@@ -1,14 +1,12 @@
 import { Outlet } from 'react-router-dom'
-import { Sidebar } from './Sidebar'
+import { TopNavigation } from './TopNavigation'
 
 export function AppShell() {
   return (
-    <div className="min-h-screen">
-      <Sidebar />
-      <main className="lg:ml-60 min-h-screen">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <Outlet />
-        </div>
+    <div className="min-h-screen bg-[var(--bg-app)]">
+      <TopNavigation />
+      <main className="mx-auto max-w-[1400px] px-5 py-8">
+        <Outlet />
       </main>
     </div>
   )

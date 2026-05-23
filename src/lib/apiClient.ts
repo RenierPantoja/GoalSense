@@ -65,7 +65,58 @@ interface LiveResponse {
 }
 
 export async function getLiveFixtures(): Promise<LiveResponse> {
-  return fetchFunction<LiveResponse>('api-football-live')
+  const raw = await fetchFunction<any>('api-football-live')
+
+  // Netlify Function returns { ok, fixtures }
+  // Dev proxy returns raw API-Football { response: [...] }
+  if (raw.fixtures) {
+    return raw as LiveResponse
+  }
+
+  // Raw API-Football response — normalize client-side in dev
+  const fixtures: LiveFixture[] = (raw.response || []).map((item: any) => ({
+    id: item.fixture.id,
+    provider: 'api_football',
+    externalId: item.fixture.id,
+    league: {
+      id: item.league.id,
+      name: item.league.name,
+      logo: item.league.logo || null,
+      country: item.league.country || '',
+      season: item.league.season,
+    },
+    status: {
+      long: item.fixture.status.long,
+      short: item.fixture.status.short,
+      elapsed: item.fixture.status.elapsed,
+    },
+    homeTeam: {
+      id: item.teams.home.id,
+      name: item.teams.home.name,
+      logo: item.teams.home.logo || null,
+    },
+    awayTeam: {
+      id: item.teams.away.id,
+      name: item.teams.away.name,
+      logo: item.teams.away.logo || null,
+    },
+    score: {
+      home: item.goals.home,
+      away: item.goals.away,
+    },
+    venue: item.fixture.venue?.name || null,
+    referee: item.fixture.referee || null,
+    date: item.fixture.date,
+    raw: item.fixture.status.short,
+  }))
+
+  return {
+    ok: true,
+    source: 'api_football',
+    fetchedAt: new Date().toISOString(),
+    count: fixtures.length,
+    fixtures,
+  }
 }
 
 // Fixture detail
@@ -98,7 +149,59 @@ interface FixtureDetailResponse {
 }
 
 export async function getFixtureDetails(id: number): Promise<FixtureDetailResponse> {
-  return fetchFunction<FixtureDetailResponse>(`api-football-fixture?id=${id}`)
+  const raw = await fetchFunction<any>(`api-football-fixture?id=${id}`)
+
+  // Netlify Function returns normalized { ok, fixture, statistics, events }
+  if (raw.fixture) {
+    return raw as FixtureDetailResponse
+  }
+
+  // Raw API-Football response in dev proxy
+  const item = (raw.response || [])[0]
+  if (!item) {
+    throw new Error('Partida não encontrada.')
+  }
+
+  const fixture: LiveFixture = {
+    id: item.fixture.id,
+    provider: 'api_football',
+    externalId: item.fixture.id,
+    league: {
+      id: item.league.id,
+      name: item.league.name,
+      logo: item.league.logo || null,
+      country: item.league.country || '',
+      season: item.league.season,
+    },
+    status: {
+      long: item.fixture.status.long,
+      short: item.fixture.status.short,
+      elapsed: item.fixture.status.elapsed,
+    },
+    homeTeam: { id: item.teams.home.id, name: item.teams.home.name, logo: item.teams.home.logo || null },
+    awayTeam: { id: item.teams.away.id, name: item.teams.away.name, logo: item.teams.away.logo || null },
+    score: { home: item.goals.home, away: item.goals.away },
+    venue: item.fixture.venue?.name || null,
+    referee: item.fixture.referee || null,
+    date: item.fixture.date,
+    raw: item.fixture.status.short,
+  }
+
+  return {
+    ok: true,
+    source: 'api_football',
+    fixture,
+    statistics: [],
+    events: (item.events || []).map((e: any) => ({
+      time: e.time,
+      team: { id: e.team.id, name: e.team.name, logo: e.team.logo },
+      player: e.player,
+      assist: e.assist,
+      type: e.type,
+      detail: e.detail,
+    })),
+    unavailable: { statistics: true, events: (item.events || []).length === 0, lineups: true },
+  }
 }
 
 // Leagues

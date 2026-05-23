@@ -7,12 +7,13 @@ interface ClubLogoProps {
   className?: string
 }
 
-export function ClubLogo({ src, name, size = 32, className = '' }: ClubLogoProps) {
+export function ClubLogo({ src, name, size = 28, className = '' }: ClubLogoProps) {
   const [failed, setFailed] = useState(false)
 
   if (!src || failed) {
     const initials = name
       .split(' ')
+      .filter((w) => w.length > 0)
       .slice(0, 2)
       .map((w) => w[0])
       .join('')
@@ -20,10 +21,12 @@ export function ClubLogo({ src, name, size = 32, className = '' }: ClubLogoProps
 
     return (
       <div
-        className={`flex items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[var(--text-muted)] font-semibold select-none ${className}`}
-        style={{ width: size, height: size, fontSize: size * 0.35 }}
+        className={`inline-flex items-center justify-center rounded-full bg-[var(--bg-elevated)] border border-[var(--border-subtle)] select-none ${className}`}
+        style={{ width: size, height: size, fontSize: size * 0.32 }}
+        title={`Logo indisponível — ${name}`}
+        aria-label={`Logo indisponível para ${name}`}
       >
-        {initials}
+        <span className="font-semibold text-[var(--text-muted)]">{initials}</span>
       </div>
     )
   }
@@ -31,7 +34,7 @@ export function ClubLogo({ src, name, size = 32, className = '' }: ClubLogoProps
   return (
     <img
       src={src}
-      alt={name}
+      alt={`Escudo ${name}`}
       width={size}
       height={size}
       className={`object-contain ${className}`}
