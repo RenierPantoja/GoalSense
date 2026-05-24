@@ -125,22 +125,22 @@ export function LeaguesPage() {
   }
 
   return (
-    <div className="max-w-[1000px] mx-auto space-y-5">
+    <div className="max-w-[1200px] mx-auto space-y-6">
       <header>
-        <h1 className="text-[22px] font-bold text-white tracking-tight">Ligas e Competições</h1>
-        <p className="text-[11px] text-white/25 mt-0.5">{competitions.length} competições disponíveis · Dados reais</p>
+        <h1 className="text-[24px] font-bold text-white/90 tracking-tight">Ligas e Competições</h1>
+        <p className="text-[13px] text-white/40 mt-1">{competitions.length} competições disponíveis · Dados reais</p>
       </header>
 
       {/* Search + Filters */}
       <div className="space-y-3">
         <div className="relative">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/20" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar liga ou país..." className="w-full h-10 rounded-2xl border border-white/[0.06] bg-white/[0.02] pl-10 pr-10 text-[12px] text-white placeholder:text-white/20 outline-none focus:border-white/[0.12] transition-colors" />
-          {search && <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 hover:text-white/40"><X size={14} /></button>}
+          <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/25" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar liga ou país..." className="gs-input pl-10 pr-10" />
+          {search && <button onClick={() => setSearch('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/50"><X size={14} /></button>}
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex gap-2">
           {([['all', 'Todas'], ['brazil', 'Brasil'], ['europe', 'Europa'], ['favorites', 'Favoritas']] as [FilterKey, string][]).map(([k, l]) => (
-            <button key={k} onClick={() => setFilter(k)} className={`px-3 py-1.5 rounded-xl text-[10px] font-medium transition-all ${filter === k ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/25' : 'text-white/30 hover:text-white/50 border border-transparent'}`}>{l}</button>
+            <button key={k} onClick={() => setFilter(k)} className={`px-4 py-2 rounded-xl text-[11px] font-medium transition-all ${filter === k ? 'bg-cyan-500/12 text-cyan-300 border border-cyan-500/20' : 'text-white/40 hover:text-white/60 border border-transparent hover:bg-white/[0.02]'}`}>{l}</button>
           ))}
         </div>
       </div>
@@ -150,9 +150,10 @@ export function LeaguesPage() {
       {error && <div className="rounded-2xl border border-rose-500/15 bg-rose-500/5 p-5 text-[12px] text-rose-400">{error}</div>}
 
       {!loading && !error && filtered.length === 0 && (
-        <div className="rounded-[20px] border border-white/[0.04] bg-white/[0.015] py-14 text-center">
-          <Trophy size={20} className="mx-auto text-white/15 mb-3" />
-          <p className="text-[13px] text-white/35">Nenhuma competição encontrada</p>
+        <div className="gs-empty">
+          <Trophy size={20} className="mx-auto text-white/20 mb-3" />
+          <p className="text-[14px] text-white/45">Nenhuma competição encontrada</p>
+          {search && <p className="text-[12px] text-white/25 mt-1">Tente outro termo de busca</p>}
         </div>
       )}
 
@@ -177,19 +178,19 @@ export function LeaguesPage() {
 
 function LeagueCard({ competition: c, isFavorite, onToggleFavorite, onClick }: { competition: Competition; isFavorite: boolean; onToggleFavorite: () => void; onClick: () => void }) {
   return (
-    <div onClick={onClick} className="group flex items-center gap-4 rounded-[16px] border border-white/[0.05] bg-white/[0.015] p-4 cursor-pointer hover:border-white/[0.12] hover:bg-white/[0.025] transition-all">
-      <div className="flex items-center justify-center h-12 w-12 rounded-[12px] bg-white/[0.03] border border-white/[0.06] shrink-0">
-        {c.emblem ? <img src={c.emblem} alt="" className="h-8 w-8 object-contain" /> : <Shield size={20} className="text-white/20" />}
+    <div onClick={onClick} className="group gs-card gs-card-hover flex items-center gap-4 cursor-pointer">
+      <div className="flex items-center justify-center h-12 w-12 rounded-[12px] bg-white/[0.04] border border-white/[0.07] shrink-0">
+        {c.emblem ? <img src={c.emblem} alt="" className="h-8 w-8 object-contain" /> : <Shield size={20} className="text-white/25" />}
       </div>
       <div className="flex-1 min-w-0">
-        <h3 className="text-[13px] font-bold text-white/70 truncate">{c.name}</h3>
+        <h3 className="text-[14px] font-bold text-white/75 truncate">{c.name}</h3>
         <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-[10px] text-white/30">{c.area.name}</span>
-          {c.currentSeason && <span className="text-[9px] text-white/15">Rodada {c.currentSeason.currentMatchday}</span>}
+          <span className="text-[11px] text-white/40">{c.area.name}</span>
+          {c.currentSeason && <span className="text-[10px] text-white/25">Rodada {c.currentSeason.currentMatchday}</span>}
         </div>
       </div>
       <FavoriteButton active={isFavorite} onClick={(e) => { e.stopPropagation(); onToggleFavorite() }} size={14} />
-      <ChevronRight size={14} className="text-white/15 group-hover:text-white/40 transition-colors shrink-0" />
+      <ChevronRight size={14} className="text-white/20 group-hover:text-white/45 transition-colors shrink-0" />
     </div>
   )
 }
@@ -221,15 +222,15 @@ function LeagueDetail({ league, standings, loading, onBack, isFavorite, onToggle
       {loading && <div className="space-y-2">{[1,2,3,4,5].map(i => <div key={i} className="h-10 rounded-xl bg-white/[0.02] animate-pulse" />)}</div>}
 
       {!loading && standings.length === 0 && (
-        <div className="rounded-[18px] border border-white/[0.04] bg-white/[0.015] p-8 text-center">
-          <Globe2 size={20} className="mx-auto text-white/15 mb-3" />
-          <p className="text-[12px] text-white/35">Tabela indisponível neste provider</p>
-          <p className="text-[10px] text-white/15 mt-1">Classificação não disponível para esta competição</p>
+        <div className="gs-empty">
+          <Globe2 size={20} className="mx-auto text-white/20 mb-3" />
+          <p className="text-[13px] text-white/45">Tabela indisponível neste provider</p>
+          <p className="text-[11px] text-white/25 mt-1">Classificação não disponível para esta competição</p>
         </div>
       )}
 
       {!loading && standings.length > 0 && (
-        <div className="rounded-[18px] border border-white/[0.05] bg-white/[0.015] overflow-hidden">
+        <div className="gs-card overflow-x-auto p-0">
           {/* Table header */}
           <div className="grid grid-cols-[40px_1fr_40px_40px_40px_40px_50px_56px] items-center px-4 py-2.5 bg-white/[0.02] border-b border-white/[0.05] text-[9px] uppercase tracking-[0.12em] text-white/25 font-semibold">
             <span className="text-center">#</span>
