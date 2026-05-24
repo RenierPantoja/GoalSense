@@ -30,6 +30,29 @@ type ViewMode = 'agenda' | 'highlights' | 'compact'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/** Fallback: fetch ESPN scoreboard and convert to FDMatch format for Calendar view */
+async function fetchEspnAsCalendar(selectedDate: string): Promise<FDMatch[]> {
+  try {
+    const res = await fetch('/.netlify/functions/espn-live', { cache: 'no-store' })
+    if (!res.ok) return []
+    const json = await res.json()
+    const fixtures = json.fixtures || []
+    const converted: FDMatch[] = fixtures.map((fx: any) => ({
+      id: typeof fx.id === 'number' ? fx.id : parseInt(fx.id) || Math.random() * 1000000 | 0,
+      competition: { name: fx.league?.name || 'Liga', emblem: fx.league?.logo || null },
+      homeTeam: { id: fx.homeTeam?.id || 0, name: fx.homeTeam?.name || '', crest: fx.homeTeam?.logo || null, shortName: fx.homeTeam?.name || '' },
+      awayTeam: { id: fx.awayTeam?.id || 0, name: fx.awayTeam?.name || '', crest: fx.awayTeam?.logo || null, shortName: fx.awayTeam?.name || '' },
+      score: { fullTime: { home: fx.score?.home ?? null, away: fx.score?.away ?? null } },
+      status: fx.status?.short === 'LIVE' || fx.status?.short === 'HT' ? 'IN_PLAY' : fx.status?.short === 'FT' ? 'FINISHED' : 'TIMED',
+      matchday: 0,
+      utcDate: fx.date || new Date().toISOString(),
+      area: { name: fx.league?.country || '' },
+    }))
+    // Filter by selected local date
+    return converted.filter(m => isMatchOnSelectedLocalDate(m.utcDate, selectedDate))
+  } catch { return [] }
+}
+
 function mapStatus(s: string) {
   if (s === 'IN_PLAY' || s === 'LIVE') return { label: 'Ao vivo', live: true, finished: false, upcoming: false }
   if (s === 'PAUSED') return { label: 'Intervalo', live: true, finished: false, upcoming: false }
@@ -136,9 +159,24 @@ export function MatchesPage() {
           debugMatchDate(m.utcDate, date, m.homeTeam.shortName || m.homeTeam.name, m.awayTeam.shortName || m.awayTeam.name)
           return onDate
         })
-        setMatches(localFiltered)
+        if (localFiltered.length > 0) {
+          setMatches(localFiltered)
+        } else {
+          // Fallback: try ESPN scoreboard for today's matches
+          const espnMatches = await fetchEspnAsCalendar(date)
+          setMatches(espnMatches)
+        }
       })
-      .catch(e => setError(e.message))
+      .catch(async () => {
+        // football-data failed entirely — use ESPN fallback
+        try {
+          const espnMatches = await fetchEspnAsCalendar(date)
+          setMatches(espnMatches)
+          if (espnMatches.length === 0) setError('Dados de partidas indisponíveis no momento')
+        } catch (e2) {
+          setError((e2 as Error).message)
+        }
+      })
       .finally(() => setLoading(false))
   }, [date])
 
