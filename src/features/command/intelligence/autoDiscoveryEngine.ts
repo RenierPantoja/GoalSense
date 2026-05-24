@@ -3,7 +3,7 @@
  * No mocks. Only observable patterns from real data.
  */
 import type { LiveFixture } from '@/lib/apiClient'
-import type { FixtureStatsForPattern } from '../types/commandTypes'
+import type { FixtureStatsForPattern, AutoDiscoveryConfig } from '../types/commandTypes'
 import { getMatchImportanceScore } from '@/utils/matchImportance'
 
 export interface AutoDiscovery {
@@ -23,8 +23,11 @@ function toScoring(fx: LiveFixture) {
 export function runAutoDiscovery(
   fixtures: LiveFixture[],
   statsMap: Map<number, FixtureStatsForPattern>,
-  isFavoriteTeam: (name: string) => boolean
+  isFavoriteTeam: (name: string) => boolean,
+  config: AutoDiscoveryConfig
 ): AutoDiscovery[] {
+  if (!config.enabled) return []
+
   const discoveries: AutoDiscovery[] = []
   const isLive = (fx: LiveFixture) => fx.status.short === 'LIVE' || fx.status.short === 'HT' || (fx as any)._state === 'in'
 
@@ -35,139 +38,73 @@ export function runAutoDiscovery(
     const awayScore = fx.score.away ?? 0
     const scoreDiff = Math.abs(homeScore - awayScore)
     const imp = getMatchImportanceScore(toScoring(fx))
+    const isFav = isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name)
 
     if (!isLive(fx)) {
-      // Starting soon
+      if (!config.includePreMatch) continue
       const diffMin = Math.round((new Date(fx.date).getTime() - Date.now()) / 60000)
       if (diffMin > 0 && diffMin <= 30 && imp >= 80) {
-        discoveries.push({
-          id: `soon-${fx.id}`,
-          type: 'starting_soon',
-          insight: `${fx.homeTeam.name} x ${fx.awayTeam.name} começa em ${diffMin} min`,
-          evidence: `Relevância ${imp} · ${fx.league.name}`,
-          confidence: 60,
-          fixtureId: fx.id,
-          fixture: fx,
-        })
+        discoveries.push({ id: `soon-${fx.id}`, type: 'starting_soon', insight: `${fx.homeTeam.name} x ${fx.awayTeam.name} começa em ${diffMin} min`, evidence: `Relevância ${imp} · ${fx.league.name}`, confidence: 60, fixtureId: fx.id, fixture: fx })
       }
       continue
     }
 
-    // Final phase with tight score
+    if (!config.includeLive) continue
+    if (!config.monitorAllLeagues && !config.monitorMainLeagues && !isFav) continue
+    if (config.monitorFavorites && !config.monitorAllLeagues && !isFav && imp < 80) continue
+
+    // Final phase tight
     if (elapsed >= 75 && scoreDiff <= 1) {
-      discoveries.push({
-        id: `final-${fx.id}`,
-        type: 'final_phase',
-        insight: `Reta final apertada: ${fx.homeTeam.name} ${homeScore}-${awayScore} ${fx.awayTeam.name}`,
-        evidence: `${elapsed}' · Diferença de ${scoreDiff} gol${scoreDiff !== 1 ? 's' : ''}`,
-        confidence: 80,
-        fixtureId: fx.id,
-        fixture: fx,
-      })
+      discoveries.push({ id: `final-${fx.id}`, type: 'final_phase', insight: `Reta final apertada: ${fx.homeTeam.name} ${homeScore}-${awayScore} ${fx.awayTeam.name}`, evidence: `${elapsed}' · Diferença ${scoreDiff}`, confidence: 80, fixtureId: fx.id, fixture: fx })
     }
 
-    // Pressure (high shots on target, tight score)
+    // Pressure
     if (stats?.shotsOnTarget) {
       const totalSOT = stats.shotsOnTarget.home + stats.shotsOnTarget.away
       if (totalSOT >= 6 && scoreDiff <= 1 && elapsed >= 50) {
-        discoveries.push({
-          id: `pressure-${fx.id}`,
-          type: 'pressure',
-          insight: `Pressão crescente: ${totalSOT} finalizações no alvo`,
-          evidence: `${fx.homeTeam.name} ${homeScore}-${awayScore} ${fx.awayTeam.name} · ${elapsed}'`,
-          confidence: 72,
-          fixtureId: fx.id,
-          fixture: fx,
-        })
+        discoveries.push({ id: `pressure-${fx.id}`, type: 'pressure', insight: `Pressão: ${totalSOT} finalizações no alvo`, evidence: `${fx.homeTeam.name} ${homeScore}-${awayScore} ${fx.awayTeam.name} · ${elapsed}'`, confidence: 72, fixtureId: fx.id, fixture: fx })
       }
     }
 
     // Favorite at risk
-    const isFav = isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name)
-    if (isFav && (homeScore === awayScore || (isFavoriteTeam(fx.homeTeam.name) && homeScore < awayScore) || (isFavoriteTeam(fx.awayTeam.name) && awayScore < homeScore))) {
-      if (elapsed >= 45) {
-        discoveries.push({
-          id: `favrisk-${fx.id}`,
-          type: 'favorite_risk',
-          insight: `Favorito em risco: ${fx.homeTeam.name} ${homeScore}-${awayScore} ${fx.awayTeam.name}`,
-          evidence: `${elapsed}' · Favorito não lidera`,
-          confidence: 65,
-          fixtureId: fx.id,
-          fixture: fx,
-        })
+    if (isFav && config.monitorFavorites) {
+      const favIsHome = isFavoriteTeam(fx.homeTeam.name)
+      const favScore = favIsHome ? homeScore : awayScore
+      const otherScore = favIsHome ? awayScore : homeScore
+      if (favScore <= otherScore && elapsed >= 45) {
+        discoveries.push({ id: `favrisk-${fx.id}`, type: 'favorite_risk', insight: `Favorito em risco: ${fx.homeTeam.name} ${homeScore}-${awayScore} ${fx.awayTeam.name}`, evidence: `${elapsed}' · Favorito não lidera`, confidence: 65, fixtureId: fx.id, fixture: fx })
       }
     }
 
-    // Global live (high importance)
+    // Global live
     if (imp >= 100 && elapsed >= 10 && elapsed <= 60) {
-      discoveries.push({
-        id: `global-${fx.id}`,
-        type: 'global_live',
-        insight: `Jogo global ao vivo: ${fx.homeTeam.name} x ${fx.awayTeam.name}`,
-        evidence: `Relevância ${imp} · ${fx.league.name} · ${elapsed}'`,
-        confidence: 70,
-        fixtureId: fx.id,
-        fixture: fx,
-      })
+      discoveries.push({ id: `global-${fx.id}`, type: 'global_live', insight: `Jogo global ao vivo: ${fx.homeTeam.name} x ${fx.awayTeam.name}`, evidence: `Relevância ${imp} · ${fx.league.name} · ${elapsed}'`, confidence: 70, fixtureId: fx.id, fixture: fx })
     }
 
-    // Rich data available
-    if (stats && stats.shots && stats.possession && (stats.shots.home + stats.shots.away) > 0) {
-      const totalShots = stats.shots.home + stats.shots.away
-      if (totalShots >= 15) {
-        discoveries.push({
-          id: `rich-${fx.id}`,
-          type: 'rich_data',
-          insight: `Dados ricos: ${totalShots} finalizações registradas`,
-          evidence: `Posse ${stats.possession.home.toFixed(0)}%-${stats.possession.away.toFixed(0)}% · ${fx.homeTeam.name} x ${fx.awayTeam.name}`,
-          confidence: 55,
-          fixtureId: fx.id,
-          fixture: fx,
-        })
-      }
-    }
-
-    // Open game (many goals)
+    // Open game
     if ((homeScore + awayScore) >= 4 && elapsed <= 80) {
-      discoveries.push({
-        id: `open-${fx.id}`,
-        type: 'open_game',
-        insight: `Jogo aberto: ${homeScore + awayScore} gols em ${elapsed}'`,
-        evidence: `${fx.homeTeam.name} ${homeScore}-${awayScore} ${fx.awayTeam.name}`,
-        confidence: 68,
-        fixtureId: fx.id,
-        fixture: fx,
-      })
+      discoveries.push({ id: `open-${fx.id}`, type: 'open_game', insight: `Jogo aberto: ${homeScore + awayScore} gols em ${elapsed}'`, evidence: `${fx.homeTeam.name} ${homeScore}-${awayScore} ${fx.awayTeam.name}`, confidence: 68, fixtureId: fx.id, fixture: fx })
     }
 
-    // Dominance without result
+    // Dominance
     if (stats?.possession && stats?.shotsOnTarget) {
       const maxPoss = Math.max(stats.possession.home, stats.possession.away)
       const dominantIsHome = stats.possession.home > stats.possession.away
       const dominantScore = dominantIsHome ? homeScore : awayScore
       const otherScore = dominantIsHome ? awayScore : homeScore
       if (maxPoss >= 62 && (stats.shotsOnTarget.home + stats.shotsOnTarget.away) >= 5 && dominantScore <= otherScore) {
-        discoveries.push({
-          id: `dom-${fx.id}`,
-          type: 'dominance',
-          insight: `Domínio sem resultado: ${maxPoss.toFixed(0)}% posse sem vantagem`,
-          evidence: `${fx.homeTeam.name} ${homeScore}-${awayScore} ${fx.awayTeam.name} · ${elapsed}'`,
-          confidence: 62,
-          fixtureId: fx.id,
-          fixture: fx,
-        })
+        discoveries.push({ id: `dom-${fx.id}`, type: 'dominance', insight: `Domínio sem resultado: ${maxPoss.toFixed(0)}% posse`, evidence: `${fx.homeTeam.name} ${homeScore}-${awayScore} ${fx.awayTeam.name} · ${elapsed}'`, confidence: 62, fixtureId: fx.id, fixture: fx })
       }
     }
   }
 
-  // Sort by confidence, deduplicate by fixture (keep highest)
+  // Filter by config thresholds
+  const filtered = discoveries.filter(d => d.confidence >= config.minConfidence)
+
+  // Dedup by fixture, keep highest confidence
   const seen = new Set<number>()
-  return discoveries
+  return filtered
     .sort((a, b) => b.confidence - a.confidence)
-    .filter(d => {
-      if (seen.has(d.fixtureId)) return false
-      seen.add(d.fixtureId)
-      return true
-    })
+    .filter(d => { if (seen.has(d.fixtureId)) return false; seen.add(d.fixtureId); return true })
     .slice(0, 8)
 }

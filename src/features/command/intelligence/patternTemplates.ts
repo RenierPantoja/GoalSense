@@ -1,5 +1,5 @@
 /**
- * Pattern templates — real, useful starting patterns for the Command Center.
+ * Pattern templates — 14 real, useful starting patterns for the Command Center.
  */
 import type { PatternTemplate } from '../types/commandTypes'
 
@@ -7,7 +7,7 @@ export const PATTERN_TEMPLATES: PatternTemplate[] = [
   {
     id: 'pressure_for_goal',
     name: 'Pressão por gol',
-    description: 'Time com crescimento ofensivo, finalizações recentes e placar curto. Alta probabilidade de gol iminente.',
+    description: 'Time com crescimento ofensivo, finalizações recentes e placar curto.',
     severity: 'critical',
     defaultConfidence: 'alta',
     conditions: [
@@ -20,7 +20,7 @@ export const PATTERN_TEMPLATES: PatternTemplate[] = [
   {
     id: 'dangerous_final_phase',
     name: 'Reta final perigosa',
-    description: 'Jogo entre 70\' e 90\' com placar apertado e volume ofensivo. Momento decisivo.',
+    description: 'Jogo entre 70\' e 90\' com placar apertado e volume ofensivo.',
     severity: 'critical',
     defaultConfidence: 'alta',
     conditions: [
@@ -33,7 +33,7 @@ export const PATTERN_TEMPLATES: PatternTemplate[] = [
   {
     id: 'favorite_at_risk',
     name: 'Favorito em risco',
-    description: 'Favorito empatando ou perdendo com pressão adversária. Situação de alerta.',
+    description: 'Favorito empatando ou perdendo após o intervalo.',
     severity: 'attention',
     defaultConfidence: 'média',
     conditions: [
@@ -46,7 +46,7 @@ export const PATTERN_TEMPLATES: PatternTemplate[] = [
   {
     id: 'dominance_no_result',
     name: 'Domínio sem resultado',
-    description: 'Time dominante em posse e finalizações sem vantagem no placar. Pressão crescente.',
+    description: 'Time dominante em posse e finalizações sem vantagem no placar.',
     severity: 'attention',
     defaultConfidence: 'média',
     conditions: [
@@ -59,7 +59,7 @@ export const PATTERN_TEMPLATES: PatternTemplate[] = [
   {
     id: 'corners_rising',
     name: 'Escanteios em crescimento',
-    description: 'Sequência de pressão territorial com escanteios acumulados. Indica domínio ofensivo.',
+    description: 'Pressão territorial com escanteios acumulados.',
     severity: 'info',
     defaultConfidence: 'média',
     conditions: [
@@ -71,7 +71,7 @@ export const PATTERN_TEMPLATES: PatternTemplate[] = [
   {
     id: 'open_game',
     name: 'Jogo aberto',
-    description: 'Troca de ataques com volume dos dois lados. Jogo imprevisível e emocionante.',
+    description: 'Troca de ataques com volume dos dois lados.',
     severity: 'info',
     defaultConfidence: 'média',
     conditions: [
@@ -83,7 +83,7 @@ export const PATTERN_TEMPLATES: PatternTemplate[] = [
   {
     id: 'hot_second_half',
     name: 'Segundo tempo quente',
-    description: 'Jogo que acelerou após o intervalo com volume ofensivo crescente.',
+    description: 'Jogo que acelerou após o intervalo com volume ofensivo.',
     severity: 'attention',
     defaultConfidence: 'média',
     conditions: [
@@ -96,7 +96,7 @@ export const PATTERN_TEMPLATES: PatternTemplate[] = [
   {
     id: 'underdog_rising',
     name: 'Zebra em formação',
-    description: 'Azarão performando acima do esperado contra favorito. Resultado surpreendente em construção.',
+    description: 'Azarão performando acima do esperado contra favorito.',
     severity: 'attention',
     defaultConfidence: 'baixa',
     conditions: [
@@ -104,6 +104,86 @@ export const PATTERN_TEMPLATES: PatternTemplate[] = [
       { type: 'minute_between', params: { min: 45, max: 90 } },
       { type: 'score_diff_lte', params: { maxDiff: 0 } },
       { type: 'shots_on_target_gte', params: { value: 3 } },
+    ],
+  },
+  {
+    id: 'late_goal_likely',
+    name: 'Gol tardio provável',
+    description: 'Reta final com pressão ofensiva e placar curto. Alta chance de gol.',
+    severity: 'critical',
+    defaultConfidence: 'alta',
+    conditions: [
+      { type: 'is_live', params: {} },
+      { type: 'minute_between', params: { min: 75, max: 90 } },
+      { type: 'score_diff_lte', params: { maxDiff: 1 } },
+      { type: 'shots_on_target_gte', params: { value: 4 } },
+      { type: 'corners_gte', params: { value: 5 } },
+    ],
+  },
+  {
+    id: 'cards_heating',
+    name: 'Cartões em aquecimento',
+    description: 'Jogo físico com cartões acumulados. Tensão crescente.',
+    severity: 'attention',
+    defaultConfidence: 'média',
+    conditions: [
+      { type: 'is_live', params: {} },
+      { type: 'minute_between', params: { min: 25, max: 90 } },
+      { type: 'cards_gte', params: { value: 3 } },
+    ],
+  },
+  {
+    id: 'pressing_no_conversion',
+    name: 'Time pressionando sem converter',
+    description: 'Domínio ofensivo sem resultado. Frustração crescente.',
+    severity: 'attention',
+    defaultConfidence: 'média',
+    conditions: [
+      { type: 'is_live', params: {} },
+      { type: 'shots_on_target_gte', params: { value: 4 } },
+      { type: 'possession_gte', params: { value: 58 } },
+      { type: 'score_diff_lte', params: { maxDiff: 0 } },
+      { type: 'goals_total_lte', params: { value: 1 } },
+    ],
+  },
+  {
+    id: 'dangerous_away',
+    name: 'Visitante perigoso',
+    description: 'Visitante com finalizações e presença ofensiva relevante.',
+    severity: 'info',
+    defaultConfidence: 'média',
+    conditions: [
+      { type: 'is_live', params: {} },
+      { type: 'away_shots_on_target_gte', params: { value: 3 } },
+      { type: 'score_diff_lte', params: { maxDiff: 1 } },
+      { type: 'minute_between', params: { min: 30, max: 90 } },
+    ],
+  },
+  {
+    id: 'over_tendency',
+    name: 'Over tendência',
+    description: 'Jogo com muitos gols ou volume ofensivo alto. Tendência de mais gols.',
+    severity: 'info',
+    defaultConfidence: 'média',
+    conditions: [
+      { type: 'is_live', params: {} },
+      { type: 'goals_total_gte', params: { value: 2 } },
+      { type: 'shots_on_target_gte', params: { value: 5 } },
+      { type: 'minute_between', params: { min: 25, max: 75 } },
+    ],
+  },
+  {
+    id: 'locked_game_rupture',
+    name: 'Jogo travado com ruptura provável',
+    description: 'Jogo equilibrado com pressão crescente. Ruptura iminente.',
+    severity: 'attention',
+    defaultConfidence: 'média',
+    conditions: [
+      { type: 'is_live', params: {} },
+      { type: 'minute_between', params: { min: 55, max: 85 } },
+      { type: 'goals_total_lte', params: { value: 1 } },
+      { type: 'score_diff_lte', params: { maxDiff: 1 } },
+      { type: 'shots_recent_gte', params: { value: 4 } },
     ],
   },
 ]

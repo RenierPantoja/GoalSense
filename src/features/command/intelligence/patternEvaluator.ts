@@ -11,11 +11,7 @@ interface EvalContext {
   isFavoriteTeam: (name: string) => boolean
 }
 
-/**
- * Evaluate a single condition against a fixture.
- * Returns true if the condition is met, false otherwise.
- */
-function evaluateCondition(condition: PatternCondition, ctx: EvalContext): boolean {
+function evaluateCondition(condition: PatternCondition, ctx: EvalContext): boolean | null {
   const { fixture, stats, isFavoriteTeam } = ctx
   const elapsed = fixture.status.elapsed || 0
   const isLive = fixture.status.short === 'LIVE' || fixture.status.short === 'HT' || (fixture as any)._state === 'in'
@@ -54,35 +50,31 @@ function evaluateCondition(condition: PatternCondition, ctx: EvalContext): boole
 
     case 'shots_recent_gte': {
       const threshold = (condition.params.value as number) || 3
-      if (!stats?.shots) return false
-      const totalShots = (stats.shots.home || 0) + (stats.shots.away || 0)
-      return totalShots >= threshold
+      if (!stats?.shots) return null // data unavailable
+      return (stats.shots.home + stats.shots.away) >= threshold
     }
 
     case 'shots_on_target_gte': {
       const threshold = (condition.params.value as number) || 4
-      if (!stats?.shotsOnTarget) return false
-      const total = (stats.shotsOnTarget.home || 0) + (stats.shotsOnTarget.away || 0)
-      return total >= threshold
+      if (!stats?.shotsOnTarget) return null
+      return (stats.shotsOnTarget.home + stats.shotsOnTarget.away) >= threshold
     }
 
     case 'corners_gte': {
       const threshold = (condition.params.value as number) || 6
-      if (!stats?.corners) return false
-      const total = (stats.corners.home || 0) + (stats.corners.away || 0)
-      return total >= threshold
+      if (!stats?.corners) return null
+      return (stats.corners.home + stats.corners.away) >= threshold
     }
 
     case 'cards_gte': {
       const threshold = (condition.params.value as number) || 3
-      if (!stats?.yellowCards) return false
-      const total = (stats.yellowCards.home || 0) + (stats.yellowCards.away || 0)
-      return total >= threshold
+      if (!stats?.yellowCards) return null
+      return (stats.yellowCards.home + stats.yellowCards.away) >= threshold
     }
 
     case 'possession_gte': {
       const threshold = (condition.params.value as number) || 60
-      if (!stats?.possession) return false
+      if (!stats?.possession) return null
       return stats.possession.home >= threshold || stats.possession.away >= threshold
     }
 
@@ -91,14 +83,33 @@ function evaluateCondition(condition: PatternCondition, ctx: EvalContext): boole
       return (homeScore + awayScore) >= threshold
     }
 
+    case 'goals_total_lte': {
+      const threshold = (condition.params.value as number) || 1
+      return (homeScore + awayScore) <= threshold
+    }
+
+    case 'away_shots_on_target_gte': {
+      const threshold = (condition.params.value as number) || 3
+      if (!stats?.shotsOnTarget) return null
+      return stats.shotsOnTarget.away >= threshold
+    }
+
+    case 'away_goals_gte': {
+      const threshold = (condition.params.value as number) || 1
+      return awayScore >= threshold
+    }
+
+    case 'away_possession_gte': {
+      const threshold = (condition.params.value as number) || 45
+      if (!stats?.possession) return null
+      return stats.possession.away >= threshold
+    }
+
     default:
       return false
   }
 }
 
-/**
- * Evaluate a pattern against a fixture. Returns a PatternHit if enough conditions match.
- */
 export function evaluatePattern(
   pattern: Pattern,
   fixture: LiveFixture,
@@ -108,30 +119,34 @@ export function evaluatePattern(
   if (pattern.status !== 'active') return null
   if (pattern.conditions.length === 0) return null
 
+  // Scope check
+  if (pattern.scope === 'favorites_only') {
+    if (!isFavoriteTeam(fixture.homeTeam.name) && !isFavoriteTeam(fixture.awayTeam.name)) return null
+  }
+
   const ctx: EvalContext = { fixture, stats, isFavoriteTeam }
-  const results = pattern.conditions.map(c => ({
-    condition: c,
-    matched: evaluateCondition(c, ctx),
-  }))
+  const results = pattern.conditions.map(c => ({ condition: c, result: evaluateCondition(c, ctx) }))
 
-  const matchedCount = results.filter(r => r.matched).length
-  const totalCount = results.length
+  const matched = results.filter(r => r.result === true).length
+  const unavailable = results.filter(r => r.result === null).length
+  const failed = results.filter(r => r.result === false).length
+  const total = results.length
 
-  // Need at least 60% of conditions to match (minimum 2 out of 3, 3 out of 4, etc.)
-  const threshold = Math.ceil(totalCount * 0.6)
-  if (matchedCount < threshold) return null
+  // Need at least 60% of evaluable conditions to match
+  const evaluable = total - unavailable
+  if (evaluable === 0) return null
+  const threshold = Math.ceil(evaluable * 0.6)
+  if (matched < threshold) return null
 
-  // Calculate confidence based on how many conditions matched
-  const rawConfidence = Math.round((matchedCount / totalCount) * 100)
-  // Boost confidence if stats are available
-  const hasStats = Boolean(stats && ((stats.shots?.home ?? 0) > 0 || (stats.possession?.home ?? 0) > 0))
-  const confidence = hasStats ? Math.min(rawConfidence + 10, 99) : Math.max(rawConfidence - 10, 30)
+  // Confidence: based on matched ratio, penalized by unavailable data
+  const baseConfidence = Math.round((matched / total) * 100)
+  const unavailablePenalty = unavailable * 8
+  const confidence = Math.max(30, Math.min(99, baseConfidence - unavailablePenalty + (stats ? 5 : 0)))
+
+  if (confidence < pattern.minConfidence) return null
 
   const confidenceLevel: ConfidenceLevel = confidence >= 75 ? 'alta' : confidence >= 50 ? 'média' : 'baixa'
-
-  const reasons = results
-    .filter(r => r.matched)
-    .map(r => conditionToReason(r.condition, ctx))
+  const reasons = results.filter(r => r.result === true).map(r => conditionToReason(r.condition, ctx))
 
   return {
     patternId: pattern.id,
@@ -142,15 +157,12 @@ export function evaluatePattern(
     confidenceLevel,
     severity: pattern.severity,
     reasons,
-    matchedConditions: matchedCount,
-    totalConditions: totalCount,
+    matchedConditions: matched,
+    totalConditions: total,
     timestamp: new Date().toISOString(),
   }
 }
 
-/**
- * Evaluate all active patterns against all fixtures.
- */
 export function evaluateAllPatterns(
   patterns: Pattern[],
   fixtures: LiveFixture[],
@@ -158,9 +170,9 @@ export function evaluateAllPatterns(
   isFavoriteTeam: (name: string) => boolean
 ): PatternHit[] {
   const hits: PatternHit[] = []
-  const activePatterns = patterns.filter(p => p.status === 'active')
+  const active = patterns.filter(p => p.status === 'active')
 
-  for (const pattern of activePatterns) {
+  for (const pattern of active) {
     for (const fixture of fixtures) {
       const stats = statsMap.get(fixture.id)
       const hit = evaluatePattern(pattern, fixture, stats, isFavoriteTeam)
@@ -168,7 +180,6 @@ export function evaluateAllPatterns(
     }
   }
 
-  // Sort by confidence descending, then severity
   return hits.sort((a, b) => {
     const sevOrder = { critical: 3, attention: 2, info: 1 }
     const sevDiff = sevOrder[b.severity] - sevOrder[a.severity]
@@ -182,31 +193,23 @@ function conditionToReason(condition: PatternCondition, ctx: EvalContext): strin
   const elapsed = fixture.status.elapsed || 0
 
   switch (condition.type) {
-    case 'is_live': return 'Jogo ao vivo'
+    case 'is_live': return 'Ao vivo'
     case 'is_final_phase': return `Reta final (${elapsed}')`
     case 'is_pre_live': return 'Começa em breve'
     case 'minute_between': return `Minuto ${elapsed}'`
-    case 'score_tied': return `Placar empatado ${fixture.score.home}-${fixture.score.away}`
-    case 'score_diff_lte': return `Placar apertado (${fixture.score.home}-${fixture.score.away})`
+    case 'score_tied': return `Empatado ${fixture.score.home}-${fixture.score.away}`
+    case 'score_diff_lte': return `Placar curto (${fixture.score.home}-${fixture.score.away})`
     case 'favorite_involved': return 'Favorito envolvido'
-    case 'shots_recent_gte': {
-      const total = stats?.shots ? (stats.shots.home + stats.shots.away) : 0
-      return `${total} finalizações`
-    }
-    case 'shots_on_target_gte': {
-      const total = stats?.shotsOnTarget ? (stats.shotsOnTarget.home + stats.shotsOnTarget.away) : 0
-      return `${total} no alvo`
-    }
-    case 'corners_gte': {
-      const total = stats?.corners ? (stats.corners.home + stats.corners.away) : 0
-      return `${total} escanteios`
-    }
-    case 'cards_gte': return 'Jogo físico'
-    case 'possession_gte': {
-      const max = stats?.possession ? Math.max(stats.possession.home, stats.possession.away) : 0
-      return `Posse ${max.toFixed(0)}%`
-    }
+    case 'shots_recent_gte': return `${stats?.shots ? stats.shots.home + stats.shots.away : '?'} finalizações`
+    case 'shots_on_target_gte': return `${stats?.shotsOnTarget ? stats.shotsOnTarget.home + stats.shotsOnTarget.away : '?'} no alvo`
+    case 'corners_gte': return `${stats?.corners ? stats.corners.home + stats.corners.away : '?'} escanteios`
+    case 'cards_gte': return `${stats?.yellowCards ? stats.yellowCards.home + stats.yellowCards.away : '?'} cartões`
+    case 'possession_gte': return `Posse ${stats?.possession ? Math.max(stats.possession.home, stats.possession.away).toFixed(0) : '?'}%`
     case 'goals_total_gte': return `${(fixture.score.home ?? 0) + (fixture.score.away ?? 0)} gols`
+    case 'goals_total_lte': return `Poucos gols (${(fixture.score.home ?? 0) + (fixture.score.away ?? 0)})`
+    case 'away_shots_on_target_gte': return `Visitante: ${stats?.shotsOnTarget?.away ?? '?'} no alvo`
+    case 'away_goals_gte': return `Visitante marcou ${fixture.score.away ?? 0}`
+    case 'away_possession_gte': return `Visitante: ${stats?.possession?.away?.toFixed(0) ?? '?'}% posse`
     default: return ''
   }
 }
