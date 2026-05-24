@@ -1,12 +1,16 @@
 /**
  * Pre-Match Intelligence Panel — shows form, H2H, preview for scheduled matches.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { TrendingUp, Users, BarChart3, Zap } from 'lucide-react'
 import { getPreMatchIntelligence, type PreMatchIntelligenceResult } from '@/services/preMatchIntelligence'
 import { getPreMatchAdvanced, type PreMatchAdvancedResult } from '@/services/intelligence/preMatchAdvanced'
+import { getPreMatchPatternReadiness, type PreMatchPatternReadiness } from '@/services/intelligence/preMatchPatternConnector'
+import { calculatePreMatchScore } from '@/services/intelligence/preMatchScoreEngine'
 import { PreMatchScorePanel } from './PreMatchScorePanel'
 import { useViewMode } from '@/context/ViewModeContext'
+import { usePatterns } from '@/features/command/contexts/PatternContext'
+import { useFavorites } from '@/context/FavoritesContext'
 
 interface Props {
   homeName: string
@@ -91,6 +95,9 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
 
       {/* Score Panel */}
       <PreMatchScorePanel data={data} />
+
+      {/* Pattern Readiness */}
+      <PatternReadinessSection homeName={homeName} awayName={awayName} data={data} />
 
       {/* Goals Profile */}
       {data.goalsProfile && (
@@ -323,6 +330,56 @@ function AdvancedSection({ homeName, awayName, homeId, awayId, competition, data
           <p className="text-white/10">Fontes: {advanced.sources.join(', ')}</p>
         </div>
       )}
+    </div>
+  )
+}
+
+
+// ─── Pattern Readiness Section ───────────────────────────────────────────────
+
+function PatternReadinessSection({ homeName, awayName, data }: { homeName: string; awayName: string; data: PreMatchIntelligenceResult }) {
+  const { getActivePatterns } = usePatterns()
+  const { isFavoriteTeam } = useFavorites()
+  const { isAdvanced } = useViewMode()
+
+  const activePatterns = getActivePatterns()
+  const score = useMemo(() => calculatePreMatchScore(data), [data])
+
+  const readiness = useMemo(() => {
+    if (activePatterns.length === 0) return []
+    return getPreMatchPatternReadiness({ homeName, awayName, activePatterns, preMatchData: data, score, isFavoriteTeam })
+  }, [homeName, awayName, activePatterns, data, score, isFavoriteTeam])
+
+  if (activePatterns.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-white/[0.06] bg-white/[0.01] p-4 text-center">
+        <p className="text-[12px] text-white/40">Nenhum padrão ativo para esta partida</p>
+        <p className="text-[10px] text-white/25 mt-1">Configure padrões no Command Center para transformar leituras pré-jogo em alertas operacionais.</p>
+      </div>
+    )
+  }
+
+  if (readiness.length === 0) return null
+
+  const shown = isAdvanced ? readiness : readiness.filter(r => r.readiness !== 'not_applicable').slice(0, 4)
+
+  return (
+    <div>
+      <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/30 mb-2">Padrões que serão monitorados</h4>
+      <p className="text-[10px] text-white/20 mb-3">Pré-sinal não é alerta. O alerta só é registrado quando as condições reais forem atendidas ao vivo.</p>
+      <div className="space-y-1.5">
+        {shown.map(r => (
+          <div key={r.patternId} className="flex items-center gap-3 rounded-xl bg-white/[0.015] border border-white/[0.04] px-4 py-2.5">
+            <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-md shrink-0 ${r.readiness === 'ready' ? 'bg-emerald-500/10 text-emerald-400/70' : r.readiness === 'needs_live_data' ? 'bg-amber-500/8 text-amber-400/60' : 'bg-white/[0.04] text-white/25'}`}>{r.readiness === 'ready' ? 'Pronto' : r.readiness === 'needs_live_data' ? 'Ao vivo' : 'Dados'}</span>
+            <div className="flex-1 min-w-0">
+              <span className="text-[11px] text-white/55 block">{r.patternName}</span>
+              <span className="text-[10px] text-white/25 block">{r.watchPoint}</span>
+            </div>
+            {r.triggerWindow && <span className="text-[9px] text-white/20 shrink-0">{r.triggerWindow}</span>}
+            {isAdvanced && <span className="text-[9px] text-white/15 tabular-nums shrink-0">{r.confidencePreview}%</span>}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
