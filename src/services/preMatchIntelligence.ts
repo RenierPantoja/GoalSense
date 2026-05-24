@@ -229,7 +229,7 @@ export async function getPreMatchIntelligence(input: PreMatchInput): Promise<Pre
 
   const result: PreMatchIntelligenceResult = { available: true, status, confidence, executiveSummary, homeForm, awayForm, homeAtHome: homeAtHome?.matches.length ? homeAtHome : undefined, awayAway: awayAway?.matches.length ? awayAway : undefined, h2h, recentMeetings, preview, goalsProfile, disciplineProfile: disciplineProfile?.trend !== 'unknown' ? disciplineProfile : undefined, dataSources, limitations }
 
-  setCache(cacheKeys.prematchBasic(homeName, awayName), result, CACHE_TTL.PREMATCH_BASIC, 'goalsense')
+  setCache(cacheKeys.prematchBasic(homeName, awayName), result, status === 'basic' ? 2 * 3600_000 : CACHE_TTL.PREMATCH_BASIC, 'goalsense')
   return result
 }
 

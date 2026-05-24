@@ -60,11 +60,40 @@ function setCached(normalizedName: string, entry: Omit<CacheEntry, 'savedAt'>): 
   saveCache(cache)
 }
 
+// ─── Aliases for common name mismatches ───────────────────────────────────────
+
+const TEAM_ALIASES: Record<string, string> = {
+  'lafc': 'Los Angeles FC',
+  'los angeles fc': 'Los Angeles FC',
+  'seattle sounders fc': 'Seattle Sounders',
+  'seattle sounders': 'Seattle Sounders',
+  'pumas unam': 'Pumas UNAM',
+  'pumas': 'Pumas UNAM',
+  'u.n.a.m. - pumas': 'Pumas UNAM',
+  'unam pumas': 'Pumas UNAM',
+  'volta redonda': 'Volta Redonda',
+  'volta redonda fc': 'Volta Redonda',
+  'ypiranga': 'Ypiranga-RS',
+  'ypiranga fc': 'Ypiranga-RS',
+  'ypiranga erechim': 'Ypiranga-RS',
+  'atletico-mg': 'Atletico Mineiro',
+  'atlético-mg': 'Atletico Mineiro',
+  'ath paranaense': 'Athletico Paranaense',
+  'rb bragantino': 'Bragantino',
+  'vasco da gama': 'Vasco DA Gama',
+}
+
+function resolveAlias(name: string): string {
+  const lower = name.toLowerCase().trim()
+  return TEAM_ALIASES[lower] || name
+}
+
 // ─── Main resolver ───────────────────────────────────────────────────────────
 
 export async function resolveApiFootballTeamId(input: ResolveInput): Promise<ResolveResult> {
   const { teamName, competition, country } = input
-  const normalized = normalizeTeamName(teamName)
+  const aliasResolved = resolveAlias(teamName)
+  const normalized = normalizeTeamName(aliasResolved)
 
   if (!normalized || normalized.length < 3) {
     return { found: false, confidence: 'low', reason: 'Nome muito curto', provider: 'api-football' }
@@ -79,7 +108,7 @@ export async function resolveApiFootballTeamId(input: ResolveInput): Promise<Res
 
   // Search API-Football
   try {
-    const searchTerm = teamName.length > 3 ? teamName : normalized
+    const searchTerm = aliasResolved.length > 3 ? aliasResolved : normalized
     const resp = await fetch(`/api/api-football-fixtures?search_team=${encodeURIComponent(searchTerm)}`)
     if (!resp.ok) {
       return { found: false, confidence: 'low', reason: 'API indisponível', provider: 'api-football' }

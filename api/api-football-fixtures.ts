@@ -12,7 +12,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Build query params from request
     const params = new URLSearchParams()
-    const { date, team, last, season, league, h2h } = req.query
+    const { date, team, last, season, league, h2h, search_team } = req.query
+
+    // Team search endpoint
+    if (search_team) {
+      const searchResp = await fetch(`${BASE}/teams?search=${encodeURIComponent(String(search_team))}`, {
+        headers: { "x-apisports-key": apiKey },
+      })
+      if (!searchResp.ok) return res.status(502).json({ ok: false, code: "API_FOOTBALL_ERROR" })
+      const searchData = await searchResp.json()
+      return res.status(200).json({ ok: true, response: searchData.response || [] })
+    }
 
     if (h2h) params.set('h2h', String(h2h))
     else {
