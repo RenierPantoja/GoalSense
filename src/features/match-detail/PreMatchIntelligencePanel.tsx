@@ -2,8 +2,9 @@
  * Pre-Match Intelligence Panel — shows form, H2H, preview for scheduled matches.
  */
 import { useEffect, useState } from 'react'
-import { TrendingUp, Users, BarChart3 } from 'lucide-react'
+import { TrendingUp, Users, BarChart3, Zap } from 'lucide-react'
 import { getPreMatchIntelligence, type PreMatchIntelligenceResult } from '@/services/preMatchIntelligence'
+import { getPreMatchAdvanced, type PreMatchAdvancedResult } from '@/services/intelligence/preMatchAdvanced'
 import { useViewMode } from '@/context/ViewModeContext'
 
 interface Props {
@@ -164,6 +165,9 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
         </div>
       )}
 
+      {/* Advanced Load Button */}
+      <AdvancedSection homeName={homeName} awayName={awayName} homeId={homeId} awayId={awayId} competition={competition} data={data} isAdvanced={isAdvanced} />
+
       {/* Confidence */}
       <div className="flex items-center gap-2">
         <span className={`text-[9px] font-medium rounded-lg border px-2 py-1 ${data.confidence === 'high' ? 'text-emerald-400/60 border-emerald-500/15' : data.confidence === 'medium' ? 'text-amber-400/60 border-amber-500/15' : 'text-white/25 border-white/[0.05]'}`}>
@@ -193,6 +197,128 @@ function FormCard({ form, label }: { form: import('@/services/preMatchIntelligen
         <div><span className="text-[12px] font-bold text-rose-400/60 block">{form.summary.losses}</span><span className="text-[9px] text-white/30">Derrotas</span></div>
       </div>
       <p className="text-[10px] text-white/25 mt-2 text-center">{form.summary.goalsFor} gols marcados · {form.summary.goalsAgainst} sofridos</p>
+    </div>
+  )
+}
+
+// ─── Advanced Section ────────────────────────────────────────────────────────
+
+function AdvancedSection({ homeName, awayName, homeId, awayId, competition, data, isAdvanced }: { homeName: string; awayName: string; homeId?: string | number; awayId?: string | number; competition?: string; data: PreMatchIntelligenceResult; isAdvanced: boolean }) {
+  const [advanced, setAdvanced] = useState<PreMatchAdvancedResult | null>(null)
+  const [loadingAdv, setLoadingAdv] = useState(false)
+
+  const loadAdvanced = async () => {
+    setLoadingAdv(true)
+    try {
+      const result = await getPreMatchAdvanced({
+        homeName, awayName,
+        homeId: homeId ? Number(homeId) : undefined,
+        awayId: awayId ? Number(awayId) : undefined,
+        goalsProfile: data.goalsProfile,
+        homeForm: data.homeForm,
+        awayForm: data.awayForm,
+        disciplineTrend: data.disciplineProfile?.trend,
+      })
+      setAdvanced(result)
+    } catch { /* */ }
+    finally { setLoadingAdv(false) }
+  }
+
+  if (!advanced) {
+    return (
+      <div className="pt-3 border-t border-white/[0.03]">
+        <button onClick={loadAdvanced} disabled={loadingAdv} className="w-full py-3 rounded-xl text-[11px] font-semibold bg-cyan-500/8 text-cyan-400/70 border border-cyan-500/15 hover:bg-cyan-500/12 disabled:opacity-40 transition-colors" type="button">
+          {loadingAdv ? 'Carregando...' : 'Carregar análise avançada'}
+        </button>
+        <p className="text-[9px] text-white/20 text-center mt-1.5">Ausências, goleadores, padrões aplicáveis e sinais pré-jogo</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4 pt-3 border-t border-white/[0.03]">
+      {/* Absences */}
+      {(advanced.absences.home.injuries.length > 0 || advanced.absences.away.injuries.length > 0 || advanced.absences.home.suspensions.length > 0 || advanced.absences.away.suspensions.length > 0) && (
+        <div>
+          <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/25 mb-2">Ausências</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {advanced.absences.home.injuries.length + advanced.absences.home.suspensions.length > 0 && (
+              <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
+                <span className="text-[10px] font-semibold text-white/50 block mb-1.5">{homeName}</span>
+                {advanced.absences.home.injuries.map((p, i) => <p key={i} className="text-[10px] text-rose-400/50">🏥 {p.name} — {p.reason || 'Lesão'}</p>)}
+                {advanced.absences.home.suspensions.map((p, i) => <p key={i} className="text-[10px] text-amber-400/50">⚠️ {p.name} — Suspenso</p>)}
+              </div>
+            )}
+            {advanced.absences.away.injuries.length + advanced.absences.away.suspensions.length > 0 && (
+              <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
+                <span className="text-[10px] font-semibold text-white/50 block mb-1.5">{awayName}</span>
+                {advanced.absences.away.injuries.map((p, i) => <p key={i} className="text-[10px] text-rose-400/50">🏥 {p.name} — {p.reason || 'Lesão'}</p>)}
+                {advanced.absences.away.suspensions.map((p, i) => <p key={i} className="text-[10px] text-amber-400/50">⚠️ {p.name} — Suspenso</p>)}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Scorers */}
+      {(advanced.scorers.home.players.length > 0 || advanced.scorers.away.players.length > 0) && (
+        <div>
+          <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/25 mb-2">Goleadores</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {advanced.scorers.home.players.length > 0 && (
+              <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
+                <span className="text-[10px] font-semibold text-white/50 block mb-1.5">{homeName}</span>
+                {advanced.scorers.home.players.map((p, i) => <p key={i} className="text-[10px] text-white/40">{p.name} — {p.goals} gols{p.assists ? `, ${p.assists} assist.` : ''}</p>)}
+              </div>
+            )}
+            {advanced.scorers.away.players.length > 0 && (
+              <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-3">
+                <span className="text-[10px] font-semibold text-white/50 block mb-1.5">{awayName}</span>
+                {advanced.scorers.away.players.map((p, i) => <p key={i} className="text-[10px] text-white/40">{p.name} — {p.goals} gols{p.assists ? `, ${p.assists} assist.` : ''}</p>)}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Applicable Patterns */}
+      {advanced.applicablePatterns.length > 0 && (
+        <div>
+          <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/25 mb-2 flex items-center gap-1.5"><Zap size={10} className="text-cyan-400/40" />Padrões aplicáveis</h4>
+          <div className="space-y-1">
+            {advanced.applicablePatterns.map(p => (
+              <div key={p.patternId} className="flex items-center gap-2 rounded-lg bg-white/[0.015] px-3 py-2 border border-white/[0.03]">
+                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${p.readiness === 'ready' ? 'bg-emerald-500/10 text-emerald-400/60' : 'bg-white/[0.03] text-white/25'}`}>{p.readiness === 'ready' ? 'Pronto' : 'Ao vivo'}</span>
+                <span className="text-[10px] text-white/50 flex-1">{p.name}</span>
+                <span className="text-[9px] text-white/20">{p.reason}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Risk Flags */}
+      {advanced.riskFlags.length > 0 && (
+        <div>
+          <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/25 mb-2">Sinais pré-jogo</h4>
+          <div className="space-y-1">
+            {advanced.riskFlags.map((f, i) => (
+              <div key={i} className={`rounded-lg px-3 py-2 border-l-2 ${f.severity === 'critical' ? 'border-l-rose-400/50 bg-rose-500/[0.02]' : f.severity === 'attention' ? 'border-l-amber-400/40 bg-amber-500/[0.02]' : 'border-l-white/[0.1] bg-white/[0.01]'}`}>
+                <span className="text-[10px] text-white/50 block">{f.label}</span>
+                <span className="text-[9px] text-white/25">{f.detail}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Limitations */}
+      {advanced.limitations.length > 0 && isAdvanced && (
+        <div className="text-[9px] text-white/15 space-y-0.5">
+          {advanced.limitations.map((l, i) => <p key={i}>{l}</p>)}
+          <p className="text-white/10">Fontes: {advanced.sources.join(', ')}</p>
+        </div>
+      )}
     </div>
   )
 }

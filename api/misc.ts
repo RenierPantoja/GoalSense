@@ -55,6 +55,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ ok: true, matches: data.results || data.matches || [] });
       }
 
+      case 'api-football-injuries': {
+        const team = getQuery('team'); const season = getQuery('season');
+        if (!team) return res.status(400).json({ ok: false, code: 'MISSING_TEAM' });
+        const AF_BASE = process.env.API_FOOTBALL_BASE_URL || 'https://v3.football.api-sports.io';
+        const keys = (process.env.API_FOOTBALL_KEYS || process.env.API_FOOTBALL_KEY || '').split(',').filter(Boolean);
+        const apiKey = keys[0]?.trim();
+        if (!apiKey) return res.status(200).json({ ok: true, response: [] });
+        try {
+          const url = `${AF_BASE}/injuries?team=${team}&season=${season || new Date().getFullYear()}`;
+          const resp = await fetch(url, { headers: { 'x-apisports-key': apiKey } });
+          if (!resp.ok) return res.status(200).json({ ok: true, response: [], error: `API returned ${resp.status}` });
+          const data = await resp.json();
+          return res.status(200).json({ ok: true, response: data.response || [] });
+        } catch (e: any) { return res.status(200).json({ ok: true, response: [], error: e.message }); }
+      }
+
+      case 'api-football-topscorers': {
+        const league = getQuery('league'); const season = getQuery('season');
+        if (!league) return res.status(400).json({ ok: false, code: 'MISSING_LEAGUE' });
+        const AF_BASE = process.env.API_FOOTBALL_BASE_URL || 'https://v3.football.api-sports.io';
+        const keys = (process.env.API_FOOTBALL_KEYS || process.env.API_FOOTBALL_KEY || '').split(',').filter(Boolean);
+        const apiKey = keys[0]?.trim();
+        if (!apiKey) return res.status(200).json({ ok: true, response: [] });
+        try {
+          const url = `${AF_BASE}/players/topscorers?league=${league}&season=${season || new Date().getFullYear()}`;
+          const resp = await fetch(url, { headers: { 'x-apisports-key': apiKey } });
+          if (!resp.ok) return res.status(200).json({ ok: true, response: [], error: `API returned ${resp.status}` });
+          const data = await resp.json();
+          return res.status(200).json({ ok: true, response: data.response || [] });
+        } catch (e: any) { return res.status(200).json({ ok: true, response: [], error: e.message }); }
+      }
+
       default:
         return res.status(400).json({ ok: false, error: `Unknown function: ${fn}` });
     }
