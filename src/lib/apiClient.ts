@@ -246,8 +246,8 @@ async function fetchEspnLive(): Promise<LiveResponse> {
       ok: true,
       source: 'espn',
       fetchedAt: raw.fetchedAt || new Date().toISOString(),
-      count: raw.liveCount || raw.count || 0,
-      fixtures: raw.live || raw.fixtures,
+      count: raw.count || 0,
+      fixtures: raw.fixtures,
     }
   }
 
