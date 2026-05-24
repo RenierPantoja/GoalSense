@@ -122,6 +122,15 @@ export function evaluatePattern(
   // Scope check
   if (pattern.scope === 'favorites_only') {
     if (!isFavoriteTeam(fixture.homeTeam.name) && !isFavoriteTeam(fixture.awayTeam.name)) return null
+  } else if (pattern.scope === 'specific_leagues' && pattern.scopeFilter && pattern.scopeFilter.length > 0) {
+    const leagueLower = fixture.league.name.toLowerCase()
+    const matches = pattern.scopeFilter.some(f => leagueLower.includes(f.toLowerCase()) || f.toLowerCase().includes(leagueLower))
+    if (!matches) return null
+  } else if (pattern.scope === 'specific_teams' && pattern.scopeFilter && pattern.scopeFilter.length > 0) {
+    const homeLower = fixture.homeTeam.name.toLowerCase()
+    const awayLower = fixture.awayTeam.name.toLowerCase()
+    const matches = pattern.scopeFilter.some(f => { const fl = f.toLowerCase(); return homeLower.includes(fl) || fl.includes(homeLower) || awayLower.includes(fl) || fl.includes(awayLower) })
+    if (!matches) return null
   }
 
   const ctx: EvalContext = { fixture, stats, isFavoriteTeam }

@@ -370,18 +370,34 @@ function CockpitContent({ decisionMatch, decisionHit, decisionDiscovery, pattern
 // ═══ PATTERNS ═══
 function PatternsContent({ patterns, templates, createFromTemplate, createPattern, updatePattern, togglePattern, deletePattern, isAdvanced, showBuilder, setShowBuilder, discoveryConfig, updateDiscoveryConfig }: { patterns: Pattern[]; templates: PatternTemplate[]; createFromTemplate: (id: string) => Pattern | null; createPattern: (p: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => Pattern; updatePattern: (id: string, patch: Partial<Pattern>) => void; togglePattern: (id: string) => void; deletePattern: (id: string) => void; isAdvanced: boolean; showBuilder: boolean; setShowBuilder: (v: boolean) => void; discoveryConfig: AutoDiscoveryConfig; updateDiscoveryConfig: (p: Partial<AutoDiscoveryConfig>) => void }) {
   const [showConfig, setShowConfig] = useState(false)
+  const [editingPattern, setEditingPattern] = useState<Pattern | null>(null)
+
+  const handleEdit = (p: Pattern) => { setEditingPattern(p); setShowBuilder(true) }
+  const handleDuplicate = (p: Pattern) => { createPattern({ ...p, name: `${p.name} (cópia)`, status: 'paused', isTemplate: false, templateId: undefined }) }
+  const handleSaveEdit = (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => {
+    if (editingPattern) { updatePattern(editingPattern.id, data); setEditingPattern(null) }
+    else { createPattern(data) }
+    setShowBuilder(false)
+  }
+
   return (
     <div className="space-y-6">
-      {showBuilder && <PatternBuilderPanel onSave={(p) => { createPattern(p); setShowBuilder(false) }} onCancel={() => setShowBuilder(false)} />}
+      {showBuilder && <PatternBuilderPanel onSave={handleSaveEdit} onCancel={() => { setShowBuilder(false); setEditingPattern(null) }} initial={editingPattern} />}
       {showConfig && <DiscoveryConfigPanel config={discoveryConfig} onChange={updateDiscoveryConfig} onClose={() => setShowConfig(false)} />}
 
       {patterns.length > 0 && (
         <section>
-          <div className="flex items-center justify-between mb-3"><h3 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/35">Padrões configurados</h3><div className="flex gap-2"><button onClick={() => setShowConfig(true)} className="text-[9px] text-white/25 hover:text-white/50 flex items-center gap-1 transition-colors" type="button"><Settings2 size={10} />Config</button><button onClick={() => setShowBuilder(true)} className="text-[9px] text-cyan-400/50 hover:text-cyan-400/80 font-medium flex items-center gap-1 transition-colors" type="button"><Plus size={10} />Criar</button></div></div>
+          <div className="flex items-center justify-between mb-3"><h3 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/35">Padrões configurados</h3><div className="flex gap-2"><button onClick={() => setShowConfig(true)} className="text-[9px] text-white/25 hover:text-white/50 flex items-center gap-1 transition-colors" type="button"><Settings2 size={10} />Config</button><button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} className="text-[9px] text-cyan-400/50 hover:text-cyan-400/80 font-medium flex items-center gap-1 transition-colors" type="button"><Plus size={10} />Criar</button></div></div>
           <div className="space-y-1.5">{patterns.map(p => (
             <div key={p.id} className="flex items-center gap-3 rounded-xl border border-white/[0.04] bg-white/[0.006] px-4 py-3">
               <div className={`h-2 w-2 rounded-full shrink-0 ${p.status === 'active' ? 'bg-emerald-400/70' : 'bg-white/15'}`} />
-              <div className="flex-1 min-w-0"><span className="text-[11px] font-medium text-white/60 block">{p.name}</span><span className="text-[9px] text-white/25 block mt-0.5">{p.description || `${p.conditions.length} condições`}</span>{isAdvanced && <span className="text-[9px] text-white/15 font-mono mt-0.5 block">scope:{p.scope} · conf≥{p.minConfidence} · action:{p.action}</span>}</div>
+              <div className="flex-1 min-w-0">
+                <span className="text-[11px] font-medium text-white/60 block">{p.name}</span>
+                <span className="text-[9px] text-white/30 block mt-0.5">{p.description || `${p.conditions.length} condições`}{p.scope !== 'all' && ` · ${p.scope === 'favorites_only' ? 'Favoritos' : p.scope === 'specific_leagues' ? `Ligas: ${p.scopeFilter?.length || 0}` : `Times: ${p.scopeFilter?.length || 0}`}`}</span>
+                {isAdvanced && <span className="text-[9px] text-white/15 font-mono mt-0.5 block">scope:{p.scope} · conf≥{p.minConfidence} · action:{p.action}</span>}
+              </div>
+              <button onClick={() => handleEdit(p)} className="text-[9px] text-white/20 hover:text-white/50 transition-colors px-1.5" type="button">Editar</button>
+              <button onClick={() => handleDuplicate(p)} className="text-[9px] text-white/20 hover:text-white/50 transition-colors px-1.5" type="button">Duplicar</button>
               <button onClick={() => togglePattern(p.id)} className={`text-[9px] px-2.5 py-1 rounded-lg border transition-all ${p.status === 'active' ? 'border-emerald-500/15 text-emerald-400/60' : 'border-white/[0.04] text-white/25'}`} type="button">{p.status === 'active' ? 'Ativo' : 'Pausado'}</button>
               <button onClick={() => deletePattern(p.id)} className="text-[10px] text-white/15 hover:text-rose-400/50 transition-colors px-1" type="button">×</button>
             </div>
@@ -390,7 +406,7 @@ function PatternsContent({ patterns, templates, createFromTemplate, createPatter
       )}
 
       <section>
-        <div className="flex items-center justify-between mb-3"><h3 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/35">Biblioteca de padrões</h3>{!showBuilder && <button onClick={() => setShowBuilder(true)} className="text-[9px] text-cyan-400/50 hover:text-cyan-400/80 font-medium flex items-center gap-1 transition-colors" type="button"><Plus size={10} />Personalizado</button>}</div>
+        <div className="flex items-center justify-between mb-3"><h3 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/35">Biblioteca de padrões</h3>{!showBuilder && <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} className="text-[9px] text-cyan-400/50 hover:text-cyan-400/80 font-medium flex items-center gap-1 transition-colors" type="button"><Plus size={10} />Personalizado</button>}</div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">{templates.map(t => {
           const active = patterns.some(p => p.templateId === t.id && p.status === 'active')
           return (<div key={t.id} className="rounded-xl border border-white/[0.04] bg-white/[0.005] p-4 hover:border-white/[0.07] transition-all">
@@ -407,14 +423,16 @@ function PatternsContent({ patterns, templates, createFromTemplate, createPatter
 // ═══ PATTERN BUILDER ═══
 const COND_LABELS: Record<PatternConditionType, string> = { is_live: 'Jogo ao vivo', is_final_phase: 'Reta final (70\'+)', is_pre_live: 'Começa em breve', minute_between: 'Minuto entre', score_tied: 'Placar empatado', score_diff_lte: 'Diferença gols ≤', favorite_involved: 'Favorito envolvido', shots_recent_gte: 'Finalizações ≥', shots_on_target_gte: 'No alvo ≥', corners_gte: 'Escanteios ≥', cards_gte: 'Cartões ≥', possession_gte: 'Posse ≥', goals_total_gte: 'Gols totais ≥', goals_total_lte: 'Gols totais ≤', away_shots_on_target_gte: 'Visitante no alvo ≥', away_goals_gte: 'Gols visitante ≥', away_possession_gte: 'Posse visitante ≥' }
 
-function PatternBuilderPanel({ onSave, onCancel }: { onSave: (p: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void; onCancel: () => void }) {
-  const [name, setName] = useState('')
-  const [desc, setDesc] = useState('')
-  const [severity, setSeverity] = useState<'critical' | 'attention' | 'info'>('attention')
-  const [scope, setScope] = useState<'all' | 'favorites_only'>('all')
-  const [minConf, setMinConf] = useState(50)
-  const [action, setAction] = useState<'register_alert' | 'suggest_only' | 'highlight'>('register_alert')
-  const [conditions, setConditions] = useState<PatternCondition[]>([{ type: 'is_live', params: {} }])
+function PatternBuilderPanel({ onSave, onCancel, initial }: { onSave: (p: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void; onCancel: () => void; initial?: Pattern | null }) {
+  const [name, setName] = useState(initial?.name || '')
+  const [desc, setDesc] = useState(initial?.description || '')
+  const [severity, setSeverity] = useState<'critical' | 'attention' | 'info'>(initial?.severity || 'attention')
+  const [scope, setScope] = useState<'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams'>(initial?.scope || 'all')
+  const [scopeFilter, setScopeFilter] = useState<string[]>(initial?.scopeFilter || [])
+  const [scopeInput, setScopeInput] = useState('')
+  const [minConf, setMinConf] = useState(initial?.minConfidence ?? 50)
+  const [action, setAction] = useState<'register_alert' | 'suggest_only' | 'highlight'>(initial?.action || 'register_alert')
+  const [conditions, setConditions] = useState<PatternCondition[]>(initial?.conditions || [{ type: 'is_live', params: {} }])
 
   const addCond = (type: PatternConditionType) => {
     const params: Record<string, number | string | boolean> = {}
@@ -431,7 +449,9 @@ function PatternBuilderPanel({ onSave, onCancel }: { onSave: (p: Omit<Pattern, '
     setConditions(prev => prev.map((c, i) => i === idx ? { ...c, params: { ...c.params, [key]: val } } : c))
   }
 
-  const save = () => { if (!name.trim() || conditions.length === 0) return; onSave({ name: name.trim(), description: desc.trim(), conditions, severity, status: 'active', isTemplate: false, scope, minConfidence: minConf, action, maxTriggersPerMatch: 2, antiDuplicateWindow: 5 }) }
+  const save = () => { if (!name.trim() || conditions.length === 0) return; onSave({ name: name.trim(), description: desc.trim(), conditions, severity, status: initial?.status || 'active', isTemplate: initial?.isTemplate || false, templateId: initial?.templateId, scope, scopeFilter: (scope === 'specific_leagues' || scope === 'specific_teams') ? scopeFilter : undefined, minConfidence: minConf, action, maxTriggersPerMatch: 2, antiDuplicateWindow: 5 }) }
+
+  const addScopeItem = () => { if (scopeInput.trim() && !scopeFilter.includes(scopeInput.trim())) { setScopeFilter(prev => [...prev, scopeInput.trim()]); setScopeInput('') } }
 
   return (
     <div className="rounded-xl border border-cyan-500/12 bg-gradient-to-b from-cyan-500/[0.02] to-transparent p-5">
@@ -441,7 +461,14 @@ function PatternBuilderPanel({ onSave, onCancel }: { onSave: (p: Omit<Pattern, '
         <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descrição (opcional)" className="w-full h-9 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 text-[11px] text-white placeholder:text-white/20 outline-none focus:border-white/[0.12]" />
         <div className="flex gap-4 flex-wrap">
           <div><span className="text-[9px] text-white/30 block mb-1">Severidade</span><div className="flex gap-1">{(['critical', 'attention', 'info'] as const).map(s => (<button key={s} onClick={() => setSeverity(s)} className={`text-[9px] px-2.5 py-1 rounded-lg border transition-all ${severity === s ? 'border-white/[0.1] text-white/60 bg-white/[0.03]' : 'border-white/[0.03] text-white/20'}`} type="button">{s === 'critical' ? 'Crítico' : s === 'attention' ? 'Atenção' : 'Info'}</button>))}</div></div>
-          <div><span className="text-[9px] text-white/30 block mb-1">Escopo</span><div className="flex gap-1">{(['all', 'favorites_only'] as const).map(s => (<button key={s} onClick={() => setScope(s)} className={`text-[9px] px-2.5 py-1 rounded-lg border transition-all ${scope === s ? 'border-white/[0.1] text-white/60 bg-white/[0.03]' : 'border-white/[0.03] text-white/20'}`} type="button">{s === 'all' ? 'Todos' : 'Favoritos'}</button>))}</div></div>
+          <div><span className="text-[9px] text-white/30 block mb-1">Escopo</span><div className="flex gap-1 flex-wrap">{(['all', 'favorites_only', 'specific_leagues', 'specific_teams'] as const).map(s => (<button key={s} onClick={() => setScope(s)} className={`text-[9px] px-2.5 py-1 rounded-lg border transition-all ${scope === s ? 'border-white/[0.1] text-white/60 bg-white/[0.03]' : 'border-white/[0.03] text-white/20'}`} type="button">{s === 'all' ? 'Todos' : s === 'favorites_only' ? 'Favoritos' : s === 'specific_leagues' ? 'Ligas' : 'Times'}</button>))}</div>
+            {(scope === 'specific_leagues' || scope === 'specific_teams') && (
+              <div className="mt-2">
+                <div className="flex gap-1"><input value={scopeInput} onChange={e => setScopeInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addScopeItem()} placeholder={scope === 'specific_leagues' ? 'Nome da liga' : 'Nome do time'} className="flex-1 h-7 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2 text-[9px] text-white placeholder:text-white/15 outline-none" /><button onClick={addScopeItem} className="text-[9px] text-cyan-400/50 px-2" type="button">+</button></div>
+                {scopeFilter.length > 0 && <div className="flex flex-wrap gap-1 mt-1.5">{scopeFilter.map((f, i) => (<span key={i} className="text-[8px] text-white/40 bg-white/[0.03] px-2 py-0.5 rounded-lg flex items-center gap-1">{f}<button onClick={() => setScopeFilter(prev => prev.filter((_, j) => j !== i))} className="text-white/20 hover:text-rose-400/50" type="button">×</button></span>))}</div>}
+              </div>
+            )}
+          </div>
           <div><span className="text-[9px] text-white/30 block mb-1">Confiança mín.</span><input type="number" value={minConf} onChange={e => setMinConf(Number(e.target.value))} className="w-16 h-7 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2 text-[10px] text-white outline-none" min={20} max={95} /></div>
           <div><span className="text-[9px] text-white/30 block mb-1">Ação</span><div className="flex gap-1">{(['register_alert', 'suggest_only', 'highlight'] as const).map(a => (<button key={a} onClick={() => setAction(a)} className={`text-[9px] px-2.5 py-1 rounded-lg border transition-all ${action === a ? 'border-white/[0.1] text-white/60 bg-white/[0.03]' : 'border-white/[0.03] text-white/20'}`} type="button">{a === 'register_alert' ? 'Alerta' : a === 'suggest_only' ? 'Sugerir' : 'Destacar'}</button>))}</div></div>
         </div>
@@ -545,47 +572,77 @@ function PerformanceContent({ patterns, triggeredAlerts, isAdvanced }: { pattern
   const stats = useMemo(() => patterns.map(p => {
     const alerts = triggeredAlerts.filter(t => t.patternId === p.id)
     const confirmed = alerts.filter(t => t.status === 'confirmed').length
+    const partial = alerts.filter(t => t.status === 'confirmed_partial' as any).length
     const failed = alerts.filter(t => t.status === 'failed').length
     const expired = alerts.filter(t => t.status === 'expired').length
+    const unknown = alerts.filter(t => t.status === 'unknown').length
+    const pending = alerts.filter(t => t.status === 'pending').length
     const resolved = confirmed + failed
     const hitRate = resolved >= 5 ? Math.round((confirmed / resolved) * 100) : null
     const avgConf = alerts.length > 0 ? Math.round(alerts.reduce((s, a) => s + a.confidence, 0) / alerts.length) : null
-    return { pattern: p, total: alerts.length, confirmed, failed, expired, hitRate, avgConf, lastHit: alerts[0]?.timestamp || null }
+    const needsReview = (unknown > 3 && unknown > confirmed) || (resolved >= 5 && (hitRate ?? 100) < 30) || (failed > 5 && failed > confirmed * 2)
+    const reviewReason = unknown > 3 ? 'Muitos alertas sem dados para confirmar' : (resolved >= 5 && (hitRate ?? 100) < 30) ? 'Taxa de acerto baixa' : failed > 5 ? 'Muitas falhas' : ''
+    return { pattern: p, total: alerts.length, confirmed, partial, failed, expired, unknown, pending, hitRate, avgConf, lastHit: alerts[0]?.timestamp || null, needsReview, reviewReason }
   }), [patterns, triggeredAlerts])
 
   const totalDisparos = triggeredAlerts.length
   const totalConfirmed = triggeredAlerts.filter(t => t.status === 'confirmed').length
+  const totalPartial = triggeredAlerts.filter(t => t.status === 'confirmed_partial' as any).length
   const totalFailed = triggeredAlerts.filter(t => t.status === 'failed').length
+  const totalExpired = triggeredAlerts.filter(t => t.status === 'expired').length
+  const totalUnknown = triggeredAlerts.filter(t => t.status === 'unknown').length
+  const patternsNeedingReview = stats.filter(s => s.needsReview)
 
   if (patterns.length === 0) {
-    return (<div className="rounded-xl border border-white/[0.04] border-dashed bg-white/[0.005] p-10 text-center"><BarChart3 size={20} className="mx-auto text-white/15 mb-2" /><p className="text-[12px] text-white/30">Sem dados de performance</p><p className="text-[10px] text-white/18 mt-1">Ative padrões para começar a medir resultados</p></div>)
+    return (<div className="rounded-xl border border-white/[0.04] border-dashed bg-white/[0.005] p-10 text-center"><BarChart3 size={20} className="mx-auto text-white/15 mb-2" /><p className="text-[12px] text-white/30">Sem dados de performance</p><p className="text-[10px] text-white/20 mt-1">Ative padrões para começar a medir resultados</p></div>)
   }
 
   return (
     <div className="space-y-5">
-      <div className="flex gap-3">
-        <MetricCard label="Padrões" value={patterns.length} color="white" />
-        <MetricCard label="Disparos" value={totalDisparos} color="amber" />
+      {/* Summary */}
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+        <MetricCard label="Disparos" value={totalDisparos} color="white" />
         <MetricCard label="Confirmados" value={totalConfirmed} color="emerald" />
+        <MetricCard label="Parciais" value={totalPartial} color="cyan" />
         <MetricCard label="Falhados" value={totalFailed} color="rose" />
+        <MetricCard label="Expirados" value={totalExpired} color="white" />
+        <MetricCard label="Unknown" value={totalUnknown} color="white" />
       </div>
-      <div className="space-y-1.5">{stats.map(s => (
-        <div key={s.pattern.id} className="rounded-xl border border-white/[0.04] bg-white/[0.005] px-4 py-3">
-          <div className="flex items-center justify-between mb-1"><span className="text-[11px] font-medium text-white/55">{s.pattern.name}</span><span className={`text-[8px] px-2 py-0.5 rounded-md ${s.pattern.status === 'active' ? 'bg-emerald-500/8 text-emerald-400/50' : 'bg-white/[0.02] text-white/15'}`}>{s.pattern.status}</span></div>
-          <div className="flex items-center gap-4 text-[10px] text-white/30">
-            <span>{s.total} disparos</span>
-            {s.hitRate !== null ? <span className="text-emerald-400/50">Taxa: {s.hitRate}%</span> : <span className="text-white/18 italic">Dados insuficientes ({s.confirmed + s.failed}/5 resoluções)</span>}
-            {s.avgConf !== null && <span>Conf. média: {s.avgConf}%</span>}
-            {s.lastHit && <span>Último: {new Date(s.lastHit).toLocaleDateString('pt-BR')}</span>}
+
+      {/* Patterns needing review */}
+      {patternsNeedingReview.length > 0 && (
+        <section className="rounded-xl border border-amber-500/10 bg-amber-500/[0.02] p-4">
+          <h4 className="text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-400/50 mb-2">Padrões que precisam de revisão</h4>
+          <div className="space-y-1.5">{patternsNeedingReview.map(s => (
+            <div key={s.pattern.id} className="flex items-center justify-between">
+              <div><span className="text-[11px] text-white/50">{s.pattern.name}</span><span className="text-[9px] text-amber-400/40 ml-2">{s.reviewReason}</span></div>
+            </div>
+          ))}</div>
+        </section>
+      )}
+
+      {/* Per pattern */}
+      <section>
+        <h4 className="text-[10px] font-semibold uppercase tracking-[0.1em] text-white/30 mb-2">Por padrão</h4>
+        <div className="space-y-1.5">{stats.map(s => (
+          <div key={s.pattern.id} className="rounded-xl border border-white/[0.04] bg-white/[0.005] px-4 py-3">
+            <div className="flex items-center justify-between mb-1"><span className="text-[11px] font-medium text-white/55">{s.pattern.name}</span><span className={`text-[8px] px-2 py-0.5 rounded-md ${s.pattern.status === 'active' ? 'bg-emerald-500/8 text-emerald-400/50' : 'bg-white/[0.02] text-white/15'}`}>{s.pattern.status}</span></div>
+            <div className="flex items-center gap-3 text-[10px] text-white/35 flex-wrap">
+              <span>{s.total} disparos</span>
+              {s.hitRate !== null ? <span className="text-emerald-400/60 font-medium">Taxa forte: {s.hitRate}%</span> : <span className="text-white/20">Insuficiente ({s.confirmed + s.failed}/5)</span>}
+              {s.partial > 0 && <span className="text-cyan-400/40">Parciais: {s.partial}</span>}
+              {s.avgConf !== null && <span>Conf: {s.avgConf}%</span>}
+              {s.lastHit && <span>Último: {new Date(s.lastHit).toLocaleDateString('pt-BR')}</span>}
+            </div>
+            {isAdvanced && <div className="mt-1.5 text-[9px] text-white/15 font-mono">✓{s.confirmed} · ~{s.partial} · ✗{s.failed} · ⏱{s.expired} · ?{s.unknown} · ⏳{s.pending}</div>}
           </div>
-          {isAdvanced && <div className="mt-1.5 text-[9px] text-white/15 font-mono">confirmed:{s.confirmed} · failed:{s.failed} · expired:{s.expired} · pending:{s.total - s.confirmed - s.failed - s.expired}</div>}
-        </div>
-      ))}</div>
+        ))}</div>
+      </section>
     </div>
   )
 }
 
 function MetricCard({ label, value, color }: { label: string; value: number; color: string }) {
-  const colorClass = value > 0 ? (color === 'emerald' ? 'text-emerald-400' : color === 'amber' ? 'text-amber-400' : color === 'rose' ? 'text-rose-400' : 'text-white/60') : 'text-white/15'
-  return (<div className="rounded-xl border border-white/[0.04] bg-white/[0.005] px-4 py-3 flex-1 text-center"><span className={`text-[18px] font-bold tabular-nums block ${colorClass}`}>{value}</span><span className="text-[9px] text-white/25 uppercase tracking-wider">{label}</span></div>)
+  const colorClass = value > 0 ? (color === 'emerald' ? 'text-emerald-400' : color === 'cyan' ? 'text-cyan-400' : color === 'amber' ? 'text-amber-400' : color === 'rose' ? 'text-rose-400' : 'text-white/50') : 'text-white/15'
+  return (<div className="rounded-xl border border-white/[0.04] bg-white/[0.005] px-3 py-2.5 text-center"><span className={`text-[16px] font-bold tabular-nums block ${colorClass}`}>{value}</span><span className="text-[8px] text-white/25 uppercase tracking-wider">{label}</span></div>)
 }
