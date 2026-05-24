@@ -76,24 +76,21 @@ export function MatchCenterPage() {
         if (summaryData) { setData(summaryData); setError(null); return }
       }
 
-      // Attempt 2: Try provider-specific data (non-ESPN or ESPN failed)
-      // Try API-Football live (has stats for Serie A, Brazilian league etc.)
+      // Attempt 2: Search ESPN by team names (works for all providers, returns full data)
+      const searchData = await searchEspnScoreboard(expectedHome, expectedAway)
+      if (searchData) { setData(searchData); setError(null); return }
+
+      // Attempt 3: Try provider-specific data (non-ESPN or ESPN failed)
       const apiData = await tryApiFootballLive(expectedHome, expectedAway)
       if (apiData) { setData(apiData); setError(null); return }
 
-      // Try football-data.org detail
       if (fixtureState?.provider === 'football_data' && fixtureId) {
         const fdData = await tryFootballDataDetail(fixtureId, expectedHome, expectedAway)
         if (fdData) { setData(fdData); setError(null); return }
       }
 
-      // Try FutPythonTrader
       const fptData = await tryFutPythonTrader(expectedHome, expectedAway)
       if (fptData) { setData(fptData); setError(null); return }
-
-      // Attempt 3: Search ESPN scoreboard by team names
-      const searchData = await searchEspnScoreboard(expectedHome, expectedAway)
-      if (searchData) { setData(searchData); setError(null); return }
 
       // Attempt 4: Safe fallback — always shows the correct match
       if (fixtureState) {
@@ -148,32 +145,21 @@ export function MatchCenterPage() {
   /** Search ESPN scoreboard for a match by team names. */
   async function searchEspnScoreboard(expectedHome: string, expectedAway: string): Promise<MatchData | null> {
     try {
-      const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard')
+      // Use our ESPN function with today's date to include finished matches
+      const today = new Date().toISOString().split('T')[0].replace(/-/g, '')
+      const res = await fetch(`/.netlify/functions/espn-live?date=${today}`)
       if (!res.ok) return null
       const json = await res.json()
+      const fixtures = json.fixtures || []
 
-      for (const event of (json.events || [])) {
-        const comp = event.competitions?.[0]
-        if (!comp?.competitors || comp.competitors.length < 2) continue
-        const h = comp.competitors.find((c: any) => c.homeAway === 'home')
-        const a = comp.competitors.find((c: any) => c.homeAway === 'away')
-        const eName = h?.team?.displayName || ''
-        const aName = a?.team?.displayName || ''
+      // Find the match by name
+      for (const fx of fixtures) {
+        const eName = fx.homeTeam?.name || ''
+        const aName = fx.awayTeam?.name || ''
+        if (!isSameMatchStrict({ homeName: expectedHome, awayName: expectedAway }, { homeName: eName, awayName: aName })) continue
 
-        const isMatch = isSameMatchStrict({ homeName: expectedHome, awayName: expectedAway }, { homeName: eName, awayName: aName })
-        if (!isMatch) {
-          // Also try shortDisplayName
-          const eShort = h?.team?.shortDisplayName || ''
-          const aShort = a?.team?.shortDisplayName || ''
-          if (eShort && aShort && isSameMatchStrict({ homeName: expectedHome, awayName: expectedAway }, { homeName: eShort, awayName: aShort })) {
-            // Match via short name
-          } else {
-            continue
-          }
-        }
-
-        // Found match in scoreboard " fetch full summary
-        const sumRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${event.id}`)
+        // Found! Get full ESPN summary for rich data
+        const sumRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${fx.id}`)
         if (!sumRes.ok) continue
         const sumJson = await sumRes.json()
         const sumComp = sumJson.header?.competitions?.[0]
@@ -182,7 +168,7 @@ export function MatchCenterPage() {
         const sumHome = sumComp.competitors.find((c: any) => c.homeAway === 'home')?.team?.displayName || ''
         const sumAway = sumComp.competitors.find((c: any) => c.homeAway === 'away')?.team?.displayName || ''
 
-        // FINAL CHECK on the summary too
+        // Final validation
         if (isSameMatchStrict({ homeName: expectedHome, awayName: expectedAway }, { homeName: sumHome, awayName: sumAway })) {
           return parseEspn(sumJson)
         }
