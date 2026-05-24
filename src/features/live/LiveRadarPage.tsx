@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { RefreshCw, X, LayoutList, TableProperties, Eye } from 'lucide-react'
 import { getLiveFixtures, type LiveFixture } from '@/lib/apiClient'
 import { storeFixtureForNavigation } from '@/lib/matchNavigation'
@@ -25,9 +25,14 @@ import { LiveMatchDetailView } from './LiveMatchDetailView'
 
 export function LiveRadarPage() {
   const navigate = useNavigate()
+  const location = useLocation()
 
   // Expanded match detail (inline, no navigation)
-  const [expandedFixture, setExpandedFixture] = useState<LiveFixture | null>(null)
+  const [expandedFixture, setExpandedFixture] = useState<LiveFixture | null>(() => {
+    // Check if navigated from Matches with a fixture to open
+    const fromState = (location.state as any)?.openFixture as LiveFixture | undefined
+    return fromState || null
+  })
 
   // Helper: open match detail inline
   const openMatch = useCallback((fixture: LiveFixture) => {
