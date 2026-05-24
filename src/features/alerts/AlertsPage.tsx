@@ -34,7 +34,7 @@ export function AlertsPage() {
           <h1 className="text-[22px] font-bold text-white tracking-tight">Alertas</h1>
           <p className="text-[11px] text-white/25 mt-0.5">Monitore seus jogos, times e competições favoritos</p>
         </div>
-        <button onClick={() => { setPrefill(null); setEditingAlert(null); setShowModal(true) }} className="flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/15 transition-colors">
+        <button onClick={() => { setPrefill(null); setEditingAlert(null); setShowModal(true) }} className="gs-btn-primary">
           <Plus size={13} />Criar alerta
         </button>
       </header>
@@ -79,13 +79,13 @@ export function AlertsPage() {
 
       {/* Alert list */}
       {alerts.length === 0 && (
-        <div className="rounded-[24px] border border-white/[0.04] bg-white/[0.015] py-16 text-center">
+        <div className="gs-empty">
           <div className="inline-flex items-center justify-center h-12 w-12 rounded-2xl bg-white/[0.03] border border-white/[0.05] mb-4">
             <Bell size={20} className="text-white/20" />
           </div>
-          <p className="text-[14px] text-white/40 font-medium">Nenhum alerta criado</p>
-          <p className="text-[11px] text-white/20 mt-1">Crie alertas para gols, início de partida e eventos dos seus favoritos.</p>
-          <button onClick={() => { setPrefill(null); setEditingAlert(null); setShowModal(true) }} className="mt-4 px-4 py-2 rounded-xl text-[10px] font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/15 transition-colors">
+          <p className="text-[14px] text-white/50 font-medium">Nenhum alerta criado</p>
+          <p className="text-[12px] text-white/35 mt-1">Crie alertas para gols, início de partida e eventos dos seus favoritos.</p>
+          <button onClick={() => { setPrefill(null); setEditingAlert(null); setShowModal(true) }} className="gs-btn-primary mt-4" type="button">
             Criar alerta
           </button>
         </div>

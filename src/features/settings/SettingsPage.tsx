@@ -169,7 +169,7 @@ function StorageSection() {
   const showFeedback = (msg: string) => { setFeedback(msg); setTimeout(() => setFeedback(''), 3000) }
 
   return (
-    <div className="rounded-[18px] border border-white/[0.05] bg-white/[0.015] p-5 space-y-4">
+    <div className="gs-card space-y-4">
       <div className="flex items-center gap-3 mb-1">
         <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-emerald-500/10 border border-emerald-500/15"><HardDrive size={16} className="text-emerald-400" /></div>
         <div><h3 className="text-[13px] font-semibold text-white/70">Dados locais e cache</h3><p className="text-[10px] text-white/30 mt-0.5">~{stats.estimatedSizeKB} KB usados · {stats.goalsenseKeys} entradas</p></div>
