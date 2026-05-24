@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+
 import { ClubLogo } from '@/components/ui/ClubLogo'
 import type { LiveFixture } from '@/lib/apiClient'
 import { calculateAttention } from '@/features/live/attentionQueue'
@@ -10,13 +10,14 @@ interface Props {
   liveCount: number
   allFixtures: LiveFixture[]
   onSelectBest: () => void
+  onOpenDetail?: () => void
 }
 
 interface QuickStats { possession?: [number, number]; shots?: [number, number]; onTarget?: [number, number]; corners?: [number, number]; fouls?: [number, number] }
 interface PlayerInfo { jersey: string; name: string; starter: boolean }
 
-export function InspectorPanel({ fixture, liveCount, allFixtures, onSelectBest }: Props) {
-  const navigate = useNavigate()
+export function InspectorPanel({ fixture, liveCount, allFixtures, onSelectBest, onOpenDetail }: Props) {
+
   const [tab, setTab] = useState<'resumo' | 'dados' | 'jogadores'>('resumo')
   const [stats, setStats] = useState<QuickStats | null>(null)
   const [players, setPlayers] = useState<{ home: PlayerInfo[]; away: PlayerInfo[] } | null>(null)
@@ -222,7 +223,7 @@ export function InspectorPanel({ fixture, liveCount, allFixtures, onSelectBest }
 
       {/* Actions */}
       <div className="p-5 border-t border-white/[0.04] space-y-2">
-        <button onClick={() => navigate(`/app/matches/${fixture.id}`)} className="w-full h-12 rounded-xl bg-cyan-500/8 border border-cyan-500/12 text-[13px] font-semibold text-cyan-400 transition-all hover:bg-cyan-500/12">Analisar partida</button>
+        <button onClick={() => onOpenDetail?.()} className="w-full h-12 rounded-xl bg-cyan-500/8 border border-cyan-500/12 text-[13px] font-semibold text-cyan-400 transition-all hover:bg-cyan-500/12">Analisar partida</button>
         <button
           onClick={(e) => {
             const comp = displayCompetition(fixture.league.name, fixture.league.country)

@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+
 import { ClubLogo } from '@/components/ui/ClubLogo'
 import type { LiveFixture } from '@/lib/apiClient'
 import { calculateRelevance } from '@/features/live/liveMatchScoring'
@@ -6,10 +6,11 @@ import { calculateRelevance } from '@/features/live/liveMatchScoring'
 interface Props {
   fixture: LiveFixture
   onSelect: () => void
+  onOpenDetail?: () => void
 }
 
-export function FeaturedMatchPanel({ fixture, onSelect }: Props) {
-  const navigate = useNavigate()
+export function FeaturedMatchPanel({ fixture, onSelect, onOpenDetail }: Props) {
+
   const { reasons, dataQuality } = calculateRelevance(fixture)
   const elapsed = fixture.status.elapsed
 
@@ -55,7 +56,7 @@ export function FeaturedMatchPanel({ fixture, onSelect }: Props) {
       <div className="mt-5 flex items-center justify-between text-[10px] text-[var(--text-muted)]">
         <span>{reasons.slice(0, 2).join(' · ')}</span>
         <button
-          onClick={(e) => { e.stopPropagation(); navigate(`/app/matches/${fixture.id}`) }}
+          onClick={(e) => { e.stopPropagation(); onOpenDetail?.() }}
           className="text-cyan-400 font-medium hover:text-cyan-300 transition-colors"
         >
           Analisar

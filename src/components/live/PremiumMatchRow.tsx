@@ -1,20 +1,20 @@
-import { useNavigate } from 'react-router-dom'
+
 import { ClubLogo } from '@/components/ui/ClubLogo'
 import { getStatusLabel } from '@/lib/footballStatus'
 import type { LiveFixture } from '@/lib/apiClient'
 
-export function PremiumMatchRow({ fixture }: { fixture: LiveFixture }) {
-  const navigate = useNavigate()
+export function PremiumMatchRow({ fixture, onOpenDetail }: { fixture: LiveFixture; onOpenDetail?: () => void }) {
+
   const elapsed = fixture.status.elapsed
   const statusText = elapsed ? `${elapsed}'` : getStatusLabel(fixture.status.short)
 
   return (
     <div
-      onClick={() => navigate(`/app/matches/${fixture.id}`)}
+      onClick={() => onOpenDetail?.()}
       className="group flex items-center cursor-pointer px-4 py-3 transition-colors hover:bg-[var(--bg-hover)]"
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/app/matches/${fixture.id}`) }}
+      onKeyDown={(e) => { if (e.key === 'Enter') onOpenDetail?.() }}
     >
       {/* Status pill */}
       <div className="w-14 shrink-0">

@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+
 import { ClubLogo } from '@/components/ui/ClubLogo'
 import type { LiveFixture } from '@/lib/apiClient'
 import { calculateRelevance } from '@/features/live/liveMatchScoring'
@@ -7,10 +7,11 @@ interface Props {
   fixture: LiveFixture
   selected: boolean
   onSelect: () => void
+  onOpenDetail?: () => void
 }
 
-export function LiveMatchRowPro({ fixture, selected, onSelect }: Props) {
-  const navigate = useNavigate()
+export function LiveMatchRowPro({ fixture, selected, onSelect, onOpenDetail }: Props) {
+
   const elapsed = fixture.status.elapsed
   const { dataQuality } = calculateRelevance(fixture)
 
@@ -24,7 +25,7 @@ export function LiveMatchRowPro({ fixture, selected, onSelect }: Props) {
   return (
     <div
       onClick={onSelect}
-      onDoubleClick={() => navigate(`/app/matches/${fixture.id}`)}
+      onDoubleClick={() => onOpenDetail?.()}
       className={`group flex items-center gap-3 px-4 py-3 cursor-pointer transition-all ${
         selected ? 'bg-cyan-500/5 border-l-2 border-l-cyan-400' : 'hover:bg-[var(--bg-hover)] border-l-2 border-l-transparent'
       }`}
@@ -65,7 +66,7 @@ export function LiveMatchRowPro({ fixture, selected, onSelect }: Props) {
 
       {/* Action */}
       <button
-        onClick={(e) => { e.stopPropagation(); navigate(`/app/matches/${fixture.id}`) }}
+        onClick={(e) => { e.stopPropagation(); onOpenDetail?.() }}
         className="hidden sm:block text-[10px] font-medium text-cyan-400/40 group-hover:text-cyan-400 transition-colors shrink-0"
       >
         Analisar

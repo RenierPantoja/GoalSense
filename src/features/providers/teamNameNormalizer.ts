@@ -189,24 +189,28 @@ export function teamNameSimilarity(nameA: string, nameB: string): number {
   if (!a || !b) return 0
   if (a === b) return 1
 
-  // One contains the other
-  if (a.includes(b) || b.includes(a)) return 0.9
+  // One is clearly a prefix/start of the other (e.g. "parma" in "parma calcio")
+  if (a.startsWith(b + ' ') || b.startsWith(a + ' ')) return 0.92
 
-  // First significant word match
-  const wordsA = a.split(' ').filter(w => w.length >= 3)
-  const wordsB = b.split(' ').filter(w => w.length >= 3)
+  // One contains the other entirely
+  if ((a.includes(b) && b.length >= 4) || (b.includes(a) && a.length >= 4)) return 0.85
+
+  // First significant word match (requires at least one word with 4+ chars to match)
+  const wordsA = a.split(' ').filter(w => w.length >= 4)
+  const wordsB = b.split(' ').filter(w => w.length >= 4)
   const commonWords = wordsA.filter(w => wordsB.includes(w))
-  if (commonWords.length > 0) {
-    return 0.7 + (commonWords.length / Math.max(wordsA.length, wordsB.length)) * 0.3
+  if (commonWords.length > 0 && commonWords[0].length >= 4) {
+    // Both must share a significant word (not just "fc" or "sc")
+    return 0.7 + (commonWords.length / Math.max(wordsA.length, wordsB.length)) * 0.25
   }
 
-  // Levenshtein-like: character overlap
+  // Character overlap — VERY conservative, never return > 0.6
   const setA = new Set(a.replace(/\s/g, '').split(''))
   const setB = new Set(b.replace(/\s/g, '').split(''))
   let common = 0
   for (const ch of setA) { if (setB.has(ch)) common++ }
   const overlap = common / Math.max(setA.size, setB.size)
-  return overlap * 0.6
+  return overlap * 0.5 // max possible: 0.5 — never enough to pass 0.7 threshold
 }
 
 /**

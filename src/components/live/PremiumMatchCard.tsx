@@ -1,18 +1,18 @@
-import { useNavigate } from 'react-router-dom'
+
 import { ClubLogo } from '@/components/ui/ClubLogo'
 import type { LiveFixture } from '@/lib/apiClient'
 
-export function PremiumMatchCard({ fixture }: { fixture: LiveFixture }) {
-  const navigate = useNavigate()
+export function PremiumMatchCard({ fixture, onOpenDetail }: { fixture: LiveFixture; onOpenDetail?: () => void }) {
+
   const elapsed = fixture.status.elapsed
 
   return (
     <div
-      onClick={() => navigate(`/app/matches/${fixture.id}`)}
+      onClick={() => onOpenDetail?.()}
       className="group relative flex flex-col rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] p-5 cursor-pointer transition-all duration-200 hover:border-cyan-500/20 hover:shadow-[0_0_30px_rgba(6,182,212,0.04)]"
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/app/matches/${fixture.id}`) }}
+      onKeyDown={(e) => { if (e.key === 'Enter') onOpenDetail?.() }}
     >
       {/* Top: League + Status */}
       <div className="flex items-center justify-between mb-5">

@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+
 import { ClubLogo } from '@/components/ui/ClubLogo'
 import type { LiveFixture } from '@/lib/apiClient'
 import { calculateRelevance } from '@/features/live/liveMatchScoring'
@@ -6,10 +6,11 @@ import { calculateRelevance } from '@/features/live/liveMatchScoring'
 interface Props {
   fixture: LiveFixture
   compact?: boolean
+  onOpenDetail?: () => void
 }
 
-export function LiveMatchTile({ fixture, compact = false }: Props) {
-  const navigate = useNavigate()
+export function LiveMatchTile({ fixture, compact = false, onOpenDetail }: Props) {
+
   const elapsed = fixture.status.elapsed
   const { dataQuality } = calculateRelevance(fixture)
   const isLive = fixture.status.short === 'LIVE' || fixture.status.short === 'HT' || fixture.status.short === '1H' || fixture.status.short === '2H'
@@ -24,10 +25,10 @@ export function LiveMatchTile({ fixture, compact = false }: Props) {
   if (compact) {
     return (
       <div
-        onClick={() => navigate(`/app/matches/${fixture.id}`)}
+        onClick={() => onOpenDetail?.()}
         className="group flex items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)]/50 px-4 py-3 cursor-pointer transition-all hover:border-[var(--border-strong)] hover:bg-[var(--bg-panel)]"
         role="button" tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/app/matches/${fixture.id}`) }}
+        onKeyDown={(e) => { if (e.key === 'Enter') onOpenDetail?.() }}
       >
         <span className="text-[10px] tabular-nums text-[var(--text-muted)] w-12">
           {new Date(fixture.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
@@ -43,10 +44,10 @@ export function LiveMatchTile({ fixture, compact = false }: Props) {
 
   return (
     <div
-      onClick={() => navigate(`/app/matches/${fixture.id}`)}
+      onClick={() => onOpenDetail?.()}
       className="group relative flex flex-col rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] p-5 cursor-pointer transition-all duration-200 hover:border-cyan-500/20 hover:shadow-[0_0_40px_rgba(6,182,212,0.03)]"
       role="button" tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/app/matches/${fixture.id}`) }}
+      onKeyDown={(e) => { if (e.key === 'Enter') onOpenDetail?.() }}
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-5">

@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { RefreshCw, X, LayoutList, TableProperties, Eye } from 'lucide-react'
 import { getLiveFixtures, type LiveFixture } from '@/lib/apiClient'
 import { storeFixtureForNavigation } from '@/lib/matchNavigation'
+import { useFavorites } from '@/context/FavoritesContext'
+import { useViewMode } from '@/context/ViewModeContext'
+import { FavoriteButton } from '@/components/ui/FavoriteButton'
+import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
 import { isLiveStatus } from '@/lib/footballStatus'
 import { translateStage } from '@/lib/competitionLabels'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
@@ -17,15 +21,19 @@ import { InspectorPanel } from '@/components/live/InspectorPanel'
 import { LiveEventTicker } from '@/components/live/LiveEventTicker'
 import { RefreshProgressBar } from '@/components/live/RefreshProgressBar'
 import { LiveRadarSummary } from '@/components/live/LiveRadarSummary'
+import { LiveMatchDetailView } from './LiveMatchDetailView'
 
 export function LiveRadarPage() {
   const navigate = useNavigate()
 
-  // Helper: store fixture and navigate
+  // Expanded match detail (inline, no navigation)
+  const [expandedFixture, setExpandedFixture] = useState<LiveFixture | null>(null)
+
+  // Helper: open match detail inline
   const openMatch = useCallback((fixture: LiveFixture) => {
-    storeFixtureForNavigation(fixture)
-    navigate(`/app/matches/${fixture.id}`, { state: { fixture } })
-  }, [navigate])
+    console.log('[LiveRadar] Opening match inline:', fixture.homeTeam.name, 'x', fixture.awayTeam.name)
+    setExpandedFixture(fixture)
+  }, [])
 
   const allFixturesRef = useRef<LiveFixture[] | null>(null)
   const fetcher = useCallback(async () => (await getLiveFixtures()).fixtures, [])
@@ -43,6 +51,7 @@ export function LiveRadarPage() {
   const [changes, setChanges] = useState<ChangeEvent[]>([])
   const { watchlist, toggle: toggleWatch, isWatching } = useLiveWatchlist()
   const [summaryFilter, setSummaryFilter] = useState('')
+  const { isFavoriteTeam: isFavTeamLive, isFavoriteMatch: isFavMatchLive, hasAnyFavorite } = useFavorites()
 
   // Countdown
   useEffect(() => {
@@ -150,6 +159,7 @@ export function LiveRadarPage() {
     else if (summaryFilter === 'final_phase') list = list.filter(fx => (fx.status.elapsed || 0) >= 75)
     else if (summaryFilter === 'with_stats') list = list.filter(fx => { const s = scannerStats.get(fx.id); if (!s) return false; const poss = (s.possession?.home || 0) + (s.possession?.away || 0); const shots = (s.shots?.home || 0) + (s.shots?.away || 0); return poss > 10 || shots > 0 })
     else if (summaryFilter === 'open_games') list = list.filter(fx => { const g = (fx.score.home ?? 0) + (fx.score.away ?? 0); const s = scannerStats.get(fx.id); return g >= 3 || ((s?.shots?.home || 0) + (s?.shots?.away || 0)) >= 16 })
+    else if (summaryFilter === 'favorites') list = list.filter(fx => isFavTeamLive(fx.homeTeam.name) || isFavTeamLive(fx.awayTeam.name) || isFavMatchLive(buildCanonicalMatchId(fx.homeTeam.name, fx.awayTeam.name, fx.date)))
     return sortByAttention(list, scannerStats)
   }, [liveFixtures, search, scannerStats, summaryFilter])
 
@@ -179,6 +189,11 @@ export function LiveRadarPage() {
   }, [selectedId, filtered, navigate, refresh])
 
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><LoadingState message="" /></div>
+
+  // If a match is expanded, show its detail inline
+  if (expandedFixture) {
+    return <LiveMatchDetailView fixture={expandedFixture} onBack={() => setExpandedFixture(null)} />
+  }
 
   return (
     <div className="flex gap-5">
@@ -311,7 +326,7 @@ export function LiveRadarPage() {
       {/* Inspector — desktop, only in focus mode */}
       {mode === 'focus' && (
         <aside className="hidden xl:block w-[440px] shrink-0 sticky top-20 self-start max-h-[calc(100vh-6rem)] overflow-y-auto">
-          <InspectorPanel fixture={selectedFixture} liveCount={liveFixtures.length} allFixtures={liveFixtures} onSelectBest={() => { if (filtered[0]) setSelectedId(filtered[0].id) }} />
+          <InspectorPanel fixture={selectedFixture} liveCount={liveFixtures.length} allFixtures={liveFixtures} onSelectBest={() => { if (filtered[0]) setSelectedId(filtered[0].id) }} onOpenDetail={() => { if (selectedFixture) openMatch(selectedFixture) }} />
         </aside>
       )}
     </div>
@@ -379,10 +394,13 @@ function MatchRow({ fixture, selected, onSelect, onOpen }: { fixture: LiveFixtur
   const elapsed = fixture.status.elapsed
   const { level } = calculateAttention(fixture)
   const dotColor = level === 'critical' ? 'bg-rose-400' : level === 'high' ? 'bg-amber-400' : 'bg-emerald-400'
+  const { isFavoriteTeam, isFavoriteMatch, toggleFavoriteMatch } = useFavorites()
+  const matchId = buildCanonicalMatchId(fixture.homeTeam.name, fixture.awayTeam.name, fixture.date)
+  const isFav = isFavoriteMatch(matchId) || isFavoriteTeam(fixture.homeTeam.name) || isFavoriteTeam(fixture.awayTeam.name)
 
   return (
     <div onClick={onSelect} onDoubleClick={onOpen}
-      className={`group flex items-center rounded-2xl px-6 py-5 cursor-pointer transition-all duration-200 border ${selected ? 'border-white/[0.08] bg-white/[0.03]' : 'border-transparent hover:bg-white/[0.02] hover:border-white/[0.04]'}`}>
+      className={`group flex items-center rounded-2xl px-6 py-5 cursor-pointer transition-all duration-200 border ${selected ? 'border-white/[0.08] bg-white/[0.03]' : isFav ? 'border-cyan-500/15 hover:bg-white/[0.02]' : 'border-transparent hover:bg-white/[0.02] hover:border-white/[0.04]'}`}>
       <div className="w-16 shrink-0">
         <span className="flex items-center gap-2 text-[12px] font-semibold tabular-nums text-emerald-400">
           <span className={`h-2 w-2 rounded-full ${dotColor} animate-pulse`} />
@@ -402,7 +420,10 @@ function MatchRow({ fixture, selected, onSelect, onOpen }: { fixture: LiveFixtur
         <ClubLogo src={fixture.awayTeam.logo} name={fixture.awayTeam.name} size={36} />
         <span className="truncate text-[14px] font-medium text-white/60">{fixture.awayTeam.name}</span>
       </div>
-      <span className="hidden lg:block text-[11px] text-white/15 w-32 truncate text-right">{fixture.league.name}</span>
+      <div className="hidden lg:flex items-center gap-2 w-40 justify-end shrink-0">
+        <span className="text-[11px] text-white/15 truncate">{fixture.league.name}</span>
+        <FavoriteButton active={isFav} onClick={() => toggleFavoriteMatch({ canonicalMatchId: matchId, homeTeam: fixture.homeTeam.name, awayTeam: fixture.awayTeam.name, competition: fixture.league.name, utcDate: fixture.date })} size={13} />
+      </div>
     </div>
   )
 }

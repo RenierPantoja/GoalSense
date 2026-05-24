@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+
 import { ClubLogo } from '@/components/ui/ClubLogo'
 import type { LiveFixture } from '@/lib/apiClient'
 
@@ -7,10 +7,11 @@ interface Props {
   liveCount: number
   leagues: string[]
   sources: string[]
+  onOpenDetail?: () => void
 }
 
-export function LiveContextInspector({ fixture, liveCount, leagues, sources }: Props) {
-  const navigate = useNavigate()
+export function LiveContextInspector({ fixture, liveCount, leagues, sources, onOpenDetail }: Props) {
+
 
   if (!fixture) {
     return (
@@ -83,7 +84,7 @@ export function LiveContextInspector({ fixture, liveCount, leagues, sources }: P
 
       {/* Actions */}
       <button
-        onClick={() => navigate(`/app/matches/${fixture.id}`)}
+        onClick={() => onOpenDetail?.()}
         className="w-full h-9 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-[12px] font-medium text-cyan-400 transition-all hover:bg-cyan-500/15"
       >
         Analisar partida

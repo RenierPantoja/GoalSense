@@ -3,6 +3,11 @@ import { useParams, Link, useLocation } from 'react-router-dom'
 import { ArrowLeft, RefreshCw, Circle, Square, ArrowRightLeft, Target, Flag } from 'lucide-react'
 import { ClubLogo } from '@/components/ui/ClubLogo'
 import { LoadingState } from '@/components/ui/LoadingState'
+import { FavoriteButton } from '@/components/ui/FavoriteButton'
+import { DataCoverageBadge, getMatchCoverage } from '@/components/ui/DataCoverageBadge'
+import { useFavorites } from '@/context/FavoritesContext'
+import { useViewMode } from '@/context/ViewModeContext'
+import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
 import type { LiveFixture } from '@/lib/apiClient'
 import { retrieveStoredFixture } from '@/lib/matchNavigation'
 import { isSameMatchStrict } from '@/features/providers/isSameMatchStrict'
@@ -51,48 +56,48 @@ export function MatchCenterPage() {
       const expectedAway = fixtureState?.awayTeam?.name || ''
 
       // ===========================================================
-      // STRATEGY: Always try to get rich ESPN data, but NEVER accept
-      // a response that doesn't match the expected teams.
-      // If we have fixtureState, we ALWAYS have a safe fallback.
+      // STRATEGY: Show the correct match immediately from fixtureState,
+      // then try to enrich with provider data. NEVER show wrong match.
+      // Only use ESPN by ID if provider is ESPN. Always validate by name.
       // ===========================================================
 
-      // Attempt 1: Try ESPN summary by route ID
-      const summaryData = await tryEspnSummary(fixtureId, expectedHome, expectedAway)
-      if (summaryData) { setData(summaryData); setError(null); return }
-
-      // Attempt 2: Search ESPN scoreboard by team names
-      if (expectedHome && expectedAway) {
-        const searchData = await searchEspnScoreboard(expectedHome, expectedAway)
-        if (searchData) { setData(searchData); setError(null); return }
+      // If no expected names, we cannot validate anything — use fallback only
+      if (!expectedHome || !expectedAway) {
+        if (fixtureState) { setData(buildFallbackData(fixtureState)); setError(null); return }
+        setError('Detalhes indisponíveis para esta partida.')
+        return
       }
 
-      // Attempt 3: Try football-data.org match detail OR API-Football live
-      if (fixtureState && expectedHome && expectedAway) {
-        // Try API-Football live first (has stats for Brazilian league)
-        const apiData = await tryApiFootballLive(expectedHome, expectedAway)
-        if (apiData) { setData(apiData); setError(null); return }
+      const isEspnFixture = fixtureState?.provider === 'espn'
 
-        // Try FutPythonTrader (footystats/bet365 data)
-        const fptData = await tryFutPythonTrader(expectedHome, expectedAway)
-        if (fptData) { setData(fptData); setError(null); return }
-
-        // Try football-data.org detail
-        if (fixtureState.provider === 'football_data' && fixtureId) {
-          const fdData = await tryFootballDataDetail(fixtureId, expectedHome, expectedAway)
-          if (fdData) { setData(fdData); setError(null); return }
-        }
+      // Attempt 1: Try ESPN summary by route ID — ONLY if fixture is from ESPN
+      if (isEspnFixture) {
+        const summaryData = await tryEspnSummary(fixtureId, expectedHome, expectedAway)
+        if (summaryData) { setData(summaryData); setError(null); return }
       }
 
-      // Attempt 4: Safe fallback " show the fixture we clicked on
+      // Attempt 2: Try provider-specific data (non-ESPN or ESPN failed)
+      // Try API-Football live (has stats for Serie A, Brazilian league etc.)
+      const apiData = await tryApiFootballLive(expectedHome, expectedAway)
+      if (apiData) { setData(apiData); setError(null); return }
+
+      // Try football-data.org detail
+      if (fixtureState?.provider === 'football_data' && fixtureId) {
+        const fdData = await tryFootballDataDetail(fixtureId, expectedHome, expectedAway)
+        if (fdData) { setData(fdData); setError(null); return }
+      }
+
+      // Try FutPythonTrader
+      const fptData = await tryFutPythonTrader(expectedHome, expectedAway)
+      if (fptData) { setData(fptData); setError(null); return }
+
+      // Attempt 3: Search ESPN scoreboard by team names
+      const searchData = await searchEspnScoreboard(expectedHome, expectedAway)
+      if (searchData) { setData(searchData); setError(null); return }
+
+      // Attempt 4: Safe fallback — always shows the correct match
       if (fixtureState) {
-        setData({
-          home: { name: fixtureState.homeTeam.name, logo: fixtureState.homeTeam.logo, score: fixtureState.score.home ?? 0, color: '22d3ee', colors: ['22d3ee', '1a1a2e'] },
-          away: { name: fixtureState.awayTeam.name, logo: fixtureState.awayTeam.logo, score: fixtureState.score.away ?? 0, color: '34d399', colors: ['34d399', '1a1a2e'] },
-          league: fixtureState.league.name, leagueLogo: fixtureState.league.logo,
-          status: fixtureState.status.long || '', elapsed: fixtureState.status.elapsed,
-          isLive: fixtureState.status.short === 'LIVE' || fixtureState.status.short === 'HT',
-          venue: fixtureState.venue, stats: [], events: [], commentary: [], homeRoster: [], awayRoster: [],
-        })
+        setData(buildFallbackData(fixtureState))
         setError(null)
         return
       }
@@ -102,36 +107,41 @@ export function MatchCenterPage() {
     finally { setLoading(false) }
   }, [fixtureId, fixtureState])
 
+  function buildFallbackData(fs: LiveFixture): MatchData {
+    return {
+      home: { name: fs.homeTeam.name, logo: fs.homeTeam.logo, score: fs.score.home ?? 0, color: '22d3ee', colors: ['22d3ee', '1a1a2e'] },
+      away: { name: fs.awayTeam.name, logo: fs.awayTeam.logo, score: fs.score.away ?? 0, color: '34d399', colors: ['34d399', '1a1a2e'] },
+      league: fs.league.name, leagueLogo: fs.league.logo,
+      status: fs.status.long || '', elapsed: fs.status.elapsed,
+      isLive: fs.status.short === 'LIVE' || fs.status.short === 'HT',
+      venue: fs.venue, stats: [], events: [], commentary: [], homeRoster: [], awayRoster: [],
+    }
+  }
+
   /** Try ESPN summary by event ID. Returns null if teams don't match expected. */
   async function tryEspnSummary(eventId: string, expectedHome: string, expectedAway: string): Promise<MatchData | null> {
+    // CRITICAL: Only attempt if we have expected names to validate against
+    if (!expectedHome || !expectedAway) return null
+
     try {
-      // Try multiple ESPN endpoint patterns
-      const endpoints = [
-        `https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${eventId}`,
-        `https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/summary?event=${eventId}`,
-        `https://site.api.espn.com/apis/site/v2/sports/soccer/bra.2/summary?event=${eventId}`,
-      ]
+      // Only try the /all endpoint — league-specific endpoints can return different events for the same ID
+      const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${eventId}`
+      const res = await fetch(url)
+      if (!res.ok) return null
+      const json = await res.json()
+      const comp = json.header?.competitions?.[0]
+      if (!comp?.competitors || comp.competitors.length < 2) return null
 
-      for (const url of endpoints) {
-        const res = await fetch(url)
-        if (!res.ok) continue
-        const json = await res.json()
-        const comp = json.header?.competitions?.[0]
-        if (!comp?.competitors || comp.competitors.length < 2) continue
+      const espnHome = comp.competitors.find((c: any) => c.homeAway === 'home')?.team?.displayName || ''
+      const espnAway = comp.competitors.find((c: any) => c.homeAway === 'away')?.team?.displayName || ''
 
-        const espnHome = comp.competitors.find((c: any) => c.homeAway === 'home')?.team?.displayName || ''
-        const espnAway = comp.competitors.find((c: any) => c.homeAway === 'away')?.team?.displayName || ''
-
-        // If we have expected names, VALIDATE
-        if (expectedHome && expectedAway) {
-          if (!isSameMatchStrict({ homeName: expectedHome, awayName: expectedAway }, { homeName: espnHome, awayName: espnAway })) {
-            continue // Try next endpoint
-          }
-        }
-
-        return parseEspn(json)
+      // STRICT VALIDATION: both teams must match
+      if (!isSameMatchStrict({ homeName: expectedHome, awayName: expectedAway }, { homeName: espnHome, awayName: espnAway })) {
+        if (import.meta.env.DEV) console.warn('[match-detail] ESPN ID mismatch:', { expected: `${expectedHome} x ${expectedAway}`, got: `${espnHome} x ${espnAway}`, eventId })
+        return null
       }
-      return null
+
+      return parseEspn(json)
     } catch { return null }
   }
 
@@ -524,7 +534,10 @@ export function MatchCenterPage() {
       {/* NAV */}
       <div className="flex items-center justify-between">
         <Link to="/app/live" className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> Voltar ao Ao vivo</Link>
-        <button onClick={() => fetchData(true)} className="p-2 rounded-full text-white/20 hover:text-white/50 hover:bg-white/[0.03]"><RefreshCw size={13} /></button>
+        <div className="flex items-center gap-2">
+          <MatchDetailFavorites home={home} away={away} league={league} leagueLogo={leagueLogo} date={data?.events?.[0] ? '' : ''} utcDate={fixtureState?.date || ''} />
+          <button onClick={() => fetchData(true)} className="p-2 rounded-full text-white/20 hover:text-white/50 hover:bg-white/[0.03]"><RefreshCw size={13} /></button>
+        </div>
       </div>
 
       {/* 1. TOP MATCH HEADER */}
@@ -595,6 +608,9 @@ export function MatchCenterPage() {
           </div>
         )}
       </section>
+
+      {/* DATA COVERAGE BADGE */}
+      <MatchCoverageSection stats={stats} events={events} commentary={commentary} homeRoster={homeRoster} home={home} away={away} />
 
       {/* DIAGNOSTIC PANEL */}
       {stats.length > 0 && <DiagnosticPanel stats={stats} homeName={home.name} awayName={away.name} homeScore={home.score} awayScore={away.score} elapsed={elapsed} events={events} />}
@@ -1094,4 +1110,67 @@ function parseEspn(json: any): MatchData {
   result.home.color = resolved.home[0]
   result.away.color = resolved.away[0]
   return result
+}
+
+// ─── Match Detail Favorites ──────────────────────────────────────────────────
+
+function MatchDetailFavorites({ home, away, league, leagueLogo, utcDate }: { home: { name: string; logo: string | null }; away: { name: string; logo: string | null }; league: string; leagueLogo: string | null; date: string; utcDate: string }) {
+  const { isFavoriteTeam, toggleFavoriteTeam, isFavoriteMatch, toggleFavoriteMatch } = useFavorites()
+  const matchId = buildCanonicalMatchId(home.name, away.name, utcDate)
+  const isMatchFav = isFavoriteMatch(matchId)
+  const isHomeFav = isFavoriteTeam(home.name)
+  const isAwayFav = isFavoriteTeam(away.name)
+
+  return (
+    <div className="flex items-center gap-1">
+      {(isHomeFav || isAwayFav) && <span className="text-[8px] text-rose-400/50 mr-1">Favorito em campo</span>}
+      <FavoriteButton
+        active={isMatchFav}
+        onClick={() => toggleFavoriteMatch({ canonicalMatchId: matchId, homeTeam: home.name, awayTeam: away.name, competition: league, utcDate })}
+        size={14}
+        label={isMatchFav ? 'Remover partida dos favoritos' : 'Favoritar partida'}
+      />
+      <FavoriteButton
+        active={isHomeFav}
+        onClick={() => toggleFavoriteTeam({ name: home.name, logo: home.logo })}
+        size={12}
+        label={isHomeFav ? `Remover ${home.name} dos favoritos` : `Favoritar ${home.name}`}
+      />
+      <FavoriteButton
+        active={isAwayFav}
+        onClick={() => toggleFavoriteTeam({ name: away.name, logo: away.logo })}
+        size={12}
+        label={isAwayFav ? `Remover ${away.name} dos favoritos` : `Favoritar ${away.name}`}
+      />
+    </div>
+  )
+}
+
+// ─── Match Coverage Section ──────────────────────────────────────────────────
+
+function MatchCoverageSection({ stats, events, commentary, homeRoster, home, away }: { stats: { label: string; home: string; away: string }[]; events: { clock: string; text: string; type: string; team: string }[]; commentary: { clock: string; text: string }[]; homeRoster: any[]; home: { name: string; logo: string | null }; away: { name: string; logo: string | null } }) {
+  const { isAdvanced } = useViewMode()
+  const coverage = getMatchCoverage({
+    hasStats: stats.length > 0,
+    hasEvents: events.length > 0,
+    hasLineups: homeRoster.length > 0,
+    hasNarration: commentary.length > 0,
+    hasLogos: Boolean(home.logo && away.logo),
+  })
+
+  if (!isAdvanced && coverage.level === 'basic') return null
+
+  return (
+    <div className="flex items-center gap-3">
+      <DataCoverageBadge coverage={coverage} />
+      {isAdvanced && (
+        <div className="flex items-center gap-2 text-[9px] text-white/20">
+          <span>{stats.length > 0 ? '✓ Estatísticas' : '✗ Estatísticas'}</span>
+          <span>{events.length > 0 ? '✓ Eventos' : '✗ Eventos'}</span>
+          <span>{commentary.length > 0 ? '✓ Narração' : '✗ Narração'}</span>
+          <span>{homeRoster.length > 0 ? '✓ Escalações' : '✗ Escalações'}</span>
+        </div>
+      )}
+    </div>
+  )
 }
