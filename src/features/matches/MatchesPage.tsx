@@ -1,12 +1,12 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Calendar, ChevronLeft, ChevronRight, Search, X, Activity, Clock, CheckCircle2, BarChart3, LayoutGrid, List, Rows3, Zap, TrendingUp, Trophy, Globe2, Sparkles } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, ChevronDown, Search, X, Activity, Clock, CheckCircle2, BarChart3, LayoutGrid, List, Rows3, Zap, TrendingUp, Trophy, Globe2, Sparkles } from 'lucide-react'
 import { ClubLogo } from '@/components/ui/ClubLogo'
 import { storeFixtureForNavigation } from '@/lib/matchNavigation'
 import { getMatchLocalDateKey, formatMatchTime, isMatchOnSelectedLocalDate, formatSelectedDateLabel, getTodayLocalDateKey, debugMatchDate } from '@/utils/matchDate'
 import { getMatchImportanceScore, getMatchImportanceReason, getMatchImportanceBadge, sortMatchesByImportance, getMainGlobalMatch, getBrazilFeaturedMatch } from '@/utils/matchImportance'
 import { dedupeMatches, normalizeCompetitionName } from '@/services/matchesDedup'
-import { curateMatches, type CompetitionGroup } from '@/features/matches/matchCuration'
+import { curateMatches, getMatchRelevanceReason, type CompetitionGroup } from '@/features/matches/matchCuration'
 import type { LiveFixture } from '@/lib/apiClient'
 import { useFavorites } from '@/context/FavoritesContext'
 import { useViewMode } from '@/context/ViewModeContext'
@@ -380,16 +380,7 @@ export function MatchesPage() {
                   <AgendaCompetitionSection key={group.name} group={group} openMatch={openMatch} />
                 ))}
                 {curated.secondaryLeagues.length > 0 && (
-                  <>
-                    <div className="flex items-center gap-3 px-2 pt-2">
-                      <div className="flex-1 h-px bg-white/[0.04]" />
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/20">Outras competições</span>
-                      <div className="flex-1 h-px bg-white/[0.04]" />
-                    </div>
-                    {curated.secondaryLeagues.map(group => (
-                      <AgendaCompetitionSection key={group.name} group={group} openMatch={openMatch} />
-                    ))}
-                  </>
+                  <SecondaryLeaguesAccordion groups={curated.secondaryLeagues} openMatch={openMatch} />
                 )}
               </>
             ) : (
@@ -547,6 +538,41 @@ function AgendaCompetitionSection({ group, openMatch }: { group: CompetitionGrou
         {group.matches.map((m, idx) => <AgendaRow key={m.id} match={m as unknown as FDMatch} onClick={() => openMatch(m)} isLast={idx === group.matches.length - 1} />)}
       </div>
     </section>
+  )
+}
+
+// ─── Secondary Leagues Accordion ─────────────────────────────────────────────
+
+function SecondaryLeaguesAccordion({ groups, openMatch }: { groups: CompetitionGroup[]; openMatch: (m: any) => void }) {
+  const [open, setOpen] = useState(() => {
+    try { return localStorage.getItem('goalsense_matches_secondary_open') === 'true' } catch { return false }
+  })
+  const totalMatches = groups.reduce((sum, g) => sum + g.matches.length, 0)
+
+  const toggle = () => {
+    const next = !open
+    setOpen(next)
+    try { localStorage.setItem('goalsense_matches_secondary_open', String(next)) } catch { /* */ }
+  }
+
+  return (
+    <div>
+      <button onClick={toggle} className="flex items-center gap-3 w-full px-2 pt-3 pb-1 group">
+        <div className="flex-1 h-px bg-white/[0.04]" />
+        <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/25 group-hover:text-white/40 transition-colors flex items-center gap-1.5">
+          {open ? 'Outras competições' : `Outras competições · ${totalMatches} jogos em ${groups.length} ligas`}
+          <ChevronDown size={11} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        </span>
+        <div className="flex-1 h-px bg-white/[0.04]" />
+      </button>
+      {open && (
+        <div className="space-y-7 mt-4">
+          {groups.map(group => (
+            <AgendaCompetitionSection key={group.name} group={group} openMatch={openMatch} />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -832,7 +858,7 @@ function AgendaRow({ match: m, onClick, isLast }: { match: FDMatch; onClick: () 
 
       {/* Insight + micro-text + CTA + Favorite */}
       <div className="hidden md:flex items-center gap-2 shrink-0 w-[240px] justify-end">
-        {isAdvanced && <span className="text-[8px] tabular-nums text-white/15 font-mono" title={`Score: ${imp}`}>{imp}</span>}
+        {isAdvanced && <span className="text-[8px] tabular-nums text-white/15 font-mono" title={`Score: ${imp} · ${getMatchRelevanceReason(m, isFavTeam).detail}`}>{imp}</span>}
         {insightBadge.label && (
           <span className={`text-[9px] px-2.5 py-1 rounded-lg border font-medium ${insightBadge.style}`}>{insightBadge.label}</span>
         )}

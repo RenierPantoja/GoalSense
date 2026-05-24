@@ -185,3 +185,80 @@ export function curateMatches(
 
   return { mainMatches, priorityLeagues, secondaryLeagues, liveMatches, soonMatches, favoriteMatches, finishedMatches, allGroups }
 }
+
+
+// ─── Match Relevance Reason ──────────────────────────────────────────────────
+
+export type RelevanceTone = 'global' | 'brazil' | 'live' | 'soon' | 'favorite' | 'score' | 'neutral'
+
+export interface RelevanceReason {
+  label: string
+  detail: string
+  tone: RelevanceTone
+}
+
+export function getMatchRelevanceReason(
+  match: CurationMatch,
+  isFavTeam: (name: string) => boolean = () => false
+): RelevanceReason {
+  const comp = match.competition.name.toLowerCase()
+  const homeName = match.homeTeam.shortName || match.homeTeam.name
+  const awayName = match.awayTeam.shortName || match.awayTeam.name
+
+  // Favorite
+  if (isFavTeam(homeName) || isFavTeam(awayName)) {
+    return { label: 'Favorito em campo', detail: 'Você acompanha um dos times deste jogo', tone: 'favorite' }
+  }
+
+  // Live
+  if (isLive(match.status)) {
+    return { label: 'Ao vivo agora', detail: 'Partida em andamento com dados ativos', tone: 'live' }
+  }
+
+  // Soon
+  if (isSoon(match)) {
+    return { label: 'Começa em breve', detail: 'Início previsto nos próximos 60 minutos', tone: 'soon' }
+  }
+
+  // Dominant score
+  const h = match.score.fullTime.home, a = match.score.fullTime.away
+  if (h !== null && a !== null && Math.abs(h - a) >= 3) {
+    return { label: 'Placar dominante', detail: 'Diferença relevante no placar', tone: 'score' }
+  }
+
+  // Global elite league
+  if (comp.includes('premier') || comp.includes('champions')) {
+    return { label: 'Jogo global', detail: 'Premier League com clube de alto alcance', tone: 'global' }
+  }
+  if (comp.includes('la liga') || comp.includes('laliga') || comp.includes('primera')) {
+    return { label: 'Liga de elite', detail: 'LaLiga com times de projeção mundial', tone: 'global' }
+  }
+  if (comp.includes('serie a') && !comp.includes('brasil')) {
+    return { label: 'Liga de elite', detail: 'Serie A italiana', tone: 'global' }
+  }
+  if (comp.includes('bundesliga')) {
+    return { label: 'Liga de elite', detail: 'Bundesliga alemã', tone: 'global' }
+  }
+
+  // Brazil
+  if (comp.includes('brasil') || comp.includes('série') || comp.includes('brasileiro')) {
+    return { label: 'Brasil em alta', detail: 'Brasileirão com clube de grande torcida', tone: 'brazil' }
+  }
+
+  // High importance
+  const imp = getMatchImportanceScore(match)
+  if (imp >= 90) {
+    return { label: 'Jogo relevante', detail: 'Alta relevância editorial', tone: 'global' }
+  }
+
+  return { label: 'Jogo do dia', detail: '', tone: 'neutral' }
+}
+
+// ─── Helper: isMatchStartingSoon (testable) ──────────────────────────────────
+
+export function isMatchStartingSoon(match: CurationMatch, now = new Date(), windowMinutes = 60): boolean {
+  if (!isScheduled(match.status)) return false
+  if (!match.utcDate) return false
+  const diff = Math.round((new Date(match.utcDate).getTime() - now.getTime()) / 60000)
+  return diff > 0 && diff <= windowMinutes
+}
