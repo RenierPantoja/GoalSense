@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { TrendingUp, Users, BarChart3, Zap } from 'lucide-react'
 import { getPreMatchIntelligence, type PreMatchIntelligenceResult } from '@/services/preMatchIntelligence'
 import { getPreMatchAdvanced, type PreMatchAdvancedResult } from '@/services/intelligence/preMatchAdvanced'
+import { PreMatchScorePanel } from './PreMatchScorePanel'
 import { useViewMode } from '@/context/ViewModeContext'
 
 interface Props {
@@ -87,6 +88,9 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
           )}
         </div>
       )}
+
+      {/* Score Panel */}
+      <PreMatchScorePanel data={data} />
 
       {/* Goals Profile */}
       {data.goalsProfile && (
