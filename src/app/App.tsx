@@ -8,6 +8,7 @@ const MatchesPage = lazy(() => import('@/features/matches/MatchesPage').then(m =
 const LeaguesPage = lazy(() => import('@/features/leagues/LeaguesPage').then(m => ({ default: m.LeaguesPage })))
 const AlertsPage = lazy(() => import('@/features/alerts/AlertsPage').then(m => ({ default: m.AlertsPage })))
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then(m => ({ default: m.SettingsPage })))
+const CommandCenterPage = lazy(() => import('@/features/command/CommandCenterPage').then(m => ({ default: m.CommandCenterPage })))
 
 function PageLoader() {
   return (
@@ -29,7 +30,7 @@ export function App() {
         <Route path="matches/:fixtureId" element={<Suspense fallback={<PageLoader />}><MatchCenterPage /></Suspense>} />
         <Route path="dashboard" element={<ComingSoon title="Dashboard" />} />
         <Route path="matches" element={<Suspense fallback={<PageLoader />}><MatchesPage /></Suspense>} />
-        <Route path="command" element={<ComingSoon title="Command Center" />} />
+        <Route path="command" element={<Suspense fallback={<PageLoader />}><CommandCenterPage /></Suspense>} />
         <Route path="alerts" element={<Suspense fallback={<PageLoader />}><AlertsPage /></Suspense>} />
         <Route path="leagues" element={<Suspense fallback={<PageLoader />}><LeaguesPage /></Suspense>} />
         <Route path="favorites" element={<ComingSoon title="Favoritos" />} />
