@@ -16,11 +16,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Team search endpoint
     if (search_team) {
-      const searchResp = await fetch(`${BASE}/teams?search=${encodeURIComponent(String(search_team))}`, {
+      const term = String(search_team)
+      // Try search first, then name exact match
+      let searchResp = await fetch(`${BASE}/teams?search=${encodeURIComponent(term)}`, {
         headers: { "x-apisports-key": apiKey },
       })
-      if (!searchResp.ok) return res.status(502).json({ ok: false, code: "API_FOOTBALL_ERROR" })
-      const searchData = await searchResp.json()
+      let searchData = searchResp.ok ? await searchResp.json() : { response: [] }
+      
+      // If search returned nothing, try with name parameter
+      if ((!searchData.response || searchData.response.length === 0) && term.length >= 3) {
+        searchResp = await fetch(`${BASE}/teams?name=${encodeURIComponent(term)}`, {
+          headers: { "x-apisports-key": apiKey },
+        })
+        searchData = searchResp.ok ? await searchResp.json() : { response: [] }
+      }
+      
       return res.status(200).json({ ok: true, response: searchData.response || [] })
     }
 
