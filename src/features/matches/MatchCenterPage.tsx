@@ -14,6 +14,7 @@ import { retrieveStoredFixture } from '@/lib/matchNavigation'
 import { isSameMatchStrict } from '@/features/providers/isSameMatchStrict'
 import { calculateMatchIntelligence, type MetricResult } from '@/services/intelligence/matchIntelligence'
 import { recordFinishedFixture } from '@/services/intelligence/goalsenseKnowledgeBase'
+import { recordPreMatchOutcome } from '@/services/intelligence/preMatchOutcomePerformance'
 import { buildExecutiveRead } from '@/services/intelligence/buildExecutiveRead'
 import { translateNarration, sanitizeFinalPortugueseText } from '@/features/matches/translateMatchNarration'
 import { normalizeEvents } from '@/features/matches/normalizeMatchEvents'
@@ -461,6 +462,18 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
           corners: (() => { const s = data.stats.find(x => x.label === 'Corner Kicks' || x.label === 'wonCorners'); return s ? { home: parseFloat(s.home) || 0, away: parseFloat(s.away) || 0 } : undefined })(),
           cards: (() => { const s = data.stats.find(x => x.label === 'Yellow Cards' || x.label === 'yellowCards'); return s ? { home: parseFloat(s.home) || 0, away: parseFloat(s.away) || 0 } : undefined })(),
         } : undefined,
+      })
+      // Record pre-match outcome for performance tracking
+      recordPreMatchOutcome({
+        canonicalMatchId: canonicalId,
+        date: fixtureState.date,
+        competition: data.league,
+        homeTeam: data.home.name,
+        awayTeam: data.away.name,
+        monitoredPatterns: [],
+        triggeredAlerts: [],
+        finalScore: { home: data.home.score, away: data.away.score },
+        outcomeStatus: 'resolved',
       })
     } catch { /* non-blocking */ }
   }, [data, fixtureState])
