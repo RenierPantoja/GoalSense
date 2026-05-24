@@ -20,6 +20,7 @@ import { buildPlayerEventMap, getBadgesForPlayer, getBadgeStyle } from '@/featur
 import { MatchStoryline, PlayerImpactPanel, DangerousAttackPanel, StatsInsightHeader } from '@/features/matches/matchSections'
 import { LivePressureGraph } from '@/components/matches/LivePressureGraph'
 import { MatchHighlightsSection } from '@/features/matches/highlights/MatchHighlightsSection'
+import { PreMatchIntelligencePanel } from '@/features/match-detail/PreMatchIntelligencePanel'
 
 interface MatchData {
   home: { name: string; logo: string | null; score: number; color: string; colors: string[] }
@@ -606,6 +607,11 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
 
       {/* DATA COVERAGE BADGE */}
       <MatchCoverageSection stats={stats} events={events} commentary={commentary} homeRoster={homeRoster} home={home} away={away} />
+
+      {/* PRE-MATCH INTELLIGENCE (for scheduled/upcoming matches) */}
+      {isScheduledMatch(status) && (
+        <PreMatchIntelligencePanel homeName={home.name} awayName={away.name} competition={league} utcDate={fixtureState?.date} />
+      )}
 
       {/* DIAGNOSTIC PANEL */}
       {stats.length > 0 && <DiagnosticPanel stats={stats} homeName={home.name} awayName={away.name} homeScore={home.score} awayScore={away.score} elapsed={elapsed} events={events} />}
