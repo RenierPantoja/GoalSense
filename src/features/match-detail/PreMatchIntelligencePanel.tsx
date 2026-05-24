@@ -44,13 +44,17 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
   )
 
   if (!data || !data.available) {
-    if (!isAdvanced) return null
     return (
-      <div className="rounded-[24px] border border-white/[0.04] bg-white/[0.015] p-5">
-        <h3 className="text-[12px] font-bold text-white/50 mb-2">Pré-jogo</h3>
-        <p className="text-[10px] text-white/25">Dados pré-jogo indisponíveis para esta partida.</p>
-        {data?.limitations && data.limitations.map((l, i) => <p key={i} className="text-[9px] text-white/15 mt-1">{l}</p>)}
-      </div>
+      <section className="rounded-[24px] border border-white/[0.04] bg-white/[0.015] p-6">
+        <h3 className="text-[13px] font-bold text-white/60 mb-2">Pré-jogo</h3>
+        <p className="text-[12px] text-white/40">Dados pré-jogo limitados para esta partida.</p>
+        <p className="text-[11px] text-white/25 mt-1">Não encontramos dados suficientes nos providers para este confronto. Você ainda pode configurar padrões para monitorar quando a partida iniciar.</p>
+        {data?.limitations && data.limitations.length > 0 && isAdvanced && (
+          <div className="mt-3 pt-3 border-t border-white/[0.03] space-y-1">
+            {data.limitations.map((l, i) => <p key={i} className="text-[10px] text-white/20">{l}</p>)}
+          </div>
+        )}
+      </section>
     )
   }
 
