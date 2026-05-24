@@ -1,153 +1,427 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
-import { Radio } from 'lucide-react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { RefreshCw, X, LayoutList, TableProperties, Eye } from 'lucide-react'
 import { getLiveFixtures, type LiveFixture } from '@/lib/apiClient'
-import { PremiumMatchRow } from '@/components/live/PremiumMatchRow'
+import { storeFixtureForNavigation } from '@/lib/matchNavigation'
+import { isLiveStatus } from '@/lib/footballStatus'
+import { translateStage } from '@/lib/competitionLabels'
+import { useAutoRefresh } from '@/hooks/useAutoRefresh'
+import { ClubLogo } from '@/components/ui/ClubLogo'
 import { LoadingState } from '@/components/ui/LoadingState'
-import { EmptyState } from '@/components/ui/EmptyState'
+import { sortByAttention, calculateAttention } from './attentionQueue'
+import { LiveScannerTable, type FixtureStats } from './LiveScannerTable'
+import { QUICK_SCANNERS } from './liveQuickScanners'
+import { useLiveWatchlist } from './useLiveWatchlist'
+import { detectChanges, type ChangeEvent } from './liveChangeRadar'
+import { InspectorPanel } from '@/components/live/InspectorPanel'
+import { LiveEventTicker } from '@/components/live/LiveEventTicker'
+import { RefreshProgressBar } from '@/components/live/RefreshProgressBar'
+import { LiveRadarSummary } from '@/components/live/LiveRadarSummary'
 
 export function LiveRadarPage() {
-  const [fixtures, setFixtures] = useState<LiveFixture[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [lastUpdate, setLastUpdate] = useState<string | null>(null)
+  const navigate = useNavigate()
+
+  // Helper: store fixture and navigate
+  const openMatch = useCallback((fixture: LiveFixture) => {
+    storeFixtureForNavigation(fixture)
+    navigate(`/app/matches/${fixture.id}`, { state: { fixture } })
+  }, [navigate])
+
+  const allFixturesRef = useRef<LiveFixture[] | null>(null)
+  const fetcher = useCallback(async () => (await getLiveFixtures()).fixtures, [])
+  const { data: allFixtures, loading, error, lastUpdate, refreshing, refresh } = useAutoRefresh(fetcher, { intervalMs: 15_000 })
+
+  // Keep ref in sync for the navigate helpers
+  useEffect(() => { allFixturesRef.current = allFixtures || null }, [allFixtures])
+
   const [search, setSearch] = useState('')
-  const [filterCountry, setFilterCountry] = useState('all')
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [countdown, setCountdown] = useState(15)
+  const [mode, setMode] = useState<'focus' | 'scanner'>('focus')
+  const [scannerStats, setScannerStats] = useState<Map<number, FixtureStats>>(new Map())
+  const [activeScanner, setActiveScanner] = useState('all')
+  const [changes, setChanges] = useState<ChangeEvent[]>([])
+  const { watchlist, toggle: toggleWatch, isWatching } = useLiveWatchlist()
+  const [summaryFilter, setSummaryFilter] = useState('')
 
-  const fetchLive = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true)
-    try {
-      const data = await getLiveFixtures()
-      setFixtures(data.fixtures)
-      setLastUpdate(data.fetchedAt)
-      setError(null)
-    } catch (err) {
-      setError((err as Error).message)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
+  // Countdown
   useEffect(() => {
-    fetchLive()
-    const interval = setInterval(() => fetchLive(true), 60_000)
-    return () => clearInterval(interval)
-  }, [fetchLive])
+    const id = setInterval(() => setCountdown(c => c <= 1 ? 15 : c - 1), 1000)
+    return () => clearInterval(id)
+  }, [])
+  useEffect(() => { setCountdown(15) }, [lastUpdate])
 
-  // Derived
-  const countries = useMemo(() => {
-    const set = new Set(fixtures.map((f) => f.league.country).filter(Boolean))
-    return Array.from(set).sort()
+  // Change radar: detect changes between refreshes
+  useEffect(() => {
+    if (allFixtures && allFixtures.length > 0) {
+      const newChanges = detectChanges(allFixtures)
+      if (newChanges.length > 0) {
+        setChanges(prev => [...newChanges, ...prev].slice(0, 20))
+      }
+    }
+  }, [lastUpdate])
+
+  // Fetch stats for all live fixtures (used by Summary, Scanner, Inspector, Foco)
+  useEffect(() => {
+    const lf = (allFixtures || []).filter((fx: LiveFixture) => {
+      if (isLiveStatus(fx.status.short)) return true
+      const raw = fx.raw || ''
+      return raw.includes('FIRST_HALF') || raw.includes('SECOND_HALF') || raw.includes('IN_PROGRESS') || raw.includes('HALFTIME')
+    })
+    if (lf.length === 0) return
+    const fetchStats = async () => {
+      const batch = lf.slice(0, 20)
+      const results = await Promise.allSettled(
+        batch.map(async (fx) => {
+          // Only fetch ESPN summary for ESPN-provider fixtures
+          if (fx.provider !== 'espn') return null
+          const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${fx.id}`)
+          if (!res.ok) return null
+          const json = await res.json()
+          const homeS = json.boxscore?.teams?.[0]?.statistics || []
+          const awayS = json.boxscore?.teams?.[1]?.statistics || []
+          const get = (arr: any[], name: string) => {
+            const s = arr.find((x: any) => x.name === name || x.label === name)
+            return s ? parseFloat(s.displayValue) || 0 : undefined
+          }
+          return {
+            id: fx.id,
+            stats: {
+              possession: { home: get(homeS, 'possessionPct') || get(homeS, 'POSSESSION') || 0, away: get(awayS, 'possessionPct') || get(awayS, 'POSSESSION') || 0 },
+              shots: { home: get(homeS, 'totalShots') || get(homeS, 'SHOTS') || 0, away: get(awayS, 'totalShots') || get(awayS, 'SHOTS') || 0 },
+              shotsOnTarget: { home: get(homeS, 'shotsOnTarget') || get(homeS, 'ON GOAL') || 0, away: get(awayS, 'shotsOnTarget') || get(awayS, 'ON GOAL') || 0 },
+              corners: { home: get(homeS, 'wonCorners') || get(homeS, 'Corner Kicks') || 0, away: get(awayS, 'wonCorners') || get(awayS, 'Corner Kicks') || 0 },
+              yellowCards: { home: get(homeS, 'yellowCards') || get(homeS, 'Yellow Cards') || 0, away: get(awayS, 'yellowCards') || get(awayS, 'Yellow Cards') || 0 },
+            } as FixtureStats,
+          }
+        })
+      )
+      const newStats = new Map<number, FixtureStats>()
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value) newStats.set(r.value.id, r.value.stats)
+      }
+      setScannerStats(newStats)
+    }
+    fetchStats()
+  }, [allFixtures, lastUpdate])
+
+  const fixtures = allFixtures || []
+
+  const liveFixtures = useMemo(() => {
+    return fixtures.filter((fx) => {
+      if (isLiveStatus(fx.status.short)) return true
+      const raw = fx.raw || ''
+      return raw.includes('FIRST_HALF') || raw.includes('SECOND_HALF') || raw.includes('IN_PROGRESS') || raw.includes('HALFTIME')
+    })
   }, [fixtures])
 
+  const upcomingFixtures = useMemo(() => {
+    const now = Date.now()
+    return fixtures
+      .filter((fx) => {
+        if (isLiveStatus(fx.status.short) || fx.status.short === 'LIVE' || fx.status.short === 'HT') return false
+        if (fx.status.short === 'FT' || fx.raw?.includes('FULL_TIME')) return false
+        if (fx.status.short !== 'NS') return false
+        const k = new Date(fx.date).getTime()
+        return !isNaN(k) && k > now && k < now + 3 * 3600_000
+      })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(0, 6)
+  }, [fixtures])
+
+  // Smart search with commands
   const filtered = useMemo(() => {
-    let list = fixtures
-    if (filterCountry !== 'all') {
-      list = list.filter((f) => f.league.country === filterCountry)
-    }
+    let list = liveFixtures
     if (search.trim()) {
-      const q = search.toLowerCase()
-      list = list.filter(
-        (f) =>
-          f.homeTeam.name.toLowerCase().includes(q) ||
-          f.awayTeam.name.toLowerCase().includes(q) ||
-          f.league.name.toLowerCase().includes(q)
-      )
+      const q = search.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      list = list.filter((fx) => {
+        if (q === 'ao vivo' || q === 'live') return true
+        if (q.includes('com stats') || q.includes('com estat')) { const s = scannerStats.get(fx.id); return Boolean(s && (((s.shots?.home || 0) + (s.shots?.away || 0)) > 0 || ((s.possession?.home || 0) + (s.possession?.away || 0)) > 10)) }
+        if (q.includes('alta aten') || q.includes('critica')) { const a = calculateAttention(fx); return a.level === 'critical' || a.level === 'high' }
+        if (q.includes('2 tempo') || q.includes('segundo tempo')) return (fx.status.elapsed || 0) > 45
+        if (q.includes('com gol')) return ((fx.score.home ?? 0) + (fx.score.away ?? 0)) > 0
+        if (q.includes('empate')) return (fx.score.home ?? 0) === (fx.score.away ?? 0)
+        const fields = [fx.homeTeam.name, fx.awayTeam.name, fx.league.name, fx.league.country, fx.provider].map(s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
+        return fields.some(f => f.includes(q))
+      })
     }
-    return list
-  }, [fixtures, filterCountry, search])
+    // Apply summary filter
+    if (summaryFilter === 'high_attention') list = list.filter(fx => calculateAttention(fx, scannerStats.get(fx.id)).score >= 60)
+    else if (summaryFilter === 'final_phase') list = list.filter(fx => (fx.status.elapsed || 0) >= 75)
+    else if (summaryFilter === 'with_stats') list = list.filter(fx => { const s = scannerStats.get(fx.id); if (!s) return false; const poss = (s.possession?.home || 0) + (s.possession?.away || 0); const shots = (s.shots?.home || 0) + (s.shots?.away || 0); return poss > 10 || shots > 0 })
+    else if (summaryFilter === 'open_games') list = list.filter(fx => { const g = (fx.score.home ?? 0) + (fx.score.away ?? 0); const s = scannerStats.get(fx.id); return g >= 3 || ((s?.shots?.home || 0) + (s?.shots?.away || 0)) >= 16 })
+    return sortByAttention(list, scannerStats)
+  }, [liveFixtures, search, scannerStats, summaryFilter])
 
-  // Group by league
-  const grouped = useMemo(() => {
-    const map = new Map<string, LiveFixture[]>()
-    for (const fx of filtered) {
-      const key = `${fx.league.country} — ${fx.league.name}`
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(fx)
+  const hero = filtered[0] || null
+  const rest = filtered.slice(1)
+  const selectedFixture = fixtures.find(f => f.id === selectedId) || null
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement) return
+      if (e.key === 'Escape') { setSelectedId(null); return }
+      if (e.key === 'Enter' && selectedId) { const fx = filtered.find(f => f.id === selectedId) || allFixtures?.find(f => f.id === selectedId); if (fx) openMatch(fx); return }
+      if (e.key === '/' && !e.metaKey) { e.preventDefault(); document.querySelector<HTMLInputElement>('[data-search]')?.focus(); return }
+      if (e.key === 'f' && !e.metaKey) { setMode('focus'); return }
+      if (e.key === 's' && !e.metaKey && !e.ctrlKey) { setMode('scanner'); return }
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { refresh(); return }
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && filtered.length > 0) {
+        e.preventDefault()
+        const idx = filtered.findIndex(f => f.id === selectedId)
+        const next = e.key === 'ArrowDown' ? (idx < filtered.length - 1 ? idx + 1 : 0) : (idx > 0 ? idx - 1 : filtered.length - 1)
+        setSelectedId(filtered[next].id)
+      }
     }
-    return map
-  }, [filtered])
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [selectedId, filtered, navigate, refresh])
 
-  if (loading) return <LoadingState message="Conectando ao provider..." />
-
-  if (error) {
-    return (
-      <div className="rounded-xl border border-rose-500/15 bg-rose-500/5 p-5">
-        <p className="text-sm font-medium text-rose-400">Erro ao buscar dados reais</p>
-        <p className="mt-1 text-xs text-[var(--text-muted)]">{error}</p>
-        <p className="mt-2 text-xs text-[var(--text-muted)]">
-          Limite de requisições pode ter sido atingido. Tente novamente em alguns minutos.
-        </p>
-      </div>
-    )
-  }
+  if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><LoadingState message="" /></div>
 
   return (
-    <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <Radio size={18} className="text-[var(--accent-cyan)]" />
-            <h1 className="text-[20px] font-semibold tracking-tight">Live Radar</h1>
+    <div className="flex gap-5">
+      {/* Main Board */}
+      <div className="flex-1 min-w-0 space-y-6">
+        {/* Header */}
+        <header className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-[22px] font-bold tracking-tight text-white">Ao vivo</h1>
+              <p className="text-[12px] text-white/35 mt-0.5">
+                {liveFixtures.length > 0 ? `${liveFixtures.length} partidas ao vivo` : 'Monitorando partidas em tempo real'}
+                {lastUpdate && ` · ${lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center rounded-xl border border-white/[0.06] bg-white/[0.02] p-0.5">
+                <button onClick={() => setMode('focus')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${mode === 'focus' ? 'bg-white/[0.08] text-white/80' : 'text-white/30 hover:text-white/50'}`}>
+                  <LayoutList size={12} /> Foco
+                </button>
+                <button onClick={() => setMode('scanner')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${mode === 'scanner' ? 'bg-white/[0.08] text-white/80' : 'text-white/30 hover:text-white/50'}`}>
+                  <TableProperties size={12} /> Scanner
+                </button>
+              </div>
+              <button onClick={refresh} disabled={refreshing} className="group flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.02] text-white/40 transition-all hover:border-white/[0.12] hover:text-white/70 disabled:opacity-30" aria-label="Atualizar">
+                <RefreshCw size={14} className={refreshing ? 'animate-spin' : 'group-hover:rotate-45 transition-transform'} />
+              </button>
+            </div>
           </div>
-          <p className="mt-1 text-[12px] text-[var(--text-muted)]">
-            {fixtures.length} jogos ao vivo
-            {lastUpdate && ` · Atualizado ${new Date(lastUpdate).toLocaleTimeString('pt-BR')}`}
-          </p>
+          <RefreshProgressBar countdown={countdown} total={15} />
+        </header>
+
+        {/* Radar Summary */}
+        <LiveRadarSummary fixtures={liveFixtures} stats={scannerStats} onFilter={setSummaryFilter} activeFilter={summaryFilter} />
+
+        {/* Search */}
+        <div className="relative">
+          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} data-search
+            placeholder="Buscar time, liga ou comando"
+            className="w-full h-11 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 text-[13px] text-white placeholder:text-white/20 outline-none transition-all focus:border-white/[0.12] focus:bg-white/[0.03]" />
+          {search && <button onClick={() => setSearch('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"><X size={14} /></button>}
+        </div>
+
+        {/* Error */}
+        {error && <div className="rounded-2xl border border-white/[0.04] bg-white/[0.015] p-5 text-center text-[12px] text-white/40">{error}</div>}
+
+        {/* Scanner Mode */}
+        {mode === 'scanner' && (
+          <>
+            {/* Ticker in scanner */}
+            <LiveEventTicker fixtures={liveFixtures} onSelect={(id) => setSelectedId(id)} />
+
+            <div className="flex flex-wrap gap-1.5">
+              {QUICK_SCANNERS.map(qs => {
+                const count = qs.id === 'all' ? filtered.length : filtered.filter(fx => qs.filter(fx, scannerStats.get(fx.id))).length
+                return (
+                  <button key={qs.id} onClick={() => setActiveScanner(qs.id)}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${activeScanner === qs.id ? 'bg-white/[0.08] text-white/80 border border-white/[0.1]' : 'text-white/30 hover:text-white/50 border border-transparent'}`}>
+                    {qs.label} <span className={`ml-1 tabular-nums ${count > 0 ? 'text-white/40' : 'text-white/15'}`}>{count}</span>
+                  </button>
+                )
+              })}
+              <button onClick={() => setActiveScanner('watchlist')}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all flex items-center gap-1.5 ${activeScanner === 'watchlist' ? 'bg-white/[0.08] text-white/80 border border-white/[0.1]' : 'text-white/30 hover:text-white/50 border border-transparent'}`}>
+                <Eye size={11} /> Observando <span className="tabular-nums text-white/40">{watchlist.size}</span>
+              </button>
+            </div>
+            <LiveScannerTable
+              fixtures={filtered.filter(fx => {
+                const scanner = QUICK_SCANNERS.find(q => q.id === activeScanner)
+                if (activeScanner === 'watchlist') return isWatching(fx.id)
+                if (!scanner || scanner.id === 'all') return true
+                return scanner.filter(fx, scannerStats.get(fx.id))
+              })}
+              stats={scannerStats}
+              selectedId={selectedId}
+              onSelect={(id) => setSelectedId(id)}
+              onOpen={(id) => { const fx = filtered.find(f => f.id === id) || allFixtures?.find(f => f.id === id); if (fx) openMatch(fx) }}
+            />
+          </>
+        )}
+
+        {/* Focus Mode */}
+        {mode === 'focus' && (
+          <>
+            {/* Ticker */}
+            <LiveEventTicker fixtures={liveFixtures} onSelect={(id) => setSelectedId(id)} />
+
+            {/* Hero */}
+            {hero && (
+          <section onClick={() => setSelectedId(hero.id)} onDoubleClick={() => { openMatch(hero) }}
+            className="group relative rounded-[28px] border border-white/[0.06] bg-gradient-to-b from-white/[0.025] to-transparent p-8 cursor-pointer transition-all duration-300 hover:border-white/[0.1] hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] animate-slideUp">
+            <div className="absolute inset-0 rounded-[28px] bg-gradient-to-b from-cyan-500/[0.03] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <HeroContent fixture={hero} stats={scannerStats.get(hero.id)} />
+          </section>
+        )}
+
+        {/* Attention Queue */}
+        {rest.length > 0 && (
+          <section className="space-y-1">
+            {rest.map((fx) => (
+              <MatchRow key={fx.id} fixture={fx} selected={fx.id === selectedId}
+                onSelect={() => setSelectedId(fx.id)}
+                onOpen={() => { openMatch(fx) }} />
+            ))}
+          </section>
+        )}
+
+        {/* Empty */}
+        {filtered.length === 0 && !error && (
+          <div className="rounded-[28px] border border-white/[0.04] bg-white/[0.01] py-20 text-center">
+            <p className="text-[14px] text-white/40">Nenhuma partida ao vivo</p>
+            <p className="text-[12px] text-white/20 mt-1">As partidas aparecerão quando iniciarem</p>
+          </div>
+        )}
+
+        {/* Upcoming */}
+        {upcomingFixtures.length > 0 && (
+          <section className="space-y-2 pt-2">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.15em] text-white/20">Em breve</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {upcomingFixtures.map(fx => <UpcomingTile key={fx.id} fixture={fx} />)}
+            </div>
+          </section>
+        )}
+          </>
+        )}
+      </div>
+
+      {/* Inspector — desktop, only in focus mode */}
+      {mode === 'focus' && (
+        <aside className="hidden xl:block w-[440px] shrink-0 sticky top-20 self-start max-h-[calc(100vh-6rem)] overflow-y-auto">
+          <InspectorPanel fixture={selectedFixture} liveCount={liveFixtures.length} allFixtures={liveFixtures} onSelectBest={() => { if (filtered[0]) setSelectedId(filtered[0].id) }} />
+        </aside>
+      )}
+    </div>
+  )
+}
+
+// --- Sub-components ---
+
+function HeroContent({ fixture, stats }: { fixture: LiveFixture; stats?: FixtureStats }) {
+  const elapsed = fixture.status.elapsed
+  const { level, reasons } = calculateAttention(fixture, stats)
+
+  return (
+    <div className="relative flex flex-col items-center">
+      <div className="flex items-center justify-between w-full">
+        <div className="flex flex-col items-center gap-4 flex-1">
+          <ClubLogo src={fixture.homeTeam.logo} name={fixture.homeTeam.name} size={88} />
+          <span className="text-[16px] font-semibold text-white text-center max-w-[180px] leading-tight">{fixture.homeTeam.name}</span>
+        </div>
+        <div className="flex flex-col items-center gap-4 px-8">
+          <div className="flex items-baseline gap-5">
+            <span className="text-[72px] font-bold tabular-nums text-white leading-none">{fixture.score.home ?? 0}</span>
+            <span className="text-[24px] text-white/15">:</span>
+            <span className="text-[72px] font-bold tabular-nums text-white leading-none">{fixture.score.away ?? 0}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`h-2.5 w-2.5 rounded-full animate-pulse ${level === 'critical' ? 'bg-rose-400 shadow-[0_0_10px_rgba(251,113,133,0.5)]' : 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.4)]'}`} />
+            <span className={`text-[14px] font-semibold ${level === 'critical' ? 'text-rose-400' : 'text-emerald-400'}`}>
+              {elapsed ? `${elapsed}'` : 'Ao vivo'}
+            </span>
+          </div>
+          <span className="text-[12px] text-white/25">{fixture.league.name}</span>
+        </div>
+        <div className="flex flex-col items-center gap-4 flex-1">
+          <ClubLogo src={fixture.awayTeam.logo} name={fixture.awayTeam.name} size={88} />
+          <span className="text-[16px] font-semibold text-white text-center max-w-[180px] leading-tight">{fixture.awayTeam.name}</span>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <input
-          type="text"
-          placeholder="Buscar time ou liga..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="h-8 w-64 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-3 text-[12px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-focus)]"
-        />
-        <select
-          value={filterCountry}
-          onChange={(e) => setFilterCountry(e.target.value)}
-          className="h-8 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-2.5 text-[12px] text-[var(--text-secondary)] outline-none focus:border-[var(--border-focus)]"
-        >
-          <option value="all">Todos os países</option>
-          {countries.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-        <span className="ml-auto text-[11px] text-[var(--text-muted)]">
-          {filtered.length} partidas
+      {/* Mini insight + stats */}
+      <div className="mt-6 flex flex-col items-center gap-3">
+        {/* Reasons */}
+        {reasons.length > 0 && (
+          <div className="flex items-center gap-3 text-[11px] text-white/30">
+            {reasons.slice(0, 2).map((r, i) => (
+              <span key={i} className="flex items-center gap-1.5"><span className="h-1 w-1 rounded-full bg-white/20" />{r}</span>
+            ))}
+          </div>
+        )}
+        {/* Stats */}
+        {stats && ((stats.shots?.home ?? 0) > 0 || (stats.shotsOnTarget?.home ?? 0) > 0 || (stats.corners?.home ?? 0) > 0 || (stats.corners?.away ?? 0) > 0) && (
+          <div className="flex items-center gap-5 text-[12px] text-white/30">
+            {stats.shots && (stats.shots.home > 0 || stats.shots.away > 0) && <span>Finalizações <b className="text-white/55">{stats.shots.home}–{stats.shots.away}</b></span>}
+            {stats.shotsOnTarget && (stats.shotsOnTarget.home > 0 || stats.shotsOnTarget.away > 0) && <span>No alvo <b className="text-white/55">{stats.shotsOnTarget.home}–{stats.shotsOnTarget.away}</b></span>}
+            {stats.corners && (stats.corners.home > 0 || stats.corners.away > 0) && <span>Escanteios <b className="text-white/55">{stats.corners.home}–{stats.corners.away}</b></span>}
+            {stats.possession && (stats.possession.home > 0) && <span>Posse <b className="text-white/55">{stats.possession.home.toFixed(0)}%–{stats.possession.away.toFixed(0)}%</b></span>}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function MatchRow({ fixture, selected, onSelect, onOpen }: { fixture: LiveFixture; selected: boolean; onSelect: () => void; onOpen: () => void }) {
+  const elapsed = fixture.status.elapsed
+  const { level } = calculateAttention(fixture)
+  const dotColor = level === 'critical' ? 'bg-rose-400' : level === 'high' ? 'bg-amber-400' : 'bg-emerald-400'
+
+  return (
+    <div onClick={onSelect} onDoubleClick={onOpen}
+      className={`group flex items-center rounded-2xl px-6 py-5 cursor-pointer transition-all duration-200 border ${selected ? 'border-white/[0.08] bg-white/[0.03]' : 'border-transparent hover:bg-white/[0.02] hover:border-white/[0.04]'}`}>
+      <div className="w-16 shrink-0">
+        <span className="flex items-center gap-2 text-[12px] font-semibold tabular-nums text-emerald-400">
+          <span className={`h-2 w-2 rounded-full ${dotColor} animate-pulse`} />
+          {elapsed ? `${elapsed}'` : 'LIVE'}
         </span>
       </div>
+      <div className="flex items-center gap-3 flex-1 min-w-0 justify-end">
+        <span className="truncate text-[14px] font-medium text-white/90">{fixture.homeTeam.name}</span>
+        <ClubLogo src={fixture.homeTeam.logo} name={fixture.homeTeam.name} size={36} />
+      </div>
+      <div className="flex items-center gap-3 px-6 shrink-0">
+        <span className="text-[22px] font-bold tabular-nums text-white w-6 text-right">{fixture.score.home ?? 0}</span>
+        <span className="text-[14px] text-white/15">-</span>
+        <span className="text-[22px] font-bold tabular-nums text-white w-6">{fixture.score.away ?? 0}</span>
+      </div>
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <ClubLogo src={fixture.awayTeam.logo} name={fixture.awayTeam.name} size={36} />
+        <span className="truncate text-[14px] font-medium text-white/60">{fixture.awayTeam.name}</span>
+      </div>
+      <span className="hidden lg:block text-[11px] text-white/15 w-32 truncate text-right">{fixture.league.name}</span>
+    </div>
+  )
+}
 
-      {/* Match list grouped by league */}
-      {filtered.length === 0 ? (
-        <EmptyState
-          title="Nenhum jogo ao vivo agora"
-          description="Quando a API retornar partidas em andamento, elas aparecerão aqui automaticamente."
-        />
-      ) : (
-        <div className="space-y-6">
-          {Array.from(grouped.entries()).map(([leagueKey, matches]) => (
-            <section key={leagueKey}>
-              <div className="mb-2 flex items-center gap-2 px-4">
-                {matches[0].league.logo && (
-                  <img src={matches[0].league.logo} alt="" className="h-4 w-4 object-contain opacity-60" />
-                )}
-                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                  {leagueKey}
-                </h3>
-              </div>
-              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] divide-y divide-[var(--border-subtle)]">
-                {matches.map((fx) => (
-                  <PremiumMatchRow key={fx.id} fixture={fx} />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      )}
+function UpcomingTile({ fixture }: { fixture: LiveFixture }) {
+  const diff = Math.max(0, Math.round((new Date(fixture.date).getTime() - Date.now()) / 60000))
+  return (
+    <div className="rounded-xl border border-white/[0.04] bg-white/[0.015] px-4 py-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] text-white/20 truncate">{fixture.league.name}</span>
+        <span className="text-[10px] tabular-nums text-white/25">{diff <= 90 ? `${diff} min` : new Date(fixture.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <ClubLogo src={fixture.homeTeam.logo} name={fixture.homeTeam.name} size={18} />
+        <span className="text-[11px] text-white/45 truncate flex-1">{fixture.homeTeam.name}</span>
+        <span className="text-[9px] text-white/15">vs</span>
+        <span className="text-[11px] text-white/45 truncate flex-1 text-right">{fixture.awayTeam.name}</span>
+        <ClubLogo src={fixture.awayTeam.logo} name={fixture.awayTeam.name} size={18} />
+      </div>
     </div>
   )
 }

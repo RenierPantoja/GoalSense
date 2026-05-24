@@ -9,9 +9,20 @@ export default async (req: Request, _context: Context) => {
   }
 
   const url = new URL(req.url)
+  const matchId = url.searchParams.get("matchId")
   const date = url.searchParams.get("date") || new Date().toISOString().split("T")[0]
 
   try {
+    // Single match detail
+    if (matchId) {
+      const res = await fetch(`${BASE}/matches/${matchId}`, {
+        headers: { "X-Auth-Token": API_KEY },
+      })
+      const data = await res.json()
+      return Response.json({ ok: true, source: "football_data", match: data })
+    }
+
+    // List matches by date
     const res = await fetch(`${BASE}/matches?date=${date}`, {
       headers: { "X-Auth-Token": API_KEY },
     })

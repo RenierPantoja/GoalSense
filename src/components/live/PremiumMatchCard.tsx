@@ -1,76 +1,74 @@
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { ClubLogo } from '@/components/ui/ClubLogo'
-import { StatusPill } from '@/components/ui/StatusPill'
 import type { LiveFixture } from '@/lib/apiClient'
 
-function getVariant(short: string): 'live' | 'halftime' | 'finished' | 'scheduled' | 'default' {
-  if (['1H', '2H', 'ET', 'P', 'BT', 'LIVE'].includes(short)) return 'live'
-  if (short === 'HT') return 'halftime'
-  if (['FT', 'AET', 'PEN'].includes(short)) return 'finished'
-  if (['NS', 'TBD'].includes(short)) return 'scheduled'
-  return 'default'
-}
-
 export function PremiumMatchCard({ fixture }: { fixture: LiveFixture }) {
-  const variant = getVariant(fixture.status.short)
-  const isLive = variant === 'live' || variant === 'halftime'
+  const navigate = useNavigate()
+  const elapsed = fixture.status.elapsed
 
   return (
-    <Link
-      to={`/app/matches/${fixture.id}`}
-      className="group relative flex flex-col rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] p-4 transition-all duration-200 hover:border-cyan-500/25 hover:bg-[var(--bg-elevated)]"
+    <div
+      onClick={() => navigate(`/app/matches/${fixture.id}`)}
+      className="group relative flex flex-col rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] p-5 cursor-pointer transition-all duration-200 hover:border-cyan-500/20 hover:shadow-[0_0_30px_rgba(6,182,212,0.04)]"
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/app/matches/${fixture.id}`) }}
     >
-      {/* League header */}
-      <div className="mb-3 flex items-center justify-between">
+      {/* Top: League + Status */}
+      <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2 overflow-hidden">
           {fixture.league.logo && (
-            <img src={fixture.league.logo} alt="" className="h-3.5 w-3.5 object-contain opacity-60" />
+            <img src={fixture.league.logo} alt="" className="h-4 w-4 object-contain opacity-50" />
           )}
           <span className="truncate text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
             {fixture.league.name}
           </span>
         </div>
-        <StatusPill
-          label={isLive && fixture.status.elapsed ? `${fixture.status.elapsed}'` : fixture.status.long}
-          variant={variant}
-        />
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-[10px] font-semibold tabular-nums text-emerald-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          {elapsed ? `${elapsed}'` : 'AO VIVO'}
+        </span>
       </div>
 
-      {/* Home team */}
-      <div className="flex items-center justify-between py-1">
-        <div className="flex items-center gap-3 overflow-hidden">
-          <ClubLogo src={fixture.homeTeam.logo} name={fixture.homeTeam.name} size={28} />
-          <span className="truncate text-[13px] font-medium text-[var(--text-primary)]">
+      {/* Teams + Score centered */}
+      <div className="flex items-center justify-between gap-3">
+        {/* Home */}
+        <div className="flex flex-col items-center gap-2 flex-1 min-w-0">
+          <ClubLogo src={fixture.homeTeam.logo} name={fixture.homeTeam.name} size={40} />
+          <span className="text-[11px] font-medium text-[var(--text-primary)] text-center leading-tight line-clamp-2">
             {fixture.homeTeam.name}
           </span>
         </div>
-        <span className={`min-w-[24px] text-right text-lg font-bold tabular-nums ${isLive ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-          {fixture.score.home ?? '-'}
-        </span>
-      </div>
 
-      {/* Away team */}
-      <div className="flex items-center justify-between py-1">
-        <div className="flex items-center gap-3 overflow-hidden">
-          <ClubLogo src={fixture.awayTeam.logo} name={fixture.awayTeam.name} size={28} />
-          <span className="truncate text-[13px] font-medium text-[var(--text-secondary)]">
+        {/* Score */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[28px] font-bold tabular-nums text-[var(--text-primary)]">
+            {fixture.score.home ?? 0}
+          </span>
+          <span className="text-[16px] text-[var(--text-muted)] font-light">:</span>
+          <span className="text-[28px] font-bold tabular-nums text-[var(--text-primary)]">
+            {fixture.score.away ?? 0}
+          </span>
+        </div>
+
+        {/* Away */}
+        <div className="flex flex-col items-center gap-2 flex-1 min-w-0">
+          <ClubLogo src={fixture.awayTeam.logo} name={fixture.awayTeam.name} size={40} />
+          <span className="text-[11px] font-medium text-[var(--text-secondary)] text-center leading-tight line-clamp-2">
             {fixture.awayTeam.name}
           </span>
         </div>
-        <span className={`min-w-[24px] text-right text-lg font-bold tabular-nums ${isLive ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-          {fixture.score.away ?? '-'}
-        </span>
       </div>
 
-      {/* Footer */}
-      <div className="mt-3 flex items-center justify-between border-t border-[var(--border-subtle)] pt-2.5">
+      {/* Bottom: action hint */}
+      <div className="mt-5 pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between">
         <span className="text-[10px] text-[var(--text-muted)]">
-          {fixture.league.country}
+          {fixture.league.country || fixture.provider}
         </span>
-        <span className="text-[10px] font-medium text-cyan-400/70 opacity-0 transition-opacity group-hover:opacity-100">
-          Detalhes
+        <span className="text-[10px] font-medium text-cyan-400/50 group-hover:text-cyan-400 transition-colors">
+          Analisar
         </span>
       </div>
-    </Link>
+    </div>
   )
 }

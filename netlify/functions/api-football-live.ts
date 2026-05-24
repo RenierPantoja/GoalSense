@@ -1,42 +1,98 @@
 import type { Context } from "@netlify/functions"
+import { getActiveKey, updateKeyState, markKeyExhausted } from "./lib/keyRotation"
 
 export default async (req: Request, _context: Context) => {
-  const API_KEY = process.env.API_FOOTBALL_KEY
   const BASE = process.env.API_FOOTBALL_BASE_URL || "https://v3.football.api-sports.io"
+  const apiKey = getActiveKey()
 
-  if (!API_KEY) {
+  if (!apiKey) {
     return Response.json(
-      { ok: false, code: "API_FOOTBALL_KEY_MISSING", message: "Provider real não configurado." },
+      { ok: false, code: "API_FOOTBALL_KEY_MISSING", message: "API-Football não configurada no servidor." },
       { status: 500 }
     )
   }
 
+  console.info("[api-football-live] Using key:", `...${apiKey.slice(-6)}`)
+
   try {
     const res = await fetch(`${BASE}/fixtures?live=all`, {
-      headers: { "x-apisports-key": API_KEY },
+      headers: { "x-apisports-key": apiKey },
     })
+
+    // Update rotation state from response headers
+    updateKeyState(apiKey, res.headers)
 
     if (!res.ok) {
       return Response.json(
-        { ok: false, code: "PROVIDER_ERROR", message: `API-Football retornou ${res.status}` },
+        { ok: false, code: "API_FOOTBALL_ERROR", status: res.status, message: `API-Football retornou ${res.status}` },
         { status: 502 }
       )
     }
 
     const data = await res.json()
+
+    // Detect rate limit error in response body
+    if (data.errors && Object.keys(data.errors).length > 0) {
+      const errorMsg = Object.values(data.errors).join('. ')
+      const isRateLimit = String(errorMsg).toLowerCase().includes('limit')
+
+      if (isRateLimit) {
+        markKeyExhausted(apiKey)
+
+        // Try next key immediately
+        const nextKey = getActiveKey()
+        if (nextKey && nextKey !== apiKey) {
+          console.info("[api-football-live] Retrying with key:", `...${nextKey.slice(-6)}`)
+          const retryRes = await fetch(`${BASE}/fixtures?live=all`, {
+            headers: { "x-apisports-key": nextKey },
+          })
+          updateKeyState(nextKey, retryRes.headers)
+          const retryData = await retryRes.json()
+
+          if (retryData.errors && Object.keys(retryData.errors).length > 0) {
+            return Response.json({
+              ok: false,
+              code: "ALL_KEYS_EXHAUSTED",
+              message: "Todas as chaves atingiram o limite diário. Reseta à meia-noite UTC.",
+            }, { status: 429 })
+          }
+
+          const fixtures = (retryData.response || []).map(normalizeFixture)
+          return Response.json({
+            ok: true,
+            source: "api_football",
+            fetchedAt: new Date().toISOString(),
+            count: fixtures.length,
+            fixtures,
+            keyUsed: `...${nextKey.slice(-6)}`,
+          }, { headers: { "Cache-Control": "public, max-age=12" } })
+        }
+
+        return Response.json({
+          ok: false,
+          code: "RATE_LIMIT",
+          message: String(errorMsg),
+        }, { status: 429 })
+      }
+
+      return Response.json({
+        ok: false,
+        code: "API_FOOTBALL_ERROR",
+        message: String(errorMsg),
+      }, { status: 502 })
+    }
+
     const fixtures = (data.response || []).map(normalizeFixture)
 
-    return Response.json(
-      {
-        ok: true,
-        source: "api_football",
-        fetchedAt: new Date().toISOString(),
-        count: fixtures.length,
-        fixtures,
-        ...(fixtures.length === 0 && { message: "Nenhum jogo ao vivo encontrado agora." }),
-      },
-      { headers: { "Cache-Control": "public, max-age=25" } }
-    )
+    return Response.json({
+      ok: true,
+      source: "api_football",
+      fetchedAt: new Date().toISOString(),
+      count: fixtures.length,
+      fixtures,
+      keyUsed: `...${apiKey.slice(-6)}`,
+      ...(fixtures.length === 0 && { message: "A API-Football retornou zero partidas ao vivo neste momento." }),
+    }, { headers: { "Cache-Control": "public, max-age=12" } })
   } catch (err: any) {
     return Response.json(
       { ok: false, code: "FETCH_ERROR", message: err.message },
