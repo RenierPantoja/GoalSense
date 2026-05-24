@@ -5,6 +5,7 @@ interface ReadInput {
   awayScore: number
   elapsed: number | null
   isLive: boolean
+  isScheduled?: boolean
   possession?: { home: number; away: number }
   shots?: { home: number; away: number }
   shotsOnTarget?: { home: number; away: number }
@@ -23,16 +24,20 @@ export interface ExecutiveReadResult {
 }
 
 export function buildExecutiveRead(input: ReadInput): ExecutiveReadResult {
-  const { homeName, awayName, homeScore, awayScore, elapsed, isLive, possession, shots, shotsOnTarget, corners, hasStats, hasEvents, hasLineups, hasNarration } = input
+  const { homeName, awayName, homeScore, awayScore, elapsed, isLive, isScheduled, possession, shots, shotsOnTarget, corners, hasStats, hasEvents, hasLineups, hasNarration } = input
   const totalGoals = homeScore + awayScore
   const bullets: string[] = []
 
   // Title — contextual and specific
   let title = ''
-  if (!isLive && !hasStats && !hasEvents && totalGoals === 0) {
+  if (isScheduled || (!isLive && !hasStats && !hasEvents && totalGoals === 0 && !elapsed)) {
+    title = 'Aguardando início da partida'
+  } else if (!isLive && !hasStats && !hasEvents && totalGoals === 0) {
     title = 'Aguardando dados da partida'
-  } else if (!isLive && totalGoals === 0) {
+  } else if (!isLive && totalGoals === 0 && (hasStats || hasEvents)) {
     title = 'Partida encerrada sem gols'
+  } else if (!isLive && totalGoals === 0) {
+    title = 'Aguardando dados da partida'
   } else if (!isLive) {
     const winner = homeScore > awayScore ? homeName : awayScore > homeScore ? awayName : ''
     title = winner ? `${winner} vence por ${Math.max(homeScore, awayScore)} a ${Math.min(homeScore, awayScore)}` : `Empate em ${homeScore} a ${awayScore}`

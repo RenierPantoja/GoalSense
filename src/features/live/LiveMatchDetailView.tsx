@@ -104,7 +104,8 @@ export function LiveMatchDetailView({ fixture, onBack }: Props) {
 
   const execRead = buildExecutiveRead({
     homeName: home.name, awayName: away.name, homeScore: home.score, awayScore: away.score,
-    elapsed, isLive, possession: getStat('possession'), shots: getStat('shots') || getStat('totalShots'),
+    elapsed, isLive, isScheduled: !isLive && !elapsed && home.score === 0 && away.score === 0 && stats.length === 0,
+    possession: getStat('possession'), shots: getStat('shots') || getStat('totalShots'),
     shotsOnTarget: getStat('on goal') || getStat('shotsOnTarget'), corners: getStat('corner'),
     hasStats: stats.length > 0, hasEvents: events.length > 0, hasLineups: false, hasNarration: commentary.length > 0,
   })

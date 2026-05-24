@@ -458,7 +458,8 @@ export function MatchCenterPage() {
 
   const execRead = buildExecutiveRead({
     homeName: home.name, awayName: away.name, homeScore: home.score, awayScore: away.score,
-    elapsed, isLive, possession: getStat('POSSESSION') || getStat('possessionPct'),
+    elapsed, isLive, isScheduled: !isLive && !elapsed && home.score === 0 && away.score === 0 && stats.length === 0 && events.length === 0,
+    possession: getStat('POSSESSION') || getStat('possessionPct'),
     shots: getStat('SHOTS') || getStat('totalShots'), shotsOnTarget: getStat('ON GOAL') || getStat('shotsOnTarget'),
     corners: getStat('Corner Kicks') || getStat('wonCorners'),
     hasStats: stats.length > 0, hasEvents: events.length > 0, hasLineups: homeRoster.length > 0, hasNarration: commentary.length > 0,
