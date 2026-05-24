@@ -9,6 +9,7 @@ const LeaguesPage = lazy(() => import('@/features/leagues/LeaguesPage').then(m =
 const AlertsPage = lazy(() => import('@/features/alerts/AlertsPage').then(m => ({ default: m.AlertsPage })))
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then(m => ({ default: m.SettingsPage })))
 const CommandCenterPage = lazy(() => import('@/features/command/CommandCenterPage').then(m => ({ default: m.CommandCenterPage })))
+const FavoritesPage = lazy(() => import('@/features/favorites/FavoritesPage').then(m => ({ default: m.FavoritesPage })))
 
 function PageLoader() {
   return (
@@ -28,14 +29,14 @@ export function App() {
         <Route index element={<Navigate to="live" replace />} />
         <Route path="live" element={<Suspense fallback={<PageLoader />}><LiveRadarPage /></Suspense>} />
         <Route path="matches/:fixtureId" element={<Suspense fallback={<PageLoader />}><MatchCenterPage /></Suspense>} />
-        <Route path="dashboard" element={<ComingSoon title="Dashboard" />} />
+        <Route path="dashboard" element={<Navigate to="/app/live" replace />} />
         <Route path="matches" element={<Suspense fallback={<PageLoader />}><MatchesPage /></Suspense>} />
         <Route path="command" element={<Suspense fallback={<PageLoader />}><CommandCenterPage /></Suspense>} />
         <Route path="alerts" element={<Suspense fallback={<PageLoader />}><AlertsPage /></Suspense>} />
         <Route path="leagues" element={<Suspense fallback={<PageLoader />}><LeaguesPage /></Suspense>} />
-        <Route path="favorites" element={<ComingSoon title="Favoritos" />} />
+        <Route path="favorites" element={<Suspense fallback={<PageLoader />}><FavoritesPage /></Suspense>} />
         <Route path="settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
-        <Route path="pricing" element={<ComingSoon title="Planos" />} />
+        <Route path="pricing" element={<Navigate to="/app/settings" replace />} />
       </Route>
       <Route path="*" element={<Navigate to="/app/live" replace />} />
     </Routes>
