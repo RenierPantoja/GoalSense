@@ -13,6 +13,7 @@ import type { LiveFixture } from '@/lib/apiClient'
 import { retrieveStoredFixture } from '@/lib/matchNavigation'
 import { isSameMatchStrict } from '@/features/providers/isSameMatchStrict'
 import { calculateMatchIntelligence, type MetricResult } from '@/services/intelligence/matchIntelligence'
+import { recordFinishedFixture } from '@/services/intelligence/goalsenseKnowledgeBase'
 import { buildExecutiveRead } from '@/services/intelligence/buildExecutiveRead'
 import { translateNarration, sanitizeFinalPortugueseText } from '@/features/matches/translateMatchNarration'
 import { normalizeEvents } from '@/features/matches/normalizeMatchEvents'
@@ -433,6 +434,35 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
     return () => clearInterval(id)
   }, [fetchData])
   useEffect(() => { if (narRef.current) narRef.current.scrollTop = narRef.current.scrollHeight }, [data?.commentary.length])
+
+  // Record finished fixtures to Knowledge Base
+  useEffect(() => {
+    if (!data || !fixtureState) return
+    if (!isFinishedMatch(data.status)) return
+    try {
+      const canonicalId = buildCanonicalMatchId(data.home.name, data.away.name, fixtureState.date)
+      recordFinishedFixture({
+        fixtureId: fixtureState.id,
+        canonicalMatchId: canonicalId,
+        provider: fixtureState.provider || 'unknown',
+        competition: data.league,
+        date: fixtureState.date,
+        homeTeam: data.home.name,
+        awayTeam: data.away.name,
+        homeScore: data.home.score,
+        awayScore: data.away.score,
+        homeTeamId: fixtureState.homeTeam?.id,
+        awayTeamId: fixtureState.awayTeam?.id,
+        stats: data.stats.length > 0 ? {
+          possession: (() => { const s = data.stats.find(x => x.label === 'POSSESSION' || x.label === 'possessionPct'); return s ? { home: parseFloat(s.home) || 0, away: parseFloat(s.away) || 0 } : undefined })(),
+          shots: (() => { const s = data.stats.find(x => x.label === 'SHOTS' || x.label === 'totalShots'); return s ? { home: parseFloat(s.home) || 0, away: parseFloat(s.away) || 0 } : undefined })(),
+          shotsOnTarget: (() => { const s = data.stats.find(x => x.label === 'ON GOAL' || x.label === 'shotsOnTarget'); return s ? { home: parseFloat(s.home) || 0, away: parseFloat(s.away) || 0 } : undefined })(),
+          corners: (() => { const s = data.stats.find(x => x.label === 'Corner Kicks' || x.label === 'wonCorners'); return s ? { home: parseFloat(s.home) || 0, away: parseFloat(s.away) || 0 } : undefined })(),
+          cards: (() => { const s = data.stats.find(x => x.label === 'Yellow Cards' || x.label === 'yellowCards'); return s ? { home: parseFloat(s.home) || 0, away: parseFloat(s.away) || 0 } : undefined })(),
+        } : undefined,
+      })
+    } catch { /* non-blocking */ }
+  }, [data, fixtureState])
 
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><LoadingState message="" /></div>
   if (error || !data) return (

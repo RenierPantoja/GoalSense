@@ -148,7 +148,7 @@ async function fetchAbsences(teamId: number | undefined, teamName: string, seaso
   } catch {
     // Try knowledge base fallback
     const profile = getTeamProfile(teamId)
-    if (profile && profile.matchesTracked >= 3) {
+    if (profile && profile.samples >= 3) {
       limitations.push(`Ausências de ${teamName}: API indisponível, usando base GoalSense`)
       return { teamName, injuries: [], suspensions: [], source: 'Base GoalSense (sem dados de ausências)', limitations: ['API de lesões indisponível'] }
     }
