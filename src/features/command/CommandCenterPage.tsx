@@ -161,7 +161,7 @@ export function CommandCenterPage() {
   const decisionDiscovery = !decisionHit && discoveries.length > 0 ? discoveries[0] : null
 
   // ─── Status badge ──────────────────────────────────────────────────────────
-  const statusBadge = !hasIntelligence ? { label: 'Sem configuração', color: 'text-white/40 bg-white/[0.03] border-white/[0.06]' } : patternHits.length > 0 ? { label: 'Sinais ativos', color: 'text-amber-400 bg-amber-500/8 border-amber-500/12' } : liveMatches.length > 0 ? { label: 'Monitorando', color: 'text-emerald-400 bg-emerald-500/8 border-emerald-500/12' } : { label: 'Online', color: 'text-emerald-400/60 bg-emerald-500/5 border-emerald-500/8' }
+  const statusBadge = !hasIntelligence ? { label: 'Sem configuração', color: 'text-white/55 bg-white/[0.04] border-white/[0.08]' } : patternHits.length > 0 ? { label: 'Sinais ativos', color: 'text-amber-300 bg-amber-500/10 border-amber-500/15' } : liveMatches.length > 0 ? { label: 'Monitorando', color: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/15' } : { label: 'Online', color: 'text-emerald-400/80 bg-emerald-500/8 border-emerald-500/12' }
 
   const metrics = [
     { label: 'Analisados', value: fixtures.length },
@@ -174,36 +174,36 @@ export function CommandCenterPage() {
   const openMatch = (fx: LiveFixture) => { storeFixtureForNavigation(fx); navigate(`/app/matches/${fx.id}`, { state: { fixture: fx } }) }
   const timeSince = lastUpdate ? Math.round((Date.now() - lastUpdate.getTime()) / 1000) : null
 
-  if (loading) return <div className="max-w-[1600px] mx-auto px-6 flex items-center justify-center min-h-[50vh]"><div className="flex flex-col items-center gap-4"><div className="relative h-10 w-10"><div className="absolute inset-0 rounded-full border border-white/[0.06]" /><div className="absolute inset-0 rounded-full border border-transparent border-t-cyan-400/60 animate-spin" /></div><span className="text-[12px] text-white/25">Inicializando motor</span></div></div>
+  if (loading) return <div className="max-w-[1680px] mx-auto px-6 xl:px-10 flex items-center justify-center min-h-[50vh]"><div className="flex flex-col items-center gap-4"><div className="relative h-11 w-11"><div className="absolute inset-0 rounded-full border-2 border-white/[0.08]" /><div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyan-400/70 animate-spin" /></div><span className="text-[13px] text-white/35">Inicializando motor</span></div></div>
 
   return (
-    <div className="max-w-[1600px] mx-auto px-4 xl:px-8 space-y-6 animate-fadeIn">
+    <div className="max-w-[1680px] mx-auto px-5 xl:px-10 space-y-7 animate-fadeIn">
       {/* ═══ HEADER ═══ */}
-      <header className="relative rounded-2xl overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#060a12] via-[#080d16] to-[#0a1018]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(34,211,238,0.012),transparent_50%)]" />
-        <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/[0.04] to-transparent" />
-        <div className="relative px-6 py-5">
-          <div className="flex items-center justify-between mb-4">
+      <header className="relative rounded-[24px] overflow-hidden border border-white/[0.07]">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#050910] via-[#070c15] to-[#091019]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(34,211,238,0.018),transparent_50%)]" />
+        <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" />
+        <div className="relative px-8 py-7">
+          <div className="flex items-center justify-between mb-5">
             <div>
-              <div className="flex items-center gap-3"><h1 className="text-[26px] font-bold text-white tracking-tight">Command Center</h1><span className={`text-[9px] font-bold uppercase tracking-[0.1em] px-2.5 py-1 rounded-full border ${statusBadge.color}`}>{statusBadge.label}</span></div>
-              <p className="text-[13px] text-white/35 mt-1">Motor de decisão em tempo real{timeSince !== null && ` · atualizado ${timeSince < 60 ? `${timeSince}s` : `${Math.floor(timeSince / 60)}min`} atrás`}{refreshing && <span className="text-cyan-400/40 ml-2 animate-pulse">●</span>}</p>
+              <div className="flex items-center gap-3"><h1 className="text-[28px] font-bold text-white/95 tracking-tight">Command Center</h1><span className={`text-[11px] font-bold uppercase tracking-[0.08em] px-3 py-1 rounded-full border ${statusBadge.color}`}>{statusBadge.label}</span></div>
+              <p className="text-[14px] text-white/45 mt-1.5">Motor de decisão em tempo real{timeSince !== null && <span className="text-white/30"> · atualizado {timeSince < 60 ? `${timeSince}s` : `${Math.floor(timeSince / 60)}min`} atrás</span>}{refreshing && <span className="text-cyan-400/50 ml-2 animate-pulse">●</span>}</p>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={toggleAuto} className={`h-8 px-3 rounded-lg text-[10px] font-semibold uppercase tracking-wider transition-all ${autoRefresh ? 'bg-emerald-500/8 text-emerald-400/70 border border-emerald-500/12' : 'text-white/25 border border-white/[0.05]'}`} type="button">Auto</button>
-              <button onClick={() => fetchData()} disabled={refreshing} className="h-8 w-8 rounded-lg flex items-center justify-center text-white/30 border border-white/[0.06] hover:text-white/60 transition-all disabled:opacity-20" type="button" aria-label="Atualizar"><RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} /></button>
+            <div className="flex items-center gap-2.5">
+              <button onClick={toggleAuto} className={`h-9 px-4 rounded-xl text-[11px] font-semibold uppercase tracking-wider transition-all ${autoRefresh ? 'bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/15' : 'text-white/30 border border-white/[0.06]'}`} type="button">Auto</button>
+              <button onClick={() => fetchData()} disabled={refreshing} className="h-9 w-9 rounded-xl flex items-center justify-center text-white/40 border border-white/[0.07] hover:text-white/70 hover:border-white/[0.12] transition-all disabled:opacity-20" type="button" aria-label="Atualizar"><RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /></button>
             </div>
           </div>
-          <div className="flex gap-1 rounded-xl overflow-hidden bg-white/[0.01] border border-white/[0.04]">
-            {metrics.map(m => (<div key={m.label} className="flex-1 px-4 py-3 text-center"><span className={`text-[22px] font-bold tabular-nums block leading-none ${typeof m.value === 'number' && m.value > 0 ? 'text-white/80' : 'text-white/20'}`}>{m.value}</span><span className="text-[10px] text-white/35 mt-1 block">{m.label}</span></div>))}
+          <div className="grid grid-cols-5 gap-px rounded-xl overflow-hidden border border-white/[0.06] bg-white/[0.015]">
+            {metrics.map(m => (<div key={m.label} className="px-5 py-4 text-center bg-[#080d16]"><span className={`text-[26px] font-bold tabular-nums block leading-none ${typeof m.value === 'number' && m.value > 0 ? 'text-white/90' : 'text-white/25'}`}>{m.value}</span><span className="text-[11px] text-white/45 mt-1.5 block">{m.label}</span></div>))}
           </div>
         </div>
       </header>
 
-      {error && <div className="rounded-xl border border-rose-500/10 bg-rose-500/[0.02] px-5 py-3 text-[12px] text-rose-400/70 flex items-center gap-2"><AlertCircle size={14} />{error}</div>}
+      {error && <div className="rounded-xl border border-rose-500/12 bg-rose-500/[0.025] px-6 py-3.5 text-[13px] text-rose-400/80 flex items-center gap-3"><AlertCircle size={15} />{error}</div>}
 
       {/* ═══ NAV ═══ */}
-      <nav className="flex gap-1">
+      <nav className="flex gap-1.5">
         {([
           { id: 'cockpit' as Tab, label: 'Cockpit', icon: Activity, badge: patternHits.length },
           { id: 'patterns' as Tab, label: 'Padrões', icon: Target, badge: activePatternCount },
@@ -211,9 +211,9 @@ export function CommandCenterPage() {
           { id: 'alerts' as Tab, label: 'Alertas', icon: Zap, badge: triggeredTodayCount },
           { id: 'performance' as Tab, label: 'Performance', icon: BarChart3, badge: 0 },
         ]).map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[12px] font-medium transition-all ${activeTab === tab.id ? 'text-white/90 bg-white/[0.05] border border-white/[0.08]' : 'text-white/35 hover:text-white/55 border border-transparent'}`} type="button">
-            <tab.icon size={14} />{tab.label}
-            {tab.badge > 0 && <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${activeTab === tab.id ? 'bg-cyan-500/20 text-cyan-400' : 'bg-white/[0.06] text-white/40'}`}>{tab.badge}</span>}
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-5 py-3 rounded-xl text-[13px] font-medium transition-all ${activeTab === tab.id ? 'text-white bg-white/[0.06] border border-white/[0.1]' : 'text-white/45 hover:text-white/70 border border-transparent hover:bg-white/[0.025]'}`} type="button">
+            <tab.icon size={15} />{tab.label}
+            {tab.badge > 0 && <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === tab.id ? 'bg-cyan-500/20 text-cyan-300' : 'bg-white/[0.06] text-white/45'}`}>{tab.badge}</span>}
           </button>
         ))}
       </nav>
