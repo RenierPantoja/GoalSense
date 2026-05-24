@@ -5,12 +5,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
  * Uses the public v1 API (no token required).
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const url = new URL(req.url)
+
   const team = (req.query.team as string || '') || ''
 
   try {
-    const res = await fetch('https://www.scorebat.com/video-api/v1/')
-    if (!res.ok) {
+    const resp = await fetch('https://www.scorebat.com/video-api/v1/')
+    if (!resp.ok) {
       return res.status(502).json({ ok: false, code: 'SCOREBAT_ERROR' })
     }
 

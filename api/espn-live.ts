@@ -7,15 +7,15 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    const url = new URL(req.url)
+
     const dateParam = (req.query.date as string || '') // YYYYMMDD format
     const espnUrl = dateParam
       ? `https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?dates=${dateParam}`
       : "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard"
 
-    const res = await fetch(espnUrl)
+    const resp = await fetch(espnUrl)
 
-    if (!res.ok) {
+    if (!resp.ok) {
       return res.status(200).json(
         { ok: false, code: "ESPN_ERROR", message: `ESPN retornou ${res.status}` },
         { status: 502 }

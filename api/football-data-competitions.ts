@@ -11,10 +11,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const res = await fetch(`${BASE}/competitions`, {
+    const resp = await fetch(`${BASE}/competitions`, {
       headers: { "X-Auth-Token": API_KEY },
     })
-    const data = await res.json()
+    const data = await resp.json()
 
     return res.status(200).json({
       ok: true,

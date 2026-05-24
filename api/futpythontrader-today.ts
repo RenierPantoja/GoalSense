@@ -15,7 +15,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ ok: false, code: "FPT_TOKEN_MISSING" })
   }
 
-  const url = new URL(req.url)
   const source = (req.query.source as string || '') || "footystats"
   const date = (req.query.date as string || '') || new Date().toISOString().split("T")[0]
   const league = (req.query.league as string || '') || ""
@@ -25,14 +24,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? `${BASE}/dados/jogos-do-dia/${source}/${date}/?league=${encodeURIComponent(league)}`
       : `${BASE}/dados/jogos-do-dia/${source}/${date}/`
 
-    const res = await fetch(endpoint, {
+    const resp = await fetch(endpoint, {
       headers: {
         "Authorization": `Token ${TOKEN}`,
         "Content-Type": "application/json",
       },
     })
 
-    if (!res.ok) {
+    if (!resp.ok) {
       const text = await res.text()
       return res.status(200).json({ ok: false, code: "FPT_ERROR", status: res.status, message: text }, { status: res.status })
     }

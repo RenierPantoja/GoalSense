@@ -14,14 +14,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.info("[api-football-live] Using key:", `...${apiKey.slice(-6)}`)
 
   try {
-    const res = await fetch(`${BASE}/fixtures?live=all`, {
+    const resp = await fetch(`${BASE}/fixtures?live=all`, {
       headers: { "x-apisports-key": apiKey },
     })
 
     // Update rotation state from response headers
     updateKeyState(apiKey, res.headers)
 
-    if (!res.ok) {
+    if (!resp.ok) {
       return res.status(200).json(
         { ok: false, code: "API_FOOTBALL_ERROR", status: res.status, message: `API-Football retornou ${res.status}` },
         { status: 502 }

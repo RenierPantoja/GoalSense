@@ -57,9 +57,9 @@ function dedup(home: string, away: string): string {
 }
 
 async function fetchEspn(base: string) {
-  const res = await fetch(base)
-  if (!res.ok) return []
-  const data = await res.json()
+  const resp = await fetch(base)
+  if (!resp.ok) return []
+  const data = await resp.json()
   return (data.events || [])
     .filter((e: any) => e.status?.type?.state === 'in')
     .map((event: any) => {
@@ -81,9 +81,9 @@ async function fetchEspn(base: string) {
 }
 
 async function fetchFootballData(base: string, key: string) {
-  const res = await fetch(`${base}/matches`, { headers: { 'X-Auth-Token': key } })
-  if (!res.ok) return []
-  const data = await res.json()
+  const resp = await fetch(`${base}/matches`, { headers: { 'X-Auth-Token': key } })
+  if (!resp.ok) return []
+  const data = await resp.json()
   return (data.matches || [])
     .filter((m: any) => m.status === 'IN_PLAY' || m.status === 'PAUSED')
     .map((m: any) => ({
@@ -101,9 +101,9 @@ async function fetchFootballData(base: string, key: string) {
 async function fetchApiFootball(base: string, keys: string[]) {
   for (const key of keys) {
     try {
-      const res = await fetch(`${base}/fixtures?live=all`, { headers: { 'x-apisports-key': key.trim() } })
-      if (!res.ok) continue
-      const data = await res.json()
+      const resp = await fetch(`${base}/fixtures?live=all`, { headers: { 'x-apisports-key': key.trim() } })
+      if (!resp.ok) continue
+      const data = await resp.json()
       if (data.errors && Object.keys(data.errors).length > 0) continue
       return (data.response || []).map((raw: any) => ({
         id: raw.fixture.id,

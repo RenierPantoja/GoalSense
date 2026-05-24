@@ -2,10 +2,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 /**
  * TheSportsDB Team Lookup — free, no key needed for basic access.
- * Returns team badge, banner, jersey, and metadata.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const url = new URL(req.url)
   const name = (req.query.name as string || '')
   const id = (req.query.id as string || '')
 
@@ -14,19 +12,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    let apiUrl: string
-    if (id) {
-      apiUrl = `https://www.thesportsdb.com/api/v1/json/3/lookupteam.php?id=${id}`
-    } else {
-      apiUrl = `https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(name!)}`
-    }
+    const apiUrl = id
+      ? `https://www.thesportsdb.com/api/v1/json/3/lookupteam.php?id=${id}`
+      : `https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(name)}`
 
-    const res = await fetch(apiUrl)
-    if (!res.ok) {
+    const resp = await fetch(apiUrl)
+    if (!resp.ok) {
       return res.status(502).json({ ok: false, code: 'THESPORTSDB_ERROR' })
     }
 
-    const data = await res.json()
+    const data = await resp.json()
     const team = data.teams?.[0]
 
     if (!team) {
@@ -47,7 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         league: team.strLeague || null,
         description: team.strDescriptionEN?.slice(0, 200) || null,
       },
-    }, { headers: { 'Cache-Control': 'public, max-age=86400' } })
+    })
   } catch (err: any) {
     return res.status(500).json({ ok: false, message: err.message })
   }

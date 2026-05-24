@@ -10,7 +10,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ ok: false, code: "API_FOOTBALL_KEY_MISSING" })
   }
 
-  const url = new URL(req.url)
   const league = (req.query.league as string || '')
   const season = (req.query.season as string || '') || new Date().getFullYear().toString()
 
@@ -19,10 +18,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const res = await fetch(`${BASE}/standings?league=${league}&season=${season}`, {
+    const resp = await fetch(`${BASE}/standings?league=${league}&season=${season}`, {
       headers: { "x-apisports-key": API_KEY },
     })
-    const data = await res.json()
+    const data = await resp.json()
 
     return res.status(200).json({
       ok: true,

@@ -10,7 +10,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ ok: false, code: "API_FOOTBALL_KEY_MISSING", message: "Provider real não configurado." })
   }
 
-  const url = new URL(req.url)
   const id = (req.query.id as string || '')
   if (!id) {
     return res.status(400).json({ ok: false, code: "MISSING_ID", message: "Parâmetro id obrigatório." })

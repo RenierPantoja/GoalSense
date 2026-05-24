@@ -24,8 +24,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 async function checkEspn() {
-  const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard')
-  const ok = res.ok
+  const resp = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard')
+  const ok = resp.ok
   const data = ok ? await res.json() : null
   return {
     status: ok ? 'available' : 'unavailable',
@@ -38,17 +38,17 @@ async function checkEspn() {
 async function checkFootballData() {
   const key = process.env.FOOTBALL_DATA_API_KEY
   if (!key) return { status: 'unavailable', reason: 'Key not configured' }
-  const res = await fetch('https://api.football-data.org/v4/matches', { headers: { 'X-Auth-Token': key } })
-  return { status: res.ok ? 'available' : 'unavailable', matches: res.ok ? ((await res.json()).matches?.length || 0) : 0 }
+  const resp = await fetch('https://api.football-data.org/v4/matches', { headers: { 'X-Auth-Token': key } })
+  return { status: resp.ok ? 'available' : 'unavailable', matches: resp.ok ? ((await resp.json()).matches?.length || 0) : 0 }
 }
 
 async function checkApiFootball() {
   const keys = (process.env.API_FOOTBALL_KEYS || process.env.API_FOOTBALL_KEY || '').split(',').filter(Boolean)
   if (keys.length === 0) return { status: 'unavailable', reason: 'Key not configured' }
   for (const key of keys) {
-    const res = await fetch('https://v3.football.api-sports.io/status', { headers: { 'x-apisports-key': key.trim() } })
-    if (res.ok) {
-      const data = await res.json()
+    const resp = await fetch('https://v3.football.api-sports.io/status', { headers: { 'x-apisports-key': key.trim() } })
+    if (resp.ok) {
+      const data = await resp.json()
       const account = data.response?.account
       const requests = data.response?.requests
       return {
@@ -66,11 +66,11 @@ async function checkApiFootball() {
 }
 
 async function checkTheSportsDb() {
-  const res = await fetch('https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=Barcelona')
-  return { status: res.ok ? 'available' : 'unavailable' }
+  const resp = await fetch('https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=Barcelona')
+  return { status: resp.ok ? 'available' : 'unavailable' }
 }
 
 async function checkScoreBat() {
-  const res = await fetch('https://www.scorebat.com/video-api/v1/')
-  return { status: res.ok ? 'available' : 'unavailable', videos: res.ok ? ((await res.json()).length || 0) : 0 }
+  const resp = await fetch('https://www.scorebat.com/video-api/v1/')
+  return { status: resp.ok ? 'available' : 'unavailable', videos: resp.ok ? ((await resp.json()).length || 0) : 0 }
 }

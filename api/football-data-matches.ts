@@ -10,25 +10,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ ok: false, code: "FOOTBALL_DATA_KEY_MISSING" })
   }
 
-  const url = new URL(req.url)
   const matchId = (req.query.matchId as string || '')
   const date = (req.query.date as string || '') || new Date().toISOString().split("T")[0]
 
   try {
     // Single match detail
     if (matchId) {
-      const res = await fetch(`${BASE}/matches/${matchId}`, {
+      const resp = await fetch(`${BASE}/matches/${matchId}`, {
         headers: { "X-Auth-Token": API_KEY },
       })
-      const data = await res.json()
+      const data = await resp.json()
       return res.status(200).json({ ok: true, source: "football_data", match: data })
     }
 
     // List matches by date
-    const res = await fetch(`${BASE}/matches?date=${date}`, {
+    const resp = await fetch(`${BASE}/matches?date=${date}`, {
       headers: { "X-Auth-Token": API_KEY },
     })
-    const data = await res.json()
+    const data = await resp.json()
 
     return res.status(200).json({
       ok: true,
