@@ -16,6 +16,7 @@ import { calculateMatchIntelligence, type MetricResult } from '@/services/intell
 import { recordFinishedFixture } from '@/services/intelligence/goalsenseKnowledgeBase'
 import { recordPreMatchOutcome } from '@/services/intelligence/preMatchOutcomePerformance'
 import { useAlerts } from '@/context/AlertsContext'
+import { usePatterns } from '@/features/command/contexts/PatternContext'
 import { buildExecutiveRead } from '@/services/intelligence/buildExecutiveRead'
 import { translateNarration, sanitizeFinalPortugueseText } from '@/features/matches/translateMatchNarration'
 import { normalizeEvents } from '@/features/matches/normalizeMatchEvents'
@@ -62,6 +63,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
   const [narFilter, setNarFilter] = useState<NarrationFilter>('important')
   const narRef = useRef<HTMLDivElement>(null)
   const { commandAlerts } = useAlerts()
+  const { getActivePatterns } = usePatterns()
 
   const fetchData = useCallback(async (silent = false) => {
     if (!effectiveFixtureId) return
@@ -467,16 +469,17 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       })
       // Record pre-match outcome for performance tracking
       const matchAlerts = commandAlerts.filter(a => a.fixtureId === fixtureState.id || (a.homeTeam === data.home.name && a.awayTeam === data.away.name))
+      const activeP = getActivePatterns()
       recordPreMatchOutcome({
         canonicalMatchId: canonicalId,
         date: fixtureState.date,
         competition: data.league,
         homeTeam: data.home.name,
         awayTeam: data.away.name,
-        monitoredPatterns: [],
+        monitoredPatterns: activeP.map(p => ({ patternName: p.name, readiness: 'needs_live_data' })),
         triggeredAlerts: matchAlerts.map(a => ({ patternName: a.patternName, confidence: a.confidence, status: a.status, minuteAtTrigger: a.minuteAtTrigger || undefined })),
         finalScore: { home: data.home.score, away: data.away.score },
-        outcomeStatus: matchAlerts.length > 0 ? 'complete' : 'prematch_only',
+        outcomeStatus: matchAlerts.length > 0 ? 'complete' : activeP.length > 0 ? 'prematch_only' : 'unknown',
       })
     } catch { /* non-blocking */ }
   }, [data, fixtureState])
