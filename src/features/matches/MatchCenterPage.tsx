@@ -23,6 +23,7 @@ import { LivePressureGraph } from '@/components/matches/LivePressureGraph'
 import { MatchHighlightsSection } from '@/features/matches/highlights/MatchHighlightsSection'
 import { PreMatchIntelligencePanel } from '@/features/match-detail/PreMatchIntelligencePanel'
 import { PostMatchIntelligencePanel } from '@/features/match-detail/PostMatchIntelligencePanel'
+import { IntelligenceTimelinePanel } from '@/features/match-detail/IntelligenceTimelinePanel'
 
 interface MatchData {
   home: { name: string; logo: string | null; score: number; color: string; colors: string[] }
@@ -647,6 +648,11 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       {/* POST-MATCH INTELLIGENCE (for finished matches only) */}
       {isFinishedMatch(status) && (
         <PostMatchIntelligencePanel homeName={home.name} awayName={away.name} homeScore={home.score} awayScore={away.score} stats={stats} events={events} hasLineups={homeRoster.length > 0} hasNarration={commentary.length > 0} />
+      )}
+
+      {/* INTELLIGENCE TIMELINE (for finished matches with GoalSense data) */}
+      {isFinishedMatch(status) && (
+        <IntelligenceTimelinePanel homeName={home.name} awayName={away.name} fixtureId={fixtureState?.id} finalScore={{ home: home.score, away: away.score }} />
       )}
 
       {/* DIAGNOSTIC PANEL */}
