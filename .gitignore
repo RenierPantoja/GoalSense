@@ -6,3 +6,5 @@ dist
 *.log
 *-firebase-adminsdk-*.json
 .next
+.vercel
+.env*

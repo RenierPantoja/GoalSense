@@ -190,7 +190,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
   async function tryFutPythonTrader(expectedHome: string, expectedAway: string): Promise<MatchData | null> {
     try {
       const today = new Date().toISOString().split('T')[0]
-      const res = await fetch(`/api/futpythontrader-today?date=${today}&source=footystats`)
+      const res = await fetch(`/api/misc?fn=futpythontrader-today&date=${today}&source=footystats`)
       if (!res.ok) return null
       const json = await res.json()
       const matches = json.matches || []
