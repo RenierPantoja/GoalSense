@@ -6,6 +6,7 @@ import { storeFixtureForNavigation } from '@/lib/matchNavigation'
 import { getMatchLocalDateKey, formatMatchTime, isMatchOnSelectedLocalDate, formatSelectedDateLabel, getTodayLocalDateKey, debugMatchDate } from '@/utils/matchDate'
 import { getMatchImportanceScore, getMatchImportanceReason, getMatchImportanceBadge, sortMatchesByImportance, getMainGlobalMatch, getBrazilFeaturedMatch } from '@/utils/matchImportance'
 import { dedupeMatches, normalizeCompetitionName } from '@/services/matchesDedup'
+import { curateMatches, type CompetitionGroup } from '@/features/matches/matchCuration'
 import type { LiveFixture } from '@/lib/apiClient'
 import { useFavorites } from '@/context/FavoritesContext'
 import { useViewMode } from '@/context/ViewModeContext'
@@ -26,7 +27,7 @@ interface FDMatch {
   area?: { name: string }
 }
 
-type FilterKey = 'all' | 'live' | 'upcoming' | 'finished' | 'brazil' | 'europe' | 'relevant' | 'soon' | 'dominant' | 'favorites'
+type FilterKey = 'all' | 'main' | 'live' | 'upcoming' | 'finished' | 'brazil' | 'europe' | 'relevant' | 'soon' | 'dominant' | 'favorites'
 type ViewMode = 'agenda' | 'highlights' | 'compact'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -217,6 +218,7 @@ export function MatchesPage() {
       list = list.filter(m => [m.homeTeam.shortName, m.homeTeam.name, m.awayTeam.shortName, m.awayTeam.name, m.competition.name].some(s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(q)))
     }
     switch (filter) {
+      case 'main': return list.filter(m => getMatchImportanceScore(m) >= 90 || isFavoriteTeam(m.homeTeam.shortName || m.homeTeam.name) || isFavoriteTeam(m.awayTeam.shortName || m.awayTeam.name)).sort((a, b) => calcImportance(b) - calcImportance(a))
       case 'live': return list.filter(m => mapStatus(m.status).live)
       case 'upcoming': return list.filter(m => mapStatus(m.status).upcoming)
       case 'finished': return list.filter(m => mapStatus(m.status).finished)
@@ -231,7 +233,8 @@ export function MatchesPage() {
   }, [matches, filter, search])
 
   const grouped = useMemo(() => { const map = new Map<string, FDMatch[]>(); for (const m of filtered) { const k = m.competition.name; if (!map.has(k)) map.set(k, []); map.get(k)!.push(m) }; return map }, [filtered])
-  const sidebarNext = useMemo(() => matches.filter(m => mapStatus(m.status).upcoming).sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()).slice(0, 4), [matches])
+  const curated = useMemo(() => curateMatches(matches, isFavoriteTeam, (id) => isFavoriteMatch(id), (name) => isFavoriteLeague(name)), [matches, isFavoriteTeam, isFavoriteMatch, isFavoriteLeague])
+  const sidebarNext = useMemo(() => curated.soonMatches.length > 0 ? curated.soonMatches.slice(0, 4) : matches.filter(m => mapStatus(m.status).upcoming).sort((a, b) => getMatchImportanceScore(b) - getMatchImportanceScore(a)).slice(0, 4), [curated, matches])
   const sidebarTop = useMemo(() => sortMatchesByImportance(matches).slice(0, 6), [matches])
   const mainMatch = useMemo(() => getMainGlobalMatch(matches), [matches])
   const brazilMatch = useMemo(() => getBrazilFeaturedMatch(matches), [matches])
@@ -307,7 +310,7 @@ export function MatchesPage() {
             {search && <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 hover:text-white/40"><X size={14} /></button>}
           </div>
           <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-            {([['all','Todos'],['live','Ao vivo'],['upcoming','Próximos'],['finished','Encerrados'],['relevant','Alta relevância'],['soon','Em breve'],['brazil','Brasil'],['europe','Europa'],['dominant','Placar definido'],['favorites','Favoritos']] as [FilterKey,string][]).map(([k,l]) => (
+            {([['all','Todos'],['main','Principais'],['live','Ao vivo'],['upcoming','Próximos'],['finished','Encerrados'],['relevant','Alta relevância'],['soon','Em breve'],['brazil','Brasil'],['europe','Europa'],['dominant','Placar definido'],['favorites','Favoritos']] as [FilterKey,string][]).map(([k,l]) => (
               <button key={k} onClick={() => setFilter(k)} className={`shrink-0 px-3 py-1.5 rounded-xl text-[10px] font-medium transition-all ${filter === k ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/25 shadow-[0_0_12px_-4px_rgba(34,211,238,0.15)]' : 'text-white/30 hover:text-white/50 hover:bg-white/[0.03] border border-transparent'}`}>{l}</button>
             ))}
           </div>
@@ -370,20 +373,42 @@ export function MatchesPage() {
         {/* AGENDA MODE */}
         {!loading && view === 'agenda' && filtered.length > 0 && (
           <div className="space-y-7">
-            {Array.from(grouped.entries()).map(([comp, items]) => {
-              const live = items.filter(i => mapStatus(i.status).live).length
-              const fin = items.filter(i => mapStatus(i.status).finished).length
-              const upc = items.filter(i => mapStatus(i.status).upcoming).length
-              const country = getCountry(items[0])
-              return (
-                <section key={comp}>
-                  <CompetitionHeader emblem={items[0].competition.emblem} name={translateComp(comp)} country={country} total={items.length} live={live} finished={fin} upcoming={upc} />
-                  <div className="rounded-[20px] border border-white/[0.05] bg-white/[0.012] overflow-hidden">
-                    {items.map((m, idx) => <AgendaRow key={m.id} match={m} onClick={() => openMatch(m)} isLast={idx === items.length - 1} />)}
-                  </div>
-                </section>
-              )
-            })}
+            {/* Use curated order when showing all (no search/specific filter) */}
+            {(filter === 'all' || filter === 'main') && !search ? (
+              <>
+                {curated.priorityLeagues.map(group => (
+                  <AgendaCompetitionSection key={group.name} group={group} openMatch={openMatch} />
+                ))}
+                {curated.secondaryLeagues.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-3 px-2 pt-2">
+                      <div className="flex-1 h-px bg-white/[0.04]" />
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/20">Outras competições</span>
+                      <div className="flex-1 h-px bg-white/[0.04]" />
+                    </div>
+                    {curated.secondaryLeagues.map(group => (
+                      <AgendaCompetitionSection key={group.name} group={group} openMatch={openMatch} />
+                    ))}
+                  </>
+                )}
+              </>
+            ) : (
+              /* Filtered/searched: use grouped as before */
+              Array.from(grouped.entries()).map(([comp, items]) => {
+                const live = items.filter(i => mapStatus(i.status).live).length
+                const fin = items.filter(i => mapStatus(i.status).finished).length
+                const upc = items.filter(i => mapStatus(i.status).upcoming).length
+                const country = getCountry(items[0])
+                return (
+                  <section key={comp}>
+                    <CompetitionHeader emblem={items[0].competition.emblem} name={translateComp(comp)} country={country} total={items.length} live={live} finished={fin} upcoming={upc} />
+                    <div className="rounded-[20px] border border-white/[0.05] bg-white/[0.012] overflow-hidden">
+                      {items.map((m, idx) => <AgendaRow key={m.id} match={m} onClick={() => openMatch(m)} isLast={idx === items.length - 1} />)}
+                    </div>
+                  </section>
+                )
+              })
+            )}
           </div>
         )}
       </div>
@@ -506,6 +531,22 @@ function DailyReadingPanel({ phrases, total, comps, setFilter }: { phrases: { te
         <p className="text-[9px] text-white/20 mt-3">{total} jogos em {comps} {comps === 1 ? 'competição' : 'competições'}</p>
       </div>
     </div>
+  )
+}
+
+// ─── Agenda Competition Section (uses curated group) ─────────────────────────
+
+function AgendaCompetitionSection({ group, openMatch }: { group: CompetitionGroup; openMatch: (m: any) => void }) {
+  const live = group.matches.filter(i => i.status === 'IN_PLAY' || i.status === 'LIVE' || i.status === 'PAUSED').length
+  const fin = group.matches.filter(i => i.status === 'FINISHED').length
+  const upc = group.matches.filter(i => i.status === 'TIMED' || i.status === 'SCHEDULED').length
+  return (
+    <section>
+      <CompetitionHeader emblem={group.emblem} name={translateComp(group.name)} country={group.country} total={group.matches.length} live={live} finished={fin} upcoming={upc} />
+      <div className="rounded-[20px] border border-white/[0.05] bg-white/[0.012] overflow-hidden">
+        {group.matches.map((m, idx) => <AgendaRow key={m.id} match={m as unknown as FDMatch} onClick={() => openMatch(m)} isLast={idx === group.matches.length - 1} />)}
+      </div>
+    </section>
   )
 }
 
