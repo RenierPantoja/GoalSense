@@ -609,7 +609,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       {/* STICKY NAV */}
       <nav className="sticky top-0 z-20 -mx-4 px-4 py-2 bg-[#0a0d14]/90 backdrop-blur-md border-b border-white/[0.03]">
         <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-          {[['sec-resumo','Resumo'],['sec-pressao','Pressão'],['sec-stats','Estatísticas'],['sec-timeline','Linha do tempo'],['sec-narracao','Narração'],['sec-elenco','Elenco']].map(([id, label]) => (
+          {(isScheduledMatch(status) ? [['sec-resumo','Resumo'],['sec-pressao','Pré-jogo']] : [['sec-resumo','Resumo'],['sec-pressao','Pressão'],['sec-stats','Estatísticas'],['sec-timeline','Linha do tempo'],['sec-narracao','Narração'],['sec-elenco','Elenco']]).map(([id, label]) => (
             <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
               className="shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-medium text-white/30 hover:text-white/60 hover:bg-white/[0.04] transition-colors">
               {label}
@@ -665,12 +665,14 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       </div>
 
       {/* 4. TACTICAL SNAPSHOT */}
+      {!isScheduledMatch(status) && (
       <div id="sec-stats">
         <CircularStatsPanel stats={stats} homeName={home.name} awayName={away.name} homeColor={home.color} awayColor={away.color} />
       </div>
+      )}
 
       {/* 5. KEY MOMENTS + IMPACT */}
-      {(events.length > 0 || stats.length > 0) && (
+      {!isScheduledMatch(status) && (events.length > 0 || stats.length > 0) && (
         <div id="sec-timeline" className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           {events.length > 0 && <GroupedTimeline events={events} homeName={home.name} awayName={away.name} />}
           <div className="space-y-4">
@@ -717,7 +719,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       )}
 
       {/* 8. LINEUPS */}
-      {(homeRoster.length > 0 || awayRoster.length > 0) && (
+      {!isScheduledMatch(status) && (homeRoster.length > 0 || awayRoster.length > 0) && (
         <section id="sec-elenco" className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <RosterPanel team={home.name} logo={home.logo} players={homeRoster} eventMap={playerEventMap} />
           <RosterPanel team={away.name} logo={away.logo} players={awayRoster} eventMap={playerEventMap} />
