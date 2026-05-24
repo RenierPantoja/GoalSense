@@ -28,6 +28,8 @@ interface MatchData {
   stats: { label: string; home: string; away: string }[]
   events: { clock: string; text: string; type: string; team: string }[]
   commentary: { clock: string; text: string }[]
+  homeRoster: { jersey: string; name: string; starter: boolean }[]
+  awayRoster: { jersey: string; name: string; starter: boolean }[]
 }
 
 interface Props {
@@ -63,7 +65,7 @@ export function LiveMatchDetailView({ fixture, onBack }: Props) {
         league: fixture.league.name, leagueLogo: fixture.league.logo,
         status: fixture.status.long || '', elapsed: fixture.status.elapsed,
         isLive: fixture.status.short === 'LIVE' || fixture.status.short === 'HT',
-        venue: fixture.venue, stats: [], events: [], commentary: [],
+        venue: fixture.venue, stats: [], events: [], commentary: [], homeRoster: [], awayRoster: [],
       })
     } catch {
       // Fallback
@@ -73,7 +75,7 @@ export function LiveMatchDetailView({ fixture, onBack }: Props) {
         league: fixture.league.name, leagueLogo: fixture.league.logo,
         status: fixture.status.long || '', elapsed: fixture.status.elapsed,
         isLive: fixture.status.short === 'LIVE' || fixture.status.short === 'HT',
-        venue: fixture.venue, stats: [], events: [], commentary: [],
+        venue: fixture.venue, stats: [], events: [], commentary: [], homeRoster: [], awayRoster: [],
       })
     } finally { setLoading(false) }
   }, [fixture])
@@ -238,6 +240,14 @@ export function LiveMatchDetailView({ fixture, onBack }: Props) {
         </section>
       )}
 
+      {/* Lineups */}
+      {(data.homeRoster.length > 0 || data.awayRoster.length > 0) && (
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {data.homeRoster.length > 0 && <RosterSection team={home.name} logo={home.logo} players={data.homeRoster} />}
+          {data.awayRoster.length > 0 && <RosterSection team={away.name} logo={away.logo} players={data.awayRoster} />}
+        </section>
+      )}
+
       {/* Coverage detail (advanced) */}
       {isAdvanced && (
         <div className="flex items-center gap-3 text-[9px] text-white/20">
@@ -315,6 +325,7 @@ async function searchApiFootballForMatch(expectedHome: string, expectedAway: str
         status: item.fixture?.status?.long || '', elapsed: item.fixture?.status?.elapsed || null,
         isLive: ['1H', '2H', 'HT', 'ET', 'P'].includes(item.fixture?.status?.short || ''),
         venue: item.fixture?.venue?.name || null, stats, events, commentary: [],
+        homeRoster: [], awayRoster: [],
       }
     }
     return null
@@ -329,6 +340,11 @@ function parseEspnToMatchData(json: any): MatchData {
   const awayBox = json.boxscore?.teams?.[1]?.statistics || []
   const elapsed = comp?.status?.displayClock?.match(/(\d+)/)?.[1]
 
+  // Rosters from ESPN
+  const parseRoster = (roster: any[]) => roster.map((p: any) => ({ jersey: p.jersey || '', name: p.athlete?.displayName || '', starter: p.starter ?? true }))
+  const homeRoster = parseRoster(json.rosters?.[0]?.roster || [])
+  const awayRoster = parseRoster(json.rosters?.[1]?.roster || [])
+
   return {
     home: { name: h?.team?.displayName || '', logo: h?.team?.logos?.[0]?.href || h?.team?.logo || null, score: parseInt(h?.score) || 0, color: '22d3ee', colors: ['22d3ee', '1a1a2e'] },
     away: { name: a?.team?.displayName || '', logo: a?.team?.logos?.[0]?.href || a?.team?.logo || null, score: parseInt(a?.score) || 0, color: '34d399', colors: ['34d399', '1a1a2e'] },
@@ -338,5 +354,43 @@ function parseEspnToMatchData(json: any): MatchData {
     stats: homeBox.map((s: any, i: number) => ({ label: s.label || s.name, home: s.displayValue || '0', away: awayBox[i]?.displayValue || '0' })),
     events: (json.keyEvents || []).map((ev: any) => ({ clock: ev.clock?.displayValue || '', text: ev.text || ev.shortText || '', type: ev.type?.text || '', team: ev.team?.displayName || '' })),
     commentary: (json.commentary || []).map((c: any) => ({ clock: c.time?.displayValue || c.clock?.displayValue || '', text: c.text || '' })),
+    homeRoster, awayRoster,
   }
+}
+
+// ─── Roster Section ──────────────────────────────────────────────────────────
+
+function RosterSection({ team, logo, players }: { team: string; logo: string | null; players: { jersey: string; name: string; starter: boolean }[] }) {
+  const starters = players.filter(p => p.starter)
+  const bench = players.filter(p => !p.starter)
+  return (
+    <div className="rounded-[20px] border border-white/[0.04] bg-white/[0.015] overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.04] bg-white/[0.01]">
+        <ClubLogo src={logo} name={team} size={20} />
+        <h3 className="text-[11px] font-bold text-white/70">{team}</h3>
+        <span className="ml-auto text-[10px] text-white/20">{starters.length} titulares</span>
+      </div>
+      <div className="px-4 py-3 space-y-1">
+        {starters.map((p, i) => (
+          <div key={i} className="flex items-center gap-2 py-1.5">
+            <span className="w-6 h-6 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-[10px] font-bold tabular-nums text-white/40">{p.jersey}</span>
+            <span className="text-[11px] font-medium text-white/70">{p.name}</span>
+          </div>
+        ))}
+      </div>
+      {bench.length > 0 && (
+        <div className="px-4 py-3 border-t border-white/[0.03]">
+          <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/15 mb-1.5">Banco ({bench.length})</p>
+          <div className="grid grid-cols-2 gap-0">
+            {bench.map((p, i) => (
+              <div key={i} className="flex items-center gap-2 py-1">
+                <span className="text-[10px] tabular-nums text-white/30 w-4 text-right">{p.jersey}</span>
+                <span className="text-[10px] text-white/40 truncate">{p.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
