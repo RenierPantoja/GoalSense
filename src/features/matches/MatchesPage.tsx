@@ -153,7 +153,7 @@ export function MatchesPage() {
     // Fetch from both football-data AND ESPN, merge results
     Promise.allSettled([
       fetch(`/.netlify/functions/football-data-matches?date=${date}`, { cache: 'no-store' }).then(r => r.json()),
-      fetch('/.netlify/functions/espn-live', { cache: 'no-store' }).then(r => r.json()),
+      fetch('/.netlify/functions/espn-live?date=' + date.replace(/-/g, ''), { cache: 'no-store' }).then(r => r.json()),
     ]).then(async ([fdResult, espnResult]) => {
       let fdMatches: FDMatch[] = []
       let espnMatches: FDMatch[] = []

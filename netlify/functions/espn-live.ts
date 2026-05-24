@@ -1,12 +1,17 @@
 /**
  * ESPN Scoreboard — free, no API key, real-time soccer data.
  * Endpoint: https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard
+ * Accepts ?date=YYYYMMDD to fetch specific day (includes finished matches)
  */
-export default async () => {
+export default async (req: Request) => {
   try {
-    const res = await fetch(
-      "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard"
-    )
+    const url = new URL(req.url)
+    const dateParam = url.searchParams.get('date') // YYYYMMDD format
+    const espnUrl = dateParam
+      ? `https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?dates=${dateParam}`
+      : "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard"
+
+    const res = await fetch(espnUrl)
 
     if (!res.ok) {
       return Response.json(
