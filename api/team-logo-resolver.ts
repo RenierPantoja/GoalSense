@@ -1,42 +1,24 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import originalHandler from '../netlify/functions/team-logo-resolver';
 
-/**
- * Team Logo Resolver — tries multiple providers to find a real team badge.
- */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const name = (req.query.name as string || '')
-  if (!name) {
-    return res.status(400).json({ ok: false, code: 'MISSING_NAME' })
-  }
-
-  // TheSportsDB
   try {
-    const resp = await fetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(name)}`)
-    if (resp.ok) {
-      const data = await resp.json()
-      const team = data.teams?.[0]
-      if (team?.strBadge) {
-        return res.status(200).json({ ok: true, logo: team.strBadge, source: 'thesportsdb', teamName: team.strTeam })
-      }
+    // Build a Request-like object for the original Netlify handler
+    const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    if (req.query) {
+      Object.entries(req.query).forEach(([k, v]) => {
+        if (v) url.searchParams.set(k, Array.isArray(v) ? v[0] : v);
+      });
     }
-  } catch {}
-
-  // API-Football search
-  const AF_KEY = (process.env.API_FOOTBALL_KEYS || process.env.API_FOOTBALL_KEY || '').split(',')[0]
-  if (AF_KEY) {
-    try {
-      const resp = await fetch(`https://v3.football.api-sports.io/teams?search=${encodeURIComponent(name)}`, {
-        headers: { 'x-apisports-key': AF_KEY.trim() },
-      })
-      if (resp.ok) {
-        const data = await resp.json()
-        const team = data.response?.[0]?.team
-        if (team?.logo) {
-          return res.status(200).json({ ok: true, logo: team.logo, source: 'api_football', teamName: team.name })
-        }
-      }
-    } catch {}
+    const request = new Request(url.toString(), { method: req.method || 'GET' });
+    
+    // Call original handler
+    const response = await originalHandler(request);
+    
+    // Convert Response to Vercel res
+    const body = await response.json();
+    return res.status(response.status).json(body);
+  } catch (err: any) {
+    return res.status(500).json({ ok: false, error: err.message });
   }
-
-  return res.status(200).json({ ok: true, logo: null, reason: 'Logo não encontrado nos providers.' })
 }

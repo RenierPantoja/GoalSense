@@ -1,26 +1,24 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-
+import originalHandler from '../netlify/functions/api-football-leagues';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const API_KEY = process.env.API_FOOTBALL_KEY
-  const BASE = process.env.API_FOOTBALL_BASE_URL || "https://v3.football.api-sports.io"
-
-  if (!API_KEY) {
-    return res.status(500).json({ ok: false, code: "API_FOOTBALL_KEY_MISSING" })
-  }
-
   try {
-    const resp = await fetch(`${BASE}/leagues?current=true`, { headers: { "x-apisports-key": API_KEY } })
-    const data = await resp.json()
-
-    return res.status(200).json({
-      ok: true,
-      source: "api_football",
-      fetchedAt: new Date().toISOString(),
-      response: data.response || [],
-    }, { headers: { "Cache-Control": "public, max-age=3600" } })
+    // Build a Request-like object for the original Netlify handler
+    const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    if (req.query) {
+      Object.entries(req.query).forEach(([k, v]) => {
+        if (v) url.searchParams.set(k, Array.isArray(v) ? v[0] : v);
+      });
+    }
+    const request = new Request(url.toString(), { method: req.method || 'GET' });
+    
+    // Call original handler
+    const response = await originalHandler(request);
+    
+    // Convert Response to Vercel res
+    const body = await response.json();
+    return res.status(response.status).json(body);
   } catch (err: any) {
-    return res.status(500).json({ ok: false, message: err.message })
+    return res.status(500).json({ ok: false, error: err.message });
   }
 }
