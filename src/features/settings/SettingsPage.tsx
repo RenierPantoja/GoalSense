@@ -2,10 +2,11 @@
  * Settings page — displays user preferences, mode, favorites summary.
  */
 import { useState } from 'react'
-import { Zap, Heart, Trash2, Globe2, Database, Shield, Bell } from 'lucide-react'
+import { Zap, Heart, Trash2, Globe2, Database, Shield, Bell, HardDrive } from 'lucide-react'
 import { useFavorites } from '@/context/FavoritesContext'
 import { useViewMode } from '@/context/ViewModeContext'
 import { useAlerts } from '@/context/AlertsContext'
+import { getGoalSenseStorageStats, cleanupExpiredCache, clearPreMatchCache, clearKnowledgeBase, clearOutcomes, clearTriggeredAlerts, clearAllGoalSense } from '@/services/cache/storageMaintenance'
 
 export function SettingsPage() {
   const { teams, leagues, matches, clearAll, hasAnyFavorite } = useFavorites()
@@ -118,6 +119,9 @@ export function SettingsPage() {
         )}
       </div>
 
+      {/* Storage Management */}
+      <StorageSection />
+
       {/* System info */}
       <div className="rounded-[18px] border border-white/[0.05] bg-white/[0.015] p-5 space-y-4">
         <div className="flex items-center gap-3 mb-3">
@@ -153,4 +157,60 @@ export function SettingsPage() {
       </div>
     </div>
   )
+}
+
+
+function StorageSection() {
+  const [stats, setStats] = useState(() => getGoalSenseStorageStats())
+  const [confirmAll, setConfirmAll] = useState(false)
+  const [feedback, setFeedback] = useState('')
+
+  const refresh = () => setStats(getGoalSenseStorageStats())
+  const showFeedback = (msg: string) => { setFeedback(msg); setTimeout(() => setFeedback(''), 3000) }
+
+  return (
+    <div className="rounded-[18px] border border-white/[0.05] bg-white/[0.015] p-5 space-y-4">
+      <div className="flex items-center gap-3 mb-1">
+        <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-emerald-500/10 border border-emerald-500/15"><HardDrive size={16} className="text-emerald-400" /></div>
+        <div><h3 className="text-[13px] font-semibold text-white/70">Dados locais e cache</h3><p className="text-[10px] text-white/30 mt-0.5">~{stats.estimatedSizeKB} KB usados · {stats.goalsenseKeys} entradas</p></div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <StatBox label="Cache" value={stats.cacheEntries} />
+        <StatBox label="Favoritos" value={stats.favorites} />
+        <StatBox label="Padrões" value={stats.patterns} />
+        <StatBox label="Alertas" value={stats.alerts} />
+        <StatBox label="Cmd Alerts" value={stats.commandAlerts} />
+        <StatBox label="Outcomes" value={stats.outcomes} />
+      </div>
+
+      <div className="pt-3 border-t border-white/[0.04] space-y-2">
+        <button onClick={() => { const n = cleanupExpiredCache(); refresh(); showFeedback(`${n} caches expirados removidos`) }} className="flex items-center gap-2 text-[11px] text-white/40 hover:text-white/60 transition-colors" type="button"><Trash2 size={11} />Limpar cache expirado</button>
+        <button onClick={() => { clearPreMatchCache(); refresh(); showFeedback('Cache de pré-jogo limpo') }} className="flex items-center gap-2 text-[11px] text-white/40 hover:text-white/60 transition-colors" type="button"><Trash2 size={11} />Limpar cache de pré-jogo</button>
+        <button onClick={() => { clearKnowledgeBase(); refresh(); showFeedback('Knowledge Base limpa') }} className="flex items-center gap-2 text-[11px] text-white/40 hover:text-white/60 transition-colors" type="button"><Trash2 size={11} />Limpar Knowledge Base</button>
+        <button onClick={() => { clearOutcomes(); refresh(); showFeedback('Outcomes removidos') }} className="flex items-center gap-2 text-[11px] text-white/40 hover:text-white/60 transition-colors" type="button"><Trash2 size={11} />Limpar outcomes</button>
+        <button onClick={() => { clearTriggeredAlerts(); refresh(); showFeedback('Alertas disparados limpos') }} className="flex items-center gap-2 text-[11px] text-white/40 hover:text-white/60 transition-colors" type="button"><Trash2 size={11} />Limpar alertas disparados</button>
+      </div>
+
+      <div className="pt-3 border-t border-white/[0.04]">
+        {!confirmAll ? (
+          <button onClick={() => setConfirmAll(true)} className="flex items-center gap-2 text-[11px] text-rose-400/50 hover:text-rose-400/80 transition-colors" type="button"><Trash2 size={11} />Limpar tudo do GoalSense</button>
+        ) : (
+          <div className="rounded-xl bg-rose-500/[0.04] border border-rose-500/15 p-3">
+            <p className="text-[11px] text-rose-400/70 mb-2">Isso remove cache, Knowledge Base, outcomes, alertas locais, padrões e favoritos salvos neste navegador.</p>
+            <div className="flex gap-2">
+              <button onClick={() => { clearAllGoalSense(); refresh(); setConfirmAll(false); showFeedback('Todos os dados GoalSense removidos') }} className="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/25" type="button">Confirmar limpeza total</button>
+              <button onClick={() => setConfirmAll(false)} className="px-3 py-1.5 rounded-lg text-[10px] text-white/30 border border-white/[0.06]" type="button">Cancelar</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {feedback && <p className="text-[11px] text-emerald-400/60 animate-fadeIn">{feedback}</p>}
+    </div>
+  )
+}
+
+function StatBox({ label, value }: { label: string; value: number }) {
+  return (<div className="rounded-lg bg-white/[0.02] border border-white/[0.04] px-3 py-2 text-center"><span className="text-[14px] font-bold text-white/60 block">{value}</span><span className="text-[9px] text-white/30">{label}</span></div>)
 }
