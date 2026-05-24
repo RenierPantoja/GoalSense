@@ -10,7 +10,7 @@ import { useViewMode } from '@/context/ViewModeContext'
 import { ClubLogo } from '@/components/ui/ClubLogo'
 
 export function AlertsPage() {
-  const { alerts, deleteAlert, toggleAlert, totalCount, enabledCount, clearAllAlerts } = useAlerts()
+  const { alerts, deleteAlert, toggleAlert, totalCount, enabledCount, clearAllAlerts, commandAlerts } = useAlerts()
   const { teams: favTeams, leagues: favLeagues, matches: favMatches } = useFavorites()
   const { isAdvanced } = useViewMode()
   const [showModal, setShowModal] = useState(false)
@@ -96,6 +96,44 @@ export function AlertsPage() {
           {alerts.map(a => (
             <AlertCard key={a.id} alert={a} onToggle={() => toggleAlert(a.id)} onDelete={() => deleteAlert(a.id)} onEdit={() => { setEditingAlert(a); setPrefill(null); setShowModal(true) }} isAdvanced={isAdvanced} />
           ))}
+        </div>
+      )}
+
+      {/* Command Center Triggered Alerts */}
+      {commandAlerts.length > 0 && (
+        <div className="space-y-3 pt-2">
+          <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-400/40 flex items-center gap-2"><Zap size={12} className="text-amber-400/40" />Alertas do Command Center</h3>
+          <div className="space-y-2">
+            {commandAlerts.slice(0, 15).map(ca => {
+              const statusLabel = ca.status === 'pending' ? 'Pendente' : ca.status === 'confirmed' ? 'Confirmado' : ca.status === 'failed' ? 'Falhou' : ca.status === 'expired' ? 'Expirado' : 'Desconhecido'
+              const statusColor = ca.status === 'confirmed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/15' : ca.status === 'failed' ? 'bg-rose-500/10 text-rose-400 border-rose-500/15' : ca.status === 'pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/15' : 'bg-white/[0.03] text-white/30 border-white/[0.05]'
+              return (
+                <div key={ca.id} className="rounded-[16px] border border-white/[0.05] bg-white/[0.015] p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/8 text-amber-400/60 border border-amber-500/10">Command Center</span>
+                      <span className="text-[12px] font-semibold text-white/65">{ca.patternName}</span>
+                    </div>
+                    <span className={`text-[9px] font-semibold px-2.5 py-1 rounded-lg border ${statusColor}`}>{statusLabel}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] text-white/40 mb-1.5">
+                    <span>{ca.homeTeam} x {ca.awayTeam}</span>
+                    <span>·</span>
+                    <span>{ca.competition}</span>
+                    {ca.minuteAtTrigger && <><span>·</span><span>{ca.minuteAtTrigger}'</span></>}
+                  </div>
+                  <div className="flex items-center gap-3 text-[10px] text-white/25">
+                    <span>Confiança: {ca.confidence}%</span>
+                    <span>Placar: {ca.scoreAtTrigger.home}-{ca.scoreAtTrigger.away}</span>
+                    {ca.scoreAtResolution && <span>→ {ca.scoreAtResolution.home}-{ca.scoreAtResolution.away}</span>}
+                  </div>
+                  {ca.resolutionReason && <p className="text-[10px] text-white/20 mt-1 italic">{ca.resolutionReason}</p>}
+                  {isAdvanced && <p className="text-[9px] text-white/15 mt-1 font-mono">{ca.evidences.slice(0, 3).join(' · ')}</p>}
+                  <span className="text-[9px] text-white/15 mt-1 block">{new Date(ca.createdAt).toLocaleString('pt-BR')}</span>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 

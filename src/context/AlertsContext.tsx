@@ -1,7 +1,7 @@
 /**
  * Local alerts system with localStorage persistence.
  * Alert rules define what the user wants to monitor.
- * No push notifications in this phase — just saved rules.
+ * Also stores triggered alerts from Command Center patterns.
  */
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 
@@ -22,6 +22,30 @@ export interface AlertRule {
   updatedAt: string
 }
 
+// Command Center triggered alerts stored here for /app/alerts visibility
+export type CommandAlertStatus = 'pending' | 'confirmed' | 'failed' | 'expired' | 'unknown'
+
+export interface CommandCenterAlert {
+  id: string
+  source: 'command_center'
+  patternId: string
+  patternName: string
+  fixtureId: number
+  homeTeam: string
+  awayTeam: string
+  competition: string
+  minuteAtTrigger: number | null
+  scoreAtTrigger: { home: number; away: number }
+  scoreAtResolution?: { home: number; away: number }
+  confidence: number
+  severity: string
+  evidences: string[]
+  status: CommandAlertStatus
+  resolutionReason?: string
+  createdAt: string
+  resolvedAt?: string
+}
+
 interface AlertsContextValue {
   alerts: AlertRule[]
   createAlert: (rule: Omit<AlertRule, 'id' | 'createdAt' | 'updatedAt'>) => void
@@ -36,11 +60,17 @@ interface AlertsContextValue {
   clearAllAlerts: () => void
   totalCount: number
   enabledCount: number
+  // Command Center alerts
+  commandAlerts: CommandCenterAlert[]
+  registerCommandAlert: (alert: Omit<CommandCenterAlert, 'id' | 'createdAt'>) => void
+  updateCommandAlertStatus: (id: string, status: CommandAlertStatus, extra?: { score?: { home: number; away: number }; reason?: string }) => void
+  getCommandAlerts: () => CommandCenterAlert[]
 }
 
 // ─── Storage ─────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'goalsense_alert_rules'
+const CMD_ALERTS_KEY = 'goalsense_command_alerts'
 
 function loadAlerts(): AlertRule[] {
   try {
@@ -55,6 +85,19 @@ function saveAlerts(alerts: AlertRule[]): void {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(alerts)) } catch { /* */ }
 }
 
+function loadCommandAlerts(): CommandCenterAlert[] {
+  try {
+    const raw = localStorage.getItem(CMD_ALERTS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch { return [] }
+}
+
+function saveCommandAlerts(alerts: CommandCenterAlert[]): void {
+  try { localStorage.setItem(CMD_ALERTS_KEY, JSON.stringify(alerts)) } catch { /* */ }
+}
+
 function generateId(): string {
   return `alert_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }
@@ -65,8 +108,10 @@ const AlertsContext = createContext<AlertsContextValue | null>(null)
 
 export function AlertsProvider({ children }: { children: ReactNode }) {
   const [alerts, setAlerts] = useState<AlertRule[]>(loadAlerts)
+  const [commandAlerts, setCommandAlerts] = useState<CommandCenterAlert[]>(loadCommandAlerts)
 
   useEffect(() => { saveAlerts(alerts) }, [alerts])
+  useEffect(() => { saveCommandAlerts(commandAlerts) }, [commandAlerts])
 
   const createAlert = useCallback((rule: Omit<AlertRule, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString()
@@ -104,11 +149,34 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
 
   const clearAllAlerts = useCallback(() => { setAlerts([]) }, [])
 
+  // ─── Command Center Alerts ─────────────────────────────────────────────
+
+  const registerCommandAlert = useCallback((alert: Omit<CommandCenterAlert, 'id' | 'createdAt'>) => {
+    setCommandAlerts(prev => {
+      // Anti-duplicate: same pattern + fixture within 5 min
+      const dup = prev.find(a => a.patternId === alert.patternId && a.fixtureId === alert.fixtureId && (Date.now() - new Date(a.createdAt).getTime()) < 300_000)
+      if (dup) return prev
+      const newAlert: CommandCenterAlert = { ...alert, id: generateId(), createdAt: new Date().toISOString() }
+      return [newAlert, ...prev].slice(0, 100)
+    })
+  }, [])
+
+  const updateCommandAlertStatus = useCallback((id: string, status: CommandAlertStatus, extra?: { score?: { home: number; away: number }; reason?: string }) => {
+    setCommandAlerts(prev => prev.map(a => a.id === id ? {
+      ...a, status,
+      ...(status === 'confirmed' || status === 'failed' ? { resolvedAt: new Date().toISOString() } : {}),
+      ...(extra?.score ? { scoreAtResolution: extra.score } : {}),
+      ...(extra?.reason ? { resolutionReason: extra.reason } : {}),
+    } : a))
+  }, [])
+
+  const getCommandAlerts = useCallback(() => commandAlerts, [commandAlerts])
+
   const totalCount = alerts.length
   const enabledCount = alerts.filter(a => a.enabled).length
 
   return (
-    <AlertsContext.Provider value={{ alerts, createAlert, updateAlert, deleteAlert, toggleAlert, getAlerts, getEnabledAlerts, getAlertsForTeam, getAlertsForMatch, hasAlertForTarget, clearAllAlerts, totalCount, enabledCount }}>
+    <AlertsContext.Provider value={{ alerts, createAlert, updateAlert, deleteAlert, toggleAlert, getAlerts, getEnabledAlerts, getAlertsForTeam, getAlertsForMatch, hasAlertForTarget, clearAllAlerts, totalCount, enabledCount, commandAlerts, registerCommandAlert, updateCommandAlertStatus, getCommandAlerts }}>
       {children}
     </AlertsContext.Provider>
   )

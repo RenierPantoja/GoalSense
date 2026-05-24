@@ -17,6 +17,7 @@ import { getMatchImportanceScore } from '@/utils/matchImportance'
 import { usePatterns } from './contexts/PatternContext'
 import { evaluateAllPatterns } from './intelligence/patternEvaluator'
 import { runAutoDiscovery, type AutoDiscovery } from './intelligence/autoDiscoveryEngine'
+import { resolveTriggeredAlert as resolveTriggeredAlertFn } from './intelligence/patternResolutionEngine'
 import { isLiveFx, detectChanges, type ChangeEvent } from './commandHelpers'
 import type { Pattern, PatternTemplate, PatternHit, PatternCondition, PatternConditionType, FixtureStatsForPattern, ScannerEntry, TriggeredAlert, AutoDiscoveryConfig } from './types/commandTypes'
 
@@ -42,7 +43,7 @@ export function CommandCenterPage() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const { isFavoriteTeam, isFavoriteMatch, toggleFavoriteMatch } = useFavorites()
-  const { enabledCount } = useAlerts()
+  const { enabledCount, registerCommandAlert, updateCommandAlertStatus, commandAlerts } = useAlerts()
   const { isAdvanced } = useViewMode()
   const { patterns, templates, createPattern, createFromTemplate, updatePattern, togglePattern, deletePattern, getActivePatterns, triggeredAlerts, triggerAlert, getRecentTriggered, resolveExpired, discoveryConfig, updateDiscoveryConfig, activePatternCount, triggeredTodayCount } = usePatterns()
 
@@ -102,10 +103,29 @@ export function CommandCenterPage() {
         const pat = patterns.find(p => p.id === hit.patternId)
         if (pat && pat.action !== 'suggest_only') {
           triggerAlert({ patternId: hit.patternId, patternName: hit.patternName, fixtureId: hit.fixtureId, homeTeam: hit.fixture.homeTeam.name, awayTeam: hit.fixture.awayTeam.name, league: hit.fixture.league.name, minute: hit.fixture.status.elapsed, confidence: hit.confidence, reasons: hit.reasons, timestamp: new Date().toISOString(), status: 'pending', scoreAtTrigger: { home: hit.fixture.score.home ?? 0, away: hit.fixture.score.away ?? 0 } })
+          // Bridge: also register in /app/alerts via AlertsContext
+          registerCommandAlert({ source: 'command_center', patternId: hit.patternId, patternName: hit.patternName, fixtureId: hit.fixtureId, homeTeam: hit.fixture.homeTeam.name, awayTeam: hit.fixture.awayTeam.name, competition: hit.fixture.league.name, minuteAtTrigger: hit.fixture.status.elapsed, scoreAtTrigger: { home: hit.fixture.score.home ?? 0, away: hit.fixture.score.away ?? 0 }, confidence: hit.confidence, severity: hit.severity, evidences: hit.reasons, status: 'pending' })
         }
       }
     }
-  }, [patternHits, triggerAlert, patterns])
+  }, [patternHits, triggerAlert, patterns, registerCommandAlert])
+
+  // ─── Resolution Engine ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (fixtures.length === 0 || commandAlerts.length === 0) return
+    const pending = commandAlerts.filter(a => a.status === 'pending')
+    if (pending.length === 0) return
+    const fixtureMap = new Map(fixtures.map(f => [f.id, f]))
+    for (const alert of pending) {
+      const fx = fixtureMap.get(alert.fixtureId)
+      if (!fx) continue
+      const trigAlert: TriggeredAlert = { id: alert.id, patternId: alert.patternId, patternName: alert.patternName, fixtureId: alert.fixtureId, homeTeam: alert.homeTeam, awayTeam: alert.awayTeam, league: alert.competition, minute: alert.minuteAtTrigger, confidence: alert.confidence, reasons: alert.evidences, timestamp: alert.createdAt, status: 'pending', scoreAtTrigger: alert.scoreAtTrigger }
+      const result = resolveTriggeredAlertFn(trigAlert, fx)
+      if (result) {
+        updateCommandAlertStatus(alert.id, result.status, { score: result.scoreAtResolution, reason: result.resolutionReason })
+      }
+    }
+  }, [fixtures, commandAlerts, updateCommandAlertStatus])
 
   // ─── Auto Discovery ────────────────────────────────────────────────────────
   const discoveries = useMemo(() => runAutoDiscovery(fixtures, statsMap, isFavoriteTeam, discoveryConfig), [fixtures, statsMap, isFavoriteTeam, discoveryConfig])
