@@ -8,7 +8,7 @@ import { DataCoverageBadge, getMatchCoverage } from '@/components/ui/DataCoverag
 import { useFavorites } from '@/context/FavoritesContext'
 import { useViewMode } from '@/context/ViewModeContext'
 import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
-import { isScheduledMatch } from '@/utils/matchStatus'
+import { isScheduledMatch, isFinishedMatch } from '@/utils/matchStatus'
 import type { LiveFixture } from '@/lib/apiClient'
 import { retrieveStoredFixture } from '@/lib/matchNavigation'
 import { isSameMatchStrict } from '@/features/providers/isSameMatchStrict'
@@ -614,10 +614,10 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
         <PreMatchIntelligencePanel homeName={home.name} awayName={away.name} competition={league} utcDate={fixtureState?.date} />
       )}
 
-      {/* POST-MATCH INTELLIGENCE (for finished matches) */}
-      {status === 'Encerrado' || status === 'FINISHED' || status === 'Full Time' || (home.score + away.score > 0 && !isLive && !isScheduledMatch(status)) ? (
+      {/* POST-MATCH INTELLIGENCE (for finished matches only) */}
+      {isFinishedMatch(status) && (
         <PostMatchIntelligencePanel homeName={home.name} awayName={away.name} homeScore={home.score} awayScore={away.score} stats={stats} events={events} hasLineups={homeRoster.length > 0} hasNarration={commentary.length > 0} />
-      ) : null}
+      )}
 
       {/* DIAGNOSTIC PANEL */}
       {stats.length > 0 && <DiagnosticPanel stats={stats} homeName={home.name} awayName={away.name} homeScore={home.score} awayScore={away.score} elapsed={elapsed} events={events} />}
