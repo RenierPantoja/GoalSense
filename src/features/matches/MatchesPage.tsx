@@ -240,11 +240,6 @@ export function MatchesPage() {
   const openMatch = (m: FDMatch) => {
     const { label, live } = mapStatus(m.status)
     const fx: LiveFixture = { id: m.id, provider: 'football_data', externalId: m.id, league: { id: 0, name: m.competition.name, logo: m.competition.emblem, country: m.area?.name || '', season: 2026 }, status: { long: label, short: live ? 'LIVE' : m.status === 'FINISHED' ? 'FT' : 'NS', elapsed: null }, homeTeam: { id: m.homeTeam.id, name: m.homeTeam.shortName || m.homeTeam.name, logo: m.homeTeam.crest }, awayTeam: { id: m.awayTeam.id, name: m.awayTeam.shortName || m.awayTeam.name, logo: m.awayTeam.crest }, score: { home: m.score.fullTime.home, away: m.score.fullTime.away }, venue: null, referee: null, date: m.utcDate, raw: m.status }
-    // Live matches → redirect to Live Radar with fixture open
-    if (live) {
-      navigate('/app/live', { state: { openFixture: fx } })
-      return
-    }
     storeFixtureForNavigation(fx)
     navigate(`/app/matches/${m.id}`, { state: { fixture: fx } })
   }

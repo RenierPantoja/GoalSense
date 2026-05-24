@@ -30,31 +30,33 @@ export function buildExecutiveRead(input: ReadInput): ExecutiveReadResult {
 
   // Title — contextual and specific
   let title = ''
-  if (isScheduled || (!isLive && !hasStats && !hasEvents && totalGoals === 0 && !elapsed)) {
-    title = 'Aguardando início da partida'
-  } else if (!isLive && !hasStats && !hasEvents && totalGoals === 0) {
-    title = 'Aguardando dados da partida'
-  } else if (!isLive && totalGoals === 0 && (hasStats || hasEvents)) {
+  if (isScheduled) {
+    title = 'Partida ainda não começou'
+  } else if (isLive && elapsed && elapsed >= 80) {
+    title = totalGoals >= 4 ? 'Jogo de muitos gols na reta final' : homeScore === awayScore ? 'Empate na fase decisiva' : 'Reta final com vantagem mínima'
+  } else if (isLive && elapsed && elapsed > 45) {
+    title = totalGoals >= 3 ? 'Segundo tempo aberto com muitos gols' : totalGoals > 0 ? 'Segundo tempo em progresso' : 'Segundo tempo em andamento'
+  } else if (isLive && elapsed && elapsed > 15) {
+    title = totalGoals > 0 ? 'Primeiro tempo com gol' : 'Primeiro tempo em andamento'
+  } else if (isLive) {
+    title = 'Fase inicial da partida'
+  } else if (!isLive && !isScheduled && totalGoals === 0 && (hasStats || hasEvents || elapsed)) {
     title = 'Partida encerrada sem gols'
-  } else if (!isLive && totalGoals === 0) {
-    title = 'Aguardando dados da partida'
-  } else if (!isLive) {
+  } else if (!isLive && !isScheduled && totalGoals > 0) {
     const winner = homeScore > awayScore ? homeName : awayScore > homeScore ? awayName : ''
     title = winner ? `${winner} vence por ${Math.max(homeScore, awayScore)} a ${Math.min(homeScore, awayScore)}` : `Empate em ${homeScore} a ${awayScore}`
-  } else if (elapsed && elapsed >= 80) {
-    title = totalGoals >= 4 ? 'Jogo de muitos gols na reta final' : homeScore === awayScore ? 'Empate na fase decisiva' : 'Reta final com vantagem mínima'
-  } else if (elapsed && elapsed > 45) {
-    title = totalGoals >= 3 ? 'Segundo tempo aberto com muitos gols' : 'Segundo tempo em progresso'
-  } else if (elapsed && elapsed > 15) {
-    title = totalGoals > 0 ? 'Primeiro tempo com gol' : 'Primeiro tempo em andamento'
+  } else if (!isLive && !isScheduled && !hasStats && !hasEvents && totalGoals === 0) {
+    title = 'Aguardando dados da partida'
   } else {
-    title = 'Fase inicial da partida'
+    title = 'Aguardando dados da partida'
   }
 
   // Summary — analytical, not generic
   const parts: string[] = []
 
-  if (isLive && elapsed) {
+  if (isScheduled) {
+    parts.push(`Pré-jogo disponível. Dados ao vivo serão atualizados após o início.`)
+  } else if (isLive && elapsed) {
     if (homeScore === awayScore) {
       if (totalGoals === 0) {
         parts.push(`Empate sem gols aos ${elapsed}'.`)

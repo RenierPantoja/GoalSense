@@ -8,6 +8,7 @@ import { DataCoverageBadge, getMatchCoverage } from '@/components/ui/DataCoverag
 import { useFavorites } from '@/context/FavoritesContext'
 import { useViewMode } from '@/context/ViewModeContext'
 import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
+import { isScheduledMatch } from '@/utils/matchStatus'
 import type { LiveFixture } from '@/lib/apiClient'
 import { retrieveStoredFixture } from '@/lib/matchNavigation'
 import { isSameMatchStrict } from '@/features/providers/isSameMatchStrict'
@@ -444,7 +445,7 @@ export function MatchCenterPage() {
 
   const execRead = buildExecutiveRead({
     homeName: home.name, awayName: away.name, homeScore: home.score, awayScore: away.score,
-    elapsed, isLive, isScheduled: !isLive && !elapsed && home.score === 0 && away.score === 0 && stats.length === 0 && events.length === 0,
+    elapsed, isLive, isScheduled: isScheduledMatch(status),
     possession: getStat('POSSESSION') || getStat('possessionPct'),
     shots: getStat('SHOTS') || getStat('totalShots'), shotsOnTarget: getStat('ON GOAL') || getStat('shotsOnTarget'),
     corners: getStat('Corner Kicks') || getStat('wonCorners'),
@@ -542,9 +543,9 @@ export function MatchCenterPage() {
             </div>
             <div className="flex flex-col items-center gap-1.5">
               <div className="flex items-baseline gap-3">
-                <span className="text-[48px] font-bold tabular-nums text-white leading-none">{home.score}</span>
+                <span className="text-[48px] font-bold tabular-nums text-white leading-none">{isScheduledMatch(status) ? '-' : home.score}</span>
                 <span className="text-[18px] text-white/10">:</span>
-                <span className="text-[48px] font-bold tabular-nums text-white leading-none">{away.score}</span>
+                <span className="text-[48px] font-bold tabular-nums text-white leading-none">{isScheduledMatch(status) ? '-' : away.score}</span>
               </div>
               {isLive && <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /><span className="text-[12px] font-semibold text-emerald-400">{elapsed ? `${elapsed}'` : 'Ao vivo'}</span></div>}
               {!isLive && status && <span className="text-[10px] text-white/25">{status}</span>}
