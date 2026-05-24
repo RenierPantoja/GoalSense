@@ -565,17 +565,19 @@ function SecondaryLeaguesAccordion({ groups, openMatch }: { groups: CompetitionG
         <div className="flex-1 h-px bg-white/[0.04]" />
         <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/25 group-hover:text-white/40 transition-colors flex items-center gap-1.5">
           {open ? 'Outras competições' : `Outras competições · ${totalMatches} jogos em ${groups.length} ligas`}
-          <ChevronDown size={11} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+          <ChevronDown size={11} className={`transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
         </span>
         <div className="flex-1 h-px bg-white/[0.04]" />
       </button>
-      {open && (
-        <div className="space-y-7 mt-4">
-          {groups.map(group => (
-            <AgendaCompetitionSection key={group.name} group={group} openMatch={openMatch} />
-          ))}
+      <div className={`accordion-content ${open ? 'open' : ''}`}>
+        <div>
+          <div className="space-y-7 pt-4">
+            {groups.map(group => (
+              <AgendaCompetitionSection key={group.name} group={group} openMatch={openMatch} />
+            ))}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

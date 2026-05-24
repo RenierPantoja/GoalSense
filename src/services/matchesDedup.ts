@@ -200,6 +200,22 @@ const COMPETITION_NORMALIZE: Record<string, string> = {
   '2026 eliteserien': 'Eliteserien',
   '2026 chinese super league': 'Chinese Super League',
   '2026 primera division de chile': 'Primera División Chile',
+  'regular season': 'Regular Season',
+  'english championship': 'Championship',
+  'french ligue 1': 'Ligue 1',
+  'german bundesliga': 'Bundesliga',
+  'dutch eredivisie': 'Eredivisie',
+  'portuguese primeira liga': 'Liga Portugal',
+  'scottish premiership': 'Scottish Premiership',
+  'turkish super lig': 'Süper Lig',
+  'belgian pro league': 'Pro League',
+  'argentine primera division': 'Primera División Argentina',
+  'colombian primera a': 'Liga BetPlay',
+  'mexican liga mx': 'Liga MX',
+  'uruguayan primera division': 'Primera División Uruguay',
+  'paraguayan primera division': 'Primera División Paraguay',
+  'peruvian primera division': 'Liga 1 Perú',
+  'chilean primera division': 'Primera División Chile',
 }
 
 export function normalizeCompetitionName(name: string): string {

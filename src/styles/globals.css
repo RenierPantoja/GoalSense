@@ -121,3 +121,18 @@ body {
 .ticker-track:hover {
   animation-play-state: paused;
 }
+
+/* Accordion animation */
+.accordion-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease-out, opacity 0.25s ease-out;
+  opacity: 0;
+}
+.accordion-content.open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.accordion-content > div {
+  overflow: hidden;
+}
