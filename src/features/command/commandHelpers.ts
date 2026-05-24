@@ -113,7 +113,74 @@ export function getActionPlan(liveCount: number, favCount: number, alertCount: n
   return actions.slice(0, 5)
 }
 
-// ─── Data Health (advanced) ──────────────────────────────────────────────────
+// ─── Operational Decision per match ──────────────────────────────────────────
+
+export interface OperationalDecision {
+  action: 'open_now' | 'monitor' | 'prepare_alert' | 'watch_later' | 'low_priority'
+  label: string
+  reason: string
+  urgency: number
+  confidence: 'alta' | 'média' | 'baixa'
+}
+
+export function getOperationalDecision(fx: LiveFixture, isFavoriteTeam: (n: string) => boolean, hasAlert: boolean): OperationalDecision {
+  const live = isLiveFx(fx)
+  const isFav = isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name)
+  const elapsed = fx.status.elapsed || 0
+  const scoreDiff = Math.abs((fx.score.home ?? 0) - (fx.score.away ?? 0))
+  const imp = getMatchImportanceScore(toScoring(fx))
+
+  // Open now
+  if (isFav && live) return { action: 'open_now', label: 'Abrir agora', reason: 'Favorito ao vivo', urgency: 95, confidence: 'alta' }
+  if (live && elapsed >= 75 && scoreDiff <= 1) return { action: 'open_now', label: 'Abrir agora', reason: 'Reta final com placar curto', urgency: 90, confidence: 'alta' }
+  if (live && imp >= 100) return { action: 'open_now', label: 'Abrir agora', reason: 'Jogo global ao vivo', urgency: 85, confidence: 'alta' }
+
+  // Monitor
+  if (live && imp >= 70) return { action: 'monitor', label: 'Monitorar', reason: 'Jogo relevante em andamento', urgency: 60, confidence: 'média' }
+  if (live) return { action: 'monitor', label: 'Monitorar', reason: 'Ao vivo', urgency: 40, confidence: 'média' }
+
+  // Prepare alert
+  const diff = Math.round((new Date(fx.date).getTime() - Date.now()) / 60000)
+  if (diff > 0 && diff <= 60 && imp >= 80) return { action: 'prepare_alert', label: 'Preparar alerta', reason: `Começa em ${diff} min`, urgency: 55, confidence: 'média' }
+  if (diff > 0 && diff <= 60 && isFav) return { action: 'prepare_alert', label: 'Preparar alerta', reason: `Favorito começa em ${diff} min`, urgency: 65, confidence: 'alta' }
+
+  // Watch later
+  if (isFav && diff > 60) return { action: 'watch_later', label: 'Acompanhar depois', reason: 'Favorito joga mais tarde', urgency: 30, confidence: 'baixa' }
+  if (imp >= 80 && diff > 60) return { action: 'watch_later', label: 'Acompanhar depois', reason: 'Jogo relevante mais tarde', urgency: 25, confidence: 'baixa' }
+
+  return { action: 'low_priority', label: 'Baixa prioridade', reason: 'Pouca relevância atual', urgency: 10, confidence: 'baixa' }
+}
+
+// ─── Change Radar ────────────────────────────────────────────────────────────
+
+export interface ChangeEvent {
+  id: string
+  text: string
+  type: 'status_change' | 'final_phase' | 'new_live' | 'score_change' | 'soon'
+}
+
+export function detectChanges(current: LiveFixture[], previous: LiveFixture[] | null): ChangeEvent[] {
+  if (!previous || previous.length === 0) return []
+  const changes: ChangeEvent[] = []
+
+  for (const fx of current) {
+    const prev = previous.find(p => p.id === fx.id)
+    if (!prev) {
+      if (isLiveFx(fx)) changes.push({ id: `new-${fx.id}`, text: `${fx.homeTeam.name} x ${fx.awayTeam.name} entrou ao vivo`, type: 'new_live' })
+      continue
+    }
+    // Entered final phase
+    if ((fx.status.elapsed || 0) >= 75 && (prev.status.elapsed || 0) < 75) {
+      changes.push({ id: `final-${fx.id}`, text: `${fx.homeTeam.name} x ${fx.awayTeam.name} entrou em reta final`, type: 'final_phase' })
+    }
+    // Score changed
+    if ((fx.score.home ?? 0) + (fx.score.away ?? 0) > (prev.score.home ?? 0) + (prev.score.away ?? 0)) {
+      changes.push({ id: `score-${fx.id}`, text: `Gol em ${fx.homeTeam.name} x ${fx.awayTeam.name}`, type: 'score_change' })
+    }
+  }
+
+  return changes.slice(0, 5)
+}
 
 export interface DataHealth {
   totalFixtures: number
@@ -129,7 +196,7 @@ export function getDataHealth(fixtures: LiveFixture[], lastUpdate: Date | null):
   return {
     totalFixtures: fixtures.length,
     withLogos,
-    liveWithStats: 0, // would need stats data
+    liveWithStats: 0,
     providers: providers.length > 0 ? providers : ['espn'],
     lastUpdate: lastUpdate?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) || '—',
   }
