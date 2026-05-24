@@ -1,6 +1,6 @@
 /**
- * Command Center V3.1 — Cockpit de Decisão, Padrões e Automação.
- * Only shows matches with real signals. No generic game lists.
+ * Command Center V3.6 — Wide cockpit layout, intelligence gate, no false positives.
+ * Only shows signals when user has configured patterns or auto-discovery.
  */
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -47,6 +47,11 @@ export function CommandCenterPage() {
   const { isAdvanced } = useViewMode()
   const { patterns, templates, createPattern, createFromTemplate, updatePattern, togglePattern, deletePattern, getActivePatterns, triggeredAlerts, triggerAlert, getRecentTriggered, resolveExpired, discoveryConfig, updateDiscoveryConfig, activePatternCount, triggeredTodayCount } = usePatterns()
 
+  // ═══ INTELLIGENCE GATE ═══
+  const hasManualPatterns = activePatternCount > 0
+  const hasAutoDiscovery = discoveryConfig.enabled && discoveryConfig.userConfigured
+  const hasIntelligence = hasManualPatterns || hasAutoDiscovery
+
   // ─── Fetch ─────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true)
@@ -55,28 +60,27 @@ export function CommandCenterPage() {
       const fx = r.fixtures || []
       const det = detectChanges(fx, prevRef.current)
       if (det.length > 0) setChanges(prev => [...det, ...prev].slice(0, 12))
-      prevRef.current = fx
-      setFixtures(fx); setLastUpdate(new Date()); setError(null)
+      prevRef.current = fx; setFixtures(fx); setLastUpdate(new Date()); setError(null)
     } catch (e) { if (!silent) setError((e as Error).message) }
     finally { setLoading(false); setRefreshing(false) }
   }, [])
 
   const fetchStats = useCallback(async (fxList: LiveFixture[]) => {
+    if (!hasIntelligence) return
     const live = fxList.filter(fx => isLiveFx(fx) && fx.provider === 'espn').slice(0, 15)
     if (live.length === 0) return
     const results = await Promise.allSettled(live.map(async (fx) => {
       const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${fx.id}`)
       if (!res.ok) return null
       const json = await res.json()
-      const hS = json.boxscore?.teams?.[0]?.statistics || []
-      const aS = json.boxscore?.teams?.[1]?.statistics || []
+      const hS = json.boxscore?.teams?.[0]?.statistics || []; const aS = json.boxscore?.teams?.[1]?.statistics || []
       const g = (arr: any[], n: string) => { const s = arr.find((x: any) => x.name === n || x.label === n); return s ? parseFloat(s.displayValue) || 0 : 0 }
       return { id: fx.id, stats: { possession: { home: g(hS, 'possessionPct') || g(hS, 'POSSESSION'), away: g(aS, 'possessionPct') || g(aS, 'POSSESSION') }, shots: { home: g(hS, 'totalShots') || g(hS, 'SHOTS'), away: g(aS, 'totalShots') || g(aS, 'SHOTS') }, shotsOnTarget: { home: g(hS, 'shotsOnTarget') || g(hS, 'ON GOAL'), away: g(aS, 'shotsOnTarget') || g(aS, 'ON GOAL') }, corners: { home: g(hS, 'wonCorners') || g(hS, 'Corner Kicks'), away: g(aS, 'wonCorners') || g(aS, 'Corner Kicks') }, yellowCards: { home: g(hS, 'yellowCards') || g(hS, 'Yellow Cards'), away: g(aS, 'yellowCards') || g(aS, 'Yellow Cards') } } as FixtureStatsForPattern }
     }))
     const m = new Map<number, FixtureStatsForPattern>()
     for (const r of results) { if (r.status === 'fulfilled' && r.value) m.set(r.value.id, r.value.stats) }
     setStatsMap(m)
-  }, [])
+  }, [hasIntelligence])
 
   useEffect(() => { fetchData() }, [fetchData])
   useEffect(() => { if (fixtures.length > 0) fetchStats(fixtures) }, [fixtures, fetchStats])
@@ -90,137 +94,116 @@ export function CommandCenterPage() {
 
   const toggleAuto = () => { const n = !autoRefresh; setAutoRefresh(n); try { localStorage.setItem('goalsense_cmd_auto', String(n)) } catch {} }
 
-  // ─── Pattern Evaluation ────────────────────────────────────────────────────
+  // ─── Pattern Evaluation (ONLY if intelligence active) ──────────────────────
   const patternHits = useMemo(() => {
-    const active = getActivePatterns()
-    if (active.length === 0 || fixtures.length === 0) return []
-    return evaluateAllPatterns(active, fixtures, statsMap, isFavoriteTeam)
-  }, [patterns, fixtures, statsMap, isFavoriteTeam, getActivePatterns])
+    if (!hasManualPatterns) return []
+    return evaluateAllPatterns(getActivePatterns(), fixtures, statsMap, isFavoriteTeam)
+  }, [hasManualPatterns, patterns, fixtures, statsMap, isFavoriteTeam, getActivePatterns])
 
   useEffect(() => {
+    if (!hasIntelligence) return
     for (const hit of patternHits) {
       if (hit.confidence >= 50) {
         const pat = patterns.find(p => p.id === hit.patternId)
         if (pat && pat.action !== 'suggest_only') {
-          const fx = hit.fixture
-          const fxStats = statsMap.get(fx.id)
+          const fx = hit.fixture; const fxStats = statsMap.get(fx.id)
           triggerAlert({ patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, league: fx.league.name, minute: fx.status.elapsed, confidence: hit.confidence, reasons: hit.reasons, timestamp: new Date().toISOString(), status: 'pending', scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 } })
-          // Bridge with snapshot
-          registerCommandAlert({
-            source: 'command_center', patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id,
-            homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, competition: fx.league.name,
-            minuteAtTrigger: fx.status.elapsed, scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 },
-            confidence: hit.confidence, severity: hit.severity, evidences: hit.reasons, status: 'pending',
-            triggerSnapshot: {
-              minute: fx.status.elapsed, homeScore: fx.score.home ?? 0, awayScore: fx.score.away ?? 0,
-              status: fx.status.short, competition: fx.league.name, provider: fx.provider,
-              homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name,
-              homeLogo: fx.homeTeam.logo, awayLogo: fx.awayTeam.logo,
-              favoriteInvolved: isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name),
-              conditionsMatched: hit.matchedConditions, conditionsTotal: hit.totalConditions,
-              confidenceAtTrigger: hit.confidence,
-              ...(fxStats ? { stats: fxStats } : {}),
-            },
-          })
+          registerCommandAlert({ source: 'command_center', patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, competition: fx.league.name, minuteAtTrigger: fx.status.elapsed, scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 }, confidence: hit.confidence, severity: hit.severity, evidences: hit.reasons, status: 'pending', triggerSnapshot: { minute: fx.status.elapsed, homeScore: fx.score.home ?? 0, awayScore: fx.score.away ?? 0, status: fx.status.short, competition: fx.league.name, provider: fx.provider, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, homeLogo: fx.homeTeam.logo, awayLogo: fx.awayTeam.logo, favoriteInvolved: isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name), conditionsMatched: hit.matchedConditions, conditionsTotal: hit.totalConditions, confidenceAtTrigger: hit.confidence, ...(fxStats ? { stats: fxStats } : {}) } })
         }
       }
     }
-  }, [patternHits, triggerAlert, patterns, registerCommandAlert, isFavoriteTeam, statsMap])
+  }, [patternHits, hasIntelligence, triggerAlert, patterns, registerCommandAlert, isFavoriteTeam, statsMap])
 
-  // ─── Resolution Engine ─────────────────────────────────────────────────────
+  // ─── Resolution ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (fixtures.length === 0 || commandAlerts.length === 0) return
     const pending = commandAlerts.filter(a => a.status === 'pending')
     if (pending.length === 0) return
-    const fixtureMap = new Map(fixtures.map(f => [f.id, f]))
+    const fxMap = new Map(fixtures.map(f => [f.id, f]))
     for (const alert of pending) {
-      const fx = fixtureMap.get(alert.fixtureId)
+      const fx = fxMap.get(alert.fixtureId)
       const result = resolveAlert({ id: alert.id, patternName: alert.patternName, fixtureId: alert.fixtureId, minuteAtTrigger: alert.minuteAtTrigger, scoreAtTrigger: alert.scoreAtTrigger, confidence: alert.confidence, createdAt: alert.createdAt, status: 'pending' }, fx)
-      if (result) {
-        const finalStatus = result.strength === 'partial_confirmation' ? 'confirmed_partial' as const : result.status
-        updateCommandAlertStatus(alert.id, finalStatus, { score: result.scoreAtResolution, reason: result.reason })
-      }
+      if (result) { const finalStatus = result.strength === 'partial_confirmation' ? 'confirmed_partial' as const : result.status; updateCommandAlertStatus(alert.id, finalStatus, { score: result.scoreAtResolution, reason: result.reason }) }
     }
   }, [fixtures, commandAlerts, updateCommandAlertStatus])
 
-  // ─── Auto Discovery ────────────────────────────────────────────────────────
-  const discoveries = useMemo(() => runAutoDiscovery(fixtures, statsMap, isFavoriteTeam, discoveryConfig), [fixtures, statsMap, isFavoriteTeam, discoveryConfig])
+  // ─── Auto Discovery (ONLY if configured) ──────────────────────────────────
+  const discoveries = useMemo(() => {
+    if (!hasAutoDiscovery) return []
+    return runAutoDiscovery(fixtures, statsMap, isFavoriteTeam, discoveryConfig)
+  }, [hasAutoDiscovery, fixtures, statsMap, isFavoriteTeam, discoveryConfig])
 
-  // ─── Scanner (ONLY matches with signals) ───────────────────────────────────
+  // ─── Scanner (ONLY signals) ────────────────────────────────────────────────
   const scannerEntries = useMemo((): ScannerEntry[] => {
-    const hitFixtureIds = new Set(patternHits.map(h => h.fixtureId))
-    const discoveryFixtureIds = new Set(discoveries.map(d => d.fixtureId))
+    if (!hasIntelligence) return []
+    const hitIds = new Set(patternHits.map(h => h.fixtureId))
+    const discIds = new Set(discoveries.map(d => d.fixtureId))
     const entries: ScannerEntry[] = []
-
     for (const fx of fixtures) {
       const fxHits = patternHits.filter(h => h.fixtureId === fx.id)
-      const hasDiscovery = discoveryFixtureIds.has(fx.id)
-      const hasHit = hitFixtureIds.has(fx.id)
-
-      if (!hasHit && !hasDiscovery) continue // ONLY show matches with real signals
-
-      const topPattern = fxHits[0] || null
-      const confidence = topPattern?.confidence || 0
-      const disc = discoveries.find(d => d.fixtureId === fx.id)
-      const priority: ScannerEntry['priority'] = confidence >= 75 ? 'critical' : confidence >= 50 ? 'attention' : hasDiscovery ? 'watch' : 'low'
-      const reason = topPattern?.patternName || disc?.insight || ''
-      entries.push({ fixture: fx, patterns: fxHits, topPattern, priority, confidence: confidence || disc?.confidence || 0, reason })
+      if (!hitIds.has(fx.id) && !discIds.has(fx.id)) continue
+      const top = fxHits[0] || null; const disc = discoveries.find(d => d.fixtureId === fx.id)
+      const conf = top?.confidence || disc?.confidence || 0
+      const priority: ScannerEntry['priority'] = conf >= 75 ? 'critical' : conf >= 50 ? 'attention' : 'watch'
+      entries.push({ fixture: fx, patterns: fxHits, topPattern: top, priority, confidence: conf, reason: top?.patternName || disc?.insight || '' })
     }
-
     return entries.sort((a, b) => b.confidence - a.confidence)
-  }, [fixtures, patternHits, discoveries])
+  }, [hasIntelligence, fixtures, patternHits, discoveries])
 
   // ─── Decision ──────────────────────────────────────────────────────────────
   const decisionMatch = useMemo(() => {
+    if (!hasIntelligence) return null
     if (patternHits.length > 0) return patternHits[0].fixture
     if (discoveries.length > 0) return discoveries[0].fixture
     return null
-  }, [patternHits, discoveries])
-  const decisionHit = patternHits[0] || null
+  }, [hasIntelligence, patternHits, discoveries])
+  const decisionHit = hasIntelligence ? patternHits[0] || null : null
   const decisionDiscovery = !decisionHit && discoveries.length > 0 ? discoveries[0] : null
 
-  // ─── Metrics ───────────────────────────────────────────────────────────────
-  const metrics = useMemo(() => [
-    { label: 'Analisados', value: fixtures.length, color: 'white' },
-    { label: 'Ao vivo', value: liveMatches.length, color: 'emerald' },
-    { label: 'Padrões', value: activePatternCount, color: 'cyan' },
-    { label: 'Batendo', value: patternHits.length, color: 'amber' },
-    { label: 'Disparados', value: triggeredTodayCount, color: 'rose' },
-  ], [fixtures, liveMatches, activePatternCount, patternHits, triggeredTodayCount])
+  // ─── Status badge ──────────────────────────────────────────────────────────
+  const statusBadge = !hasIntelligence ? { label: 'Sem configuração', color: 'text-white/40 bg-white/[0.03] border-white/[0.06]' } : patternHits.length > 0 ? { label: 'Sinais ativos', color: 'text-amber-400 bg-amber-500/8 border-amber-500/12' } : liveMatches.length > 0 ? { label: 'Monitorando', color: 'text-emerald-400 bg-emerald-500/8 border-emerald-500/12' } : { label: 'Online', color: 'text-emerald-400/60 bg-emerald-500/5 border-emerald-500/8' }
+
+  const metrics = [
+    { label: 'Analisados', value: fixtures.length },
+    { label: 'Padrões ativos', value: activePatternCount },
+    { label: 'Motor auto', value: hasAutoDiscovery ? 'On' : 'Off' },
+    { label: 'Sinais', value: patternHits.length + discoveries.length },
+    { label: 'Alertas', value: triggeredTodayCount },
+  ]
 
   const openMatch = (fx: LiveFixture) => { storeFixtureForNavigation(fx); navigate(`/app/matches/${fx.id}`, { state: { fixture: fx } }) }
   const timeSince = lastUpdate ? Math.round((Date.now() - lastUpdate.getTime()) / 1000) : null
 
-  if (loading) return <div className="max-w-[1200px] mx-auto flex items-center justify-center min-h-[50vh]"><div className="flex flex-col items-center gap-4"><div className="relative h-10 w-10"><div className="absolute inset-0 rounded-full border border-white/[0.06]" /><div className="absolute inset-0 rounded-full border border-transparent border-t-cyan-400/60 animate-spin" /></div><span className="text-[11px] text-white/20 tracking-wider uppercase">Inicializando motor</span></div></div>
+  if (loading) return <div className="max-w-[1600px] mx-auto px-6 flex items-center justify-center min-h-[50vh]"><div className="flex flex-col items-center gap-4"><div className="relative h-10 w-10"><div className="absolute inset-0 rounded-full border border-white/[0.06]" /><div className="absolute inset-0 rounded-full border border-transparent border-t-cyan-400/60 animate-spin" /></div><span className="text-[12px] text-white/25">Inicializando motor</span></div></div>
 
   return (
-    <div className="max-w-[1200px] mx-auto space-y-5 animate-fadeIn">
-      {/* HEADER */}
+    <div className="max-w-[1600px] mx-auto px-4 xl:px-8 space-y-6 animate-fadeIn">
+      {/* ═══ HEADER ═══ */}
       <header className="relative rounded-2xl overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-[#060a12] via-[#080d16] to-[#0a1018]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(34,211,238,0.015),transparent_50%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(34,211,238,0.012),transparent_50%)]" />
         <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/[0.04] to-transparent" />
-        <div className="relative px-5 py-4">
-          <div className="flex items-center justify-between mb-3">
+        <div className="relative px-6 py-5">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <div className="flex items-center gap-2"><h1 className="text-[18px] font-semibold text-white tracking-tight">Command Center</h1><span className={`text-[8px] font-bold uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-full border ${error ? 'bg-rose-500/6 text-rose-400/70 border-rose-500/10' : 'bg-emerald-500/6 text-emerald-400/70 border-emerald-500/10'}`}>{error ? 'Erro parcial' : 'Online'}</span></div>
-              <p className="text-[11px] text-white/30 mt-0.5">Motor de decisão em tempo real{timeSince !== null && ` · ${timeSince < 60 ? `${timeSince}s` : `${Math.floor(timeSince / 60)}min`}`}{refreshing && <span className="text-cyan-400/40 ml-1 animate-pulse">●</span>}</p>
+              <div className="flex items-center gap-3"><h1 className="text-[26px] font-bold text-white tracking-tight">Command Center</h1><span className={`text-[9px] font-bold uppercase tracking-[0.1em] px-2.5 py-1 rounded-full border ${statusBadge.color}`}>{statusBadge.label}</span></div>
+              <p className="text-[13px] text-white/35 mt-1">Motor de decisão em tempo real{timeSince !== null && ` · atualizado ${timeSince < 60 ? `${timeSince}s` : `${Math.floor(timeSince / 60)}min`} atrás`}{refreshing && <span className="text-cyan-400/40 ml-2 animate-pulse">●</span>}</p>
             </div>
-            <div className="flex items-center gap-1.5">
-              <button onClick={toggleAuto} className={`h-7 px-2.5 rounded-lg text-[9px] font-medium uppercase tracking-wider transition-all ${autoRefresh ? 'bg-emerald-500/8 text-emerald-400/60 border border-emerald-500/10' : 'text-white/20 border border-white/[0.04]'}`} type="button">Auto</button>
-              <button onClick={() => fetchData()} disabled={refreshing} className="h-7 w-7 rounded-lg flex items-center justify-center text-white/25 border border-white/[0.05] hover:text-white/50 transition-all disabled:opacity-20" type="button" aria-label="Atualizar"><RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /></button>
+            <div className="flex items-center gap-2">
+              <button onClick={toggleAuto} className={`h-8 px-3 rounded-lg text-[10px] font-semibold uppercase tracking-wider transition-all ${autoRefresh ? 'bg-emerald-500/8 text-emerald-400/70 border border-emerald-500/12' : 'text-white/25 border border-white/[0.05]'}`} type="button">Auto</button>
+              <button onClick={() => fetchData()} disabled={refreshing} className="h-8 w-8 rounded-lg flex items-center justify-center text-white/30 border border-white/[0.06] hover:text-white/60 transition-all disabled:opacity-20" type="button" aria-label="Atualizar"><RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} /></button>
             </div>
           </div>
-          <div className="flex gap-px rounded-xl overflow-hidden bg-white/[0.01] border border-white/[0.03]">
-            {metrics.map(m => (<div key={m.label} className="flex-1 px-2.5 py-2.5 text-center"><span className={`text-[17px] font-bold tabular-nums block leading-none ${m.value > 0 ? (m.color === 'emerald' ? 'text-emerald-400' : m.color === 'cyan' ? 'text-cyan-400' : m.color === 'amber' ? 'text-amber-400' : m.color === 'rose' ? 'text-rose-400' : 'text-white/60') : 'text-white/12'}`}>{m.value}</span><span className="text-[9px] text-white/30 uppercase tracking-[0.06em] mt-1 block">{m.label}</span></div>))}
+          <div className="flex gap-1 rounded-xl overflow-hidden bg-white/[0.01] border border-white/[0.04]">
+            {metrics.map(m => (<div key={m.label} className="flex-1 px-4 py-3 text-center"><span className={`text-[22px] font-bold tabular-nums block leading-none ${typeof m.value === 'number' && m.value > 0 ? 'text-white/80' : 'text-white/20'}`}>{m.value}</span><span className="text-[10px] text-white/35 mt-1 block">{m.label}</span></div>))}
           </div>
         </div>
       </header>
 
-      {error && <div className="rounded-lg border border-rose-500/8 bg-rose-500/[0.015] px-4 py-2.5 text-[11px] text-rose-400/60 flex items-center gap-2"><AlertCircle size={12} />{error}</div>}
+      {error && <div className="rounded-xl border border-rose-500/10 bg-rose-500/[0.02] px-5 py-3 text-[12px] text-rose-400/70 flex items-center gap-2"><AlertCircle size={14} />{error}</div>}
 
-      {/* NAV */}
-      <nav className="flex gap-0.5">
+      {/* ═══ NAV ═══ */}
+      <nav className="flex gap-1">
         {([
           { id: 'cockpit' as Tab, label: 'Cockpit', icon: Activity, badge: patternHits.length },
           { id: 'patterns' as Tab, label: 'Padrões', icon: Target, badge: activePatternCount },
@@ -228,421 +211,200 @@ export function CommandCenterPage() {
           { id: 'alerts' as Tab, label: 'Alertas', icon: Zap, badge: triggeredTodayCount },
           { id: 'performance' as Tab, label: 'Performance', icon: BarChart3, badge: 0 },
         ]).map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[11px] font-medium transition-all ${activeTab === tab.id ? 'text-white/80 bg-white/[0.04] border border-white/[0.06]' : 'text-white/25 hover:text-white/45 border border-transparent'}`} type="button">
-            <tab.icon size={12} />{tab.label}
-            {tab.badge > 0 && <span className={`text-[8px] px-1.5 rounded-full ${activeTab === tab.id ? 'bg-cyan-500/15 text-cyan-400/80' : 'bg-white/[0.04] text-white/30'}`}>{tab.badge}</span>}
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[12px] font-medium transition-all ${activeTab === tab.id ? 'text-white/90 bg-white/[0.05] border border-white/[0.08]' : 'text-white/35 hover:text-white/55 border border-transparent'}`} type="button">
+            <tab.icon size={14} />{tab.label}
+            {tab.badge > 0 && <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${activeTab === tab.id ? 'bg-cyan-500/20 text-cyan-400' : 'bg-white/[0.06] text-white/40'}`}>{tab.badge}</span>}
           </button>
         ))}
       </nav>
 
-      {/* CONTENT */}
-      {activeTab === 'cockpit' && <CockpitContent decisionMatch={decisionMatch} decisionHit={decisionHit} decisionDiscovery={decisionDiscovery} patternHits={patternHits} discoveries={discoveries} changes={changes} fixtures={fixtures} openMatch={openMatch} isAdvanced={isAdvanced} activePatternCount={activePatternCount} enabledCount={enabledCount} triggeredAlerts={getRecentTriggered(5)} onGoToPatterns={() => setActiveTab('patterns')} navigate={navigate} />}
-      {activeTab === 'patterns' && <PatternsContent patterns={patterns} templates={templates} createFromTemplate={createFromTemplate} createPattern={createPattern} updatePattern={updatePattern} togglePattern={togglePattern} deletePattern={deletePattern} isAdvanced={isAdvanced} showBuilder={showBuilder} setShowBuilder={setShowBuilder} discoveryConfig={discoveryConfig} updateDiscoveryConfig={updateDiscoveryConfig} />}
-      {activeTab === 'scanner' && <ScannerContent entries={scannerEntries} openMatch={openMatch} isAdvanced={isAdvanced} />}
-      {activeTab === 'alerts' && <AlertsContent triggeredAlerts={getRecentTriggered(30)} isAdvanced={isAdvanced} openMatch={openMatch} fixtures={fixtures} navigate={navigate} />}
-      {activeTab === 'performance' && <PerformanceContent patterns={patterns} triggeredAlerts={triggeredAlerts} isAdvanced={isAdvanced} />}
+      {/* ═══ CONTENT ═══ */}
+      {activeTab === 'cockpit' && <CockpitView hasIntelligence={hasIntelligence} decisionMatch={decisionMatch} decisionHit={decisionHit} decisionDiscovery={decisionDiscovery} patternHits={patternHits} discoveries={discoveries} changes={changes} fixtures={fixtures} openMatch={openMatch} isAdvanced={isAdvanced} activePatternCount={activePatternCount} enabledCount={enabledCount} triggeredAlerts={getRecentTriggered(5)} onGoToPatterns={() => setActiveTab('patterns')} navigate={navigate} templates={templates} createFromTemplate={createFromTemplate} />}
+      {activeTab === 'patterns' && <PatternsView patterns={patterns} templates={templates} createFromTemplate={createFromTemplate} createPattern={createPattern} updatePattern={updatePattern} togglePattern={togglePattern} deletePattern={deletePattern} isAdvanced={isAdvanced} showBuilder={showBuilder} setShowBuilder={setShowBuilder} discoveryConfig={discoveryConfig} updateDiscoveryConfig={updateDiscoveryConfig} />}
+      {activeTab === 'scanner' && <ScannerView hasIntelligence={hasIntelligence} entries={scannerEntries} openMatch={openMatch} isAdvanced={isAdvanced} onGoToPatterns={() => setActiveTab('patterns')} />}
+      {activeTab === 'alerts' && <AlertsView triggeredAlerts={getRecentTriggered(30)} isAdvanced={isAdvanced} openMatch={openMatch} fixtures={fixtures} navigate={navigate} />}
+      {activeTab === 'performance' && <PerformanceView patterns={patterns} triggeredAlerts={triggeredAlerts} isAdvanced={isAdvanced} />}
     </div>
   )
 }
 
 
 // ═══ COCKPIT ═══
-function CockpitContent({ decisionMatch, decisionHit, decisionDiscovery, patternHits, discoveries, changes, fixtures, openMatch, isAdvanced, activePatternCount, enabledCount, triggeredAlerts, onGoToPatterns, navigate }: { decisionMatch: LiveFixture | null; decisionHit: PatternHit | null; decisionDiscovery: AutoDiscovery | null; patternHits: PatternHit[]; discoveries: AutoDiscovery[]; changes: ChangeEvent[]; fixtures: LiveFixture[]; openMatch: (fx: LiveFixture) => void; isAdvanced: boolean; activePatternCount: number; enabledCount: number; triggeredAlerts: TriggeredAlert[]; onGoToPatterns: () => void; navigate: (path: string) => void }) {
+function CockpitView({ hasIntelligence, decisionMatch, decisionHit, decisionDiscovery, patternHits, discoveries, changes, fixtures, openMatch, isAdvanced, activePatternCount, enabledCount, triggeredAlerts, onGoToPatterns, navigate, templates, createFromTemplate }: { hasIntelligence: boolean; decisionMatch: LiveFixture | null; decisionHit: PatternHit | null; decisionDiscovery: AutoDiscovery | null; patternHits: PatternHit[]; discoveries: AutoDiscovery[]; changes: ChangeEvent[]; fixtures: LiveFixture[]; openMatch: (fx: LiveFixture) => void; isAdvanced: boolean; activePatternCount: number; enabledCount: number; triggeredAlerts: TriggeredAlert[]; onGoToPatterns: () => void; navigate: (path: string) => void; templates: PatternTemplate[]; createFromTemplate: (id: string) => Pattern | null }) {
   const { isFavoriteMatch, toggleFavoriteMatch } = useFavorites()
-  const { templates, createFromTemplate } = usePatterns()
 
+  // NO INTELLIGENCE — show premium onboarding
+  if (!hasIntelligence) {
+    return (
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6">
+        <section className="rounded-2xl border border-white/[0.05] bg-gradient-to-b from-white/[0.015] to-transparent p-8 xl:p-10">
+          <h2 className="text-[22px] font-bold text-white/80 mb-2">Motor pronto para operar</h2>
+          <p className="text-[14px] text-white/40 mb-6 max-w-[500px] leading-relaxed">Configure padrões manuais ou ative o motor automático para o GoalSense começar a procurar sinais reais nas partidas ao vivo.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+            {templates.slice(0, 4).map(t => (
+              <button key={t.id} onClick={() => createFromTemplate(t.id)} className="text-left rounded-xl border border-white/[0.05] bg-white/[0.008] px-5 py-4 hover:border-white/[0.1] hover:bg-white/[0.015] transition-all group" type="button">
+                <span className="text-[13px] text-white/60 group-hover:text-white/80 block font-medium">{t.name}</span>
+                <span className="text-[11px] text-white/30 block mt-1">{t.description}</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-3">
+            <button onClick={onGoToPatterns} className="px-5 py-2.5 rounded-xl text-[12px] font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/15 transition-colors" type="button">Ver todos os templates</button>
+            <button onClick={onGoToPatterns} className="px-5 py-2.5 rounded-xl text-[12px] font-medium text-white/40 border border-white/[0.06] hover:text-white/60 transition-colors" type="button">Criar padrão manual</button>
+          </div>
+        </section>
+        <aside className="space-y-4">
+          <div className="rounded-xl border border-white/[0.04] bg-white/[0.008] p-5">
+            <h4 className="text-[11px] font-semibold text-white/40 mb-2">Status</h4>
+            <p className="text-[12px] text-white/50">Monitorando {fixtures.length} partidas</p>
+            <p className="text-[12px] text-white/30 mt-1">{fixtures.filter(isLiveFx).length} ao vivo agora</p>
+          </div>
+          <div className="rounded-xl border border-white/[0.04] bg-white/[0.008] p-5">
+            <h4 className="text-[11px] font-semibold text-white/40 mb-2">Ações</h4>
+            <div className="space-y-1">
+              <SideAction label="Explorar partidas" onClick={() => navigate('/app/matches')} />
+              <SideAction label="Live Radar" onClick={() => navigate('/app/live')} />
+              {enabledCount === 0 && <SideAction label="Criar alertas" onClick={() => navigate('/app/alerts')} />}
+            </div>
+          </div>
+        </aside>
+      </div>
+    )
+  }
+
+  // HAS INTELLIGENCE — show cockpit
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-5">
+    <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6">
       <div className="space-y-5">
         {/* DECISÃO AGORA */}
         {decisionMatch ? (
           <section className="group relative rounded-2xl overflow-hidden cursor-pointer" onClick={() => openMatch(decisionMatch)} role="button">
             <div className="absolute inset-0 bg-gradient-to-br from-[#070b13] via-[#090d17] to-[#0b101a]" />
-            <div className="absolute inset-0 border border-white/[0.04] rounded-2xl group-hover:border-white/[0.08] transition-colors duration-300" />
-            {(decisionHit || decisionDiscovery) && <div className="absolute top-0 left-1/3 w-[180px] h-[50px] bg-amber-500/[0.012] rounded-full blur-[35px]" />}
-            <div className="relative p-5">
-              <div className="flex items-center justify-between mb-4">
+            <div className="absolute inset-0 border border-white/[0.05] rounded-2xl group-hover:border-white/[0.1] transition-colors duration-300" />
+            {decisionHit && <div className="absolute top-0 left-1/3 w-[200px] h-[60px] bg-amber-500/[0.015] rounded-full blur-[40px]" />}
+            <div className="relative p-6">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">{decisionHit && <div className="h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_5px_rgba(251,191,36,0.3)] animate-pulse" />}<span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/40">{decisionHit ? 'Padrão detectado' : decisionDiscovery ? 'Descoberta automática' : 'Sinal'}</span></div>
                 <div className="flex items-center gap-2">
-                  {decisionHit && <div className="h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_4px_rgba(251,191,36,0.3)] animate-pulse" />}
-                  <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/35">{decisionHit ? 'Padrão detectado' : decisionDiscovery ? 'Descoberta automática' : 'Jogo prioritário'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <FavoriteButton active={isFavoriteMatch(buildCanonicalMatchId(decisionMatch.homeTeam.name, decisionMatch.awayTeam.name, decisionMatch.date))} onClick={(e) => { e.stopPropagation(); toggleFavoriteMatch({ canonicalMatchId: buildCanonicalMatchId(decisionMatch.homeTeam.name, decisionMatch.awayTeam.name, decisionMatch.date), homeTeam: decisionMatch.homeTeam.name, awayTeam: decisionMatch.awayTeam.name, competition: decisionMatch.league.name, utcDate: decisionMatch.date }) }} size={12} />
-                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${isLiveFx(decisionMatch) ? 'bg-emerald-500/8 text-emerald-400 border border-emerald-500/8' : 'text-white/25'}`}>{isLiveFx(decisionMatch) ? `${decisionMatch.status.elapsed || ''}'` : new Date(decisionMatch.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                  <FavoriteButton active={isFavoriteMatch(buildCanonicalMatchId(decisionMatch.homeTeam.name, decisionMatch.awayTeam.name, decisionMatch.date))} onClick={(e) => { e.stopPropagation(); toggleFavoriteMatch({ canonicalMatchId: buildCanonicalMatchId(decisionMatch.homeTeam.name, decisionMatch.awayTeam.name, decisionMatch.date), homeTeam: decisionMatch.homeTeam.name, awayTeam: decisionMatch.awayTeam.name, competition: decisionMatch.league.name, utcDate: decisionMatch.date }) }} size={13} />
+                  <span className={`text-[11px] font-medium px-2.5 py-1 rounded-lg ${isLiveFx(decisionMatch) ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10' : 'text-white/30'}`}>{isLiveFx(decisionMatch) ? `${decisionMatch.status.elapsed || ''}'` : new Date(decisionMatch.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <div className="flex flex-col items-center gap-1.5 w-[90px]"><ClubLogo src={decisionMatch.homeTeam.logo} name={decisionMatch.homeTeam.name} size={44} /><span className="text-[10px] font-medium text-white/60 text-center leading-tight">{decisionMatch.homeTeam.name}</span></div>
-                <div className="flex flex-col items-center gap-1"><div className="flex items-baseline gap-2"><span className="text-[32px] font-bold tabular-nums text-white leading-none">{decisionMatch.score.home ?? '-'}</span><span className="text-[11px] text-white/10">:</span><span className="text-[32px] font-bold tabular-nums text-white leading-none">{decisionMatch.score.away ?? '-'}</span></div>{isLiveFx(decisionMatch) && <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.3)] animate-pulse" />}<span className="text-[10px] text-white/20 mt-0.5">{decisionMatch.league.name}</span></div>
-                <div className="flex flex-col items-center gap-1.5 w-[90px]"><ClubLogo src={decisionMatch.awayTeam.logo} name={decisionMatch.awayTeam.name} size={44} /><span className="text-[10px] font-medium text-white/40 text-center leading-tight">{decisionMatch.awayTeam.name}</span></div>
+                <div className="flex flex-col items-center gap-2 w-[110px]"><ClubLogo src={decisionMatch.homeTeam.logo} name={decisionMatch.homeTeam.name} size={52} /><span className="text-[13px] font-medium text-white/70 text-center leading-tight">{decisionMatch.homeTeam.name}</span></div>
+                <div className="flex flex-col items-center gap-1.5"><div className="flex items-baseline gap-3"><span className="text-[42px] font-bold tabular-nums text-white leading-none">{decisionMatch.score.home ?? '-'}</span><span className="text-[14px] text-white/15">:</span><span className="text-[42px] font-bold tabular-nums text-white leading-none">{decisionMatch.score.away ?? '-'}</span></div>{isLiveFx(decisionMatch) && <div className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.3)] animate-pulse" />}<span className="text-[11px] text-white/25 mt-1">{decisionMatch.league.name}</span></div>
+                <div className="flex flex-col items-center gap-2 w-[110px]"><ClubLogo src={decisionMatch.awayTeam.logo} name={decisionMatch.awayTeam.name} size={52} /><span className="text-[13px] font-medium text-white/45 text-center leading-tight">{decisionMatch.awayTeam.name}</span></div>
               </div>
-              <div className="mt-4 pt-3 border-t border-white/[0.03]">
+              <div className="mt-5 pt-4 border-t border-white/[0.04]">
                 {decisionHit ? (
-                  <div>
-                    <div className="flex items-center gap-2 mb-1.5"><span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${decisionHit.severity === 'critical' ? 'bg-rose-500/10 text-rose-400/70' : 'bg-amber-500/8 text-amber-400/60'}`}>{decisionHit.patternName}</span><span className="text-[10px] text-white/30 tabular-nums">{decisionHit.confidence}%</span></div>
-                    <p className="text-[11px] text-white/45 leading-relaxed mb-1.5">Evidências: {decisionHit.reasons.slice(0, 4).join(' · ')}</p>
-                    <div className="flex items-center justify-between"><span className="text-[10px] text-white/25">Ação: Abrir análise detalhada</span><span className="text-[10px] text-cyan-400/50 group-hover:text-cyan-400/80 font-medium flex items-center gap-0.5 transition-colors">Abrir <ChevronRight size={10} /></span></div>
-                    {isAdvanced && <div className="mt-2 text-[9px] text-white/15 font-mono">cond:{decisionHit.matchedConditions}/{decisionHit.totalConditions} · imp:{getMatchImportanceScore(toScoring(decisionMatch))} · {decisionHit.confidenceLevel}</div>}
-                  </div>
+                  <div><div className="flex items-center gap-2 mb-2"><span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg ${decisionHit.severity === 'critical' ? 'bg-rose-500/10 text-rose-400/70' : 'bg-amber-500/8 text-amber-400/60'}`}>{decisionHit.patternName}</span><span className="text-[12px] text-white/40 tabular-nums">{decisionHit.confidence}%</span></div><p className="text-[12px] text-white/50 leading-relaxed">{decisionHit.reasons.slice(0, 4).join(' · ')}</p><div className="flex items-center justify-between mt-2"><span className="text-[11px] text-white/30">Ação: Abrir análise</span><span className="text-[12px] text-cyan-400/60 group-hover:text-cyan-400 font-medium flex items-center gap-1 transition-colors">Abrir <ChevronRight size={12} /></span></div>{isAdvanced && <div className="mt-2 text-[10px] text-white/20 font-mono">cond:{decisionHit.matchedConditions}/{decisionHit.totalConditions} · imp:{getMatchImportanceScore(toScoring(decisionMatch))}</div>}</div>
                 ) : decisionDiscovery ? (
-                  <div>
-                    <p className="text-[11px] text-white/45 mb-1">{decisionDiscovery.insight}</p>
-                    <p className="text-[10px] text-white/25">{decisionDiscovery.evidence} · {decisionDiscovery.confidence}%</p>
-                    <div className="flex items-center justify-end mt-1"><span className="text-[10px] text-cyan-400/40 group-hover:text-cyan-400/70 font-medium flex items-center gap-0.5 transition-colors">Abrir <ChevronRight size={10} /></span></div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between"><span className="text-[10px] text-white/20">Jogo mais relevante ao vivo</span><span className="text-[10px] text-cyan-400/40 group-hover:text-cyan-400/70 font-medium flex items-center gap-0.5 transition-colors">Abrir <ChevronRight size={10} /></span></div>
-                )}
+                  <div><p className="text-[13px] text-white/55 mb-1">{decisionDiscovery.insight}</p><p className="text-[11px] text-white/30">{decisionDiscovery.evidence} · {decisionDiscovery.confidence}%</p><div className="flex justify-end mt-2"><span className="text-[12px] text-cyan-400/50 group-hover:text-cyan-400 font-medium flex items-center gap-1 transition-colors">Abrir <ChevronRight size={12} /></span></div></div>
+                ) : null}
               </div>
             </div>
           </section>
         ) : (
-          <section className="rounded-2xl border border-white/[0.04] bg-white/[0.008] p-6 text-center">
-            <p className="text-[12px] text-white/30">Nenhuma decisão crítica agora</p>
-            <p className="text-[10px] text-white/15 mt-1">Monitorando {fixtures.length} partidas · {activePatternCount} padrões ativos</p>
+          <section className="rounded-2xl border border-white/[0.04] bg-white/[0.008] p-8 text-center">
+            <p className="text-[14px] text-white/40">Nenhum sinal detectado agora</p>
+            <p className="text-[12px] text-white/25 mt-1">Monitorando {fixtures.length} partidas com {activePatternCount} padrões ativos</p>
           </section>
         )}
 
         {/* PADRÕES BATENDO */}
-        {patternHits.length > 0 && (
-          <section>
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-400/50 mb-2.5 flex items-center gap-1.5"><Zap size={10} />Padrões batendo</h3>
-            <div className="space-y-1.5">
-              {patternHits.slice(0, 5).map((hit, i) => (
-                <div key={`${hit.patternId}-${hit.fixtureId}-${i}`} onClick={() => openMatch(hit.fixture)} className="group flex items-center gap-3 rounded-xl border border-white/[0.03] bg-white/[0.006] px-4 py-2.5 cursor-pointer hover:border-white/[0.07] transition-all" role="button">
-                  <span className={`text-[8px] font-bold uppercase px-2 py-0.5 rounded shrink-0 ${hit.severity === 'critical' ? 'bg-rose-500/10 text-rose-400/60' : hit.severity === 'attention' ? 'bg-amber-500/8 text-amber-400/50' : 'bg-white/[0.03] text-white/25'}`}>{hit.severity === 'critical' ? 'CRÍTICO' : hit.severity === 'attention' ? 'ATENÇÃO' : 'INFO'}</span>
-                  <ClubLogo src={hit.fixture.homeTeam.logo} name={hit.fixture.homeTeam.name} size={16} />
-                  <span className="text-[11px] text-white/55 truncate flex-1">{hit.fixture.homeTeam.name} {hit.fixture.score.home ?? '-'}:{hit.fixture.score.away ?? '-'} {hit.fixture.awayTeam.name}</span>
-                  <span className="text-[10px] text-white/25 shrink-0">{hit.patternName}</span>
-                  <span className="text-[9px] text-white/20 tabular-nums shrink-0">{hit.confidence}%</span>
-                  <ChevronRight size={10} className="text-white/10 group-hover:text-white/30 shrink-0" />
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        {patternHits.length > 0 && (<section><h3 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-amber-400/60 mb-3 flex items-center gap-2"><Zap size={12} />Padrões batendo</h3><div className="space-y-2">{patternHits.slice(0, 5).map((hit, i) => (<div key={`${hit.patternId}-${hit.fixtureId}-${i}`} onClick={() => openMatch(hit.fixture)} className="group flex items-center gap-3 rounded-xl border border-white/[0.04] bg-white/[0.008] px-5 py-3 cursor-pointer hover:border-white/[0.08] transition-all" role="button"><span className={`text-[9px] font-bold uppercase px-2.5 py-1 rounded-lg shrink-0 ${hit.severity === 'critical' ? 'bg-rose-500/10 text-rose-400/70' : hit.severity === 'attention' ? 'bg-amber-500/8 text-amber-400/60' : 'bg-white/[0.04] text-white/35'}`}>{hit.severity === 'critical' ? 'CRÍTICO' : hit.severity === 'attention' ? 'ATENÇÃO' : 'INFO'}</span><ClubLogo src={hit.fixture.homeTeam.logo} name={hit.fixture.homeTeam.name} size={18} /><span className="text-[13px] text-white/65 truncate flex-1">{hit.fixture.homeTeam.name} {hit.fixture.score.home ?? '-'}:{hit.fixture.score.away ?? '-'} {hit.fixture.awayTeam.name}</span><span className="text-[11px] text-white/35 shrink-0">{hit.patternName}</span><span className="text-[11px] text-white/25 tabular-nums shrink-0">{hit.confidence}%</span><ChevronRight size={12} className="text-white/15 group-hover:text-white/40 shrink-0" /></div>))}</div></section>)}
 
-        {/* DESCOBERTAS */}
-        {discoveries.length > 0 && patternHits.length === 0 && (
-          <section>
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-400/40 mb-2.5 flex items-center gap-1.5"><Sparkles size={10} />Descobertas automáticas</h3>
-            <div className="space-y-1.5">
-              {discoveries.slice(0, 4).map(d => (
-                <div key={d.id} onClick={() => openMatch(d.fixture)} className="group flex items-center gap-3 rounded-xl border border-white/[0.025] bg-white/[0.004] px-4 py-2.5 cursor-pointer hover:border-white/[0.06] transition-all" role="button">
-                  <span className="text-[11px] text-white/50 flex-1">{d.insight}</span>
-                  <span className="text-[9px] text-white/20 shrink-0">{d.confidence}%</span>
-                  <ChevronRight size={10} className="text-white/8 group-hover:text-white/20 shrink-0" />
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ONBOARDING */}
-        {activePatternCount === 0 && patternHits.length === 0 && discoveries.length === 0 && (
-          <section className="rounded-2xl border border-white/[0.04] bg-gradient-to-b from-white/[0.01] to-transparent p-6">
-            <h3 className="text-[13px] font-medium text-white/55 mb-1.5">Ative seu primeiro radar</h3>
-            <p className="text-[11px] text-white/25 mb-4 max-w-[380px]">Padrões monitoram jogos ao vivo e detectam oportunidades automaticamente. Ative um template para começar.</p>
-            <div className="grid grid-cols-2 gap-2">
-              {templates.slice(0, 4).map(t => (
-                <button key={t.id} onClick={() => createFromTemplate(t.id)} className="text-left rounded-xl border border-white/[0.04] bg-white/[0.005] px-4 py-3 hover:border-white/[0.08] hover:bg-white/[0.01] transition-all group" type="button">
-                  <span className="text-[11px] text-white/50 group-hover:text-white/70 block font-medium">{t.name}</span>
-                  <span className="text-[9px] text-white/20 block mt-0.5">{t.conditions.length} condições · {t.severity}</span>
-                </button>
-              ))}
-            </div>
-            <button onClick={onGoToPatterns} className="mt-4 text-[10px] text-cyan-400/50 hover:text-cyan-400/80 font-medium transition-colors" type="button">Ver todos os 14 templates →</button>
-          </section>
-        )}
+        {/* DISCOVERIES */}
+        {discoveries.length > 0 && patternHits.length === 0 && (<section><h3 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-cyan-400/50 mb-3 flex items-center gap-2"><Sparkles size={12} />Descobertas do motor automático</h3><div className="space-y-2">{discoveries.slice(0, 4).map(d => (<div key={d.id} onClick={() => openMatch(d.fixture)} className="group flex items-center gap-3 rounded-xl border border-white/[0.03] bg-white/[0.005] px-5 py-3 cursor-pointer hover:border-white/[0.07] transition-all" role="button"><span className="text-[13px] text-white/55 flex-1">{d.insight}</span><span className="text-[11px] text-white/25 shrink-0">{d.confidence}%</span><ChevronRight size={12} className="text-white/10 group-hover:text-white/25 shrink-0" /></div>))}</div></section>)}
       </div>
 
       {/* SIDEBAR */}
       <aside className="space-y-4">
-        {changes.length > 0 && (<div className="rounded-xl border border-white/[0.04] bg-white/[0.006] p-3.5"><h4 className="text-[9px] font-semibold uppercase tracking-[0.12em] text-amber-400/35 mb-2">Mudanças</h4><div className="space-y-1.5">{changes.slice(0, 4).map(c => (<div key={c.id} className={`rounded-lg px-3 py-1.5 border-l-2 ${c.type === 'score_change' ? 'border-l-emerald-400/40 bg-emerald-500/[0.015]' : c.type === 'final_phase' ? 'border-l-amber-400/30 bg-amber-500/[0.015]' : 'border-l-white/[0.08] bg-white/[0.005]'}`}><span className="text-[9px] text-white/35">{c.text}</span></div>))}</div></div>)}
-        {triggeredAlerts.length > 0 && (<div className="rounded-xl border border-white/[0.04] bg-white/[0.006] p-3.5"><h4 className="text-[9px] font-semibold uppercase tracking-[0.12em] text-rose-400/35 mb-2">Disparados</h4><div className="space-y-1.5">{triggeredAlerts.slice(0, 3).map(t => (<div key={t.id} className="rounded-lg px-3 py-1.5 bg-white/[0.005] border border-white/[0.02]"><span className="text-[9px] text-white/40 block">{t.patternName}</span><span className="text-[9px] text-white/20">{t.homeTeam} x {t.awayTeam} · {t.confidence}%</span></div>))}</div></div>)}
-        <div className="rounded-xl border border-white/[0.04] bg-white/[0.006] p-3.5"><h4 className="text-[9px] font-semibold uppercase tracking-[0.12em] text-white/20 mb-2">Ações</h4><div className="space-y-0.5">{[...(enabledCount === 0 ? [{ l: 'Criar alertas', t: '/app/alerts' }] : []), { l: 'Configurar padrões', t: '' }, { l: 'Explorar partidas', t: '/app/matches' }, { l: 'Live Radar', t: '/app/live' }].map((a, i) => (<button key={i} onClick={() => a.t ? navigate(a.t) : onGoToPatterns()} className="flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg hover:bg-white/[0.015] transition-colors group" type="button"><span className="text-[10px] text-white/30 group-hover:text-white/50">{a.l}</span><ChevronRight size={9} className="text-white/10 group-hover:text-white/25" /></button>))}</div></div>
+        {changes.length > 0 && (<div className="rounded-xl border border-white/[0.04] bg-white/[0.008] p-4"><h4 className="text-[11px] font-semibold text-amber-400/50 mb-2.5">Mudanças</h4><div className="space-y-2">{changes.slice(0, 4).map(c => (<div key={c.id} className={`rounded-lg px-3 py-2 border-l-2 ${c.type === 'score_change' ? 'border-l-emerald-400/50 bg-emerald-500/[0.02]' : c.type === 'final_phase' ? 'border-l-amber-400/40 bg-amber-500/[0.02]' : 'border-l-white/[0.1] bg-white/[0.008]'}`}><span className="text-[11px] text-white/45">{c.text}</span></div>))}</div></div>)}
+        {triggeredAlerts.length > 0 && (<div className="rounded-xl border border-white/[0.04] bg-white/[0.008] p-4"><h4 className="text-[11px] font-semibold text-rose-400/50 mb-2.5">Alertas disparados</h4><div className="space-y-2">{triggeredAlerts.slice(0, 3).map(t => (<div key={t.id} className="rounded-lg px-3 py-2 bg-white/[0.008] border border-white/[0.03]"><span className="text-[11px] text-white/50 block">{t.patternName}</span><span className="text-[10px] text-white/30">{t.homeTeam} x {t.awayTeam} · {t.confidence}%</span></div>))}</div></div>)}
+        <div className="rounded-xl border border-white/[0.04] bg-white/[0.008] p-4"><h4 className="text-[11px] font-semibold text-white/30 mb-2.5">Ações</h4><div className="space-y-1"><SideAction label="Configurar padrões" onClick={onGoToPatterns} /><SideAction label="Explorar partidas" onClick={() => navigate('/app/matches')} /><SideAction label="Live Radar" onClick={() => navigate('/app/live')} />{enabledCount === 0 && <SideAction label="Criar alertas" onClick={() => navigate('/app/alerts')} />}</div></div>
       </aside>
     </div>
   )
 }
 
+function SideAction({ label, onClick }: { label: string; onClick: () => void }) {
+  return <button onClick={onClick} className="flex items-center justify-between w-full px-3 py-2 rounded-lg hover:bg-white/[0.02] transition-colors group" type="button"><span className="text-[11px] text-white/40 group-hover:text-white/60">{label}</span><ChevronRight size={10} className="text-white/15 group-hover:text-white/30" /></button>
+}
 
-// ═══ PATTERNS ═══
-function PatternsContent({ patterns, templates, createFromTemplate, createPattern, updatePattern, togglePattern, deletePattern, isAdvanced, showBuilder, setShowBuilder, discoveryConfig, updateDiscoveryConfig }: { patterns: Pattern[]; templates: PatternTemplate[]; createFromTemplate: (id: string) => Pattern | null; createPattern: (p: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => Pattern; updatePattern: (id: string, patch: Partial<Pattern>) => void; togglePattern: (id: string) => void; deletePattern: (id: string) => void; isAdvanced: boolean; showBuilder: boolean; setShowBuilder: (v: boolean) => void; discoveryConfig: AutoDiscoveryConfig; updateDiscoveryConfig: (p: Partial<AutoDiscoveryConfig>) => void }) {
+
+// ═══ PATTERNS VIEW ═══
+function PatternsView({ patterns, templates, createFromTemplate, createPattern, updatePattern, togglePattern, deletePattern, isAdvanced, showBuilder, setShowBuilder, discoveryConfig, updateDiscoveryConfig }: { patterns: Pattern[]; templates: PatternTemplate[]; createFromTemplate: (id: string) => Pattern | null; createPattern: (p: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => Pattern; updatePattern: (id: string, patch: Partial<Pattern>) => void; togglePattern: (id: string) => void; deletePattern: (id: string) => void; isAdvanced: boolean; showBuilder: boolean; setShowBuilder: (v: boolean) => void; discoveryConfig: AutoDiscoveryConfig; updateDiscoveryConfig: (p: Partial<AutoDiscoveryConfig>) => void }) {
   const [showConfig, setShowConfig] = useState(false)
   const [editingPattern, setEditingPattern] = useState<Pattern | null>(null)
-
   const handleEdit = (p: Pattern) => { setEditingPattern(p); setShowBuilder(true) }
   const handleDuplicate = (p: Pattern) => { createPattern({ ...p, name: `${p.name} (cópia)`, status: 'paused', isTemplate: false, templateId: undefined }) }
-  const handleSaveEdit = (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => {
-    if (editingPattern) { updatePattern(editingPattern.id, data); setEditingPattern(null) }
-    else { createPattern(data) }
-    setShowBuilder(false)
-  }
+  const handleSave = (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => { if (editingPattern) { updatePattern(editingPattern.id, data); setEditingPattern(null) } else { createPattern(data) }; setShowBuilder(false) }
+  const handleActivateAuto = () => { updateDiscoveryConfig({ enabled: true, userConfigured: true }); setShowConfig(false) }
 
   return (
     <div className="space-y-6">
-      {showBuilder && <PatternBuilderPanel onSave={handleSaveEdit} onCancel={() => { setShowBuilder(false); setEditingPattern(null) }} initial={editingPattern} />}
-      {showConfig && <DiscoveryConfigPanel config={discoveryConfig} onChange={updateDiscoveryConfig} onClose={() => setShowConfig(false)} />}
+      {showBuilder && <PatternBuilderPanel onSave={handleSave} onCancel={() => { setShowBuilder(false); setEditingPattern(null) }} initial={editingPattern} />}
+      {showConfig && <AutoConfigPanel config={discoveryConfig} onChange={updateDiscoveryConfig} onClose={() => setShowConfig(false)} onActivate={handleActivateAuto} />}
 
-      {patterns.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-3"><h3 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/35">Padrões configurados</h3><div className="flex gap-2"><button onClick={() => setShowConfig(true)} className="text-[9px] text-white/25 hover:text-white/50 flex items-center gap-1 transition-colors" type="button"><Settings2 size={10} />Config</button><button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} className="text-[9px] text-cyan-400/50 hover:text-cyan-400/80 font-medium flex items-center gap-1 transition-colors" type="button"><Plus size={10} />Criar</button></div></div>
-          <div className="space-y-1.5">{patterns.map(p => (
-            <div key={p.id} className="flex items-center gap-3 rounded-xl border border-white/[0.04] bg-white/[0.006] px-4 py-3">
-              <div className={`h-2 w-2 rounded-full shrink-0 ${p.status === 'active' ? 'bg-emerald-400/70' : 'bg-white/15'}`} />
-              <div className="flex-1 min-w-0">
-                <span className="text-[11px] font-medium text-white/60 block">{p.name}</span>
-                <span className="text-[9px] text-white/30 block mt-0.5">{p.description || `${p.conditions.length} condições`}{p.scope !== 'all' && ` · ${p.scope === 'favorites_only' ? 'Favoritos' : p.scope === 'specific_leagues' ? `Ligas: ${p.scopeFilter?.length || 0}` : `Times: ${p.scopeFilter?.length || 0}`}`}</span>
-                {isAdvanced && <span className="text-[9px] text-white/15 font-mono mt-0.5 block">scope:{p.scope} · conf≥{p.minConfidence} · action:{p.action}</span>}
-              </div>
-              <button onClick={() => handleEdit(p)} className="text-[9px] text-white/20 hover:text-white/50 transition-colors px-1.5" type="button">Editar</button>
-              <button onClick={() => handleDuplicate(p)} className="text-[9px] text-white/20 hover:text-white/50 transition-colors px-1.5" type="button">Duplicar</button>
-              <button onClick={() => togglePattern(p.id)} className={`text-[9px] px-2.5 py-1 rounded-lg border transition-all ${p.status === 'active' ? 'border-emerald-500/15 text-emerald-400/60' : 'border-white/[0.04] text-white/25'}`} type="button">{p.status === 'active' ? 'Ativo' : 'Pausado'}</button>
-              <button onClick={() => deletePattern(p.id)} className="text-[10px] text-white/15 hover:text-rose-400/50 transition-colors px-1" type="button">×</button>
-            </div>
-          ))}</div>
-        </section>
-      )}
-
-      <section>
-        <div className="flex items-center justify-between mb-3"><h3 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/35">Biblioteca de padrões</h3>{!showBuilder && <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} className="text-[9px] text-cyan-400/50 hover:text-cyan-400/80 font-medium flex items-center gap-1 transition-colors" type="button"><Plus size={10} />Personalizado</button>}</div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">{templates.map(t => {
-          const active = patterns.some(p => p.templateId === t.id && p.status === 'active')
-          return (<div key={t.id} className="rounded-xl border border-white/[0.04] bg-white/[0.005] p-4 hover:border-white/[0.07] transition-all">
-            <div className="flex items-start justify-between mb-1.5"><div><span className="text-[11px] font-medium text-white/55 block">{t.name}</span><span className={`text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded mt-1 inline-block ${t.severity === 'critical' ? 'bg-rose-500/8 text-rose-400/50' : t.severity === 'attention' ? 'bg-amber-500/6 text-amber-400/40' : 'bg-white/[0.02] text-white/20'}`}>{t.severity}</span></div>{active ? <span className="text-[9px] text-emerald-400/50">✓ Ativo</span> : <button onClick={() => createFromTemplate(t.id)} className="text-[9px] text-cyan-400/50 hover:text-cyan-400/80 font-medium transition-colors" type="button">Ativar</button>}</div>
-            <p className="text-[10px] text-white/30 leading-relaxed">{t.description}</p>
-            {isAdvanced && <div className="mt-2 flex flex-wrap gap-1">{t.conditions.map((c, i) => <span key={i} className="text-[8px] text-white/15 bg-white/[0.02] px-1.5 py-0.5 rounded">{c.type}</span>)}</div>}
-          </div>)
-        })}</div>
+      {/* Motor automático */}
+      <section className="rounded-xl border border-white/[0.05] bg-white/[0.008] p-5">
+        <div className="flex items-center justify-between"><div><h3 className="text-[13px] font-semibold text-white/60">Motor automático</h3><p className="text-[11px] text-white/30 mt-0.5">{discoveryConfig.enabled && discoveryConfig.userConfigured ? 'Ativo — detectando sinais automaticamente' : 'Desligado — configure para ativar'}</p></div><button onClick={() => setShowConfig(true)} className={`px-4 py-2 rounded-xl text-[11px] font-medium transition-all ${discoveryConfig.enabled && discoveryConfig.userConfigured ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/15 hover:bg-cyan-500/15'}`} type="button">{discoveryConfig.enabled && discoveryConfig.userConfigured ? 'Configurado ✓' : 'Configurar'}</button></div>
       </section>
+
+      {/* Meus padrões */}
+      {patterns.length > 0 && (<section><div className="flex items-center justify-between mb-3"><h3 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/40">Meus padrões</h3><button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} className="text-[11px] text-cyan-400/60 hover:text-cyan-400 font-medium flex items-center gap-1 transition-colors" type="button"><Plus size={12} />Criar</button></div><div className="space-y-2">{patterns.map(p => (<div key={p.id} className="flex items-center gap-3 rounded-xl border border-white/[0.05] bg-white/[0.008] px-5 py-3.5"><div className={`h-2.5 w-2.5 rounded-full shrink-0 ${p.status === 'active' ? 'bg-emerald-400' : 'bg-white/20'}`} /><div className="flex-1 min-w-0"><span className="text-[13px] font-medium text-white/70 block">{p.name}</span><span className="text-[11px] text-white/35 block mt-0.5">{p.description || `${p.conditions.length} condições`}{p.scope !== 'all' ? ` · ${p.scope === 'favorites_only' ? 'Favoritos' : p.scope === 'specific_leagues' ? `${p.scopeFilter?.length || 0} ligas` : `${p.scopeFilter?.length || 0} times`}` : ''}</span></div><button onClick={() => handleEdit(p)} className="text-[10px] text-white/30 hover:text-white/60 px-2 py-1 rounded-lg hover:bg-white/[0.03] transition-all" type="button">Editar</button><button onClick={() => handleDuplicate(p)} className="text-[10px] text-white/30 hover:text-white/60 px-2 py-1 rounded-lg hover:bg-white/[0.03] transition-all" type="button">Duplicar</button><button onClick={() => togglePattern(p.id)} className={`text-[10px] px-3 py-1 rounded-lg border transition-all ${p.status === 'active' ? 'border-emerald-500/15 text-emerald-400/70' : 'border-white/[0.05] text-white/30'}`} type="button">{p.status === 'active' ? 'Ativo' : 'Pausado'}</button><button onClick={() => deletePattern(p.id)} className="text-[12px] text-white/20 hover:text-rose-400/60 transition-colors px-1" type="button">×</button></div>))}</div></section>)}
+
+      {/* Templates */}
+      <section><div className="flex items-center justify-between mb-3"><h3 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/40">Templates recomendados</h3>{!showBuilder && patterns.length === 0 && <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} className="text-[11px] text-cyan-400/60 hover:text-cyan-400 font-medium flex items-center gap-1 transition-colors" type="button"><Plus size={12} />Personalizado</button>}</div><div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">{templates.map(t => { const active = patterns.some(p => p.templateId === t.id && p.status === 'active'); return (<div key={t.id} className="rounded-xl border border-white/[0.05] bg-white/[0.006] p-4 hover:border-white/[0.08] transition-all"><div className="flex items-start justify-between mb-2"><div><span className="text-[12px] font-medium text-white/60 block">{t.name}</span><span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg mt-1 inline-block ${t.severity === 'critical' ? 'bg-rose-500/10 text-rose-400/60' : t.severity === 'attention' ? 'bg-amber-500/8 text-amber-400/50' : 'bg-white/[0.03] text-white/25'}`}>{t.severity}</span></div>{active ? <span className="text-[10px] text-emerald-400/60 font-medium">✓ Ativo</span> : <button onClick={() => createFromTemplate(t.id)} className="text-[10px] text-cyan-400/60 hover:text-cyan-400 font-medium transition-colors" type="button">Ativar</button>}</div><p className="text-[11px] text-white/35 leading-relaxed">{t.description}</p></div>) })}</div></section>
     </div>
   )
 }
+
+// ═══ AUTO CONFIG PANEL ═══
+function AutoConfigPanel({ config, onChange, onClose, onActivate }: { config: AutoDiscoveryConfig; onChange: (p: Partial<AutoDiscoveryConfig>) => void; onClose: () => void; onActivate: () => void }) {
+  return (<div className="rounded-xl border border-cyan-500/12 bg-gradient-to-b from-cyan-500/[0.02] to-transparent p-6"><div className="flex items-center justify-between mb-4"><h3 className="text-[14px] font-semibold text-white/60">Configurar motor automático</h3><button onClick={onClose} className="text-white/25 hover:text-white/50" type="button"><X size={16} /></button></div><div className="grid grid-cols-2 gap-4 mb-5"><Toggle label="Monitorar favoritos" checked={config.monitorFavorites} onChange={v => onChange({ monitorFavorites: v })} /><Toggle label="Ligas principais" checked={config.monitorMainLeagues} onChange={v => onChange({ monitorMainLeagues: v })} /><Toggle label="Todas as ligas" checked={config.monitorAllLeagues} onChange={v => onChange({ monitorAllLeagues: v })} /><Toggle label="Incluir pré-jogo" checked={config.includePreMatch} onChange={v => onChange({ includePreMatch: v })} /><Toggle label="Incluir ao vivo" checked={config.includeLive} onChange={v => onChange({ includeLive: v })} /><Toggle label="Registrar alerta auto" checked={config.registerAlertAuto} onChange={v => onChange({ registerAlertAuto: v })} /><div><span className="text-[10px] text-white/35 block mb-1">Confiança mín.</span><input type="number" value={config.minConfidence} onChange={e => onChange({ minConfidence: Number(e.target.value) })} className="w-20 h-8 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 text-[11px] text-white outline-none" min={20} max={95} /></div><div><span className="text-[10px] text-white/35 block mb-1">Max alertas/jogo</span><input type="number" value={config.maxAlertsPerMatch} onChange={e => onChange({ maxAlertsPerMatch: Number(e.target.value) })} className="w-20 h-8 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 text-[11px] text-white outline-none" min={1} max={10} /></div></div><button onClick={onActivate} className="w-full py-3 rounded-xl text-[12px] font-semibold bg-cyan-500/15 text-cyan-400 border border-cyan-500/25 hover:bg-cyan-500/20 transition-colors" type="button">Salvar e ativar motor</button></div>)
+}
+function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) { return (<button onClick={() => onChange(!checked)} className="flex items-center gap-2.5 text-left" type="button"><div className={`w-8 h-[18px] rounded-full transition-colors ${checked ? 'bg-cyan-500/30' : 'bg-white/[0.08]'}`}><div className={`w-3.5 h-3.5 rounded-full mt-[2px] transition-all ${checked ? 'ml-[17px] bg-cyan-400' : 'ml-[2px] bg-white/25'}`} /></div><span className="text-[11px] text-white/50">{label}</span></button>) }
 
 // ═══ PATTERN BUILDER ═══
 const COND_LABELS: Record<PatternConditionType, string> = { is_live: 'Jogo ao vivo', is_final_phase: 'Reta final (70\'+)', is_pre_live: 'Começa em breve', minute_between: 'Minuto entre', score_tied: 'Placar empatado', score_diff_lte: 'Diferença gols ≤', favorite_involved: 'Favorito envolvido', shots_recent_gte: 'Finalizações ≥', shots_on_target_gte: 'No alvo ≥', corners_gte: 'Escanteios ≥', cards_gte: 'Cartões ≥', possession_gte: 'Posse ≥', goals_total_gte: 'Gols totais ≥', goals_total_lte: 'Gols totais ≤', away_shots_on_target_gte: 'Visitante no alvo ≥', away_goals_gte: 'Gols visitante ≥', away_possession_gte: 'Posse visitante ≥' }
 
 function PatternBuilderPanel({ onSave, onCancel, initial }: { onSave: (p: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void; onCancel: () => void; initial?: Pattern | null }) {
-  const [name, setName] = useState(initial?.name || '')
-  const [desc, setDesc] = useState(initial?.description || '')
-  const [severity, setSeverity] = useState<'critical' | 'attention' | 'info'>(initial?.severity || 'attention')
-  const [scope, setScope] = useState<'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams'>(initial?.scope || 'all')
-  const [scopeFilter, setScopeFilter] = useState<string[]>(initial?.scopeFilter || [])
-  const [scopeInput, setScopeInput] = useState('')
-  const [minConf, setMinConf] = useState(initial?.minConfidence ?? 50)
-  const [action, setAction] = useState<'register_alert' | 'suggest_only' | 'highlight'>(initial?.action || 'register_alert')
-  const [conditions, setConditions] = useState<PatternCondition[]>(initial?.conditions || [{ type: 'is_live', params: {} }])
-
-  const addCond = (type: PatternConditionType) => {
-    const params: Record<string, number | string | boolean> = {}
-    if (type === 'minute_between') { params.min = 60; params.max = 90 }
-    else if (type === 'score_diff_lte') { params.maxDiff = 1 }
-    else if (type === 'goals_total_lte') { params.value = 1 }
-    else if (type === 'is_pre_live') { params.minutes = 60 }
-    else if (['shots_recent_gte', 'shots_on_target_gte', 'corners_gte', 'cards_gte', 'goals_total_gte', 'away_shots_on_target_gte', 'away_goals_gte'].includes(type)) { params.value = 3 }
-    else if (['possession_gte', 'away_possession_gte'].includes(type)) { params.value = 58 }
-    setConditions(prev => [...prev, { type, params }])
-  }
-
-  const updateParam = (idx: number, key: string, val: number) => {
-    setConditions(prev => prev.map((c, i) => i === idx ? { ...c, params: { ...c.params, [key]: val } } : c))
-  }
-
+  const [name, setName] = useState(initial?.name || ''); const [desc, setDesc] = useState(initial?.description || ''); const [severity, setSeverity] = useState<'critical' | 'attention' | 'info'>(initial?.severity || 'attention'); const [scope, setScope] = useState<'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams'>(initial?.scope || 'all'); const [scopeFilter, setScopeFilter] = useState<string[]>(initial?.scopeFilter || []); const [scopeInput, setScopeInput] = useState(''); const [minConf, setMinConf] = useState(initial?.minConfidence ?? 50); const [action, setAction] = useState<'register_alert' | 'suggest_only' | 'highlight'>(initial?.action || 'register_alert'); const [conditions, setConditions] = useState<PatternCondition[]>(initial?.conditions || [{ type: 'is_live', params: {} }])
+  const addCond = (type: PatternConditionType) => { const params: Record<string, number | string | boolean> = {}; if (type === 'minute_between') { params.min = 60; params.max = 90 } else if (type === 'score_diff_lte') { params.maxDiff = 1 } else if (type === 'goals_total_lte') { params.value = 1 } else if (type === 'is_pre_live') { params.minutes = 60 } else if (['shots_recent_gte', 'shots_on_target_gte', 'corners_gte', 'cards_gte', 'goals_total_gte', 'away_shots_on_target_gte', 'away_goals_gte'].includes(type)) { params.value = 3 } else if (['possession_gte', 'away_possession_gte'].includes(type)) { params.value = 58 }; setConditions(prev => [...prev, { type, params }]) }
+  const updateParam = (idx: number, key: string, val: number) => { setConditions(prev => prev.map((c, i) => i === idx ? { ...c, params: { ...c.params, [key]: val } } : c)) }
   const save = () => { if (!name.trim() || conditions.length === 0) return; onSave({ name: name.trim(), description: desc.trim(), conditions, severity, status: initial?.status || 'active', isTemplate: initial?.isTemplate || false, templateId: initial?.templateId, scope, scopeFilter: (scope === 'specific_leagues' || scope === 'specific_teams') ? scopeFilter : undefined, minConfidence: minConf, action, maxTriggersPerMatch: 2, antiDuplicateWindow: 5 }) }
-
   const addScopeItem = () => { if (scopeInput.trim() && !scopeFilter.includes(scopeInput.trim())) { setScopeFilter(prev => [...prev, scopeInput.trim()]); setScopeInput('') } }
 
-  return (
-    <div className="rounded-xl border border-cyan-500/12 bg-gradient-to-b from-cyan-500/[0.02] to-transparent p-5">
-      <div className="flex items-center justify-between mb-4"><h3 className="text-[12px] font-medium text-white/55">Criar padrão personalizado</h3><button onClick={onCancel} className="text-white/20 hover:text-white/50" type="button"><X size={15} /></button></div>
-      <div className="space-y-3">
-        <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome do padrão" className="w-full h-9 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 text-[11px] text-white placeholder:text-white/20 outline-none focus:border-white/[0.12]" />
-        <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descrição (opcional)" className="w-full h-9 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 text-[11px] text-white placeholder:text-white/20 outline-none focus:border-white/[0.12]" />
-        <div className="flex gap-4 flex-wrap">
-          <div><span className="text-[9px] text-white/30 block mb-1">Severidade</span><div className="flex gap-1">{(['critical', 'attention', 'info'] as const).map(s => (<button key={s} onClick={() => setSeverity(s)} className={`text-[9px] px-2.5 py-1 rounded-lg border transition-all ${severity === s ? 'border-white/[0.1] text-white/60 bg-white/[0.03]' : 'border-white/[0.03] text-white/20'}`} type="button">{s === 'critical' ? 'Crítico' : s === 'attention' ? 'Atenção' : 'Info'}</button>))}</div></div>
-          <div><span className="text-[9px] text-white/30 block mb-1">Escopo</span><div className="flex gap-1 flex-wrap">{(['all', 'favorites_only', 'specific_leagues', 'specific_teams'] as const).map(s => (<button key={s} onClick={() => setScope(s)} className={`text-[9px] px-2.5 py-1 rounded-lg border transition-all ${scope === s ? 'border-white/[0.1] text-white/60 bg-white/[0.03]' : 'border-white/[0.03] text-white/20'}`} type="button">{s === 'all' ? 'Todos' : s === 'favorites_only' ? 'Favoritos' : s === 'specific_leagues' ? 'Ligas' : 'Times'}</button>))}</div>
-            {(scope === 'specific_leagues' || scope === 'specific_teams') && (
-              <div className="mt-2">
-                <div className="flex gap-1"><input value={scopeInput} onChange={e => setScopeInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addScopeItem()} placeholder={scope === 'specific_leagues' ? 'Nome da liga' : 'Nome do time'} className="flex-1 h-7 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2 text-[9px] text-white placeholder:text-white/15 outline-none" /><button onClick={addScopeItem} className="text-[9px] text-cyan-400/50 px-2" type="button">+</button></div>
-                {scopeFilter.length > 0 && <div className="flex flex-wrap gap-1 mt-1.5">{scopeFilter.map((f, i) => (<span key={i} className="text-[8px] text-white/40 bg-white/[0.03] px-2 py-0.5 rounded-lg flex items-center gap-1">{f}<button onClick={() => setScopeFilter(prev => prev.filter((_, j) => j !== i))} className="text-white/20 hover:text-rose-400/50" type="button">×</button></span>))}</div>}
-              </div>
-            )}
-          </div>
-          <div><span className="text-[9px] text-white/30 block mb-1">Confiança mín.</span><input type="number" value={minConf} onChange={e => setMinConf(Number(e.target.value))} className="w-16 h-7 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2 text-[10px] text-white outline-none" min={20} max={95} /></div>
-          <div><span className="text-[9px] text-white/30 block mb-1">Ação</span><div className="flex gap-1">{(['register_alert', 'suggest_only', 'highlight'] as const).map(a => (<button key={a} onClick={() => setAction(a)} className={`text-[9px] px-2.5 py-1 rounded-lg border transition-all ${action === a ? 'border-white/[0.1] text-white/60 bg-white/[0.03]' : 'border-white/[0.03] text-white/20'}`} type="button">{a === 'register_alert' ? 'Alerta' : a === 'suggest_only' ? 'Sugerir' : 'Destacar'}</button>))}</div></div>
-        </div>
-        <div>
-          <span className="text-[9px] text-white/30 block mb-2">Condições ({conditions.length})</span>
-          <div className="space-y-1.5">{conditions.map((c, i) => {
-            const hasValue = c.params.value !== undefined || c.params.maxDiff !== undefined
-            const hasMinMax = c.params.min !== undefined
-            return (<div key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.02] px-3 py-2 border border-white/[0.03]">
-              <span className="text-[10px] text-white/45 flex-1">{COND_LABELS[c.type] || c.type}</span>
-              {hasMinMax && <><input type="number" value={Number(c.params.min) || 0} onChange={e => updateParam(i, 'min', Number(e.target.value))} className="w-12 h-6 rounded border border-white/[0.06] bg-white/[0.02] px-1.5 text-[9px] text-white text-center outline-none" /><span className="text-[9px] text-white/20">-</span><input type="number" value={Number(c.params.max) || 90} onChange={e => updateParam(i, 'max', Number(e.target.value))} className="w-12 h-6 rounded border border-white/[0.06] bg-white/[0.02] px-1.5 text-[9px] text-white text-center outline-none" /></>}
-              {hasValue && <input type="number" value={Number(c.params.value ?? c.params.maxDiff) || 0} onChange={e => updateParam(i, c.params.value !== undefined ? 'value' : 'maxDiff', Number(e.target.value))} className="w-14 h-6 rounded border border-white/[0.06] bg-white/[0.02] px-1.5 text-[9px] text-white text-center outline-none" />}
-              <button onClick={() => setConditions(prev => prev.filter((_, j) => j !== i))} className="text-[10px] text-white/15 hover:text-rose-400/50" type="button">×</button>
-            </div>)
-          })}</div>
-          <div className="flex flex-wrap gap-1 mt-2">{(Object.keys(COND_LABELS) as PatternConditionType[]).filter(t => !conditions.some(c => c.type === t)).slice(0, 8).map(t => (<button key={t} onClick={() => addCond(t)} className="text-[8px] text-white/20 hover:text-white/45 bg-white/[0.015] hover:bg-white/[0.025] px-2 py-1 rounded-lg border border-white/[0.03] transition-all" type="button">+ {COND_LABELS[t]}</button>))}</div>
-        </div>
-        <div className="flex justify-end gap-2 pt-2"><button onClick={onCancel} className="text-[10px] text-white/25 hover:text-white/45 px-3 py-1.5" type="button">Cancelar</button><button onClick={save} disabled={!name.trim() || conditions.length === 0} className="text-[10px] text-cyan-400/70 hover:text-cyan-400 font-medium px-4 py-1.5 rounded-lg border border-cyan-500/20 hover:border-cyan-500/40 disabled:opacity-30 disabled:cursor-not-allowed transition-all" type="button">Salvar padrão</button></div>
-      </div>
-    </div>
-  )
-}
-
-// ═══ DISCOVERY CONFIG ═══
-function DiscoveryConfigPanel({ config, onChange, onClose }: { config: AutoDiscoveryConfig; onChange: (p: Partial<AutoDiscoveryConfig>) => void; onClose: () => void }) {
-  return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.01] p-5">
-      <div className="flex items-center justify-between mb-4"><h3 className="text-[12px] font-medium text-white/55">Configurações do modo automático</h3><button onClick={onClose} className="text-white/20 hover:text-white/50" type="button"><X size={15} /></button></div>
-      <div className="grid grid-cols-2 gap-3">
-        <Toggle label="Auto-discovery" checked={config.enabled} onChange={v => onChange({ enabled: v })} />
-        <Toggle label="Monitorar favoritos" checked={config.monitorFavorites} onChange={v => onChange({ monitorFavorites: v })} />
-        <Toggle label="Ligas principais" checked={config.monitorMainLeagues} onChange={v => onChange({ monitorMainLeagues: v })} />
-        <Toggle label="Todas as ligas" checked={config.monitorAllLeagues} onChange={v => onChange({ monitorAllLeagues: v })} />
-        <Toggle label="Incluir pré-jogo" checked={config.includePreMatch} onChange={v => onChange({ includePreMatch: v })} />
-        <Toggle label="Incluir ao vivo" checked={config.includeLive} onChange={v => onChange({ includeLive: v })} />
-        <Toggle label="Registrar alerta auto" checked={config.registerAlertAuto} onChange={v => onChange({ registerAlertAuto: v })} />
-        <div><span className="text-[9px] text-white/30 block mb-1">Confiança mín.</span><input type="number" value={config.minConfidence} onChange={e => onChange({ minConfidence: Number(e.target.value) })} className="w-16 h-7 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2 text-[10px] text-white outline-none" min={20} max={95} /></div>
-        <div><span className="text-[9px] text-white/30 block mb-1">Max alertas/jogo</span><input type="number" value={config.maxAlertsPerMatch} onChange={e => onChange({ maxAlertsPerMatch: Number(e.target.value) })} className="w-16 h-7 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2 text-[10px] text-white outline-none" min={1} max={10} /></div>
-        <div><span className="text-[9px] text-white/30 block mb-1">Anti-duplicidade (min)</span><input type="number" value={config.antiDuplicateMinutes} onChange={e => onChange({ antiDuplicateMinutes: Number(e.target.value) })} className="w-16 h-7 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2 text-[10px] text-white outline-none" min={1} max={30} /></div>
-      </div>
-    </div>
-  )
-}
-
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (<button onClick={() => onChange(!checked)} className="flex items-center gap-2 text-left" type="button"><div className={`w-7 h-4 rounded-full transition-colors ${checked ? 'bg-cyan-500/30' : 'bg-white/[0.06]'}`}><div className={`w-3 h-3 rounded-full mt-0.5 transition-all ${checked ? 'ml-3.5 bg-cyan-400' : 'ml-0.5 bg-white/20'}`} /></div><span className="text-[10px] text-white/40">{label}</span></button>)
+  return (<div className="rounded-xl border border-cyan-500/12 bg-gradient-to-b from-cyan-500/[0.015] to-transparent p-6"><div className="flex items-center justify-between mb-4"><h3 className="text-[14px] font-medium text-white/60">{initial ? 'Editar padrão' : 'Criar padrão'}</h3><button onClick={onCancel} className="text-white/25 hover:text-white/50" type="button"><X size={16} /></button></div><div className="space-y-4"><input value={name} onChange={e => setName(e.target.value)} placeholder="Nome do padrão" className="w-full h-10 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 text-[12px] text-white placeholder:text-white/25 outline-none focus:border-white/[0.12]" /><input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descrição (opcional)" className="w-full h-10 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 text-[12px] text-white placeholder:text-white/25 outline-none focus:border-white/[0.12]" /><div className="flex gap-4 flex-wrap"><div><span className="text-[10px] text-white/35 block mb-1.5">Severidade</span><div className="flex gap-1.5">{(['critical', 'attention', 'info'] as const).map(s => (<button key={s} onClick={() => setSeverity(s)} className={`text-[10px] px-3 py-1.5 rounded-lg border transition-all ${severity === s ? 'border-white/[0.12] text-white/70 bg-white/[0.04]' : 'border-white/[0.04] text-white/25'}`} type="button">{s === 'critical' ? 'Crítico' : s === 'attention' ? 'Atenção' : 'Info'}</button>))}</div></div><div><span className="text-[10px] text-white/35 block mb-1.5">Escopo</span><div className="flex gap-1.5 flex-wrap">{(['all', 'favorites_only', 'specific_leagues', 'specific_teams'] as const).map(s => (<button key={s} onClick={() => setScope(s)} className={`text-[10px] px-3 py-1.5 rounded-lg border transition-all ${scope === s ? 'border-white/[0.12] text-white/70 bg-white/[0.04]' : 'border-white/[0.04] text-white/25'}`} type="button">{s === 'all' ? 'Todos' : s === 'favorites_only' ? 'Favoritos' : s === 'specific_leagues' ? 'Ligas' : 'Times'}</button>))}</div>{(scope === 'specific_leagues' || scope === 'specific_teams') && (<div className="mt-2"><div className="flex gap-1.5"><input value={scopeInput} onChange={e => setScopeInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addScopeItem()} placeholder={scope === 'specific_leagues' ? 'Nome da liga' : 'Nome do time'} className="flex-1 h-8 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 text-[10px] text-white placeholder:text-white/20 outline-none" /><button onClick={addScopeItem} className="text-[10px] text-cyan-400/60 px-2" type="button">+</button></div>{scopeFilter.length > 0 && <div className="flex flex-wrap gap-1.5 mt-2">{scopeFilter.map((f, i) => (<span key={i} className="text-[10px] text-white/50 bg-white/[0.04] px-2.5 py-1 rounded-lg flex items-center gap-1.5">{f}<button onClick={() => setScopeFilter(prev => prev.filter((_, j) => j !== i))} className="text-white/25 hover:text-rose-400/60" type="button">×</button></span>))}</div>}</div>)}</div><div><span className="text-[10px] text-white/35 block mb-1.5">Confiança mín.</span><input type="number" value={minConf} onChange={e => setMinConf(Number(e.target.value))} className="w-20 h-8 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 text-[11px] text-white outline-none" min={20} max={95} /></div><div><span className="text-[10px] text-white/35 block mb-1.5">Ação</span><div className="flex gap-1.5">{(['register_alert', 'suggest_only', 'highlight'] as const).map(a => (<button key={a} onClick={() => setAction(a)} className={`text-[10px] px-3 py-1.5 rounded-lg border transition-all ${action === a ? 'border-white/[0.12] text-white/70 bg-white/[0.04]' : 'border-white/[0.04] text-white/25'}`} type="button">{a === 'register_alert' ? 'Alerta' : a === 'suggest_only' ? 'Sugerir' : 'Destacar'}</button>))}</div></div></div><div><span className="text-[10px] text-white/35 block mb-2">Condições ({conditions.length})</span><div className="space-y-1.5">{conditions.map((c, i) => { const hasValue = c.params.value !== undefined || c.params.maxDiff !== undefined; const hasMinMax = c.params.min !== undefined; return (<div key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.025] px-4 py-2 border border-white/[0.04]"><span className="text-[11px] text-white/55 flex-1">{COND_LABELS[c.type] || c.type}</span>{hasMinMax && <><input type="number" value={Number(c.params.min) || 0} onChange={e => updateParam(i, 'min', Number(e.target.value))} className="w-14 h-7 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2 text-[10px] text-white text-center outline-none" /><span className="text-[10px] text-white/25">-</span><input type="number" value={Number(c.params.max) || 90} onChange={e => updateParam(i, 'max', Number(e.target.value))} className="w-14 h-7 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2 text-[10px] text-white text-center outline-none" /></>}{hasValue && <input type="number" value={Number(c.params.value ?? c.params.maxDiff) || 0} onChange={e => updateParam(i, c.params.value !== undefined ? 'value' : 'maxDiff', Number(e.target.value))} className="w-16 h-7 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2 text-[10px] text-white text-center outline-none" />}<button onClick={() => setConditions(prev => prev.filter((_, j) => j !== i))} className="text-[11px] text-white/20 hover:text-rose-400/60" type="button">×</button></div>) })}</div><div className="flex flex-wrap gap-1.5 mt-3">{(Object.keys(COND_LABELS) as PatternConditionType[]).filter(t => !conditions.some(c => c.type === t)).slice(0, 8).map(t => (<button key={t} onClick={() => addCond(t)} className="text-[9px] text-white/30 hover:text-white/55 bg-white/[0.02] hover:bg-white/[0.03] px-3 py-1.5 rounded-lg border border-white/[0.04] transition-all" type="button">+ {COND_LABELS[t]}</button>))}</div></div><div className="flex justify-end gap-3 pt-2"><button onClick={onCancel} className="text-[11px] text-white/30 hover:text-white/50 px-4 py-2" type="button">Cancelar</button><button onClick={save} disabled={!name.trim() || conditions.length === 0} className="text-[11px] text-cyan-400/80 hover:text-cyan-400 font-semibold px-5 py-2 rounded-xl border border-cyan-500/20 hover:border-cyan-500/40 disabled:opacity-30 disabled:cursor-not-allowed transition-all" type="button">{initial ? 'Salvar alterações' : 'Criar padrão'}</button></div></div></div>)
 }
 
 
 // ═══ SCANNER ═══
-function ScannerContent({ entries, openMatch, isAdvanced }: { entries: ScannerEntry[]; openMatch: (fx: LiveFixture) => void; isAdvanced: boolean }) {
-  if (entries.length === 0) {
-    return (<div className="rounded-xl border border-white/[0.04] border-dashed bg-white/[0.005] p-10 text-center"><Eye size={20} className="mx-auto text-white/15 mb-2" /><p className="text-[12px] text-white/30">Nenhum padrão detectado agora</p><p className="text-[10px] text-white/18 mt-1 max-w-[320px] mx-auto">O motor está analisando jogos ao vivo e próximos jogos com dados suficientes.</p></div>)
-  }
-  return (
-    <div className="space-y-4">
-      <p className="text-[10px] text-white/25">{entries.length} {entries.length === 1 ? 'jogo com sinal' : 'jogos com sinais'} detectados</p>
-      <div className="space-y-1.5">{entries.map(entry => {
-        const fx = entry.fixture
-        return (<div key={fx.id} onClick={() => openMatch(fx)} className="group flex items-center gap-3 rounded-xl border border-white/[0.03] bg-white/[0.005] px-4 py-3 cursor-pointer hover:border-white/[0.07] transition-all" role="button">
-          <span className={`text-[8px] font-bold uppercase px-2 py-0.5 rounded shrink-0 ${entry.priority === 'critical' ? 'bg-rose-500/10 text-rose-400/60' : entry.priority === 'attention' ? 'bg-amber-500/8 text-amber-400/50' : entry.priority === 'watch' ? 'bg-cyan-500/6 text-cyan-400/40' : 'bg-white/[0.02] text-white/20'}`}>{entry.priority === 'critical' ? 'CRÍT' : entry.priority === 'attention' ? 'ATEN' : entry.priority === 'watch' ? 'OBS' : '—'}</span>
-          <span className={`text-[10px] font-medium tabular-nums w-8 shrink-0 ${isLiveFx(fx) ? 'text-emerald-400' : 'text-white/20'}`}>{isLiveFx(fx) ? `${fx.status.elapsed || ''}'` : ''}</span>
-          <ClubLogo src={fx.homeTeam.logo} name={fx.homeTeam.name} size={16} />
-          <span className="text-[11px] text-white/55 truncate flex-1">{fx.homeTeam.name} {fx.score.home ?? '-'}:{fx.score.away ?? '-'} {fx.awayTeam.name}</span>
-          <ClubLogo src={fx.awayTeam.logo} name={fx.awayTeam.name} size={16} />
-          <span className="text-[9px] text-white/25 shrink-0 max-w-[100px] truncate">{entry.reason}</span>
-          <span className="text-[9px] text-white/20 tabular-nums shrink-0">{entry.confidence}%</span>
-          {isAdvanced && <span className="text-[8px] text-white/12 font-mono shrink-0">{entry.patterns.length}p</span>}
-          <ChevronRight size={10} className="text-white/10 group-hover:text-white/25 shrink-0" />
-        </div>)
-      })}</div>
-    </div>
-  )
+function ScannerView({ hasIntelligence, entries, openMatch, isAdvanced, onGoToPatterns }: { hasIntelligence: boolean; entries: ScannerEntry[]; openMatch: (fx: LiveFixture) => void; isAdvanced: boolean; onGoToPatterns: () => void }) {
+  if (!hasIntelligence) { return (<div className="rounded-2xl border border-white/[0.05] border-dashed bg-white/[0.008] p-10 text-center"><Eye size={24} className="mx-auto text-white/20 mb-3" /><p className="text-[14px] text-white/40 font-medium">Nenhum radar configurado</p><p className="text-[12px] text-white/25 mt-1.5 max-w-[400px] mx-auto">Crie um padrão ou configure o modo automático para começar a escanear partidas.</p><div className="flex justify-center gap-3 mt-5"><button onClick={onGoToPatterns} className="px-5 py-2.5 rounded-xl text-[11px] font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/15 transition-colors" type="button">Ativar template</button><button onClick={onGoToPatterns} className="px-5 py-2.5 rounded-xl text-[11px] font-medium text-white/40 border border-white/[0.06] hover:text-white/60 transition-colors" type="button">Configurar automático</button></div></div>) }
+  if (entries.length === 0) { return (<div className="rounded-2xl border border-white/[0.04] bg-white/[0.006] p-10 text-center"><p className="text-[14px] text-white/40">Nenhum sinal detectado agora</p><p className="text-[12px] text-white/25 mt-1">O motor está analisando partidas ao vivo com os padrões configurados.</p></div>) }
+  return (<div className="space-y-4"><p className="text-[12px] text-white/35">{entries.length} {entries.length === 1 ? 'jogo com sinal' : 'jogos com sinais'} detectados</p><div className="space-y-2">{entries.map(entry => { const fx = entry.fixture; return (<div key={fx.id} onClick={() => openMatch(fx)} className="group flex items-center gap-3 rounded-xl border border-white/[0.04] bg-white/[0.006] px-5 py-3.5 cursor-pointer hover:border-white/[0.08] transition-all" role="button"><span className={`text-[9px] font-bold uppercase px-2.5 py-1 rounded-lg shrink-0 ${entry.priority === 'critical' ? 'bg-rose-500/10 text-rose-400/70' : entry.priority === 'attention' ? 'bg-amber-500/8 text-amber-400/60' : 'bg-cyan-500/6 text-cyan-400/50'}`}>{entry.priority === 'critical' ? 'CRÍT' : entry.priority === 'attention' ? 'ATEN' : 'OBS'}</span><span className={`text-[11px] font-medium tabular-nums w-9 shrink-0 ${isLiveFx(fx) ? 'text-emerald-400' : 'text-white/25'}`}>{isLiveFx(fx) ? `${fx.status.elapsed || ''}'` : ''}</span><ClubLogo src={fx.homeTeam.logo} name={fx.homeTeam.name} size={18} /><span className="text-[13px] text-white/65 truncate flex-1">{fx.homeTeam.name} {fx.score.home ?? '-'}:{fx.score.away ?? '-'} {fx.awayTeam.name}</span><ClubLogo src={fx.awayTeam.logo} name={fx.awayTeam.name} size={18} /><span className="text-[11px] text-white/35 shrink-0 max-w-[120px] truncate">{entry.reason}</span><span className="text-[11px] text-white/25 tabular-nums shrink-0">{entry.confidence}%</span>{isAdvanced && <span className="text-[9px] text-white/15 font-mono shrink-0">{entry.patterns.length}p</span>}<ChevronRight size={12} className="text-white/15 group-hover:text-white/35 shrink-0" /></div>) })}</div></div>)
 }
 
 // ═══ ALERTS ═══
-function AlertsContent({ triggeredAlerts, isAdvanced, openMatch, fixtures, navigate }: { triggeredAlerts: TriggeredAlert[]; isAdvanced: boolean; openMatch: (fx: LiveFixture) => void; fixtures: LiveFixture[]; navigate: (path: string) => void }) {
-  if (triggeredAlerts.length === 0) {
-    return (<div className="rounded-xl border border-white/[0.04] border-dashed bg-white/[0.005] p-10 text-center"><Zap size={20} className="mx-auto text-white/15 mb-2" /><p className="text-[12px] text-white/30">Nenhum alerta disparado</p><p className="text-[10px] text-white/18 mt-1">Quando padrões baterem em jogos ao vivo, os alertas aparecerão aqui</p><button onClick={() => navigate('/app/alerts')} className="mt-3 text-[10px] text-cyan-400/45 hover:text-cyan-400/70 font-medium transition-colors" type="button">Gerenciar alertas →</button></div>)
-  }
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between"><h3 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/30">Alertas disparados</h3><button onClick={() => navigate('/app/alerts')} className="text-[9px] text-cyan-400/40 hover:text-cyan-400/70 font-medium transition-colors" type="button">Gerenciar →</button></div>
-      <div className="space-y-1.5">{triggeredAlerts.map(t => {
-        const fx = fixtures.find(f => f.id === t.fixtureId)
-        const statusLabel = t.status === 'pending' ? 'Pendente' : t.status === 'confirmed' ? 'Confirmado' : t.status === 'failed' ? 'Falhou' : t.status === 'expired' ? 'Expirado' : 'Desconhecido'
-        const statusColor = t.status === 'pending' ? 'bg-amber-500/8 text-amber-400/50' : t.status === 'confirmed' ? 'bg-emerald-500/8 text-emerald-400/50' : t.status === 'failed' ? 'bg-rose-500/8 text-rose-400/50' : 'bg-white/[0.03] text-white/20'
-        return (<div key={t.id} onClick={() => fx && openMatch(fx)} className={`rounded-xl border border-white/[0.04] bg-white/[0.005] px-4 py-3 ${fx ? 'cursor-pointer hover:border-white/[0.07]' : ''} transition-all`} role={fx ? 'button' : undefined}>
-          <div className="flex items-center justify-between mb-1"><div className="flex items-center gap-2"><span className="text-[11px] font-medium text-white/55">{t.patternName}</span><span className="text-[9px] text-white/20 tabular-nums">{t.confidence}%</span></div><span className={`text-[8px] px-2 py-0.5 rounded-md ${statusColor}`}>{statusLabel}</span></div>
-          <div className="flex items-center gap-2 text-[10px] text-white/30"><span>{t.homeTeam} x {t.awayTeam}</span>{t.minute && <span>· {t.minute}'</span>}<span>· {t.league}</span></div>
-          {isAdvanced && <div className="mt-1.5 text-[9px] text-white/15 font-mono">{t.reasons.slice(0, 3).join(' · ')} | {t.scoreAtTrigger.home}-{t.scoreAtTrigger.away}{t.scoreAtResolution ? ` → ${t.scoreAtResolution.home}-${t.scoreAtResolution.away}` : ''}</div>}
-          <span className="text-[8px] text-white/12 mt-1 block">{new Date(t.timestamp).toLocaleString('pt-BR')}</span>
-        </div>)
-      })}</div>
-    </div>
-  )
+function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, navigate }: { triggeredAlerts: TriggeredAlert[]; isAdvanced: boolean; openMatch: (fx: LiveFixture) => void; fixtures: LiveFixture[]; navigate: (path: string) => void }) {
+  if (triggeredAlerts.length === 0) { return (<div className="rounded-2xl border border-white/[0.04] border-dashed bg-white/[0.006] p-10 text-center"><Zap size={24} className="mx-auto text-white/20 mb-3" /><p className="text-[14px] text-white/40">Nenhum alerta disparado</p><p className="text-[12px] text-white/25 mt-1">Quando padrões baterem em jogos ao vivo, os alertas aparecerão aqui</p><button onClick={() => navigate('/app/alerts')} className="mt-4 text-[11px] text-cyan-400/60 hover:text-cyan-400 font-medium transition-colors" type="button">Gerenciar alertas →</button></div>) }
+  return (<div className="space-y-4"><div className="flex items-center justify-between"><h3 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/35">Alertas disparados</h3><button onClick={() => navigate('/app/alerts')} className="text-[11px] text-cyan-400/50 hover:text-cyan-400 font-medium transition-colors" type="button">Ver em /app/alerts →</button></div><div className="space-y-2">{triggeredAlerts.map(t => { const fx = fixtures.find(f => f.id === t.fixtureId); const sl = t.status === 'pending' ? 'Pendente' : t.status === 'confirmed' ? 'Confirmado' : (t.status as string) === 'confirmed_partial' ? 'Parcial' : t.status === 'failed' ? 'Falhou' : t.status === 'expired' ? 'Expirado' : 'Desconhecido'; const sc = t.status === 'confirmed' ? 'bg-emerald-500/10 text-emerald-400' : t.status === 'failed' ? 'bg-rose-500/10 text-rose-400' : t.status === 'pending' ? 'bg-amber-500/10 text-amber-400' : 'bg-white/[0.04] text-white/35'; return (<div key={t.id} onClick={() => fx && openMatch(fx)} className={`rounded-xl border border-white/[0.04] bg-white/[0.006] px-5 py-3.5 ${fx ? 'cursor-pointer hover:border-white/[0.08]' : ''} transition-all`} role={fx ? 'button' : undefined}><div className="flex items-center justify-between mb-1.5"><div className="flex items-center gap-2"><span className="text-[13px] font-medium text-white/65">{t.patternName}</span><span className="text-[11px] text-white/30 tabular-nums">{t.confidence}%</span></div><span className={`text-[9px] font-semibold px-2.5 py-1 rounded-lg ${sc}`}>{sl}</span></div><div className="flex items-center gap-2 text-[11px] text-white/40"><span>{t.homeTeam} x {t.awayTeam}</span>{t.minute && <span>· {t.minute}'</span>}<span>· {t.league}</span></div>{isAdvanced && <div className="mt-1.5 text-[10px] text-white/20 font-mono">{t.reasons.slice(0, 3).join(' · ')} | {t.scoreAtTrigger.home}-{t.scoreAtTrigger.away}</div>}<span className="text-[10px] text-white/20 mt-1 block">{new Date(t.timestamp).toLocaleString('pt-BR')}</span></div>) })}</div></div>)
 }
 
 // ═══ PERFORMANCE ═══
-function PerformanceContent({ patterns, triggeredAlerts, isAdvanced }: { patterns: Pattern[]; triggeredAlerts: TriggeredAlert[]; isAdvanced: boolean }) {
-  const stats = useMemo(() => patterns.map(p => {
-    const alerts = triggeredAlerts.filter(t => t.patternId === p.id)
-    const confirmed = alerts.filter(t => t.status === 'confirmed').length
-    const partial = alerts.filter(t => t.status === 'confirmed_partial' as any).length
-    const failed = alerts.filter(t => t.status === 'failed').length
-    const expired = alerts.filter(t => t.status === 'expired').length
-    const unknown = alerts.filter(t => t.status === 'unknown').length
-    const pending = alerts.filter(t => t.status === 'pending').length
-    const resolved = confirmed + failed
-    const hitRate = resolved >= 5 ? Math.round((confirmed / resolved) * 100) : null
-    const avgConf = alerts.length > 0 ? Math.round(alerts.reduce((s, a) => s + a.confidence, 0) / alerts.length) : null
-    const needsReview = (unknown > 3 && unknown > confirmed) || (resolved >= 5 && (hitRate ?? 100) < 30) || (failed > 5 && failed > confirmed * 2)
-    const reviewReason = unknown > 3 ? 'Muitos alertas sem dados para confirmar' : (resolved >= 5 && (hitRate ?? 100) < 30) ? 'Taxa de acerto baixa' : failed > 5 ? 'Muitas falhas' : ''
-    return { pattern: p, total: alerts.length, confirmed, partial, failed, expired, unknown, pending, hitRate, avgConf, lastHit: alerts[0]?.timestamp || null, needsReview, reviewReason }
-  }), [patterns, triggeredAlerts])
+function PerformanceView({ patterns, triggeredAlerts, isAdvanced }: { patterns: Pattern[]; triggeredAlerts: TriggeredAlert[]; isAdvanced: boolean }) {
+  const stats = useMemo(() => patterns.map(p => { const a = triggeredAlerts.filter(t => t.patternId === p.id); const confirmed = a.filter(t => t.status === 'confirmed').length; const partial = a.filter(t => (t.status as string) === 'confirmed_partial').length; const failed = a.filter(t => t.status === 'failed').length; const expired = a.filter(t => t.status === 'expired').length; const unknown = a.filter(t => t.status === 'unknown').length; const resolved = confirmed + failed; const hitRate = resolved >= 5 ? Math.round((confirmed / resolved) * 100) : null; const avgConf = a.length > 0 ? Math.round(a.reduce((s, x) => s + x.confidence, 0) / a.length) : null; const needsReview = (unknown > 3 && unknown > confirmed) || (resolved >= 5 && (hitRate ?? 100) < 30); const reviewReason = unknown > 3 ? 'Muitos alertas sem dados' : (resolved >= 5 && (hitRate ?? 100) < 30) ? 'Taxa baixa' : ''; return { pattern: p, total: a.length, confirmed, partial, failed, expired, unknown, hitRate, avgConf, lastHit: a[0]?.timestamp || null, needsReview, reviewReason } }), [patterns, triggeredAlerts])
+  const totalD = triggeredAlerts.length; const totalC = triggeredAlerts.filter(t => t.status === 'confirmed').length; const totalF = triggeredAlerts.filter(t => t.status === 'failed').length; const pNeedReview = stats.filter(s => s.needsReview)
 
-  const totalDisparos = triggeredAlerts.length
-  const totalConfirmed = triggeredAlerts.filter(t => t.status === 'confirmed').length
-  const totalPartial = triggeredAlerts.filter(t => t.status === 'confirmed_partial' as any).length
-  const totalFailed = triggeredAlerts.filter(t => t.status === 'failed').length
-  const totalExpired = triggeredAlerts.filter(t => t.status === 'expired').length
-  const totalUnknown = triggeredAlerts.filter(t => t.status === 'unknown').length
-  const patternsNeedingReview = stats.filter(s => s.needsReview)
+  if (patterns.length === 0) { return (<div className="rounded-2xl border border-white/[0.04] border-dashed bg-white/[0.006] p-10 text-center"><BarChart3 size={24} className="mx-auto text-white/20 mb-3" /><p className="text-[14px] text-white/40">Sem dados de performance</p><p className="text-[12px] text-white/25 mt-1">Ative padrões para começar a medir resultados</p></div>) }
 
-  if (patterns.length === 0) {
-    return (<div className="rounded-xl border border-white/[0.04] border-dashed bg-white/[0.005] p-10 text-center"><BarChart3 size={20} className="mx-auto text-white/15 mb-2" /><p className="text-[12px] text-white/30">Sem dados de performance</p><p className="text-[10px] text-white/20 mt-1">Ative padrões para começar a medir resultados</p></div>)
-  }
-
-  return (
-    <div className="space-y-5">
-      {/* Summary */}
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-        <MetricCard label="Disparos" value={totalDisparos} color="white" />
-        <MetricCard label="Confirmados" value={totalConfirmed} color="emerald" />
-        <MetricCard label="Parciais" value={totalPartial} color="cyan" />
-        <MetricCard label="Falhados" value={totalFailed} color="rose" />
-        <MetricCard label="Expirados" value={totalExpired} color="white" />
-        <MetricCard label="Unknown" value={totalUnknown} color="white" />
-      </div>
-
-      {/* Patterns needing review */}
-      {patternsNeedingReview.length > 0 && (
-        <section className="rounded-xl border border-amber-500/10 bg-amber-500/[0.02] p-4">
-          <h4 className="text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-400/50 mb-2">Padrões que precisam de revisão</h4>
-          <div className="space-y-1.5">{patternsNeedingReview.map(s => (
-            <div key={s.pattern.id} className="flex items-center justify-between">
-              <div><span className="text-[11px] text-white/50">{s.pattern.name}</span><span className="text-[9px] text-amber-400/40 ml-2">{s.reviewReason}</span></div>
-            </div>
-          ))}</div>
-        </section>
-      )}
-
-      {/* Per pattern */}
-      <section>
-        <h4 className="text-[10px] font-semibold uppercase tracking-[0.1em] text-white/30 mb-2">Por padrão</h4>
-        <div className="space-y-1.5">{stats.map(s => (
-          <div key={s.pattern.id} className="rounded-xl border border-white/[0.04] bg-white/[0.005] px-4 py-3">
-            <div className="flex items-center justify-between mb-1"><span className="text-[11px] font-medium text-white/55">{s.pattern.name}</span><span className={`text-[8px] px-2 py-0.5 rounded-md ${s.pattern.status === 'active' ? 'bg-emerald-500/8 text-emerald-400/50' : 'bg-white/[0.02] text-white/15'}`}>{s.pattern.status}</span></div>
-            <div className="flex items-center gap-3 text-[10px] text-white/35 flex-wrap">
-              <span>{s.total} disparos</span>
-              {s.hitRate !== null ? <span className="text-emerald-400/60 font-medium">Taxa forte: {s.hitRate}%</span> : <span className="text-white/20">Insuficiente ({s.confirmed + s.failed}/5)</span>}
-              {s.partial > 0 && <span className="text-cyan-400/40">Parciais: {s.partial}</span>}
-              {s.avgConf !== null && <span>Conf: {s.avgConf}%</span>}
-              {s.lastHit && <span>Último: {new Date(s.lastHit).toLocaleDateString('pt-BR')}</span>}
-            </div>
-            {isAdvanced && <div className="mt-1.5 text-[9px] text-white/15 font-mono">✓{s.confirmed} · ~{s.partial} · ✗{s.failed} · ⏱{s.expired} · ?{s.unknown} · ⏳{s.pending}</div>}
-          </div>
-        ))}</div>
-      </section>
-    </div>
-  )
+  return (<div className="space-y-6">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3"><MCard label="Disparos" value={totalD} color="white" /><MCard label="Confirmados" value={totalC} color="emerald" /><MCard label="Falhados" value={totalF} color="rose" /><MCard label="Padrões" value={patterns.length} color="cyan" /></div>
+    {pNeedReview.length > 0 && (<section className="rounded-xl border border-amber-500/12 bg-amber-500/[0.02] p-5"><h4 className="text-[12px] font-semibold text-amber-400/60 mb-2">Padrões que precisam de revisão</h4><div className="space-y-2">{pNeedReview.map(s => (<div key={s.pattern.id} className="flex items-center justify-between"><span className="text-[12px] text-white/55">{s.pattern.name}</span><span className="text-[11px] text-amber-400/50">{s.reviewReason}</span></div>))}</div></section>)}
+    <section><h4 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/35 mb-3">Por padrão</h4><div className="space-y-2">{stats.map(s => (<div key={s.pattern.id} className="rounded-xl border border-white/[0.04] bg-white/[0.006] px-5 py-3.5"><div className="flex items-center justify-between mb-1"><span className="text-[13px] font-medium text-white/65">{s.pattern.name}</span><span className={`text-[9px] px-2.5 py-1 rounded-lg ${s.pattern.status === 'active' ? 'bg-emerald-500/8 text-emerald-400/60' : 'bg-white/[0.03] text-white/20'}`}>{s.pattern.status}</span></div><div className="flex items-center gap-4 text-[11px] text-white/40 flex-wrap"><span>{s.total} disparos</span>{s.hitRate !== null ? <span className="text-emerald-400/70 font-medium">Taxa: {s.hitRate}%</span> : <span className="text-white/25">Insuficiente ({s.confirmed + s.failed}/5)</span>}{s.partial > 0 && <span className="text-cyan-400/50">Parciais: {s.partial}</span>}{s.avgConf !== null && <span>Conf: {s.avgConf}%</span>}{s.lastHit && <span>Último: {new Date(s.lastHit).toLocaleDateString('pt-BR')}</span>}</div>{isAdvanced && <div className="mt-1.5 text-[10px] text-white/20 font-mono">✓{s.confirmed} · ~{s.partial} · ✗{s.failed} · ⏱{s.expired} · ?{s.unknown}</div>}</div>))}</div></section>
+  </div>)
 }
-
-function MetricCard({ label, value, color }: { label: string; value: number; color: string }) {
-  const colorClass = value > 0 ? (color === 'emerald' ? 'text-emerald-400' : color === 'cyan' ? 'text-cyan-400' : color === 'amber' ? 'text-amber-400' : color === 'rose' ? 'text-rose-400' : 'text-white/50') : 'text-white/15'
-  return (<div className="rounded-xl border border-white/[0.04] bg-white/[0.005] px-3 py-2.5 text-center"><span className={`text-[16px] font-bold tabular-nums block ${colorClass}`}>{value}</span><span className="text-[8px] text-white/25 uppercase tracking-wider">{label}</span></div>)
-}
+function MCard({ label, value, color }: { label: string; value: number; color: string }) { const cc = value > 0 ? (color === 'emerald' ? 'text-emerald-400' : color === 'cyan' ? 'text-cyan-400' : color === 'rose' ? 'text-rose-400' : 'text-white/70') : 'text-white/20'; return (<div className="rounded-xl border border-white/[0.04] bg-white/[0.006] px-4 py-3.5 text-center"><span className={`text-[20px] font-bold tabular-nums block ${cc}`}>{value}</span><span className="text-[10px] text-white/35">{label}</span></div>) }

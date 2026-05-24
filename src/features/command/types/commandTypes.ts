@@ -107,6 +107,7 @@ export interface TriggeredAlert {
 
 export interface AutoDiscoveryConfig {
   enabled: boolean
+  userConfigured: boolean
   minSeverity: PatternSeverity
   minConfidence: number
   monitorFavorites: boolean
@@ -120,7 +121,8 @@ export interface AutoDiscoveryConfig {
 }
 
 export const DEFAULT_AUTO_DISCOVERY_CONFIG: AutoDiscoveryConfig = {
-  enabled: true,
+  enabled: false,
+  userConfigured: false,
   minSeverity: 'info',
   minConfidence: 50,
   monitorFavorites: true,
