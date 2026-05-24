@@ -490,7 +490,7 @@ const POST_TRANSLATION_CLEANUP: [RegExp, string][] = [
   [/ o lado direito da área/gi, ' pelo lado direito da área'],
 ]
 
-const ENGLISH_TERMS = /\b(because|injury|outside|inside|right side|left side|centre|center|box|through ball|assisted by|following|bad foul|hand ball|from the|to the|with a cross)\b/i
+const ENGLISH_TERMS = /\b(because|injury|injured|outside|inside|right side|left side|right footed|left footed|centre|center|box|through ball|assisted by|following|bad foul|hand ball|from the|to the|with a cross|blocked|saved|header|attempt|wins a free kick|the right|the left|the six yard|defensive half|attacking half|right corner|left corner)\b/i
 
 function hasEnglishRemnants(text: string): boolean {
   return ENGLISH_TERMS.test(text)
