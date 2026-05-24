@@ -5,6 +5,7 @@ import { ClubLogo } from '@/components/ui/ClubLogo'
 import { storeFixtureForNavigation } from '@/lib/matchNavigation'
 import { getMatchLocalDateKey, formatMatchTime, isMatchOnSelectedLocalDate, formatSelectedDateLabel, getTodayLocalDateKey, debugMatchDate } from '@/utils/matchDate'
 import { getMatchImportanceScore, getMatchImportanceReason, getMatchImportanceBadge, sortMatchesByImportance, getMainGlobalMatch, getBrazilFeaturedMatch } from '@/utils/matchImportance'
+import { dedupeMatches, normalizeCompetitionName } from '@/services/matchesDedup'
 import type { LiveFixture } from '@/lib/apiClient'
 import { useFavorites } from '@/context/FavoritesContext'
 import { useViewMode } from '@/context/ViewModeContext'
@@ -189,9 +190,9 @@ export function MatchesPage() {
           )
           if (!duplicate) fdMatches.push(em)
         }
-        setMatches(fdMatches)
+        setMatches(dedupeMatches(fdMatches).map(m => ({ ...m, competition: { ...m.competition, name: normalizeCompetitionName(m.competition.name) } })))
       } else {
-        setMatches(espnMatches)
+        setMatches(dedupeMatches(espnMatches).map(m => ({ ...m, competition: { ...m.competition, name: normalizeCompetitionName(m.competition.name) } })))
       }
     }).catch(e => setError((e as Error).message)).finally(() => setLoading(false))
   }, [date])
@@ -203,7 +204,7 @@ export function MatchesPage() {
     const br = matches.filter(m => isBrazil(m)).length
     const eu = matches.filter(m => isEurope(m)).length
     const dominant = matches.filter(m => isDominant(m)).length
-    const soon = matches.filter(m => { const d = Math.round((new Date(m.utcDate).getTime() - Date.now()) / 60000); return d > 0 && d <= 60 }).length
+    const soon = matches.filter(m => { if (!mapStatus(m.status).upcoming) return false; const d = Math.round((new Date(m.utcDate).getTime() - Date.now()) / 60000); return d > 0 && d <= 60 }).length
     const comps = new Set(matches.map(m => m.competition.name)).size
     const topComp = (() => { const counts = new Map<string, number>(); matches.forEach(m => counts.set(m.competition.name, (counts.get(m.competition.name) || 0) + 1)); let max = '', maxN = 0; counts.forEach((v, k) => { if (v > maxN) { max = k; maxN = v } }); return max ? translateComp(max) : '' })()
     return { total: matches.length, live: l, finished: f, upcoming: u, comps, br, eu, dominant, soon, topComp }
@@ -222,7 +223,7 @@ export function MatchesPage() {
       case 'brazil': return list.filter(m => isBrazil(m))
       case 'europe': return list.filter(m => isEurope(m))
       case 'relevant': return list.filter(m => calcImportance(m) >= 70).sort((a, b) => calcImportance(b) - calcImportance(a))
-      case 'soon': return list.filter(m => { const d = Math.round((new Date(m.utcDate).getTime() - Date.now()) / 60000); return d > 0 && d <= 60 })
+      case 'soon': return list.filter(m => { const { upcoming } = mapStatus(m.status); if (!upcoming) return false; const d = Math.round((new Date(m.utcDate).getTime() - Date.now()) / 60000); return d > 0 && d <= 60 })
       case 'dominant': return list.filter(m => isDominant(m))
       case 'favorites': return list.filter(m => isFavoriteMatch(buildCanonicalMatchId(m.homeTeam.shortName || m.homeTeam.name, m.awayTeam.shortName || m.awayTeam.name, m.utcDate)) || isFavoriteTeam(m.homeTeam.shortName || m.homeTeam.name) || isFavoriteTeam(m.awayTeam.shortName || m.awayTeam.name) || isFavoriteLeague(String(m.competition.name)))
       default: return list
