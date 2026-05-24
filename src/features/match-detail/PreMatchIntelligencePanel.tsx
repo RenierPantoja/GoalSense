@@ -80,6 +80,29 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
         </div>
       )}
 
+      {/* Goals Profile */}
+      {data.goalsProfile && (
+        <div>
+          <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/25 mb-3 flex items-center gap-2">
+            <TrendingUp size={12} className="text-white/20" />Perfil de gols
+          </h4>
+          <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-4">
+            <div className="grid grid-cols-4 gap-3 text-center">
+              <div><span className="text-[16px] font-bold text-white/70 block">{data.goalsProfile.avgGoalsPerMatch}</span><span className="text-[9px] text-white/25">Média/jogo</span></div>
+              <div><span className="text-[16px] font-bold text-white/60 block">{data.goalsProfile.over25Pct}%</span><span className="text-[9px] text-white/25">Over 2.5</span></div>
+              <div><span className="text-[16px] font-bold text-white/60 block">{data.goalsProfile.over15Pct}%</span><span className="text-[9px] text-white/25">Over 1.5</span></div>
+              <div><span className="text-[16px] font-bold text-white/60 block">{data.goalsProfile.bothScoredPct}%</span><span className="text-[9px] text-white/25">Ambos marcam</span></div>
+            </div>
+            {isAdvanced && (
+              <div className="mt-3 pt-3 border-t border-white/[0.03] grid grid-cols-2 gap-2 text-[9px] text-white/25">
+                <span>{homeName.split(' ')[0]}: {data.goalsProfile.homeAvgFor} gols/jogo · {data.goalsProfile.homeAvgAgainst} sofridos</span>
+                <span>{awayName.split(' ')[0]}: {data.goalsProfile.awayAvgFor} gols/jogo · {data.goalsProfile.awayAvgAgainst} sofridos</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* H2H */}
       {data.h2h && (
         <div>
@@ -142,11 +165,11 @@ function FormCard({ form }: { form: import('@/services/preMatchIntelligence').Te
         ))}
       </div>
       <div className="grid grid-cols-3 gap-2 text-center">
-        <div><span className="text-[12px] font-bold text-emerald-400/60 block">{form.summary.wins}</span><span className="text-[7px] text-white/20">Vitórias</span></div>
-        <div><span className="text-[12px] font-bold text-amber-400/60 block">{form.summary.draws}</span><span className="text-[7px] text-white/20">Empates</span></div>
-        <div><span className="text-[12px] font-bold text-rose-400/60 block">{form.summary.losses}</span><span className="text-[7px] text-white/20">Derrotas</span></div>
+        <div><span className="text-[12px] font-bold text-emerald-400/60 block">{form.summary.wins}</span><span className="text-[9px] text-white/30">Vitórias</span></div>
+        <div><span className="text-[12px] font-bold text-amber-400/60 block">{form.summary.draws}</span><span className="text-[9px] text-white/30">Empates</span></div>
+        <div><span className="text-[12px] font-bold text-rose-400/60 block">{form.summary.losses}</span><span className="text-[9px] text-white/30">Derrotas</span></div>
       </div>
-      <p className="text-[9px] text-white/20 mt-2 text-center">{form.summary.goalsFor} gols marcados · {form.summary.goalsAgainst} sofridos</p>
+      <p className="text-[10px] text-white/25 mt-2 text-center">{form.summary.goalsFor} gols marcados · {form.summary.goalsAgainst} sofridos</p>
     </div>
   )
 }

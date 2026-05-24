@@ -55,8 +55,21 @@ export interface PreMatchIntelligenceResult {
   h2h?: H2HRecord
   recentMeetings?: RecentMeeting[]
   preview?: PreMatchPreview
+  goalsProfile?: GoalsProfile
   dataSources?: string[]
   limitations?: string[]
+}
+
+export interface GoalsProfile {
+  avgGoalsPerMatch: number
+  over15Pct: number
+  over25Pct: number
+  bothScoredPct: number
+  homeAvgFor: number
+  homeAvgAgainst: number
+  awayAvgFor: number
+  awayAvgAgainst: number
+  sampleSize: number
 }
 
 interface PreMatchInput {
@@ -174,6 +187,9 @@ export async function getPreMatchIntelligence(input: PreMatchInput): Promise<Pre
   // Generate preview
   const preview = generatePreview(homeName, awayName, homeForm, awayForm, h2h, competition)
 
+  // Calculate goals profile from form data
+  const goalsProfile = calculateGoalsProfile(homeForm, awayForm)
+
   const confidence = (homeForm && awayForm && h2h) ? 'high' : (homeForm || awayForm) ? 'medium' : 'low'
 
   const result: PreMatchIntelligenceResult = {
@@ -184,6 +200,7 @@ export async function getPreMatchIntelligence(input: PreMatchInput): Promise<Pre
     h2h,
     recentMeetings,
     preview,
+    goalsProfile,
     dataSources,
     limitations: limitations.length > 0 ? limitations : undefined,
   }
@@ -311,4 +328,57 @@ function generatePreview(homeName: string, awayName: string, homeForm?: TeamRece
   const summary = parts.length > 0 ? parts.join(' ') : 'A prévia será atualizada quando mais informações estiverem disponíveis.'
 
   return { title, summary, keyPoints: keyPoints.slice(0, 5) }
+}
+
+
+// ─── Goals Profile ───────────────────────────────────────────────────────────
+
+function calculateGoalsProfile(homeForm?: TeamRecentForm, awayForm?: TeamRecentForm): GoalsProfile | undefined {
+  if (!homeForm && !awayForm) return undefined
+
+  const allMatches: { goalsFor: number; goalsAgainst: number; isHome: boolean }[] = []
+
+  if (homeForm) {
+    for (const m of homeForm.matches) {
+      const isHome = m.homeTeam.toLowerCase().includes(homeForm.teamName.toLowerCase().split(' ')[0])
+      const gf = isHome ? (m.homeScore ?? 0) : (m.awayScore ?? 0)
+      const ga = isHome ? (m.awayScore ?? 0) : (m.homeScore ?? 0)
+      allMatches.push({ goalsFor: gf, goalsAgainst: ga, isHome: true })
+    }
+  }
+  if (awayForm) {
+    for (const m of awayForm.matches) {
+      const isHome = m.homeTeam.toLowerCase().includes(awayForm.teamName.toLowerCase().split(' ')[0])
+      const gf = isHome ? (m.homeScore ?? 0) : (m.awayScore ?? 0)
+      const ga = isHome ? (m.awayScore ?? 0) : (m.homeScore ?? 0)
+      allMatches.push({ goalsFor: gf, goalsAgainst: ga, isHome: false })
+    }
+  }
+
+  if (allMatches.length === 0) return undefined
+
+  const totalGoals = allMatches.reduce((s, m) => s + m.goalsFor + m.goalsAgainst, 0)
+  const avgGoalsPerMatch = totalGoals / allMatches.length
+  const over15 = allMatches.filter(m => (m.goalsFor + m.goalsAgainst) > 1.5).length
+  const over25 = allMatches.filter(m => (m.goalsFor + m.goalsAgainst) > 2.5).length
+  const bothScored = allMatches.filter(m => m.goalsFor > 0 && m.goalsAgainst > 0).length
+
+  const homeMatches = homeForm?.matches || []
+  const awayMatches = awayForm?.matches || []
+  const homeAvgFor = homeForm ? homeForm.summary.goalsFor / Math.max(homeMatches.length, 1) : 0
+  const homeAvgAgainst = homeForm ? homeForm.summary.goalsAgainst / Math.max(homeMatches.length, 1) : 0
+  const awayAvgFor = awayForm ? awayForm.summary.goalsFor / Math.max(awayMatches.length, 1) : 0
+  const awayAvgAgainst = awayForm ? awayForm.summary.goalsAgainst / Math.max(awayMatches.length, 1) : 0
+
+  return {
+    avgGoalsPerMatch: Math.round(avgGoalsPerMatch * 10) / 10,
+    over15Pct: Math.round((over15 / allMatches.length) * 100),
+    over25Pct: Math.round((over25 / allMatches.length) * 100),
+    bothScoredPct: Math.round((bothScored / allMatches.length) * 100),
+    homeAvgFor: Math.round(homeAvgFor * 10) / 10,
+    homeAvgAgainst: Math.round(homeAvgAgainst * 10) / 10,
+    awayAvgFor: Math.round(awayAvgFor * 10) / 10,
+    awayAvgAgainst: Math.round(awayAvgAgainst * 10) / 10,
+    sampleSize: allMatches.length,
+  }
 }
