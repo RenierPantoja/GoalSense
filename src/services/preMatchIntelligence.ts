@@ -175,7 +175,7 @@ export async function getPreMatchIntelligence(input: PreMatchInput): Promise<Pre
 
 async function fetchApiFootballH2H(homeId: number, awayId: number): Promise<{ record: H2HRecord; meetings: RecentMeeting[] } | null> {
   try {
-    const res = await fetch(`/.netlify/functions/api-football-fixture?h2h=${homeId}-${awayId}`)
+    const res = await fetch(`/api/api-football-fixture?h2h=${homeId}-${awayId}`)
     if (!res.ok) return null
     const json = await res.json()
     const fixtures = json.response || []
@@ -214,7 +214,7 @@ async function fetchApiFootballH2H(homeId: number, awayId: number): Promise<{ re
 async function fetchTeamForm(teamId: number, teamName: string): Promise<TeamRecentForm | null> {
   try {
     const season = new Date().getFullYear()
-    const res = await fetch(`/.netlify/functions/api-football-fixtures?team=${teamId}&last=5&season=${season}`)
+    const res = await fetch(`/api/api-football-fixtures?team=${teamId}&last=5&season=${season}`)
     if (!res.ok) return null
     const json = await res.json()
     const fixtures = json.response || []

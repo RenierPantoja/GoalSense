@@ -55,7 +55,7 @@ export function InspectorPanel({ fixture, liveCount, allFixtures, onSelectBest, 
         } else {
           // ESPN has no stats — try football-data.org via proxy
           try {
-            const fdRes = await fetch('/.netlify/functions/football-data-matches')
+            const fdRes = await fetch('/api/football-data-matches')
             if (fdRes.ok) {
               const fdJson = await fdRes.json()
               const matches = fdJson.matches || []

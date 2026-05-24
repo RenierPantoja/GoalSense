@@ -1,7 +1,8 @@
 import { teamsAreSame } from '@/features/providers/teamNameNormalizer'
 import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
 
-const BASE = '/.netlify/functions'
+// BASE moved to apiPath
+const BASE = ''
 
 interface ApiResponse<T> {
   ok: boolean
@@ -11,7 +12,7 @@ interface ApiResponse<T> {
 }
 
 async function fetchFunction<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}/${path}`, { cache: 'no-store' })
+  const res = await fetch('/api/${path}', { cache: 'no-store' })
   const json = await res.json()
 
   if (!json.ok && json.code) {
@@ -175,8 +176,8 @@ async function fetchFootballDataLive(): Promise<LiveFixture[]> {
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
 
   const [resToday, resTomorrow] = await Promise.allSettled([
-    fetch(`${BASE}/football-data-matches`, { cache: 'no-store' }),
-    fetch(`${BASE}/football-data-matches?date=${tomorrow}`, { cache: 'no-store' }),
+    fetch('/api/football-data-matches', { cache: 'no-store' }),
+    fetch('/api/football-data-matches?date=${tomorrow}', { cache: 'no-store' }),
   ])
 
   const matchesToday = resToday.status === 'fulfilled' ? (await resToday.value.json()).matches || [] : []
@@ -226,7 +227,7 @@ async function fetchFootballDataLive(): Promise<LiveFixture[]> {
 // API-Football live (Brazilian league stats)
 async function fetchApiFootballLive(): Promise<LiveFixture[]> {
   try {
-    const res = await fetch(`${BASE}/api-football-live`, { cache: 'no-store' })
+    const res = await fetch('/api/api-football-live', { cache: 'no-store' })
     if (!res.ok) return []
     const json = await res.json()
     if (json.errors && typeof json.errors === 'object' && Object.keys(json.errors).length > 0) return []
@@ -237,7 +238,7 @@ async function fetchApiFootballLive(): Promise<LiveFixture[]> {
 
 // ESPN normalizer for client-side (dev proxy returns raw ESPN data)
 async function fetchEspnLive(): Promise<LiveResponse> {
-  const res = await fetch(`${BASE}/espn-live`, { cache: 'no-store' })
+  const res = await fetch('/api/espn-live', { cache: 'no-store' })
   const raw = await res.json()
 
   // Netlify Function format

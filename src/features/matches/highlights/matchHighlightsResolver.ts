@@ -32,7 +32,7 @@ export async function resolveHighlights(homeName: string, awayName: string): Pro
   try {
     console.info('[highlights] start', { home: homeName, away: awayName, homeNorm, awayNorm })
 
-    const res = await fetch('/.netlify/functions/scorebat-videos')
+    const res = await fetch('/api/scorebat-videos')
     if (!res.ok) return { highlights: [], debug: { ...emptyDebug, reason: `fetch failed: ${res.status}` } }
 
     const data = await res.json()

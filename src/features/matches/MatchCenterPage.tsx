@@ -156,7 +156,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
     try {
       // Use our ESPN function with today's date to include finished matches
       const today = new Date().toISOString().split('T')[0].replace(/-/g, '')
-      const res = await fetch(`/.netlify/functions/espn-live?date=${today}`)
+      const res = await fetch(`/api/espn-live?date=${today}`)
       if (!res.ok) return null
       const json = await res.json()
       const fixtures = json.fixtures || []
@@ -190,7 +190,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
   async function tryFutPythonTrader(expectedHome: string, expectedAway: string): Promise<MatchData | null> {
     try {
       const today = new Date().toISOString().split('T')[0]
-      const res = await fetch(`/.netlify/functions/futpythontrader-today?date=${today}&source=footystats`)
+      const res = await fetch(`/api/futpythontrader-today?date=${today}&source=footystats`)
       if (!res.ok) return null
       const json = await res.json()
       const matches = json.matches || []
@@ -247,7 +247,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
   /** Try football-data.org match detail endpoint */
   async function tryFootballDataDetail(matchId: string, expectedHome: string, expectedAway: string): Promise<MatchData | null> {
     try {
-      const res = await fetch(`/.netlify/functions/football-data-matches?matchId=${matchId}`)
+      const res = await fetch(`/api/football-data-matches?matchId=${matchId}`)
       if (!res.ok) return null
       const json = await res.json()
 
@@ -325,7 +325,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
   /** Try API-Football live endpoint for stats */
   async function tryApiFootballLive(expectedHome: string, expectedAway: string): Promise<MatchData | null> {
     try {
-      const res = await fetch('/.netlify/functions/api-football-live')
+      const res = await fetch('/api/api-football-live')
       if (!res.ok) return null
       const json = await res.json()
       const fixtures = json.response || []
@@ -344,7 +344,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
 
         if (fixtureApiId) {
           try {
-            const detailRes = await fetch(`/.netlify/functions/api-football-fixture?id=${fixtureApiId}`)
+            const detailRes = await fetch(`/api/api-football-fixture?id=${fixtureApiId}`)
             if (detailRes.ok) {
               const detailJson = await detailRes.json()
               const detail = detailJson.response?.[0] || detailJson

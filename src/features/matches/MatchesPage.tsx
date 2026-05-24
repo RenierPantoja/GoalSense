@@ -36,7 +36,7 @@ type ViewMode = 'agenda' | 'highlights' | 'compact'
 /** Fallback: fetch ESPN scoreboard and convert to FDMatch format for Calendar view */
 async function fetchEspnAsCalendar(selectedDate: string): Promise<FDMatch[]> {
   try {
-    const res = await fetch('/.netlify/functions/espn-live', { cache: 'no-store' })
+    const res = await fetch('/api/espn-live', { cache: 'no-store' })
     if (!res.ok) return []
     const json = await res.json()
     const fixtures = json.fixtures || []
@@ -155,8 +155,8 @@ export function MatchesPage() {
 
     // Fetch from both football-data AND ESPN, merge results
     Promise.allSettled([
-      fetch(`/.netlify/functions/football-data-matches?date=${date}`, { cache: 'no-store' }).then(r => r.json()),
-      fetch('/.netlify/functions/espn-live?date=' + date.replace(/-/g, ''), { cache: 'no-store' }).then(r => r.json()),
+      fetch(`/api/football-data-matches?date=${date}`, { cache: 'no-store' }).then(r => r.json()),
+      fetch('/api/espn-live?date=' + date.replace(/-/g, ''), { cache: 'no-store' }).then(r => r.json()),
     ]).then(async ([fdResult, espnResult]) => {
       let fdMatches: FDMatch[] = []
       let espnMatches: FDMatch[] = []
@@ -336,7 +336,7 @@ export function MatchesPage() {
           <div className="rounded-[20px] border border-rose-500/10 bg-rose-500/[0.03] p-6 text-center">
             <p className="text-[13px] text-rose-400/70 font-medium">Não foi possível carregar as partidas</p>
             <p className="text-[10px] text-white/20 mt-1">{error}</p>
-            <button onClick={() => { setLoading(true); setError(null); fetch(`/.netlify/functions/football-data-matches?date=${date}`, { cache: 'no-store' }).then(async r => { const j = await r.json(); setMatches(j.matches || []) }).catch(e => setError(e.message)).finally(() => setLoading(false)) }} className="mt-3 px-4 py-1.5 rounded-xl text-[10px] font-medium text-cyan-400/70 border border-cyan-500/20 hover:bg-cyan-500/5 transition-colors">Tentar novamente</button>
+            <button onClick={() => { setLoading(true); setError(null); fetch(`/api/football-data-matches?date=${date}`, { cache: 'no-store' }).then(async r => { const j = await r.json(); setMatches(j.matches || []) }).catch(e => setError(e.message)).finally(() => setLoading(false)) }} className="mt-3 px-4 py-1.5 rounded-xl text-[10px] font-medium text-cyan-400/70 border border-cyan-500/20 hover:bg-cyan-500/5 transition-colors">Tentar novamente</button>
           </div>
         )}
         {!loading && !error && filtered.length === 0 && (

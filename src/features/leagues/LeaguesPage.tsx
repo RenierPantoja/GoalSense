@@ -47,7 +47,7 @@ export function LeaguesPage() {
 
   useEffect(() => {
     setLoading(true)
-    fetch('/.netlify/functions/football-data-competitions', { cache: 'no-store' })
+    fetch('/api/football-data-competitions', { cache: 'no-store' })
       .then(async r => {
         const j = await r.json()
         const comps: Competition[] = (j.competitions || []).map((c: any) => ({
@@ -89,7 +89,7 @@ export function LeaguesPage() {
       const apiFootballId = leagueIdMap[comp.code]
       if (apiFootballId) {
         const season = new Date().getFullYear()
-        const res = await fetch(`/.netlify/functions/api-football-standings?league=${apiFootballId}&season=${season}`)
+        const res = await fetch(`/api/api-football-standings?league=${apiFootballId}&season=${season}`)
         const j = await res.json()
         const league = (j.response || [])[0]?.league
         if (league?.standings?.[0]) {
