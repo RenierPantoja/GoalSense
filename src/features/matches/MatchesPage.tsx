@@ -149,35 +149,51 @@ export function MatchesPage() {
 
   useEffect(() => {
     setLoading(true); setError(null)
-    fetch(`/.netlify/functions/football-data-matches?date=${date}`, { cache: 'no-store' })
-      .then(async r => {
-        const j = await r.json()
-        const raw: FDMatch[] = j.matches || []
-        // Filter by local date to prevent timezone-shift bugs
-        const localFiltered = raw.filter(m => {
-          const onDate = isMatchOnSelectedLocalDate(m.utcDate, date)
-          debugMatchDate(m.utcDate, date, m.homeTeam.shortName || m.homeTeam.name, m.awayTeam.shortName || m.awayTeam.name)
-          return onDate
-        })
-        if (localFiltered.length > 0) {
-          setMatches(localFiltered)
-        } else {
-          // Fallback: try ESPN scoreboard for today's matches
-          const espnMatches = await fetchEspnAsCalendar(date)
-          setMatches(espnMatches)
+
+    // Fetch from both football-data AND ESPN, merge results
+    Promise.allSettled([
+      fetch(`/.netlify/functions/football-data-matches?date=${date}`, { cache: 'no-store' }).then(r => r.json()),
+      fetch('/.netlify/functions/espn-live', { cache: 'no-store' }).then(r => r.json()),
+    ]).then(async ([fdResult, espnResult]) => {
+      let fdMatches: FDMatch[] = []
+      let espnMatches: FDMatch[] = []
+
+      // Parse football-data
+      if (fdResult.status === 'fulfilled' && fdResult.value?.matches) {
+        fdMatches = (fdResult.value.matches as FDMatch[]).filter(m => isMatchOnSelectedLocalDate(m.utcDate, date))
+      }
+
+      // Parse ESPN as fallback/supplement
+      if (espnResult.status === 'fulfilled' && espnResult.value?.fixtures) {
+        const fixtures = espnResult.value.fixtures || []
+        espnMatches = fixtures.map((fx: any) => ({
+          id: typeof fx.id === 'number' ? fx.id : parseInt(fx.id) || Math.random() * 1000000 | 0,
+          competition: { name: fx.league?.name || 'Liga', emblem: fx.league?.logo || null },
+          homeTeam: { id: fx.homeTeam?.id || 0, name: fx.homeTeam?.name || '', crest: fx.homeTeam?.logo || null, shortName: fx.homeTeam?.name || '' },
+          awayTeam: { id: fx.awayTeam?.id || 0, name: fx.awayTeam?.name || '', crest: fx.awayTeam?.logo || null, shortName: fx.awayTeam?.name || '' },
+          score: { fullTime: { home: fx.score?.home ?? null, away: fx.score?.away ?? null } },
+          status: fx.status?.short === 'LIVE' || fx.status?.short === 'HT' || fx.status?.state === 'in' ? 'IN_PLAY' : fx.status?.short === 'FT' || fx.status?.state === 'post' ? 'FINISHED' : 'TIMED',
+          matchday: 0,
+          utcDate: fx.date || new Date().toISOString(),
+          area: { name: fx.league?.country || '' },
+        })).filter((m: FDMatch) => isMatchOnSelectedLocalDate(m.utcDate, date))
+      }
+
+      // Merge: football-data first (better data), ESPN fills gaps
+      if (fdMatches.length > 0) {
+        // Add ESPN matches not already in football-data (by team name check)
+        for (const em of espnMatches) {
+          const duplicate = fdMatches.some(fd =>
+            fd.homeTeam.shortName.toLowerCase().includes(em.homeTeam.shortName.toLowerCase().slice(0, 5)) &&
+            fd.awayTeam.shortName.toLowerCase().includes(em.awayTeam.shortName.toLowerCase().slice(0, 5))
+          )
+          if (!duplicate) fdMatches.push(em)
         }
-      })
-      .catch(async () => {
-        // football-data failed entirely — use ESPN fallback
-        try {
-          const espnMatches = await fetchEspnAsCalendar(date)
-          setMatches(espnMatches)
-          if (espnMatches.length === 0) setError('Dados de partidas indisponíveis no momento')
-        } catch (e2) {
-          setError((e2 as Error).message)
-        }
-      })
-      .finally(() => setLoading(false))
+        setMatches(fdMatches)
+      } else {
+        setMatches(espnMatches)
+      }
+    }).catch(e => setError((e as Error).message)).finally(() => setLoading(false))
   }, [date])
 
   const stats = useMemo(() => {
