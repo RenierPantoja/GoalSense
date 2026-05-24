@@ -12,7 +12,7 @@ interface ApiResponse<T> {
 }
 
 async function fetchFunction<T>(path: string): Promise<T> {
-  const res = await fetch('/api/${path}', { cache: 'no-store' })
+  const res = await fetch(`/api/${path}`, { cache: 'no-store' })
   const json = await res.json()
 
   if (!json.ok && json.code) {
@@ -177,7 +177,7 @@ async function fetchFootballDataLive(): Promise<LiveFixture[]> {
 
   const [resToday, resTomorrow] = await Promise.allSettled([
     fetch('/api/football-data-matches', { cache: 'no-store' }),
-    fetch('/api/football-data-matches?date=${tomorrow}', { cache: 'no-store' }),
+    fetch(`/api/football-data-matches?date=${tomorrow}`, { cache: 'no-store' }),
   ])
 
   const matchesToday = resToday.status === 'fulfilled' ? (await resToday.value.json()).matches || [] : []
