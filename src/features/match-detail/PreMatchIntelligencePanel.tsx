@@ -8,6 +8,7 @@ import { getPreMatchAdvanced, type PreMatchAdvancedResult } from '@/services/int
 import { getPreMatchPatternReadiness, type PreMatchPatternReadiness } from '@/services/intelligence/preMatchPatternConnector'
 import { calculatePreMatchScore } from '@/services/intelligence/preMatchScoreEngine'
 import { PreMatchScorePanel } from './PreMatchScorePanel'
+import { PatternJourneyCard } from './PatternJourneyCard'
 import { useViewMode } from '@/context/ViewModeContext'
 import { usePatterns } from '@/features/command/contexts/PatternContext'
 import { useFavorites } from '@/context/FavoritesContext'
@@ -98,6 +99,9 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
 
       {/* Pattern Readiness */}
       <PatternReadinessSection homeName={homeName} awayName={awayName} data={data} />
+
+      {/* Pattern Journey */}
+      <PatternJourneyCard />
 
       {/* Goals Profile */}
       {data.goalsProfile && (

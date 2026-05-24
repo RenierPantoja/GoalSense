@@ -113,6 +113,7 @@ export function AlertsPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/8 text-amber-400/60 border border-amber-500/10">Command Center</span>
                       <span className="text-[12px] font-semibold text-white/65">{ca.patternName}</span>
+                      {ca.triggerSnapshot && <span className="text-[8px] px-1.5 py-0.5 rounded-md bg-cyan-500/6 text-cyan-400/50 border border-cyan-500/10">Pré-jogo monitorado</span>}
                     </div>
                     <span className={`text-[9px] font-semibold px-2.5 py-1 rounded-lg border ${statusColor}`}>{statusLabel}</span>
                   </div>
