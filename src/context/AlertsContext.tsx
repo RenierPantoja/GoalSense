@@ -23,7 +23,42 @@ export interface AlertRule {
 }
 
 // Command Center triggered alerts stored here for /app/alerts visibility
-export type CommandAlertStatus = 'pending' | 'confirmed' | 'failed' | 'expired' | 'unknown'
+export type CommandAlertStatus = 'pending' | 'confirmed' | 'confirmed_partial' | 'failed' | 'expired' | 'unknown'
+export type ResolutionStrength = 'strong_confirmation' | 'partial_confirmation' | 'failed' | 'expired' | 'unknown_data'
+
+export interface TriggerSnapshot {
+  minute: number | null
+  homeScore: number
+  awayScore: number
+  status: string
+  competition: string
+  provider: string
+  homeTeam: string
+  awayTeam: string
+  homeLogo: string | null
+  awayLogo: string | null
+  favoriteInvolved: boolean
+  conditionsMatched: number
+  conditionsTotal: number
+  confidenceAtTrigger: number
+  stats?: {
+    possession?: { home: number; away: number }
+    shots?: { home: number; away: number }
+    shotsOnTarget?: { home: number; away: number }
+    corners?: { home: number; away: number }
+    cards?: { home: number; away: number }
+  }
+}
+
+export interface ResolutionSnapshot {
+  resolvedAt: string
+  minuteAtResolution: number | null
+  scoreAtResolution: { home: number; away: number }
+  resolutionStrength: ResolutionStrength
+  resolutionEvidence: string[]
+  resolutionConfidence: number
+  timeToResolutionMs: number
+}
 
 export interface CommandCenterAlert {
   id: string
@@ -42,6 +77,9 @@ export interface CommandCenterAlert {
   evidences: string[]
   status: CommandAlertStatus
   resolutionReason?: string
+  resolutionStrength?: ResolutionStrength
+  triggerSnapshot?: TriggerSnapshot
+  resolutionSnapshot?: ResolutionSnapshot
   createdAt: string
   resolvedAt?: string
 }
@@ -164,9 +202,14 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
   const updateCommandAlertStatus = useCallback((id: string, status: CommandAlertStatus, extra?: { score?: { home: number; away: number }; reason?: string }) => {
     setCommandAlerts(prev => prev.map(a => a.id === id ? {
       ...a, status,
-      ...(status === 'confirmed' || status === 'failed' ? { resolvedAt: new Date().toISOString() } : {}),
+      ...(status !== 'pending' ? { resolvedAt: new Date().toISOString() } : {}),
       ...(extra?.score ? { scoreAtResolution: extra.score } : {}),
       ...(extra?.reason ? { resolutionReason: extra.reason } : {}),
+      ...(status === 'confirmed' ? { resolutionStrength: 'strong_confirmation' as ResolutionStrength } : {}),
+      ...(status === 'confirmed_partial' ? { resolutionStrength: 'partial_confirmation' as ResolutionStrength } : {}),
+      ...(status === 'failed' ? { resolutionStrength: 'failed' as ResolutionStrength } : {}),
+      ...(status === 'unknown' ? { resolutionStrength: 'unknown_data' as ResolutionStrength } : {}),
+      ...(status === 'expired' ? { resolutionStrength: 'expired' as ResolutionStrength } : {}),
     } : a))
   }, [])
 

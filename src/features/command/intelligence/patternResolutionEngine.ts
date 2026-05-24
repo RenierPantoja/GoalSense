@@ -1,195 +1,185 @@
 /**
- * Pattern Resolution Engine — resolves triggered alerts by comparing
- * the fixture state at trigger time vs current state.
- * No mocks. Uses real score/stats changes.
+ * Pattern Resolution Engine V2 — resolves triggered alerts with
+ * strong/partial confirmation, failure, expiry, and unknown states.
+ * No mocks. Uses real score/stats changes only.
  */
 import type { LiveFixture } from '@/lib/apiClient'
-import type { TriggeredAlert, TriggeredAlertStatus } from '../types/commandTypes'
+import type { CommandAlertStatus, ResolutionStrength } from '@/context/AlertsContext'
 
-export interface ResolutionResult {
-  status: TriggeredAlertStatus
-  scoreAtResolution?: { home: number; away: number }
-  resolutionReason: string
+export interface ResolutionInput {
+  id: string
+  patternName: string
+  fixtureId: number
+  minuteAtTrigger: number | null
+  scoreAtTrigger: { home: number; away: number }
+  confidence: number
+  createdAt: string
+  status: CommandAlertStatus
 }
 
-/**
- * Resolve a single triggered alert based on current fixture data.
- * Returns null if no resolution can be determined yet.
- */
-export function resolveTriggeredAlert(
-  alert: TriggeredAlert,
+export interface ResolutionResult {
+  status: CommandAlertStatus
+  strength: ResolutionStrength
+  scoreAtResolution: { home: number; away: number }
+  reason: string
+  evidence: string[]
+  confidence: number
+}
+
+export function resolveAlert(
+  alert: ResolutionInput,
   currentFixture: LiveFixture | undefined
 ): ResolutionResult | null {
-  // Only resolve pending alerts
   if (alert.status !== 'pending') return null
-
-  // If fixture not found, check if alert is old enough to expire
   if (!currentFixture) {
-    const age = Date.now() - new Date(alert.timestamp).getTime()
-    if (age > 3 * 60 * 60 * 1000) { // 3 hours
-      return { status: 'expired', resolutionReason: 'Partida não encontrada após 3h' }
+    const age = Date.now() - new Date(alert.createdAt).getTime()
+    if (age > 3 * 60 * 60 * 1000) {
+      return { status: 'expired', strength: 'expired', scoreAtResolution: alert.scoreAtTrigger, reason: 'Partida não encontrada após 3h', evidence: [], confidence: 0 }
     }
     return null
   }
 
   const isFinished = currentFixture.status.short === 'FT' || currentFixture.raw === 'STATUS_FULL_TIME' || (currentFixture as any)._state === 'post'
-  const currentHome = currentFixture.score.home ?? 0
-  const currentAway = currentFixture.score.away ?? 0
-  const triggerHome = alert.scoreAtTrigger.home
-  const triggerAway = alert.scoreAtTrigger.away
-  const goalsSinceTrigger = (currentHome + currentAway) - (triggerHome + triggerAway)
-  const currentElapsed = currentFixture.status.elapsed || 0
-  const triggerMinute = alert.minute || 0
+  const cH = currentFixture.score.home ?? 0
+  const cA = currentFixture.score.away ?? 0
+  const tH = alert.scoreAtTrigger.home
+  const tA = alert.scoreAtTrigger.away
+  const goalsSince = (cH + cA) - (tH + tA)
+  const elapsed = currentFixture.status.elapsed || 0
+  const trigMin = alert.minuteAtTrigger || 0
+  const alertAge = Date.now() - new Date(alert.createdAt).getTime()
+  const score = { home: cH, away: cA }
+  const pn = alert.patternName.toLowerCase()
 
-  // Time-based expiry: if alert is > 2h old and match not finished
-  const alertAge = Date.now() - new Date(alert.timestamp).getTime()
-  if (alertAge > 2 * 60 * 60 * 1000 && !isFinished) {
-    return { status: 'expired', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: 'Alerta expirou (>2h sem resolução)' }
+  // ─── Time-based expiry ─────────────────────────────────────────────────
+  if (alertAge > 2.5 * 60 * 60 * 1000 && !isFinished) {
+    return { status: 'expired', strength: 'expired', scoreAtResolution: score, reason: 'Alerta expirou (>2.5h)', evidence: [], confidence: 0 }
   }
 
-  // Pattern-specific resolution
-  const patternName = alert.patternName.toLowerCase()
-
-  // ─── Goal-based patterns ───────────────────────────────────────────────
-  if (patternName.includes('pressão por gol') || patternName.includes('gol tardio') || patternName.includes('over tendência')) {
-    if (goalsSinceTrigger > 0) {
-      return { status: 'confirmed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: `Gol confirmado: ${triggerHome}-${triggerAway} → ${currentHome}-${currentAway}` }
+  // ─── GOAL-BASED PATTERNS ───────────────────────────────────────────────
+  if (pn.includes('pressão por gol') || pn.includes('gol tardio') || pn.includes('over tendência')) {
+    if (goalsSince > 0) {
+      return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Gol confirmado: ${tH}-${tA} → ${cH}-${cA}`, evidence: [`Gol após disparo`, `Placar mudou de ${tH}-${tA} para ${cH}-${cA}`], confidence: 95 }
     }
     if (isFinished) {
-      return { status: 'failed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: 'Jogo terminou sem novo gol' }
+      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: 'Jogo terminou sem novo gol', evidence: ['Nenhum gol após o disparo'], confidence: 90 }
+    }
+    // Window: 20 min for pressure patterns
+    if (elapsed - trigMin >= 20 && !isFinished) {
+      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: '20 min sem gol após disparo', evidence: ['Janela de pressão expirou'], confidence: 70 }
     }
     return null
   }
 
-  // ─── Reta final / Segundo tempo quente / Jogo travado ──────────────────
-  if (patternName.includes('reta final') || patternName.includes('segundo tempo') || patternName.includes('jogo travado') || patternName.includes('ruptura')) {
-    if (goalsSinceTrigger > 0) {
-      return { status: 'confirmed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: `Evento confirmado: gol após disparo (${currentHome}-${currentAway})` }
+  // ─── RETA FINAL / 2º TEMPO / TRAVADO / RUPTURA ─────────────────────────
+  if (pn.includes('reta final') || pn.includes('segundo tempo') || pn.includes('travado') || pn.includes('ruptura')) {
+    if (goalsSince > 0) {
+      return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Evento confirmado: gol (${cH}-${cA})`, evidence: [`Gol após disparo`, `${elapsed}'`], confidence: 92 }
     }
     if (isFinished) {
-      return { status: 'failed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: 'Jogo terminou sem evento relevante' }
+      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: 'Jogo terminou sem evento relevante', evidence: ['Sem gol após disparo'], confidence: 85 }
     }
-    // If 15+ minutes passed since trigger without event
-    if (currentElapsed - triggerMinute >= 15 && !isFinished) {
-      return { status: 'failed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: '15 min sem evento relevante' }
+    if (elapsed - trigMin >= 15 && !isFinished) {
+      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: '15 min sem evento', evidence: ['Janela expirou'], confidence: 65 }
     }
     return null
   }
 
-  // ─── Escanteios em crescimento ─────────────────────────────────────────
-  if (patternName.includes('escanteio')) {
-    // Can't track corners without stats refresh — resolve on game end or time
+  // ─── ESCANTEIOS ────────────────────────────────────────────────────────
+  if (pn.includes('escanteio')) {
+    // Without real-time corner tracking, we can't confirm strongly
+    if (goalsSince > 0) {
+      return { status: 'confirmed', strength: 'partial_confirmation', scoreAtResolution: score, reason: 'Pressão territorial resultou em gol', evidence: ['Gol após pressão de escanteios'], confidence: 60 }
+    }
     if (isFinished) {
-      return { status: 'unknown', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: 'Dados de escanteios indisponíveis para confirmação' }
+      return { status: 'unknown', strength: 'unknown_data', scoreAtResolution: score, reason: 'Dados de escanteios indisponíveis para confirmação', evidence: ['Provider não fornece escanteios em tempo real'], confidence: 0 }
     }
     if (alertAge > 30 * 60 * 1000) {
-      return { status: 'expired', resolutionReason: 'Janela de observação expirou (30min)' }
+      return { status: 'expired', strength: 'expired', scoreAtResolution: score, reason: 'Janela de 30min expirou', evidence: [], confidence: 0 }
     }
     return null
   }
 
-  // ─── Cartões em aquecimento ────────────────────────────────────────────
-  if (patternName.includes('cartão') || patternName.includes('cartões')) {
-    // Without card tracking, resolve on game end
+  // ─── CARTÕES ───────────────────────────────────────────────────────────
+  if (pn.includes('cartão') || pn.includes('cartões')) {
+    // Without real-time card tracking
     if (isFinished) {
-      return { status: 'unknown', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: 'Dados de cartões indisponíveis para confirmação automática' }
+      return { status: 'unknown', strength: 'unknown_data', scoreAtResolution: score, reason: 'Dados de cartões indisponíveis para confirmação automática', evidence: ['Sem tracking de cartões em tempo real'], confidence: 0 }
     }
     if (alertAge > 30 * 60 * 1000) {
-      return { status: 'expired', resolutionReason: 'Janela expirou' }
+      return { status: 'expired', strength: 'expired', scoreAtResolution: score, reason: 'Janela expirou', evidence: [], confidence: 0 }
     }
     return null
   }
 
-  // ─── Favorito em risco ─────────────────────────────────────────────────
-  if (patternName.includes('favorito')) {
+  // ─── FAVORITO EM RISCO ─────────────────────────────────────────────────
+  if (pn.includes('favorito')) {
     if (isFinished) {
-      const scoreDiff = currentHome - currentAway
-      // If score is tied or the team that was behind/tied is still not winning
-      if (scoreDiff === 0 || (triggerHome <= triggerAway && currentHome <= currentAway) || (triggerAway <= triggerHome && currentAway <= currentHome)) {
-        return { status: 'confirmed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: `Favorito não venceu: ${currentHome}-${currentAway}` }
+      // At trigger, score was tied or fav was behind. Check final.
+      if (cH === cA || (tH <= tA && cH <= cA) || (tA <= tH && cA <= cH)) {
+        return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Favorito não venceu: ${cH}-${cA}`, evidence: ['Resultado final confirma risco'], confidence: 90 }
       }
-      return { status: 'failed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: `Favorito se recuperou: ${currentHome}-${currentAway}` }
+      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: `Favorito se recuperou: ${cH}-${cA}`, evidence: ['Favorito virou/venceu'], confidence: 85 }
     }
     return null
   }
 
-  // ─── Domínio sem resultado / Pressionando sem converter ────────────────
-  if (patternName.includes('domínio') || patternName.includes('pressionando')) {
-    if (goalsSinceTrigger > 0) {
-      return { status: 'confirmed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: `Gol após pressão: ${currentHome}-${currentAway}` }
+  // ─── DOMÍNIO / PRESSIONANDO SEM CONVERTER ──────────────────────────────
+  if (pn.includes('domínio') || pn.includes('pressionando')) {
+    if (goalsSince > 0) {
+      return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Pressão convertida: ${cH}-${cA}`, evidence: ['Gol após domínio'], confidence: 90 }
     }
     if (isFinished) {
-      return { status: 'failed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: 'Pressão não convertida até o fim' }
+      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: 'Pressão não convertida até o fim', evidence: ['Sem gol do time dominante'], confidence: 80 }
     }
-    if (currentElapsed - triggerMinute >= 20) {
-      return { status: 'failed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: '20 min de pressão sem conversão' }
+    if (elapsed - trigMin >= 20) {
+      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: '20 min sem conversão', evidence: ['Janela de pressão expirou'], confidence: 65 }
     }
     return null
   }
 
-  // ─── Zebra em formação ─────────────────────────────────────────────────
-  if (patternName.includes('zebra')) {
+  // ─── ZEBRA ─────────────────────────────────────────────────────────────
+  if (pn.includes('zebra')) {
     if (isFinished) {
-      // Zebra confirmed if underdog maintained or improved
-      const triggerDiff = triggerHome - triggerAway
-      const currentDiff = currentHome - currentAway
-      if (Math.abs(currentDiff) <= Math.abs(triggerDiff)) {
-        return { status: 'confirmed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: `Zebra sustentada: ${currentHome}-${currentAway}` }
+      const trigDiff = tH - tA
+      const curDiff = cH - cA
+      if (Math.abs(curDiff) <= Math.abs(trigDiff) || curDiff * trigDiff >= 0) {
+        return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Zebra sustentada: ${cH}-${cA}`, evidence: ['Azarão manteve resultado'], confidence: 88 }
       }
-      return { status: 'failed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: `Favorito virou: ${currentHome}-${currentAway}` }
+      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: `Favorito virou: ${cH}-${cA}`, evidence: ['Resultado revertido'], confidence: 85 }
     }
     return null
   }
 
-  // ─── Visitante perigoso ────────────────────────────────────────────────
-  if (patternName.includes('visitante')) {
-    if (currentAway > triggerAway) {
-      return { status: 'confirmed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: `Visitante marcou: ${currentHome}-${currentAway}` }
+  // ─── VISITANTE PERIGOSO ────────────────────────────────────────────────
+  if (pn.includes('visitante')) {
+    if (cA > tA) {
+      return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Visitante marcou: ${cH}-${cA}`, evidence: ['Gol do visitante'], confidence: 92 }
     }
     if (isFinished) {
-      return { status: 'failed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: 'Visitante não marcou' }
+      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: 'Visitante não marcou', evidence: ['Sem gol visitante'], confidence: 80 }
     }
     return null
   }
 
-  // ─── Jogo aberto ───────────────────────────────────────────────────────
-  if (patternName.includes('jogo aberto') || patternName.includes('open')) {
-    if (goalsSinceTrigger > 0) {
-      return { status: 'confirmed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: `Novo gol em jogo aberto: ${currentHome}-${currentAway}` }
+  // ─── JOGO ABERTO ───────────────────────────────────────────────────────
+  if (pn.includes('jogo aberto') || pn.includes('open')) {
+    if (goalsSince > 0) {
+      return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Novo gol: ${cH}-${cA}`, evidence: ['Jogo aberto confirmado com gol'], confidence: 88 }
     }
     if (isFinished) {
-      return { status: 'failed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: 'Jogo esfriou sem novo gol' }
+      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: 'Jogo esfriou', evidence: ['Sem novo gol'], confidence: 75 }
     }
     return null
   }
 
-  // ─── Generic fallback ──────────────────────────────────────────────────
+  // ─── GENERIC FALLBACK ──────────────────────────────────────────────────
   if (isFinished) {
-    if (goalsSinceTrigger > 0) {
-      return { status: 'confirmed', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: `Evento após disparo: ${currentHome}-${currentAway}` }
+    if (goalsSince > 0) {
+      return { status: 'confirmed', strength: 'partial_confirmation', scoreAtResolution: score, reason: `Evento após disparo: ${cH}-${cA}`, evidence: ['Gol detectado'], confidence: 60 }
     }
-    return { status: 'unknown', scoreAtResolution: { home: currentHome, away: currentAway }, resolutionReason: 'Sem dados suficientes para confirmar' }
+    return { status: 'unknown', strength: 'unknown_data', scoreAtResolution: score, reason: 'Sem dados suficientes para confirmar', evidence: [], confidence: 0 }
   }
 
   return null
-}
-
-/**
- * Batch resolve all pending alerts against current fixtures.
- */
-export function resolveAllPending(
-  alerts: TriggeredAlert[],
-  fixtures: LiveFixture[]
-): Map<string, ResolutionResult> {
-  const results = new Map<string, ResolutionResult>()
-  const fixtureMap = new Map(fixtures.map(f => [f.id, f]))
-
-  for (const alert of alerts) {
-    if (alert.status !== 'pending') continue
-    const fx = fixtureMap.get(alert.fixtureId)
-    const result = resolveTriggeredAlert(alert, fx)
-    if (result) results.set(alert.id, result)
-  }
-
-  return results
 }

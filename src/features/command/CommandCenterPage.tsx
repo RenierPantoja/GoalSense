@@ -17,7 +17,7 @@ import { getMatchImportanceScore } from '@/utils/matchImportance'
 import { usePatterns } from './contexts/PatternContext'
 import { evaluateAllPatterns } from './intelligence/patternEvaluator'
 import { runAutoDiscovery, type AutoDiscovery } from './intelligence/autoDiscoveryEngine'
-import { resolveTriggeredAlert as resolveTriggeredAlertFn } from './intelligence/patternResolutionEngine'
+import { resolveAlert } from './intelligence/patternResolutionEngine'
 import { isLiveFx, detectChanges, type ChangeEvent } from './commandHelpers'
 import type { Pattern, PatternTemplate, PatternHit, PatternCondition, PatternConditionType, FixtureStatsForPattern, ScannerEntry, TriggeredAlert, AutoDiscoveryConfig } from './types/commandTypes'
 
@@ -102,13 +102,30 @@ export function CommandCenterPage() {
       if (hit.confidence >= 50) {
         const pat = patterns.find(p => p.id === hit.patternId)
         if (pat && pat.action !== 'suggest_only') {
-          triggerAlert({ patternId: hit.patternId, patternName: hit.patternName, fixtureId: hit.fixtureId, homeTeam: hit.fixture.homeTeam.name, awayTeam: hit.fixture.awayTeam.name, league: hit.fixture.league.name, minute: hit.fixture.status.elapsed, confidence: hit.confidence, reasons: hit.reasons, timestamp: new Date().toISOString(), status: 'pending', scoreAtTrigger: { home: hit.fixture.score.home ?? 0, away: hit.fixture.score.away ?? 0 } })
-          // Bridge: also register in /app/alerts via AlertsContext
-          registerCommandAlert({ source: 'command_center', patternId: hit.patternId, patternName: hit.patternName, fixtureId: hit.fixtureId, homeTeam: hit.fixture.homeTeam.name, awayTeam: hit.fixture.awayTeam.name, competition: hit.fixture.league.name, minuteAtTrigger: hit.fixture.status.elapsed, scoreAtTrigger: { home: hit.fixture.score.home ?? 0, away: hit.fixture.score.away ?? 0 }, confidence: hit.confidence, severity: hit.severity, evidences: hit.reasons, status: 'pending' })
+          const fx = hit.fixture
+          const fxStats = statsMap.get(fx.id)
+          triggerAlert({ patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, league: fx.league.name, minute: fx.status.elapsed, confidence: hit.confidence, reasons: hit.reasons, timestamp: new Date().toISOString(), status: 'pending', scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 } })
+          // Bridge with snapshot
+          registerCommandAlert({
+            source: 'command_center', patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id,
+            homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, competition: fx.league.name,
+            minuteAtTrigger: fx.status.elapsed, scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 },
+            confidence: hit.confidence, severity: hit.severity, evidences: hit.reasons, status: 'pending',
+            triggerSnapshot: {
+              minute: fx.status.elapsed, homeScore: fx.score.home ?? 0, awayScore: fx.score.away ?? 0,
+              status: fx.status.short, competition: fx.league.name, provider: fx.provider,
+              homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name,
+              homeLogo: fx.homeTeam.logo, awayLogo: fx.awayTeam.logo,
+              favoriteInvolved: isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name),
+              conditionsMatched: hit.matchedConditions, conditionsTotal: hit.totalConditions,
+              confidenceAtTrigger: hit.confidence,
+              ...(fxStats ? { stats: fxStats } : {}),
+            },
+          })
         }
       }
     }
-  }, [patternHits, triggerAlert, patterns, registerCommandAlert])
+  }, [patternHits, triggerAlert, patterns, registerCommandAlert, isFavoriteTeam, statsMap])
 
   // ─── Resolution Engine ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -118,11 +135,10 @@ export function CommandCenterPage() {
     const fixtureMap = new Map(fixtures.map(f => [f.id, f]))
     for (const alert of pending) {
       const fx = fixtureMap.get(alert.fixtureId)
-      if (!fx) continue
-      const trigAlert: TriggeredAlert = { id: alert.id, patternId: alert.patternId, patternName: alert.patternName, fixtureId: alert.fixtureId, homeTeam: alert.homeTeam, awayTeam: alert.awayTeam, league: alert.competition, minute: alert.minuteAtTrigger, confidence: alert.confidence, reasons: alert.evidences, timestamp: alert.createdAt, status: 'pending', scoreAtTrigger: alert.scoreAtTrigger }
-      const result = resolveTriggeredAlertFn(trigAlert, fx)
+      const result = resolveAlert({ id: alert.id, patternName: alert.patternName, fixtureId: alert.fixtureId, minuteAtTrigger: alert.minuteAtTrigger, scoreAtTrigger: alert.scoreAtTrigger, confidence: alert.confidence, createdAt: alert.createdAt, status: 'pending' }, fx)
       if (result) {
-        updateCommandAlertStatus(alert.id, result.status, { score: result.scoreAtResolution, reason: result.resolutionReason })
+        const finalStatus = result.strength === 'partial_confirmation' ? 'confirmed_partial' as const : result.status
+        updateCommandAlertStatus(alert.id, finalStatus, { score: result.scoreAtResolution, reason: result.reason })
       }
     }
   }, [fixtures, commandAlerts, updateCommandAlertStatus])

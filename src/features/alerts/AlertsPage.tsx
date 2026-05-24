@@ -105,8 +105,8 @@ export function AlertsPage() {
           <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-400/40 flex items-center gap-2"><Zap size={12} className="text-amber-400/40" />Alertas do Command Center</h3>
           <div className="space-y-2">
             {commandAlerts.slice(0, 15).map(ca => {
-              const statusLabel = ca.status === 'pending' ? 'Pendente' : ca.status === 'confirmed' ? 'Confirmado' : ca.status === 'failed' ? 'Falhou' : ca.status === 'expired' ? 'Expirado' : 'Desconhecido'
-              const statusColor = ca.status === 'confirmed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/15' : ca.status === 'failed' ? 'bg-rose-500/10 text-rose-400 border-rose-500/15' : ca.status === 'pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/15' : 'bg-white/[0.03] text-white/30 border-white/[0.05]'
+              const statusLabel = ca.status === 'pending' ? 'Pendente' : ca.status === 'confirmed' ? 'Confirmado' : ca.status === 'confirmed_partial' ? 'Parcial' : ca.status === 'failed' ? 'Falhou' : ca.status === 'expired' ? 'Expirado' : 'Desconhecido'
+              const statusColor = ca.status === 'confirmed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/15' : ca.status === 'confirmed_partial' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/15' : ca.status === 'failed' ? 'bg-rose-500/10 text-rose-400 border-rose-500/15' : ca.status === 'pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/15' : 'bg-white/[0.03] text-white/30 border-white/[0.05]'
               return (
                 <div key={ca.id} className="rounded-[16px] border border-white/[0.05] bg-white/[0.015] p-4">
                   <div className="flex items-center justify-between mb-2">
@@ -122,14 +122,22 @@ export function AlertsPage() {
                     <span>{ca.competition}</span>
                     {ca.minuteAtTrigger && <><span>·</span><span>{ca.minuteAtTrigger}'</span></>}
                   </div>
-                  <div className="flex items-center gap-3 text-[10px] text-white/25">
+                  <div className="flex items-center gap-3 text-[10px] text-white/30">
                     <span>Confiança: {ca.confidence}%</span>
                     <span>Placar: {ca.scoreAtTrigger.home}-{ca.scoreAtTrigger.away}</span>
-                    {ca.scoreAtResolution && <span>→ {ca.scoreAtResolution.home}-{ca.scoreAtResolution.away}</span>}
+                    {ca.scoreAtResolution && <span className="text-white/45">→ {ca.scoreAtResolution.home}-{ca.scoreAtResolution.away}</span>}
                   </div>
-                  {ca.resolutionReason && <p className="text-[10px] text-white/20 mt-1 italic">{ca.resolutionReason}</p>}
+                  {ca.resolutionReason && <p className="text-[10px] text-white/25 mt-1.5">{ca.resolutionReason}</p>}
+                  {/* Audit details in advanced mode */}
+                  {isAdvanced && ca.triggerSnapshot && (
+                    <div className="mt-2 pt-2 border-t border-white/[0.04] space-y-1">
+                      <p className="text-[9px] text-white/20 font-medium">Snapshot no disparo:</p>
+                      <p className="text-[9px] text-white/15 font-mono">min:{ca.triggerSnapshot.minute} · {ca.triggerSnapshot.homeScore}-{ca.triggerSnapshot.awayScore} · cond:{ca.triggerSnapshot.conditionsMatched}/{ca.triggerSnapshot.conditionsTotal} · provider:{ca.triggerSnapshot.provider}</p>
+                      {ca.triggerSnapshot.stats?.shots && <p className="text-[9px] text-white/15 font-mono">shots:{ca.triggerSnapshot.stats.shots.home + ca.triggerSnapshot.stats.shots.away} · sot:{ca.triggerSnapshot.stats.shotsOnTarget ? ca.triggerSnapshot.stats.shotsOnTarget.home + ca.triggerSnapshot.stats.shotsOnTarget.away : '?'}</p>}
+                    </div>
+                  )}
                   {isAdvanced && <p className="text-[9px] text-white/15 mt-1 font-mono">{ca.evidences.slice(0, 3).join(' · ')}</p>}
-                  <span className="text-[9px] text-white/15 mt-1 block">{new Date(ca.createdAt).toLocaleString('pt-BR')}</span>
+                  <span className="text-[9px] text-white/15 mt-1.5 block">{new Date(ca.createdAt).toLocaleString('pt-BR')}{ca.resolvedAt && ` · Resolvido: ${new Date(ca.resolvedAt).toLocaleTimeString('pt-BR')}`}</span>
                 </div>
               )
             })}
