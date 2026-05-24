@@ -18,6 +18,7 @@ import { usePatterns } from './contexts/PatternContext'
 import { evaluateAllPatterns } from './intelligence/patternEvaluator'
 import { runAutoDiscovery, type AutoDiscovery } from './intelligence/autoDiscoveryEngine'
 import { resolveAlert } from './intelligence/patternResolutionEngine'
+import { buildPreMatchOutcomeSummary } from '@/services/intelligence/preMatchOutcomePerformance'
 import { isLiveFx, detectChanges, type ChangeEvent } from './commandHelpers'
 import type { Pattern, PatternTemplate, PatternHit, PatternCondition, PatternConditionType, FixtureStatsForPattern, ScannerEntry, TriggeredAlert, AutoDiscoveryConfig } from './types/commandTypes'
 
@@ -437,6 +438,27 @@ function PerformanceView({ patterns, triggeredAlerts, isAdvanced }: { patterns: 
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3"><MCard label="Disparos" value={totalD} color="white" /><MCard label="Confirmados" value={totalC} color="emerald" /><MCard label="Falhados" value={totalF} color="rose" /><MCard label="Padrões" value={patterns.length} color="cyan" /></div>
     {pNeedReview.length > 0 && (<section className="rounded-xl border border-amber-500/12 bg-amber-500/[0.02] p-5"><h4 className="text-[12px] font-semibold text-amber-400/60 mb-2">Padrões que precisam de revisão</h4><div className="space-y-2">{pNeedReview.map(s => (<div key={s.pattern.id} className="flex items-center justify-between"><span className="text-[12px] text-white/55">{s.pattern.name}</span><span className="text-[11px] text-amber-400/50">{s.reviewReason}</span></div>))}</div></section>)}
     <section><h4 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/35 mb-3">Por padrão</h4><div className="space-y-2">{stats.map(s => (<div key={s.pattern.id} className="rounded-xl border border-white/[0.04] bg-white/[0.006] px-5 py-3.5"><div className="flex items-center justify-between mb-1"><span className="text-[13px] font-medium text-white/65">{s.pattern.name}</span><span className={`text-[9px] px-2.5 py-1 rounded-lg ${s.pattern.status === 'active' ? 'bg-emerald-500/8 text-emerald-400/60' : 'bg-white/[0.03] text-white/20'}`}>{s.pattern.status}</span></div><div className="flex items-center gap-4 text-[11px] text-white/40 flex-wrap"><span>{s.total} disparos</span>{s.hitRate !== null ? <span className="text-emerald-400/70 font-medium">Taxa: {s.hitRate}%</span> : <span className="text-white/25">Insuficiente ({s.confirmed + s.failed}/5)</span>}{s.partial > 0 && <span className="text-cyan-400/50">Parciais: {s.partial}</span>}{s.avgConf !== null && <span>Conf: {s.avgConf}%</span>}{s.lastHit && <span>Último: {new Date(s.lastHit).toLocaleDateString('pt-BR')}</span>}</div>{isAdvanced && <div className="mt-1.5 text-[10px] text-white/20 font-mono">✓{s.confirmed} · ~{s.partial} · ✗{s.failed} · ⏱{s.expired} · ?{s.unknown}</div>}</div>))}</div></section>
+    <PreMatchOutcomeSection isAdvanced={isAdvanced} />
   </div>)
 }
+function PreMatchOutcomeSection({ isAdvanced }: { isAdvanced: boolean }) {
+  const summary = useMemo(() => buildPreMatchOutcomeSummary(), [])
+  if (summary.totalOutcomes === 0) return (<section className="rounded-[20px] border border-white/[0.05] bg-white/[0.008] p-5"><h4 className="text-[12px] font-semibold text-white/45 mb-1">Pré-jogo vs Resultado</h4><p className="text-[11px] text-white/25">Quando partidas tiverem score pré-jogo, alertas e resolução, a análise aparecerá aqui.</p></section>)
+  return (
+    <section className="rounded-[20px] border border-white/[0.06] bg-white/[0.01] p-5">
+      <h4 className="text-[13px] font-semibold text-white/55 mb-1">Pré-jogo vs Resultado</h4>
+      <p className="text-[10px] text-white/30 mb-3">Compara leituras pré-jogo, alertas disparados e resoluções reais.</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+        <div className="rounded-lg bg-white/[0.02] border border-white/[0.04] px-3 py-2 text-center"><span className="text-[16px] font-bold text-white/60 block">{summary.totalOutcomes}</span><span className="text-[9px] text-white/30">Jornadas</span></div>
+        <div className="rounded-lg bg-white/[0.02] border border-white/[0.04] px-3 py-2 text-center"><span className="text-[16px] font-bold text-emerald-400/70 block">{summary.completeJourneys}</span><span className="text-[9px] text-white/30">Completas</span></div>
+        <div className="rounded-lg bg-white/[0.02] border border-white/[0.04] px-3 py-2 text-center"><span className="text-[16px] font-bold text-white/50 block">{summary.withTriggeredAlerts}</span><span className="text-[9px] text-white/30">Com alertas</span></div>
+        <div className="rounded-lg bg-white/[0.02] border border-white/[0.04] px-3 py-2 text-center"><span className="text-[16px] font-bold text-white/50 block">{summary.resolvedAlerts}</span><span className="text-[9px] text-white/30">Resolvidos</span></div>
+      </div>
+      {summary.insufficientSample && <p className="text-[10px] text-white/25 italic mb-3">Dados insuficientes para medir relação entre score e resultado. Os indicadores ficam mais confiáveis conforme jogos são analisados.</p>}
+      {!summary.insufficientSample && summary.avgScoreConfirmed !== null && (<div className="flex gap-4 text-[11px] text-white/40 mb-3">{summary.avgScoreConfirmed !== null && <span>Score médio confirmados: <b className="text-emerald-400/70">{summary.avgScoreConfirmed}</b></span>}{summary.avgScoreFailed !== null && <span>Score médio falhados: <b className="text-rose-400/70">{summary.avgScoreFailed}</b></span>}</div>)}
+      {isAdvanced && summary.recentOutcomes.length > 0 && (<div className="space-y-1.5 pt-2 border-t border-white/[0.04]"><h5 className="text-[10px] text-white/30 uppercase tracking-wider mb-1.5">Recentes</h5>{summary.recentOutcomes.slice(0, 5).map(o => (<div key={o.canonicalMatchId} className="flex items-center gap-3 text-[11px] text-white/40"><span className="flex-1 truncate">{o.homeTeam} x {o.awayTeam}</span>{o.preMatchScore && <span className="text-white/25 tabular-nums">{o.preMatchScore}/100</span>}<span className={`text-[9px] px-2 py-0.5 rounded ${o.outcomeStatus === 'complete' ? 'bg-emerald-500/8 text-emerald-400/50' : o.outcomeStatus === 'prematch_only' ? 'bg-white/[0.03] text-white/20' : 'bg-amber-500/6 text-amber-400/40'}`}>{o.outcomeStatus === 'complete' ? 'Completa' : o.outcomeStatus === 'prematch_only' ? 'Pré-jogo' : 'Resolvida'}</span></div>))}</div>)}
+    </section>
+  )
+}
+
 function MCard({ label, value, color }: { label: string; value: number; color: string }) { const cc = value > 0 ? (color === 'emerald' ? 'text-emerald-400' : color === 'cyan' ? 'text-cyan-400' : color === 'rose' ? 'text-rose-400' : 'text-white/70') : 'text-white/20'; return (<div className="rounded-xl border border-white/[0.04] bg-white/[0.006] px-4 py-3.5 text-center"><span className={`text-[20px] font-bold tabular-nums block ${cc}`}>{value}</span><span className="text-[10px] text-white/35">{label}</span></div>) }

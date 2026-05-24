@@ -15,6 +15,7 @@ import { isSameMatchStrict } from '@/features/providers/isSameMatchStrict'
 import { calculateMatchIntelligence, type MetricResult } from '@/services/intelligence/matchIntelligence'
 import { recordFinishedFixture } from '@/services/intelligence/goalsenseKnowledgeBase'
 import { recordPreMatchOutcome } from '@/services/intelligence/preMatchOutcomePerformance'
+import { useAlerts } from '@/context/AlertsContext'
 import { buildExecutiveRead } from '@/services/intelligence/buildExecutiveRead'
 import { translateNarration, sanitizeFinalPortugueseText } from '@/features/matches/translateMatchNarration'
 import { normalizeEvents } from '@/features/matches/normalizeMatchEvents'
@@ -60,6 +61,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
   const [error, setError] = useState<string | null>(null)
   const [narFilter, setNarFilter] = useState<NarrationFilter>('important')
   const narRef = useRef<HTMLDivElement>(null)
+  const { commandAlerts } = useAlerts()
 
   const fetchData = useCallback(async (silent = false) => {
     if (!effectiveFixtureId) return
@@ -464,6 +466,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
         } : undefined,
       })
       // Record pre-match outcome for performance tracking
+      const matchAlerts = commandAlerts.filter(a => a.fixtureId === fixtureState.id || (a.homeTeam === data.home.name && a.awayTeam === data.away.name))
       recordPreMatchOutcome({
         canonicalMatchId: canonicalId,
         date: fixtureState.date,
@@ -471,9 +474,9 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
         homeTeam: data.home.name,
         awayTeam: data.away.name,
         monitoredPatterns: [],
-        triggeredAlerts: [],
+        triggeredAlerts: matchAlerts.map(a => ({ patternName: a.patternName, confidence: a.confidence, status: a.status, minuteAtTrigger: a.minuteAtTrigger || undefined })),
         finalScore: { home: data.home.score, away: data.away.score },
-        outcomeStatus: 'resolved',
+        outcomeStatus: matchAlerts.length > 0 ? 'complete' : 'prematch_only',
       })
     } catch { /* non-blocking */ }
   }, [data, fixtureState])
