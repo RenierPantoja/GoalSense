@@ -21,6 +21,7 @@ import { MatchStoryline, PlayerImpactPanel, DangerousAttackPanel, StatsInsightHe
 import { LivePressureGraph } from '@/components/matches/LivePressureGraph'
 import { MatchHighlightsSection } from '@/features/matches/highlights/MatchHighlightsSection'
 import { PreMatchIntelligencePanel } from '@/features/match-detail/PreMatchIntelligencePanel'
+import { PostMatchIntelligencePanel } from '@/features/match-detail/PostMatchIntelligencePanel'
 
 interface MatchData {
   home: { name: string; logo: string | null; score: number; color: string; colors: string[] }
@@ -612,6 +613,11 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       {isScheduledMatch(status) && (
         <PreMatchIntelligencePanel homeName={home.name} awayName={away.name} competition={league} utcDate={fixtureState?.date} />
       )}
+
+      {/* POST-MATCH INTELLIGENCE (for finished matches) */}
+      {status === 'Encerrado' || status === 'FINISHED' || status === 'Full Time' || (home.score + away.score > 0 && !isLive && !isScheduledMatch(status)) ? (
+        <PostMatchIntelligencePanel homeName={home.name} awayName={away.name} homeScore={home.score} awayScore={away.score} stats={stats} events={events} hasLineups={homeRoster.length > 0} hasNarration={commentary.length > 0} />
+      ) : null}
 
       {/* DIAGNOSTIC PANEL */}
       {stats.length > 0 && <DiagnosticPanel stats={stats} homeName={home.name} awayName={away.name} homeScore={home.score} awayScore={away.score} elapsed={elapsed} events={events} />}
