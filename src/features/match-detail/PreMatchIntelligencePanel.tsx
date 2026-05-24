@@ -77,6 +77,13 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
             {data.homeForm && <FormCard form={data.homeForm} />}
             {data.awayForm && <FormCard form={data.awayForm} />}
           </div>
+          {/* Home/Away split */}
+          {(data.homeAtHome || data.awayAway) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+              {data.homeAtHome && data.homeAtHome.matches.length >= 2 && <FormCard form={data.homeAtHome} label="Em casa" />}
+              {data.awayAway && data.awayAway.matches.length >= 2 && <FormCard form={data.awayAway} label="Fora" />}
+            </div>
+          )}
         </div>
       )}
 
@@ -133,6 +140,22 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
         </div>
       )}
 
+      {/* Discipline */}
+      {data.disciplineProfile && (
+        <div>
+          <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/25 mb-3">Disciplina e cartões</h4>
+          <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-4">
+            <div className="grid grid-cols-4 gap-3 text-center">
+              <div><span className="text-[14px] font-bold text-amber-400/70 block">{data.disciplineProfile.homeYellowAvg}</span><span className="text-[9px] text-white/25">{homeName.split(' ')[0]} amarelos/jogo</span></div>
+              <div><span className="text-[14px] font-bold text-amber-400/70 block">{data.disciplineProfile.awayYellowAvg}</span><span className="text-[9px] text-white/25">{awayName.split(' ')[0]} amarelos/jogo</span></div>
+              <div><span className="text-[14px] font-bold text-rose-400/70 block">{data.disciplineProfile.homeRedTotal}</span><span className="text-[9px] text-white/25">{homeName.split(' ')[0]} vermelhos</span></div>
+              <div><span className="text-[14px] font-bold text-rose-400/70 block">{data.disciplineProfile.awayRedTotal}</span><span className="text-[9px] text-white/25">{awayName.split(' ')[0]} vermelhos</span></div>
+            </div>
+            <p className="text-[10px] text-white/35 mt-3 text-center">{data.disciplineProfile.summary}</p>
+          </div>
+        </div>
+      )}
+
       {/* Limitations */}
       {isAdvanced && data.limitations && data.limitations.length > 0 && (
         <div className="pt-3 border-t border-white/[0.03]">
@@ -153,10 +176,10 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
 
 // ─── Form Card ───────────────────────────────────────────────────────────────
 
-function FormCard({ form }: { form: import('@/services/preMatchIntelligence').TeamRecentForm }) {
+function FormCard({ form, label }: { form: import('@/services/preMatchIntelligence').TeamFormSummary; label?: string }) {
   return (
     <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-4">
-      <span className="text-[11px] font-semibold text-white/60 block mb-2">{form.teamName}</span>
+      <span className="text-[11px] font-semibold text-white/60 block mb-2">{form.teamName}{label && <span className="text-white/30 ml-1">({label})</span>}</span>
       <div className="flex items-center gap-1 mb-2">
         {form.formString.split(' ').map((r, i) => (
           <span key={i} className={`h-6 w-6 rounded-md flex items-center justify-center text-[9px] font-bold ${r === 'W' ? 'bg-emerald-500/15 text-emerald-400' : r === 'D' ? 'bg-amber-500/15 text-amber-400' : 'bg-rose-500/15 text-rose-400'}`}>

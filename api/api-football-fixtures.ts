@@ -2,43 +2,42 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    const API_KEY = process.env.API_FOOTBALL_KEY
     const BASE = process.env.API_FOOTBALL_BASE_URL || "https://v3.football.api-sports.io"
+    const keys = (process.env.API_FOOTBALL_KEYS || process.env.API_FOOTBALL_KEY || '').split(',').filter(Boolean)
+    const apiKey = keys[0]?.trim()
 
-    if (!API_KEY) {
+    if (!apiKey) {
       return res.status(500).json({ ok: false, code: "API_FOOTBALL_KEY_MISSING" })
     }
 
-    const getQ = (key: string) => { const v = req.query[key]; return Array.isArray(v) ? v[0] || '' : v || ''; }
+    // Build query params from request
+    const params = new URLSearchParams()
+    const { date, team, last, season, league, h2h } = req.query
 
-    const date = getQ('date')
-    const league = getQ('league')
-    const season = getQ('season')
-    const team = getQ('team')
-    const last = getQ('last')
-    const searchTeam = getQ('search_team')
-
-    // Team search mode (for team ID resolution)
-    if (searchTeam) {
-      const resp = await fetch(`${BASE}/teams?search=${encodeURIComponent(searchTeam)}`, { headers: { "x-apisports-key": API_KEY } })
-      if (!resp.ok) return res.status(502).json({ ok: false, code: "API_FOOTBALL_ERROR" })
-      const data = await resp.json()
-      return res.status(200).json({ ok: true, response: data.response || [] })
+    if (h2h) params.set('h2h', String(h2h))
+    else {
+      if (date) params.set('date', String(date))
+      if (team) params.set('team', String(team))
+      if (last) params.set('last', String(last))
+      if (season) params.set('season', String(season))
+      if (league) params.set('league', String(league))
     }
 
-    // Fixtures mode
-    const params = new URLSearchParams()
-    if (date) params.set('date', date)
-    if (league) params.set('league', league)
-    if (season) params.set('season', season)
-    if (team) params.set('team', team)
-    if (last) params.set('last', last)
+    const endpoint = h2h ? 'fixtures/headtohead' : 'fixtures'
+    const resp = await fetch(`${BASE}/${endpoint}?${params.toString()}`, {
+      headers: { "x-apisports-key": apiKey },
+    })
 
-    const resp = await fetch(`${BASE}/fixtures?${params.toString()}`, { headers: { "x-apisports-key": API_KEY } })
-    if (!resp.ok) return res.status(502).json({ ok: false, code: "API_FOOTBALL_ERROR" })
+    if (!resp.ok) {
+      return res.status(502).json({ ok: false, code: "API_FOOTBALL_ERROR", message: `API-Football retornou ${resp.status}` })
+    }
+
     const data = await resp.json()
+    if (data.errors && typeof data.errors === 'object' && Object.keys(data.errors).length > 0) {
+      return res.status(200).json({ ok: true, response: [], errors: data.errors })
+    }
 
-    return res.status(200).json({ ok: true, source: "api_football", fetchedAt: new Date().toISOString(), response: data.response || [] })
+    return res.status(200).json({ ok: true, response: data.response || [] })
   } catch (err: any) {
     return res.status(500).json({ ok: false, error: err.message })
   }
