@@ -7,6 +7,7 @@ import { getMatchLocalDateKey, formatMatchTime, isMatchOnSelectedLocalDate, form
 import { getMatchImportanceScore, getMatchImportanceReason, getMatchImportanceBadge, sortMatchesByImportance, getMainGlobalMatch, getBrazilFeaturedMatch } from '@/utils/matchImportance'
 import { dedupeMatches, normalizeCompetitionName } from '@/services/matchesDedup'
 import { curateMatches, getMatchRelevanceReason, type CompetitionGroup } from '@/features/matches/matchCuration'
+import { MainMatchesEditorial } from '@/features/matches/MainMatchesEditorial'
 import type { LiveFixture } from '@/lib/apiClient'
 import { useFavorites } from '@/context/FavoritesContext'
 import { useViewMode } from '@/context/ViewModeContext'
@@ -354,6 +355,9 @@ export function MatchesPage() {
         {/* HIGHLIGHTS MODE */}
         {!loading && view === 'highlights' && filtered.length > 0 && <HighlightsView matches={filtered} openMatch={openMatch} />}
 
+        {/* PRINCIPAIS (editorial) */}
+        {!loading && filter === 'main' && view === 'agenda' && <MainMatchesEditorial matches={filtered} openMatch={openMatch} />}
+
         {/* COMPACT MODE */}
         {!loading && view === 'compact' && filtered.length > 0 && (
           <div className="rounded-[20px] border border-white/[0.08] bg-white/[0.025] overflow-hidden">
@@ -371,7 +375,7 @@ export function MatchesPage() {
         )}
 
         {/* AGENDA MODE */}
-        {!loading && view === 'agenda' && filtered.length > 0 && (
+        {!loading && view === 'agenda' && filtered.length > 0 && (filter as string) !== 'main' && (
           <div className="space-y-7">
             {/* Use curated order when showing all (no search/specific filter) */}
             {(filter === 'all' || filter === 'main') && !search ? (
