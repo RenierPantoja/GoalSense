@@ -81,54 +81,59 @@ interface PreMatchInput {
 
 // ─── Cache ───────────────────────────────────────────────────────────────────
 
-const CACHE_TTL = 6 * 3600_000
-
-function getCacheKey(home: string, away: string): string {
-  return `goalsense_prematch_v2_${home.toLowerCase().replace(/\s+/g, '_')}_${away.toLowerCase().replace(/\s+/g, '_')}`
-}
-
-function getFromCache(key: string): PreMatchIntelligenceResult | null {
-  try { const raw = localStorage.getItem(key); if (!raw) return null; const { data, savedAt } = JSON.parse(raw); if (Date.now() - savedAt > CACHE_TTL) return null; return data } catch { return null }
-}
-
-function saveToCache(key: string, data: PreMatchIntelligenceResult): void {
-  try { localStorage.setItem(key, JSON.stringify({ data, savedAt: Date.now() })) } catch { /* */ }
-}
+import { getCache, setCache, getOrFetch, CACHE_TTL, formatCacheAge } from './cache/goalsenseCache'
+import { cacheKeys } from './cache/cacheKeys'
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 export async function getPreMatchIntelligence(input: PreMatchInput): Promise<PreMatchIntelligenceResult> {
   const { homeName, awayName, homeId, awayId, competition } = input
-  const cacheKey = getCacheKey(homeName, awayName)
-  const cached = getFromCache(cacheKey)
-  if (cached) return cached
+
+  // Check basic cache
+  const basicCached = getCache<PreMatchIntelligenceResult>(cacheKeys.prematchBasic(homeName, awayName))
+  if (basicCached) return basicCached.value
 
   const dataSources: string[] = []
   const limitations: string[] = []
 
-  // Resolve IDs
+  // Resolve IDs with cache
   let hId = homeId ? Number(homeId) : undefined
   let aId = awayId ? Number(awayId) : undefined
-  if (!hId) { try { const { resolveApiFootballTeamId } = await import('./teamIdResolver'); const r = await resolveApiFootballTeamId({ teamName: homeName, competition }); if (r.found && r.teamId) hId = r.teamId } catch {} }
-  if (!aId) { try { const { resolveApiFootballTeamId } = await import('./teamIdResolver'); const r = await resolveApiFootballTeamId({ teamName: awayName, competition }); if (r.found && r.teamId) aId = r.teamId } catch {} }
+  if (!hId) {
+    const cached = getCache<number>(cacheKeys.teamId(homeName))
+    if (cached) { hId = cached.value }
+    else { try { const { resolveApiFootballTeamId } = await import('./teamIdResolver'); const r = await resolveApiFootballTeamId({ teamName: homeName, competition }); if (r.found && r.teamId) { hId = r.teamId; setCache(cacheKeys.teamId(homeName), r.teamId, CACHE_TTL.TEAM_ID, 'api-football') } } catch {} }
+  }
+  if (!aId) {
+    const cached = getCache<number>(cacheKeys.teamId(awayName))
+    if (cached) { aId = cached.value }
+    else { try { const { resolveApiFootballTeamId } = await import('./teamIdResolver'); const r = await resolveApiFootballTeamId({ teamName: awayName, competition }); if (r.found && r.teamId) { aId = r.teamId; setCache(cacheKeys.teamId(awayName), r.teamId, CACHE_TTL.TEAM_ID, 'api-football') } } catch {} }
+  }
 
-  // Fetch fixtures for both teams (last 10 for home/away split)
+  // Fetch fixtures with cache
   let homeFixtures: any[] = []
   let awayFixtures: any[] = []
+  const season = new Date().getFullYear()
 
   if (hId) {
-    try {
-      const season = new Date().getFullYear()
-      const res = await fetch(`/api/api-football-fixtures?team=${hId}&last=10&season=${season}`)
-      if (res.ok) { const j = await res.json(); homeFixtures = j.response || []; dataSources.push('API-Football') }
-    } catch {}
+    const cached = getCache<any[]>(cacheKeys.teamFixtures(hId, season))
+    if (cached) { homeFixtures = cached.value; dataSources.push('Cache GoalSense') }
+    else {
+      try {
+        const res = await fetch(`/api/api-football-fixtures?team=${hId}&last=15&season=${season}`)
+        if (res.ok) { const j = await res.json(); homeFixtures = j.response || []; setCache(cacheKeys.teamFixtures(hId, season), homeFixtures, CACHE_TTL.TEAM_FORM, 'api-football'); dataSources.push('API-Football') }
+      } catch {}
+    }
   }
   if (aId) {
-    try {
-      const season = new Date().getFullYear()
-      const res = await fetch(`/api/api-football-fixtures?team=${aId}&last=10&season=${season}`)
-      if (res.ok) { const j = await res.json(); awayFixtures = j.response || [] }
-    } catch {}
+    const cached = getCache<any[]>(cacheKeys.teamFixtures(aId, season))
+    if (cached) { awayFixtures = cached.value; if (!dataSources.includes('Cache GoalSense')) dataSources.push('Cache GoalSense') }
+    else {
+      try {
+        const res = await fetch(`/api/api-football-fixtures?team=${aId}&last=15&season=${season}`)
+        if (res.ok) { const j = await res.json(); awayFixtures = j.response || []; setCache(cacheKeys.teamFixtures(aId, season), awayFixtures, CACHE_TTL.TEAM_FORM, 'api-football') }
+      } catch {}
+    }
   }
 
   // Build form summaries
@@ -137,30 +142,35 @@ export async function getPreMatchIntelligence(input: PreMatchInput): Promise<Pre
   const homeAtHome = buildFormSummary(homeFixtures, hId, homeName, 'home')
   const awayAway = buildFormSummary(awayFixtures, aId, awayName, 'away')
 
-  // H2H
+  // H2H with long cache
   let h2h: H2HRecord | undefined
   let recentMeetings: RecentMeeting[] | undefined
   if (hId && aId) {
-    try {
-      const res = await fetch(`/api/api-football-fixtures?h2h=${hId}-${aId}`)
-      if (res.ok) {
-        const j = await res.json(); const fxs = j.response || []
-        if (fxs.length > 0) {
-          let hW = 0, aW = 0, dr = 0, hG = 0, aG = 0
-          const meetings: RecentMeeting[] = []
-          for (const fx of fxs.slice(0, 10)) {
-            const hs = fx.goals?.home ?? 0; const as2 = fx.goals?.away ?? 0
-            const isHomeFirst = fx.teams?.home?.id === hId
-            if (isHomeFirst) { hG += hs; aG += as2; if (hs > as2) hW++; else if (as2 > hs) aW++; else dr++ }
-            else { hG += as2; aG += hs; if (as2 > hs) hW++; else if (hs > as2) aW++; else dr++ }
-            meetings.push({ date: fx.fixture?.date || '', competition: fx.league?.name, homeTeam: fx.teams?.home?.name || '', awayTeam: fx.teams?.away?.name || '', homeScore: hs, awayScore: as2 })
+    const h2hCached = getCache<{ record: H2HRecord; meetings: RecentMeeting[] }>(cacheKeys.h2h(hId, aId))
+    if (h2hCached) { h2h = h2hCached.value.record; recentMeetings = h2hCached.value.meetings; if (!dataSources.includes('Cache GoalSense')) dataSources.push('Cache GoalSense') }
+    else {
+      try {
+        const res = await fetch(`/api/api-football-fixtures?h2h=${hId}-${aId}`)
+        if (res.ok) {
+          const j = await res.json(); const fxs = j.response || []
+          if (fxs.length > 0) {
+            let hW = 0, aW = 0, dr = 0, hG = 0, aG = 0
+            const meetings: RecentMeeting[] = []
+            for (const fx of fxs.slice(0, 10)) {
+              const hs = fx.goals?.home ?? 0; const as2 = fx.goals?.away ?? 0
+              const isHomeFirst = fx.teams?.home?.id === hId
+              if (isHomeFirst) { hG += hs; aG += as2; if (hs > as2) hW++; else if (as2 > hs) aW++; else dr++ }
+              else { hG += as2; aG += hs; if (as2 > hs) hW++; else if (hs > as2) aW++; else dr++ }
+              meetings.push({ date: fx.fixture?.date || '', competition: fx.league?.name, homeTeam: fx.teams?.home?.name || '', awayTeam: fx.teams?.away?.name || '', homeScore: hs, awayScore: as2 })
+            }
+            h2h = { total: fxs.length, homeWins: hW, awayWins: aW, draws: dr, homeGoals: hG, awayGoals: aG }
+            recentMeetings = meetings.slice(0, 5)
+            setCache(cacheKeys.h2h(hId, aId), { record: h2h, meetings: recentMeetings }, CACHE_TTL.H2H, 'api-football')
+            if (!dataSources.includes('API-Football H2H')) dataSources.push('API-Football H2H')
           }
-          h2h = { total: fxs.length, homeWins: hW, awayWins: aW, draws: dr, homeGoals: hG, awayGoals: aG }
-          recentMeetings = meetings.slice(0, 5)
-          if (!dataSources.includes('API-Football H2H')) dataSources.push('API-Football H2H')
         }
-      }
-    } catch {}
+      } catch {}
+    }
   }
 
   // Goals profile
@@ -190,7 +200,7 @@ export async function getPreMatchIntelligence(input: PreMatchInput): Promise<Pre
 
   const result: PreMatchIntelligenceResult = { available: true, status, confidence, executiveSummary, homeForm, awayForm, homeAtHome: homeAtHome?.matches.length ? homeAtHome : undefined, awayAway: awayAway?.matches.length ? awayAway : undefined, h2h, recentMeetings, preview, goalsProfile, disciplineProfile: disciplineProfile?.trend !== 'unknown' ? disciplineProfile : undefined, dataSources, limitations }
 
-  saveToCache(cacheKey, result)
+  setCache(cacheKeys.prematchBasic(homeName, awayName), result, CACHE_TTL.PREMATCH_BASIC, 'goalsense')
   return result
 }
 
