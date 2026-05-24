@@ -72,10 +72,17 @@ export function calculatePreMatchScore(data: PreMatchIntelligenceResult): PreMat
   const overallScore = validDimensions.length > 0 ? Math.round(validDimensions.reduce((s, d) => s + d.score, 0) / validDimensions.length) : 0
 
   // ─── Data Quality ──────────────────────────────────────────────────────
-  const dataQuality = data.status === 'rich' ? 'rich' : data.status === 'partial' ? 'partial' : data.status === 'basic' ? 'basic' : 'low'
+  const hasForm = Boolean(data.homeForm && data.awayForm)
+  const hasH2H = Boolean(data.h2h && data.h2h.total > 0)
+  const hasGoals = Boolean(data.goalsProfile && data.goalsProfile.sampleSize >= 4)
+  const hasDiscipline = Boolean(data.disciplineProfile && data.disciplineProfile.trend !== 'unknown')
+  const hasHomeAway = Boolean(data.homeAtHome && data.awayAway)
+  const strongDims = [hasForm, hasH2H, hasGoals, hasDiscipline, hasHomeAway].filter(Boolean).length
+
+  const dataQuality = strongDims >= 4 ? 'rich' : strongDims >= 2 ? 'partial' : strongDims >= 1 ? 'basic' : 'low'
   const confidence = dataQuality === 'rich' ? 'alta' : dataQuality === 'partial' ? 'média' : 'baixa'
 
-  if (dataQuality === 'low' && overallScore === 0) return null
+  if (dataQuality === 'low' && overallScore < 30) return null
 
   // ─── Main Read ─────────────────────────────────────────────────────────
   const mainRead = buildMainRead(homeStrength, awayStrength, goalsTrend, disciplineRisk, balance, confidence)

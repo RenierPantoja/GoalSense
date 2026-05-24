@@ -23,12 +23,16 @@ export function PreMatchScorePanel({ data }: Props) {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-[15px] font-bold text-white/80">Score pré-jogo GoalSense</h3>
-          <p className="text-[11px] text-white/35 mt-0.5">Leitura estratégica baseada em dados reais</p>
+          <p className="text-[11px] text-white/35 mt-0.5">Leitura de preparação baseada em sinais reais — não é previsão</p>
         </div>
         <div className="flex items-center gap-3">
-          <span className={`text-[36px] font-bold tabular-nums leading-none ${score.overallScore >= 70 ? 'text-emerald-400' : score.overallScore >= 50 ? 'text-white/80' : 'text-white/40'}`}>{score.overallScore}</span>
+          {score.dataQuality !== 'low' ? (
+            <span className={`text-[36px] font-bold tabular-nums leading-none ${score.overallScore >= 70 ? 'text-emerald-400' : score.overallScore >= 50 ? 'text-white/80' : 'text-white/40'}`}>{score.overallScore}</span>
+          ) : (
+            <span className="text-[14px] text-white/30">Dados insuficientes</span>
+          )}
           <div className="text-right">
-            <span className="text-[10px] text-white/25 block">/100</span>
+            {score.dataQuality !== 'low' && <span className="text-[10px] text-white/25 block">/100</span>}
             <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${score.confidence === 'alta' ? 'bg-emerald-500/10 text-emerald-400/70' : score.confidence === 'média' ? 'bg-amber-500/10 text-amber-400/70' : 'bg-white/[0.04] text-white/35'}`}>{score.confidence}</span>
           </div>
         </div>
@@ -74,9 +78,12 @@ export function PreMatchScorePanel({ data }: Props) {
 
       {/* Sources */}
       {isAdvanced && (
-        <div className="pt-2 border-t border-white/[0.03] flex items-center gap-3 text-[10px] text-white/20">
-          <span>Qualidade: {score.dataQuality}</span>
-          {score.sources.length > 0 && <span>Fontes: {score.sources.join(', ')}</span>}
+        <div className="pt-2 border-t border-white/[0.03] space-y-1">
+          <p className="text-[10px] text-white/25">Confiança {score.confidence}: {score.confidence === 'alta' ? 'dados ricos com múltiplas fontes' : score.confidence === 'média' ? 'dados parciais, algumas dimensões limitadas' : 'poucos dados disponíveis, leitura pode ser imprecisa'}</p>
+          <div className="flex items-center gap-3 text-[10px] text-white/20">
+            <span>Qualidade: {score.dataQuality}</span>
+            {score.sources.length > 0 && <span>Fontes: {score.sources.join(', ')}</span>}
+          </div>
         </div>
       )}
     </section>
@@ -84,12 +91,20 @@ export function PreMatchScorePanel({ data }: Props) {
 }
 
 function DimensionCard({ dim, label }: { dim: { score: number; label: string; explanation: string; evidence: string[] }; label: string }) {
-  const color = dim.score >= 70 ? 'text-emerald-400' : dim.score >= 50 ? 'text-white/70' : 'text-white/40'
+  const { isAdvanced } = useViewMode()
+  const color = dim.score >= 75 ? 'text-emerald-400' : dim.score >= 60 ? 'text-cyan-400/80' : dim.score >= 40 ? 'text-white/65' : 'text-white/35'
   return (
-    <div className="rounded-xl border border-white/[0.05] bg-white/[0.01] p-3.5 text-center">
-      <span className={`text-[20px] font-bold tabular-nums block ${color}`}>{dim.score}</span>
-      <span className="text-[10px] text-white/40 block mt-0.5">{label}</span>
-      <span className="text-[9px] text-white/25 block">{dim.label}</span>
+    <div className="rounded-xl border border-white/[0.05] bg-white/[0.01] p-3.5">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[11px] text-white/45">{label}</span>
+        <span className={`text-[18px] font-bold tabular-nums ${color}`}>{dim.score}</span>
+      </div>
+      <span className="text-[10px] text-white/30 block">{dim.label}</span>
+      {isAdvanced && dim.evidence.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-white/[0.04] space-y-0.5">
+          {dim.evidence.slice(0, 3).map((e, i) => <span key={i} className="text-[9px] text-white/25 block">· {e}</span>)}
+        </div>
+      )}
     </div>
   )
 }
