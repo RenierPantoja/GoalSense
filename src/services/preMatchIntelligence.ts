@@ -111,10 +111,29 @@ export async function getPreMatchIntelligence(input: PreMatchInput): Promise<Pre
   let h2h: H2HRecord | undefined
   let recentMeetings: RecentMeeting[] | undefined
 
-  // Try API-Football H2H if we have team IDs
-  if (homeId && awayId) {
+  // Resolve team IDs if not provided
+  let resolvedHomeId = homeId ? Number(homeId) : undefined
+  let resolvedAwayId = awayId ? Number(awayId) : undefined
+
+  if (!resolvedHomeId) {
     try {
-      const h2hData = await fetchApiFootballH2H(Number(homeId), Number(awayId))
+      const { resolveApiFootballTeamId } = await import('./teamIdResolver')
+      const result = await resolveApiFootballTeamId({ teamName: homeName, competition })
+      if (result.found && result.teamId) resolvedHomeId = result.teamId
+    } catch {}
+  }
+  if (!resolvedAwayId) {
+    try {
+      const { resolveApiFootballTeamId } = await import('./teamIdResolver')
+      const result = await resolveApiFootballTeamId({ teamName: awayName, competition })
+      if (result.found && result.teamId) resolvedAwayId = result.teamId
+    } catch {}
+  }
+
+  // Try API-Football H2H if we have both team IDs
+  if (resolvedHomeId && resolvedAwayId) {
+    try {
+      const h2hData = await fetchApiFootballH2H(resolvedHomeId, resolvedAwayId)
       if (h2hData) {
         h2h = h2hData.record
         recentMeetings = h2hData.meetings
@@ -124,15 +143,15 @@ export async function getPreMatchIntelligence(input: PreMatchInput): Promise<Pre
   }
 
   // Try API-Football team fixtures for form
-  if (homeId) {
+  if (resolvedHomeId) {
     try {
-      const form = await fetchTeamForm(Number(homeId), homeName)
+      const form = await fetchTeamForm(resolvedHomeId, homeName)
       if (form) { homeForm = form; if (!dataSources.includes('API-Football')) dataSources.push('API-Football') }
     } catch { /* */ }
   }
-  if (awayId) {
+  if (resolvedAwayId) {
     try {
-      const form = await fetchTeamForm(Number(awayId), awayName)
+      const form = await fetchTeamForm(resolvedAwayId, awayName)
       if (form) { awayForm = form; if (!dataSources.includes('API-Football')) dataSources.push('API-Football') }
     } catch { /* */ }
   }
@@ -147,8 +166,10 @@ export async function getPreMatchIntelligence(input: PreMatchInput): Promise<Pre
   }
 
   if (!h2h) limitations.push('Confronto direto indisponível')
-  if (!homeForm) limitations.push(`Forma recente de ${homeName} indisponível`)
-  if (!awayForm) limitations.push(`Forma recente de ${awayName} indisponível`)
+  if (!homeForm && !resolvedHomeId) limitations.push(`ID de ${homeName} não resolvido com confiança`)
+  else if (!homeForm) limitations.push(`Forma recente de ${homeName} indisponível`)
+  if (!awayForm && !resolvedAwayId) limitations.push(`ID de ${awayName} não resolvido com confiança`)
+  else if (!awayForm) limitations.push(`Forma recente de ${awayName} indisponível`)
 
   // Generate preview
   const preview = generatePreview(homeName, awayName, homeForm, awayForm, h2h, competition)
