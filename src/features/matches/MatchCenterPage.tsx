@@ -654,7 +654,14 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
 
       {/* 3. LIVE PRESSURE CENTER */}
       <div id="sec-pressao">
-        <LivePressureGraph events={events} commentary={commentary} homeName={home.name} awayName={away.name} elapsed={elapsed} homeColors={home.colors} awayColors={away.colors} />
+        {isScheduledMatch(status) ? (
+          <div className="rounded-[18px] border border-white/[0.06] bg-white/[0.02] p-5">
+            <h4 className="text-[13px] font-semibold text-white/50 mb-1">Pressão ao vivo aguardando início</h4>
+            <p className="text-[11px] text-white/30">O gráfico de pressão será ativado automaticamente quando eventos reais da partida começarem a chegar.</p>
+          </div>
+        ) : (
+          <LivePressureGraph events={events} commentary={commentary} homeName={home.name} awayName={away.name} elapsed={elapsed} homeColors={home.colors} awayColors={away.colors} />
+        )}
       </div>
 
       {/* 4. TACTICAL SNAPSHOT */}

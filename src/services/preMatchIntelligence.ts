@@ -83,6 +83,7 @@ interface PreMatchInput {
 
 import { getCache, setCache, getOrFetch, CACHE_TTL, formatCacheAge } from './cache/goalsenseCache'
 import { cacheKeys } from './cache/cacheKeys'
+import { getTeamProfile, hasEnoughKnowledge, getTeamKnowledgeSummary } from './intelligence/goalsenseKnowledgeBase'
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
@@ -174,10 +175,38 @@ export async function getPreMatchIntelligence(input: PreMatchInput): Promise<Pre
   }
 
   // Goals profile
-  const goalsProfile = calculateGoalsProfile(homeForm, awayForm)
+  let goalsProfile = calculateGoalsProfile(homeForm, awayForm)
 
   // Discipline from events in fixtures
-  const disciplineProfile = calculateDiscipline(homeFixtures, awayFixtures, hId, aId, homeName, awayName)
+  let disciplineProfile = calculateDiscipline(homeFixtures, awayFixtures, hId, aId, homeName, awayName)
+
+  // ─── Knowledge Base Fallback ─────────────────────────────────────────────
+  const homeKB = getTeamProfile(homeName)
+  const awayKB = getTeamProfile(awayName)
+
+  // Fallback: goals profile from KB if API insufficient
+  if (!goalsProfile && (homeKB && homeKB.samples >= 3 || awayKB && awayKB.samples >= 3)) {
+    const hAvgFor = homeKB && homeKB.samples >= 3 ? homeKB.goalsForAvg : 0
+    const hAvgAg = homeKB && homeKB.samples >= 3 ? homeKB.goalsAgainstAvg : 0
+    const aAvgFor = awayKB && awayKB.samples >= 3 ? awayKB.goalsForAvg : 0
+    const aAvgAg = awayKB && awayKB.samples >= 3 ? awayKB.goalsAgainstAvg : 0
+    const avgTotal = (hAvgFor + hAvgAg + aAvgFor + aAvgAg) / 2
+    const hOver25 = homeKB && homeKB.samples >= 3 ? homeKB.over25Rate : 50
+    const aOver25 = awayKB && awayKB.samples >= 3 ? awayKB.over25Rate : 50
+    goalsProfile = { avgGoalsPerMatch: Math.round(avgTotal * 10) / 10, over15Pct: Math.round(((homeKB?.over15Rate || 70) + (awayKB?.over15Rate || 70)) / 2), over25Pct: Math.round((hOver25 + aOver25) / 2), bothScoredPct: Math.round(((homeKB?.bothTeamsScoredRate || 50) + (awayKB?.bothTeamsScoredRate || 50)) / 2), homeAvgFor: hAvgFor, homeAvgAgainst: hAvgAg, awayAvgFor: aAvgFor, awayAvgAgainst: aAvgAg, sampleSize: (homeKB?.samples || 0) + (awayKB?.samples || 0) }
+    dataSources.push('Base GoalSense')
+    limitations.push('Perfil de gols baseado em histórico GoalSense')
+  }
+
+  // Fallback: discipline from KB if API events unavailable
+  if (disciplineProfile && disciplineProfile.trend === 'unknown' && (homeKB && homeKB.samples >= 3 && homeKB.cardsForAvg > 0 || awayKB && awayKB.samples >= 3 && awayKB.cardsForAvg > 0)) {
+    const hAvg = homeKB && homeKB.samples >= 3 ? homeKB.cardsForAvg : 0
+    const aAvg = awayKB && awayKB.samples >= 3 ? awayKB.cardsForAvg : 0
+    const totalAvg = (hAvg + aAvg) / 2
+    const trend: 'low' | 'moderate' | 'high' = totalAvg >= 3 ? 'high' : totalAvg >= 1.5 ? 'moderate' : 'low'
+    disciplineProfile = { homeYellowAvg: hAvg, awayYellowAvg: aAvg, homeRedTotal: 0, awayRedTotal: 0, trend, summary: `Disciplina baseada em histórico GoalSense (${(homeKB?.samples || 0) + (awayKB?.samples || 0)} jogos).`, limitations: ['Dados de cartões via Base GoalSense'] }
+    if (!dataSources.includes('Base GoalSense')) dataSources.push('Base GoalSense')
+  }
 
   // Limitations
   if (!homeForm) limitations.push(`Forma recente de ${homeName} indisponível`)
@@ -187,7 +216,7 @@ export async function getPreMatchIntelligence(input: PreMatchInput): Promise<Pre
   if (!h2h) limitations.push('Confronto direto indisponível')
   if (disciplineProfile?.limitations.length) limitations.push(...disciplineProfile.limitations)
 
-  const hasAny = Boolean(homeForm || awayForm || h2h)
+  const hasAny = Boolean(homeForm || awayForm || h2h || goalsProfile)
   if (!hasAny) {
     const result: PreMatchIntelligenceResult = { available: false, status: 'unavailable', confidence: 'low', executiveSummary: 'Dados pré-jogo indisponíveis.', dataSources, limitations }
     return result
