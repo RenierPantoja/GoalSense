@@ -34,15 +34,22 @@ interface Player { jersey: string; name: string; starter: boolean; goal?: boolea
 
 type NarrationFilter = 'important' | 'all' | 'goals' | 'cards' | 'subs' | 'shots'
 
-export function MatchCenterPage() {
+interface MatchCenterProps {
+  inlineFixture?: LiveFixture
+  onBack?: () => void
+}
+
+export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}) {
   const { fixtureId } = useParams<{ fixtureId: string }>()
   const location = useLocation()
-  // Read fixture state once and memoize to prevent infinite re-renders
+  // Read fixture state: prop > location.state > sessionStorage
   const fixtureState = useMemo(() => {
+    if (inlineFixture) return inlineFixture
     const fromState = (location.state as any)?.fixture as LiveFixture | undefined
     if (fromState) return fromState
     return retrieveStoredFixture() || undefined
-  }, [location.state])
+  }, [location.state, inlineFixture])
+  const effectiveFixtureId = inlineFixture ? String(inlineFixture.id) : fixtureId
   const [data, setData] = useState<MatchData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -50,7 +57,7 @@ export function MatchCenterPage() {
   const narRef = useRef<HTMLDivElement>(null)
 
   const fetchData = useCallback(async (silent = false) => {
-    if (!fixtureId) return
+    if (!effectiveFixtureId) return
     if (!silent) setLoading(true)
     try {
       const expectedHome = fixtureState?.homeTeam?.name || ''
@@ -73,7 +80,7 @@ export function MatchCenterPage() {
 
       // Attempt 1: Try ESPN summary by route ID — ONLY if fixture is from ESPN
       if (isEspnFixture) {
-        const summaryData = await tryEspnSummary(fixtureId, expectedHome, expectedAway)
+        const summaryData = await tryEspnSummary(effectiveFixtureId, expectedHome, expectedAway)
         if (summaryData) { setData(summaryData); setError(null); return }
       }
 
@@ -85,8 +92,8 @@ export function MatchCenterPage() {
       const apiData = await tryApiFootballLive(expectedHome, expectedAway)
       if (apiData) { setData(apiData); setError(null); return }
 
-      if (fixtureState?.provider === 'football_data' && fixtureId) {
-        const fdData = await tryFootballDataDetail(fixtureId, expectedHome, expectedAway)
+      if (fixtureState?.provider === 'football_data' && effectiveFixtureId) {
+        const fdData = await tryFootballDataDetail(effectiveFixtureId, expectedHome, expectedAway)
         if (fdData) { setData(fdData); setError(null); return }
       }
 
@@ -103,7 +110,7 @@ export function MatchCenterPage() {
       setError('Detalhes indisponíveis para esta partida.')
     } catch (err) { setError((err as Error).message) }
     finally { setLoading(false) }
-  }, [fixtureId, fixtureState])
+  }, [effectiveFixtureId, fixtureState])
 
   function buildFallbackData(fs: LiveFixture): MatchData {
     return {
@@ -428,7 +435,7 @@ export function MatchCenterPage() {
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><LoadingState message="" /></div>
   if (error || !data) return (
     <div className="space-y-6 animate-fadeIn">
-      <Link to="/app/live" className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> Voltar ao Ao vivo</Link>
+      {onBack ? <button onClick={onBack} className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> Voltar</button> : <Link to="/app/matches" className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> Voltar às Partidas</Link>}
       <div className="rounded-3xl border border-white/[0.04] bg-white/[0.015] p-10 text-center">
         <p className="text-[14px] text-white/40">{error || 'Partida não encontrada'}</p>
       </div>
@@ -521,7 +528,7 @@ export function MatchCenterPage() {
     <div className="max-w-5xl mx-auto space-y-5 animate-fadeIn">
       {/* NAV */}
       <div className="flex items-center justify-between">
-        <Link to="/app/live" className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> Voltar ao Ao vivo</Link>
+        {onBack ? <button onClick={onBack} className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> Voltar</button> : <Link to="/app/matches" className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> Voltar às Partidas</Link>}
         <div className="flex items-center gap-2">
           <MatchDetailFavorites home={home} away={away} league={league} leagueLogo={leagueLogo} date={data?.events?.[0] ? '' : ''} utcDate={fixtureState?.date || ''} />
           <button onClick={() => fetchData(true)} className="p-2 rounded-full text-white/20 hover:text-white/50 hover:bg-white/[0.03]"><RefreshCw size={13} /></button>
