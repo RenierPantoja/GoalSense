@@ -118,12 +118,15 @@ function extractLeague(event: any) {
 function mapEspnStatus(name: string): string {
   if (!name) return "NS"
   if (name === "STATUS_IN_PROGRESS") return "LIVE"
+  if (name === "STATUS_FIRST_HALF") return "LIVE"
+  if (name === "STATUS_SECOND_HALF") return "LIVE"
   if (name === "STATUS_HALFTIME") return "HT"
   if (name === "STATUS_FULL_TIME") return "FT"
   if (name === "STATUS_SCHEDULED") return "NS"
   if (name === "STATUS_POSTPONED") return "PST"
   if (name === "STATUS_CANCELED") return "CANC"
   if (name === "STATUS_END_PERIOD") return "HT"
+  if (name.includes("PROGRESS") || name.includes("HALF")) return "LIVE"
   return name.replace("STATUS_", "")
 }
 

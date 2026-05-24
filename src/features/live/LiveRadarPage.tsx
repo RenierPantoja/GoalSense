@@ -120,7 +120,10 @@ export function LiveRadarPage() {
     return fixtures.filter((fx) => {
       if (isLiveStatus(fx.status.short)) return true
       const raw = fx.raw || ''
-      return raw.includes('FIRST_HALF') || raw.includes('SECOND_HALF') || raw.includes('IN_PROGRESS') || raw.includes('HALFTIME')
+      if (raw.includes('FIRST_HALF') || raw.includes('SECOND_HALF') || raw.includes('IN_PROGRESS') || raw.includes('HALFTIME')) return true
+      // ESPN state field (returned by espn-live function)
+      if ((fx as any).status?.state === 'in' || (fx as any)._state === 'in') return true
+      return false
     })
   }, [fixtures])
 
