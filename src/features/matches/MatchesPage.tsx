@@ -408,68 +408,109 @@ export function MatchesPage() {
         )}
       </div>
 
-      {/* SIDEBAR (desktop) — scrolls with the page, no internal scroll */}
+      {/* SIDEBAR (desktop) — contextual by filter */}
       <aside className="hidden xl:block w-[360px] shrink-0 space-y-5 sticky top-20 self-start">
-        {/* Leitura do dia - editorial */}
-        {dailyReading.length > 0 && !loading && <DailyReadingPanel phrases={dailyReading} total={stats.total} comps={stats.comps} setFilter={setFilter} />}
-
-        {/* Jogo principal do dia (global) */}
-        {mainMatch && !loading && <FeaturedMatchCard match={mainMatch} openMatch={openMatch} />}
-
-        {/* Brasil em destaque (only if main is not Brazilian) */}
-        {brazilMatch && !loading && mainMatch && mainMatch.id !== brazilMatch.id && (
-          <BrazilFeaturedCard match={brazilMatch} openMatch={openMatch} />
-        )}
-
-        {/* Seus favoritos hoje */}
-        {!loading && (() => {
-          const favMatches = matches.filter(m => isFavoriteTeam(m.homeTeam.shortName || m.homeTeam.name) || isFavoriteTeam(m.awayTeam.shortName || m.awayTeam.name) || isFavoriteMatch(buildCanonicalMatchId(m.homeTeam.shortName || m.homeTeam.name, m.awayTeam.shortName || m.awayTeam.name, m.utcDate)))
-          if (favMatches.length === 0) return null
-          return (
-            <div className="rounded-[20px] border border-rose-500/10 bg-rose-500/[0.02] p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-rose-400/50">Seus favoritos hoje</h4>
-                <button onClick={() => setFilter('favorites')} className="text-[9px] text-rose-400/40 hover:text-rose-400/70 font-medium transition-colors">Ver todos →</button>
-              </div>
-              <div className="space-y-2">
-                {favMatches.slice(0, 3).map(m => {
-                  const { live } = mapStatus(m.status)
-                  const time = formatMatchTime(m.utcDate)
-                  return (
-                    <div key={m.id} onClick={() => openMatch(m)} className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-white/[0.03] cursor-pointer transition-colors">
-                      <span className="text-[11px] tabular-nums text-white/40 w-10 shrink-0">{live ? <span className="text-emerald-400 font-bold text-[9px]">LIVE</span> : time}</span>
-                      <ClubLogo src={m.homeTeam.crest} name={m.homeTeam.shortName} size={20} />
-                      <span className="text-[10px] text-white/55 flex-1 truncate">{m.homeTeam.shortName} x {m.awayTeam.shortName}</span>
-                      <ClubLogo src={m.awayTeam.crest} name={m.awayTeam.shortName} size={20} />
-                    </div>
-                  )
-                })}
+        {(filter as string) === 'main' && !loading ? (
+          /* Sidebar for "Principais" filter — radar editorial */
+          <>
+            <div className="rounded-[20px] border border-white/[0.06] bg-gradient-to-br from-cyan-500/[0.03] via-white/[0.01] to-transparent p-5">
+              <h4 className="text-[12px] font-bold text-white/50 mb-3 flex items-center gap-2"><Sparkles size={13} className="text-cyan-400/50" />Radar dos principais</h4>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-3 text-center"><span className="text-[18px] font-bold text-white/60 block">{curated.mainMatches.length}</span><span className="text-[8px] text-white/20">Principais</span></div>
+                <div className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-3 text-center"><span className={`text-[18px] font-bold ${curated.liveMatches.length > 0 ? 'text-emerald-400' : 'text-white/40'} block`}>{curated.liveMatches.length}</span><span className="text-[8px] text-white/20">Ao vivo</span></div>
+                <div className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-3 text-center"><span className="text-[18px] font-bold text-white/40 block">{curated.soonMatches.length}</span><span className="text-[8px] text-white/20">Em breve</span></div>
+                <div className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-3 text-center"><span className="text-[18px] font-bold text-white/40 block">{curated.favoriteMatches.length}</span><span className="text-[8px] text-white/20">Favoritos</span></div>
               </div>
             </div>
-          )
-        })()}
-
-        {/* Próximos jogos — max 3 cards */}
-        {sidebarNext.length > 0 && !loading && (
-          <div className="rounded-[20px] border border-white/[0.05] bg-white/[0.015] p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/30">Próximos jogos</h4>
-              {sidebarNext.length > 3 && <button onClick={() => setFilter('upcoming')} className="text-[9px] text-cyan-400/40 hover:text-cyan-400/70 font-medium transition-colors">Ver todos →</button>}
-            </div>
-            <div className="space-y-2">
-              {sidebarNext.slice(0, 3).map(m => <SidebarNextCard key={m.id} match={m} onClick={() => openMatch(m)} />)}
-            </div>
-          </div>
-        )}
-
-        {/* Mais relevantes — only in highlights mode */}
-        {sidebarTop.length > 1 && !loading && view === 'highlights' && (
-          <div className="rounded-[20px] border border-white/[0.05] bg-white/[0.015] p-5">
-            <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/30 mb-4">Mais relevantes</h4>
-            <div className="space-y-2">
-              {sidebarTop.slice(1, 4).map((m, i) => <SidebarRelevantCard key={m.id} match={m} rank={i + 2} onClick={() => openMatch(m)} />)}
-            </div>
-          </div>
+            {/* Motivos em destaque */}
+            {(() => {
+              const reasons = curated.mainMatches.map(m => getMatchRelevanceReason(m, isFavoriteTeam).label)
+              const counts = new Map<string, number>()
+              reasons.forEach(r => counts.set(r, (counts.get(r) || 0) + 1))
+              const top = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 4)
+              if (top.length === 0) return null
+              return (
+                <div className="rounded-[20px] border border-white/[0.05] bg-white/[0.015] p-5">
+                  <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/30 mb-3">Motivos em destaque</h4>
+                  <div className="space-y-2">
+                    {top.map(([label, count]) => (
+                      <div key={label} className="flex items-center justify-between">
+                        <span className="text-[11px] text-white/45">{label}</span>
+                        <span className="text-[10px] font-bold tabular-nums text-white/30">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+            {/* Próximos principais */}
+            {(() => {
+              const upcoming = curated.mainMatches.filter(m => mapStatus(m.status).upcoming).slice(0, 3)
+              if (upcoming.length === 0) return null
+              return (
+                <div className="rounded-[20px] border border-white/[0.05] bg-white/[0.015] p-5">
+                  <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/30 mb-3">Próximos principais</h4>
+                  <div className="space-y-2">
+                    {upcoming.map(m => <SidebarNextCard key={m.id} match={m} onClick={() => openMatch(m)} />)}
+                  </div>
+                </div>
+              )
+            })()}
+          </>
+        ) : (
+          /* Default sidebar */
+          <>
+            {dailyReading.length > 0 && !loading && <DailyReadingPanel phrases={dailyReading} total={stats.total} comps={stats.comps} setFilter={setFilter} />}
+            {mainMatch && !loading && <FeaturedMatchCard match={mainMatch} openMatch={openMatch} />}
+            {brazilMatch && !loading && mainMatch && mainMatch.id !== brazilMatch.id && (
+              <BrazilFeaturedCard match={brazilMatch} openMatch={openMatch} />
+            )}
+            {!loading && (() => {
+              const favMatches = matches.filter(m => isFavoriteTeam(m.homeTeam.shortName || m.homeTeam.name) || isFavoriteTeam(m.awayTeam.shortName || m.awayTeam.name) || isFavoriteMatch(buildCanonicalMatchId(m.homeTeam.shortName || m.homeTeam.name, m.awayTeam.shortName || m.awayTeam.name, m.utcDate)))
+              if (favMatches.length === 0) return null
+              return (
+                <div className="rounded-[20px] border border-rose-500/10 bg-rose-500/[0.02] p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-rose-400/50">Seus favoritos hoje</h4>
+                    <button onClick={() => setFilter('favorites')} className="text-[9px] text-rose-400/40 hover:text-rose-400/70 font-medium transition-colors">Ver todos →</button>
+                  </div>
+                  <div className="space-y-2">
+                    {favMatches.slice(0, 3).map(m => {
+                      const { live } = mapStatus(m.status)
+                      const time = formatMatchTime(m.utcDate)
+                      return (
+                        <div key={m.id} onClick={() => openMatch(m)} className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-white/[0.03] cursor-pointer transition-colors">
+                          <span className="text-[11px] tabular-nums text-white/40 w-10 shrink-0">{live ? <span className="text-emerald-400 font-bold text-[9px]">LIVE</span> : time}</span>
+                          <ClubLogo src={m.homeTeam.crest} name={m.homeTeam.shortName} size={20} />
+                          <span className="text-[10px] text-white/55 flex-1 truncate">{m.homeTeam.shortName} x {m.awayTeam.shortName}</span>
+                          <ClubLogo src={m.awayTeam.crest} name={m.awayTeam.shortName} size={20} />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
+            {sidebarNext.length > 0 && !loading && (
+              <div className="rounded-[20px] border border-white/[0.05] bg-white/[0.015] p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/30">Próximos jogos</h4>
+                  {sidebarNext.length > 3 && <button onClick={() => setFilter('upcoming')} className="text-[9px] text-cyan-400/40 hover:text-cyan-400/70 font-medium transition-colors">Ver todos →</button>}
+                </div>
+                <div className="space-y-2">
+                  {sidebarNext.slice(0, 3).map(m => <SidebarNextCard key={m.id} match={m} onClick={() => openMatch(m)} />)}
+                </div>
+              </div>
+            )}
+            {sidebarTop.length > 1 && !loading && view === 'highlights' && (
+              <div className="rounded-[20px] border border-white/[0.05] bg-white/[0.015] p-5">
+                <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/30 mb-4">Mais relevantes</h4>
+                <div className="space-y-2">
+                  {sidebarTop.slice(1, 4).map((m, i) => <SidebarRelevantCard key={m.id} match={m} rank={i + 2} onClick={() => openMatch(m)} />)}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </aside>
     </div>
