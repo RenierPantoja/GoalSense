@@ -8,7 +8,7 @@ export function AppShell() {
   return (
     <div className="min-h-screen bg-[var(--bg-app)]">
       <TopNavigation />
-      <main className="mx-auto max-w-[1400px] px-5 py-8">
+      <main className="mx-auto max-w-[1680px] px-4 sm:px-5 lg:px-6 py-6 sm:py-8">
         <Outlet />
       </main>
       {showOnboarding && <OnboardingModal onDismiss={dismiss} />}
