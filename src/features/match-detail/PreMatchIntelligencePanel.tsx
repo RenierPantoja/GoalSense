@@ -1,264 +1,1150 @@
 /**
- * War Room Pre-Match — Single Panel Apple-like.
- * One immersive container with internal sections divided by subtle separators.
+ * War Room Pre-Match — Native panel with internal tabs.
+ * One immersive container. Header is always visible. Tab bar segments the panel
+ * into Visao / Forma / Gols / Elenco / Padroes / Auditoria.
  */
-import { useEffect, useState, useMemo } from 'react'
-import { getPreMatchIntelligence, type PreMatchIntelligenceResult, type TeamFormSummary } from '@/services/preMatchIntelligence'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  getPreMatchIntelligence,
+  type PreMatchIntelligenceResult,
+  type TeamFormSummary,
+} from '@/services/preMatchIntelligence'
 import { getPreMatchAdvanced, type PreMatchAdvancedResult } from '@/services/intelligence/preMatchAdvanced'
-import { getPreMatchPatternReadiness } from '@/services/intelligence/preMatchPatternConnector'
-import { calculatePreMatchScore } from '@/services/intelligence/preMatchScoreEngine'
+import { getPreMatchPatternReadiness, type PreMatchPatternReadiness } from '@/services/intelligence/preMatchPatternConnector'
+import { calculatePreMatchScore, type PreMatchScore } from '@/services/intelligence/preMatchScoreEngine'
 import { useViewMode } from '@/context/ViewModeContext'
 import { usePatterns } from '@/features/command/contexts/PatternContext'
 import { useFavorites } from '@/context/FavoritesContext'
 
-interface Props { homeName: string; awayName: string; homeId?: string | number; awayId?: string | number; competition?: string; utcDate?: string }
+interface Props {
+  homeName: string
+  awayName: string
+  homeId?: string | number
+  awayId?: string | number
+  competition?: string
+  utcDate?: string
+}
+
+type TabKey = 'visao' | 'forma' | 'gols' | 'elenco' | 'padroes' | 'auditoria'
+
+// ─── Team Accent ─────────────────────────────────────────────────────────────
+// Stable hash-based fallback palette. No fake metadata invented.
+const ACCENT_PALETTE = [
+  { from: '#3b82f6', to: '#06b6d4', text: 'text-cyan-300', soft: 'rgba(59,130,246,0.20)' }, // blue/cyan
+  { from: '#10b981', to: '#34d399', text: 'text-emerald-300', soft: 'rgba(16,185,129,0.20)' }, // emerald
+  { from: '#f59e0b', to: '#fb923c', text: 'text-amber-300', soft: 'rgba(245,158,11,0.20)' }, // amber/orange
+  { from: '#a855f7', to: '#ec4899', text: 'text-fuchsia-300', soft: 'rgba(168,85,247,0.20)' }, // purple/pink
+  { from: '#ef4444', to: '#f97316', text: 'text-rose-300', soft: 'rgba(239,68,68,0.20)' }, // red/orange
+  { from: '#14b8a6', to: '#22d3ee', text: 'text-teal-300', soft: 'rgba(20,184,166,0.20)' }, // teal
+  { from: '#6366f1', to: '#8b5cf6', text: 'text-indigo-300', soft: 'rgba(99,102,241,0.20)' }, // indigo
+] as const
+
+type TeamAccent = (typeof ACCENT_PALETTE)[number]
+
+function hashString(s: string) {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h << 5) - h + s.charCodeAt(i), (h |= 0)
+  return Math.abs(h)
+}
+
+function getTeamAccent(teamName: string, side: 'home' | 'away'): TeamAccent {
+  // Default: keep mandante on cool blue/cyan, visitante on emerald, plus stable hash variation
+  if (side === 'home') {
+    const idx = hashString(teamName) % ACCENT_PALETTE.length
+    // Bias home toward cool tones so the rail reads instantly
+    return [ACCENT_PALETTE[0], ACCENT_PALETTE[6], ACCENT_PALETTE[5]][idx % 3]
+  }
+  const idx = hashString(teamName) % ACCENT_PALETTE.length
+  // Bias away toward warm tones for contrast
+  return [ACCENT_PALETTE[1], ACCENT_PALETTE[3], ACCENT_PALETTE[4], ACCENT_PALETTE[2]][idx % 4]
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, competition, utcDate }: Props) {
   const [data, setData] = useState<PreMatchIntelligenceResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [adv, setAdv] = useState<PreMatchAdvancedResult | null>(null)
   const [advLoading, setAdvLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState<TabKey>('visao')
   const { isAdvanced } = useViewMode()
   const { getActivePatterns } = usePatterns()
   const { isFavoriteTeam } = useFavorites()
 
-  useEffect(() => { if (!homeName || !awayName) return; setLoading(true); getPreMatchIntelligence({ homeName, awayName, homeId, awayId, competition, utcDate }).then(setData).finally(() => setLoading(false)) }, [homeName, awayName, homeId, awayId, competition, utcDate])
+  useEffect(() => {
+    if (!homeName || !awayName) return
+    setLoading(true)
+    getPreMatchIntelligence({ homeName, awayName, homeId, awayId, competition, utcDate })
+      .then(setData)
+      .finally(() => setLoading(false))
+  }, [homeName, awayName, homeId, awayId, competition, utcDate])
 
-  const score = useMemo(() => data ? calculatePreMatchScore(data) : null, [data])
-  const patterns = useMemo(() => { const a = getActivePatterns(); if (!a.length || !data) return []; return getPreMatchPatternReadiness({ homeName, awayName, activePatterns: a, preMatchData: data, score, isFavoriteTeam }) }, [homeName, awayName, data, score, getActivePatterns, isFavoriteTeam])
+  const score = useMemo(() => (data ? calculatePreMatchScore(data) : null), [data])
+  const patterns = useMemo<PreMatchPatternReadiness[]>(() => {
+    const a = getActivePatterns()
+    if (!a.length || !data) return []
+    return getPreMatchPatternReadiness({ homeName, awayName, activePatterns: a, preMatchData: data, score, isFavoriteTeam })
+  }, [homeName, awayName, data, score, getActivePatterns, isFavoriteTeam])
 
-  const loadAdv = async () => { setAdvLoading(true); try { setAdv(await getPreMatchAdvanced({ homeName, awayName, homeId: homeId ? Number(homeId) : undefined, awayId: awayId ? Number(awayId) : undefined, goalsProfile: data?.goalsProfile, homeForm: data?.homeForm, awayForm: data?.awayForm, disciplineTrend: data?.disciplineProfile?.trend })) } catch {} finally { setAdvLoading(false) } }
+  const homeAccent = useMemo(() => getTeamAccent(homeName, 'home'), [homeName])
+  const awayAccent = useMemo(() => getTeamAccent(awayName, 'away'), [awayName])
 
-  if (loading) return <WarRoomShell><div className="animate-pulse space-y-3"><div className="h-6 w-56 bg-white/[0.04] rounded" /><div className="h-4 w-full bg-white/[0.03] rounded" /><div className="h-32 bg-white/[0.02] rounded-2xl" /></div></WarRoomShell>
+  const loadAdv = async () => {
+    setAdvLoading(true)
+    try {
+      setAdv(
+        await getPreMatchAdvanced({
+          homeName,
+          awayName,
+          homeId: homeId ? Number(homeId) : undefined,
+          awayId: awayId ? Number(awayId) : undefined,
+          goalsProfile: data?.goalsProfile,
+          homeForm: data?.homeForm,
+          awayForm: data?.awayForm,
+          disciplineTrend: data?.disciplineProfile?.trend,
+        })
+      )
+    } catch {
+      /* graceful */
+    } finally {
+      setAdvLoading(false)
+    }
+  }
 
-  if (!data || !data.available) return (
-    <WarRoomShell>
-      <Header status="limitado" />
-      <Divider />
-      <div className="px-7 py-6"><p className="text-[14px] text-white/55 leading-relaxed">Dados pre-jogo limitados para esta partida. O GoalSense tentou buscar historico nos providers, mas nao encontrou amostra suficiente.</p>{data?.limitations && <div className="mt-3 space-y-1">{data.limitations.map((l, i) => <p key={i} className="text-[12px] text-white/35 flex items-center gap-2"><span className="text-amber-400/70">·</span> {l}</p>)}</div>}</div>
-    </WarRoomShell>
-  )
+  // ── Loading skeleton ──
+  if (loading) {
+    return (
+      <WarRoomShell>
+        <div className="px-7 py-7 animate-pulse space-y-4">
+          <div className="h-3 w-32 bg-white/[0.05] rounded" />
+          <div className="h-7 w-72 bg-white/[0.05] rounded" />
+          <div className="h-4 w-full bg-white/[0.03] rounded" />
+          <div className="h-32 bg-white/[0.02] rounded-2xl mt-4" />
+        </div>
+      </WarRoomShell>
+    )
+  }
 
-  const gp = data.goalsProfile; const dp = data.disciplineProfile; const h2h = data.h2h
-  const hf = data.homeForm; const af = data.awayForm; const hh = data.homeAtHome; const aa = data.awayAway
+  // ── Empty / unavailable ──
+  if (!data || !data.available) {
+    return (
+      <WarRoomShell>
+        <div className="px-7 pt-6 pb-3">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-400/60">War Room · Pre-Jogo</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/[0.06] text-white/55">Limitado</span>
+          </div>
+          <h2 className="text-[22px] font-bold text-white tracking-tight">{homeName} <span className="text-white/30 font-normal mx-1.5">vs</span> {awayName}</h2>
+        </div>
+        <Divider />
+        <div className="px-7 py-6">
+          <p className="text-[13px] text-white/65 leading-relaxed">Dados pre-jogo limitados para esta partida. O GoalSense buscou historico nos providers, mas nao encontrou amostra suficiente.</p>
+          {data?.limitations && data.limitations.length > 0 && (
+            <ul className="mt-3 space-y-1.5">
+              {data.limitations.map((l, i) => (
+                <li key={i} className="text-[12px] text-white/50 flex items-start gap-2">
+                  <span className="text-amber-400/70 mt-0.5">·</span>
+                  <span>{l}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </WarRoomShell>
+    )
+  }
 
-  const balanceLabel = !score ? 'Limitado' : score.balance.score >= 65 ? 'Equilibrado' : score.homeStrength.score > score.awayStrength.score + 10 ? 'Mandante +' : 'Visitante +'
+  // ── Header pieces ──
+  const balanceLabel = !score
+    ? 'Limitado'
+    : score.balance.score >= 65
+    ? 'Equilibrado'
+    : score.homeStrength.score > score.awayStrength.score + 10
+    ? 'Mandante +'
+    : score.awayStrength.score > score.homeStrength.score + 10
+    ? 'Visitante +'
+    : 'Equilibrado'
+
+  const dataLabel = data.dataSources.length > 0 ? data.dataSources[0] : 'Provider'
 
   return (
     <WarRoomShell>
       {/* ═══ HEADER ═══ */}
       <div className="px-7 pt-6 pb-5 relative">
-        <div className="absolute top-0 right-0 w-[280px] h-[120px] bg-blue-500/[0.04] rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute top-0 right-0 w-[320px] h-[140px] rounded-full blur-[80px] pointer-events-none" style={{ background: `radial-gradient(circle, ${homeAccent.soft}, transparent 70%)` }} />
         <div className="relative flex items-start justify-between gap-6">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2.5 mb-2">
-              <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-cyan-400/60">War Room · Pre-Jogo</span>
-              <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${data.status === 'rich' ? 'bg-emerald-500/12 text-emerald-300' : data.status === 'partial' ? 'bg-amber-500/12 text-amber-300' : 'bg-white/[0.06] text-white/45'}`}>{data.status === 'rich' ? 'Rico' : data.status === 'partial' ? 'Parcial' : 'Limitado'}</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-400/65">War Room · Pre-Jogo</span>
+              <CoverageBadge status={data.status} />
             </div>
-            <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight mb-1">{homeName} <span className="text-white/30 font-normal mx-1.5">vs</span> {awayName}</h2>
-            <p className="text-[13px] text-white/50 leading-relaxed">{data.preview?.summary || 'Leitura em construcao com dados disponiveis.'}</p>
+            <h2 className="text-[22px] sm:text-[24px] font-bold text-white tracking-tight leading-tight mb-1.5 truncate">
+              <span style={{ color: homeAccent.from === '#3b82f6' ? undefined : undefined }}>{homeName}</span>
+              <span className="text-white/25 font-normal mx-2">vs</span>
+              <span>{awayName}</span>
+            </h2>
+            <p className="text-[13px] text-white/60 leading-relaxed">{data.preview?.summary || 'Leitura em construcao com dados disponiveis.'}</p>
           </div>
-          {score && (
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="text-right"><span className="text-[10px] text-white/35 uppercase tracking-wider block">Score</span><span className="text-[10px] text-white/30 block">{score.confidence}</span></div>
-              <div className="relative h-[68px] w-[68px] rounded-2xl bg-gradient-to-br from-blue-500/20 via-cyan-500/15 to-blue-500/5 border border-cyan-400/20 flex flex-col items-center justify-center"><div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/5 to-transparent" /><span className="relative text-[28px] font-bold text-white leading-none">{score.overallScore}</span><span className="relative text-[9px] text-cyan-300/60">/100</span></div>
-            </div>
-          )}
+          {score && <ScoreOrb score={score} />}
         </div>
-        {/* Chips */}
-        {score && <div className="relative flex flex-wrap gap-1.5 mt-4">
-          <Chip icon="◌" label="Equilibrio" value={balanceLabel} score={score.balance.score} />
-          <Chip icon="∿" label="Gols" value={score.goalsTrend.label} score={score.goalsTrend.score} />
-          <Chip icon="●" label="Disciplina" value={score.disciplineRisk.label} score={score.disciplineRisk.score} />
-        </div>}
-      </div>
 
-      <Divider />
-
-      {/* ═══ MAPA DO CONFRONTO ═══ */}
-      <div className="px-7 py-6">
-        <SectionLabel>Mapa do Confronto</SectionLabel>
-        <div className="grid grid-cols-[1fr_auto_1fr] gap-6 items-start">
-          <TeamCol name={homeName} form={hf} venue={hh} venueLabel="Em casa" align="left" />
-          <div className="flex flex-col items-center justify-center pt-6 gap-2">
-            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-white/[0.06] to-white/[0.02] border border-white/[0.08] flex items-center justify-center"><span className="text-[10px] text-white/40 font-bold tracking-wider">VS</span></div>
-            {h2h && <span className="text-[10px] text-white/40 font-medium">{h2h.total} confrontos</span>}
-            <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${score && score.balance.score >= 65 ? 'bg-white/[0.05] text-white/55' : score && score.homeStrength.score > score.awayStrength.score + 10 ? 'bg-blue-500/12 text-blue-300' : score && score.awayStrength.score > score.homeStrength.score + 10 ? 'bg-emerald-500/12 text-emerald-300' : 'bg-white/[0.04] text-white/40'}`}>{balanceLabel}</span>
+        {/* Quick chips */}
+        {score && (
+          <div className="relative flex flex-wrap gap-1.5 mt-4">
+            <Chip label="Equilibrio" value={balanceLabel} score={score.balance.score} />
+            <Chip label="Gols" value={score.goalsTrend.label} score={score.goalsTrend.score} />
+            <Chip label="Disciplina" value={score.disciplineRisk.label} score={score.disciplineRisk.score} />
+            <Chip label="Dados" value={dataLabel} neutral />
           </div>
-          <TeamCol name={awayName} form={af} venue={aa} venueLabel="Fora" align="right" />
-        </div>
-      </div>
-
-      <Divider />
-
-      {/* ═══ INTELLIGENCE GRID ═══ */}
-      <div className="grid grid-cols-1 md:grid-cols-2">
-        {/* Gols */}
-        <div className="px-7 py-6 md:border-r border-white/[0.05]">
-          <SectionLabel icon="∿">Perfil de Gols</SectionLabel>
-          {gp ? (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <Metric label="Media/jogo" value={String(gp.avgGoalsPerMatch)} accent="emerald" />
-                <Metric label="Ambos marcam" value={`${gp.bothScoredPct}%`} accent={gp.bothScoredPct >= 55 ? 'amber' : 'slate'} />
-              </div>
-              <Bar label="Over 1.5" pct={gp.over15Pct} color="cyan" />
-              <Bar label="Over 2.5" pct={gp.over25Pct} color="emerald" />
-            </div>
-          ) : <p className="text-[12px] text-white/35">Sem jogos recentes suficientes para calcular tendencia.</p>}
-        </div>
-        {/* Disciplina */}
-        <div className="px-7 py-6 border-t md:border-t-0 border-white/[0.05]">
-          <SectionLabel icon="●">Disciplina</SectionLabel>
-          {dp && dp.trend !== 'unknown' ? (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <Metric label={`${homeName.split(' ')[0]} amarelos/j`} value={String(dp.homeYellowAvg)} accent="amber" />
-                <Metric label={`${awayName.split(' ')[0]} amarelos/j`} value={String(dp.awayYellowAvg)} accent="amber" />
-              </div>
-              <div className="flex items-center justify-between rounded-xl bg-white/[0.025] border border-white/[0.05] px-4 py-2.5">
-                <span className="text-[11px] text-white/45">Tendencia</span>
-                <span className={`text-[12px] font-bold ${dp.trend === 'high' ? 'text-rose-400' : dp.trend === 'moderate' ? 'text-amber-400' : 'text-emerald-400'}`}>{dp.trend === 'high' ? 'Alta' : dp.trend === 'moderate' ? 'Moderada' : 'Baixa'}</span>
-              </div>
-              {(dp.homeRedTotal + dp.awayRedTotal) > 0 && <p className="text-[11px] text-rose-400/70">{dp.homeRedTotal + dp.awayRedTotal} cartoes vermelhos recentes</p>}
-            </div>
-          ) : <p className="text-[12px] text-white/35">Provider sem eventos disciplinares recentes.</p>}
-        </div>
-      </div>
-
-      <Divider />
-
-      {/* ═══ H2H ═══ */}
-      <div className="px-7 py-6">
-        <SectionLabel icon="⬢">Confronto Direto</SectionLabel>
-        {h2h ? (
-          <div>
-            <div className="flex items-center gap-1 mb-3 h-3.5 rounded-full overflow-hidden bg-white/[0.04]">
-              <div className="h-full bg-gradient-to-r from-blue-400 to-blue-500" style={{ width: `${(h2h.homeWins / h2h.total) * 100}%` }} />
-              <div className="h-full bg-white/[0.12]" style={{ width: `${(h2h.draws / h2h.total) * 100}%` }} />
-              <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400" style={{ width: `${(h2h.awayWins / h2h.total) * 100}%` }} />
-            </div>
-            <div className="flex justify-between items-center text-[12px]">
-              <div><span className="text-blue-400 font-bold">{h2h.homeWins}V</span> <span className="text-white/40">{homeName.split(' ')[0]}</span></div>
-              <span className="text-white/40 font-medium">{h2h.draws} empates</span>
-              <div><span className="text-white/40">{awayName.split(' ')[0]}</span> <span className="text-emerald-400 font-bold">{h2h.awayWins}V</span></div>
-            </div>
-            <p className="text-[11px] text-white/45 mt-3">Media historica: <span className="text-white/70 font-semibold">{((h2h.homeGoals + h2h.awayGoals) / h2h.total).toFixed(1)} gols/jogo</span> · {h2h.total} confrontos analisados</p>
-            {isAdvanced && data.recentMeetings && data.recentMeetings.length > 0 && <div className="mt-3 pt-3 border-t border-white/[0.04] space-y-1.5">{data.recentMeetings.slice(0, 3).map((m, i) => <div key={i} className="flex items-center gap-3 text-[11px]"><span className="text-white/30 tabular-nums w-16">{new Date(m.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span><span className="text-white/55 flex-1">{m.homeTeam}</span><span className="text-white/85 font-bold">{m.homeScore}-{m.awayScore}</span><span className="text-white/55 flex-1 text-right">{m.awayTeam}</span></div>)}</div>}
-          </div>
-        ) : <p className="text-[12px] text-white/35">Confronto direto indisponivel no provider.</p>}
-      </div>
-
-      <Divider />
-
-      {/* ═══ OPERACAO AO VIVO ═══ */}
-      <div className="px-7 py-6">
-        <SectionLabel icon="▲">Operacao ao Vivo</SectionLabel>
-        {patterns.length > 0 ? (
-          <div className="space-y-1.5 mb-4">{(isAdvanced ? patterns : patterns.filter(r => r.readiness !== 'not_applicable').slice(0, 4)).map(r => (
-            <div key={r.patternId} className="flex items-center gap-3 rounded-xl bg-white/[0.02] border border-white/[0.05] px-4 py-2.5">
-              <span className={`h-2 w-2 rounded-full ${r.readiness === 'ready' ? 'bg-emerald-400' : 'bg-cyan-400/40'}`} />
-              <span className="text-[12px] text-white/65 flex-1 font-medium">{r.patternName}</span>
-              <span className="text-[10px] text-white/30">{r.readiness === 'ready' ? 'Pronto' : 'Aguarda live'}</span>
-              {r.triggerWindow && <span className="text-[10px] text-white/45 font-medium">{r.triggerWindow}</span>}
-            </div>
-          ))}</div>
-        ) : getActivePatterns().length === 0 ? (
-          <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] px-5 py-4 mb-4 text-center">
-            <p className="text-[12px] text-white/55 font-medium">Nenhum radar ativo</p>
-            <p className="text-[11px] text-white/35 mt-0.5">Configure padroes no Command Center para monitorar ao vivo.</p>
-          </div>
-        ) : null}
-
-        {score && score.watchPoints.length > 0 && (
-          <div className="space-y-2">{score.watchPoints.slice(0, 4).map((wp, i) => (
-            <div key={i} className="flex items-start gap-3"><span className={`text-[10px] mt-0.5 ${wp.severity === 'attention' ? 'text-amber-400' : 'text-cyan-400/70'}`}>▸</span><div className="flex-1"><span className="text-[12px] text-white/70 font-medium">{wp.label}</span><span className="text-[11px] text-white/40 ml-2">{wp.detail}{wp.timing ? ` · ${wp.timing}` : ''}</span></div></div>
-          ))}</div>
         )}
       </div>
 
-      <Divider />
+      {/* ═══ TAB BAR ═══ */}
+      <TabBar
+        active={activeTab}
+        onChange={setActiveTab}
+        showAuditoria={isAdvanced}
+        elencoLoaded={!!adv}
+        patternCount={patterns.length}
+      />
 
-      {/* ═══ AVANCADO ═══ */}
-      <div className="px-7 py-6">
-        <SectionLabel icon="◍">Elenco e Disponibilidade</SectionLabel>
-        {!adv ? (
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <p className="text-[12px] text-white/45">Ausencias, suspensoes, goleadores e jogadores-chave. Sob demanda para preservar limite da API.</p>
-            <button onClick={loadAdv} disabled={advLoading} className="px-4 py-2.5 rounded-xl text-[12px] font-semibold bg-gradient-to-r from-cyan-500/15 to-blue-500/15 text-cyan-300 border border-cyan-400/20 hover:from-cyan-500/25 hover:to-blue-500/25 disabled:opacity-40 transition-all whitespace-nowrap" type="button">{advLoading ? 'Carregando...' : 'Carregar avancada'}</button>
-          </div>
-        ) : <AdvContent data={adv} homeName={homeName} awayName={awayName} />}
+      {/* ═══ CONTENT ═══ */}
+      <div className="relative">
+        {activeTab === 'visao' && (
+          <TabVisao data={data} score={score} homeName={homeName} awayName={awayName} homeAccent={homeAccent} awayAccent={awayAccent} balanceLabel={balanceLabel} isAdvanced={isAdvanced} />
+        )}
+        {activeTab === 'forma' && (
+          <TabForma data={data} homeName={homeName} awayName={awayName} homeAccent={homeAccent} awayAccent={awayAccent} />
+        )}
+        {activeTab === 'gols' && (
+          <TabGols data={data} homeName={homeName} awayName={awayName} homeAccent={homeAccent} awayAccent={awayAccent} />
+        )}
+        {activeTab === 'elenco' && (
+          <TabElenco adv={adv} loading={advLoading} onLoad={loadAdv} homeName={homeName} awayName={awayName} />
+        )}
+        {activeTab === 'padroes' && (
+          <TabPadroes patterns={patterns} hasActivePatterns={getActivePatterns().length > 0} score={score} isAdvanced={isAdvanced} />
+        )}
+        {activeTab === 'auditoria' && isAdvanced && (
+          <TabAuditoria data={data} homeId={homeId} awayId={awayId} />
+        )}
       </div>
-
-      {/* ═══ AUDITORIA ═══ */}
-      {isAdvanced && <><Divider /><div className="px-7 py-5"><details><summary className="text-[10px] text-white/30 cursor-pointer hover:text-white/50 uppercase tracking-wider font-semibold">Auditoria Tecnica</summary><div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2 text-[10px] text-white/40">{[['Status', data.status], ['Confianca', data.confidence], ['Forma', `${hf ? hf.matches.length + 'j' : 'n/a'} / ${af ? af.matches.length + 'j' : 'n/a'}`], ['Casa/Fora', `${hh ? hh.matches.length : 'n/a'} / ${aa ? aa.matches.length : 'n/a'}`], ['Gols', gp ? 'sim' : 'nao'], ['Disciplina', dp ? dp.trend : 'n/a'], ['H2H', h2h ? `${h2h.total}` : 'n/a'], ['Fontes', data.dataSources.length || 0]].map(([k, v]) => <div key={k} className="flex items-center justify-between rounded bg-white/[0.02] px-2 py-1"><span>{k}</span><span className="text-white/65 font-medium">{v}</span></div>)}</div>{data.limitations && data.limitations.length > 0 && <div className="mt-2 space-y-0.5">{data.limitations.map((l, i) => <p key={i} className="text-[10px] text-amber-400/40">! {l}</p>)}</div>}</details></div></>}
     </WarRoomShell>
   )
 }
 
-// ═══ Components ═══
+// ═══════════════════════════════════════════════════════════════════════════
+// SHELL & PRIMITIVES
+// ═══════════════════════════════════════════════════════════════════════════
 
 function WarRoomShell({ children }: { children: React.ReactNode }) {
   return (
-    <section className="rounded-[28px] overflow-hidden border border-white/[0.07] bg-gradient-to-br from-[#0a0d14] via-[#0b1018] to-[#0c1322] shadow-[0_24px_80px_-20px_rgba(0,0,0,0.5)] relative">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(34,211,238,0.025),transparent_60%)] pointer-events-none" />
+    <section className="rounded-[28px] overflow-hidden border border-white/[0.07] bg-gradient-to-br from-[#0a0d14] via-[#0b1018] to-[#0c1322] shadow-[0_24px_80px_-20px_rgba(0,0,0,0.55)] relative">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(34,211,238,0.030),transparent_60%),radial-gradient(ellipse_at_bottom_right,rgba(99,102,241,0.025),transparent_60%)] pointer-events-none" />
       <div className="relative">{children}</div>
     </section>
   )
 }
 
-function Header({ status }: { status: string }) {
-  return <div className="px-7 pt-6 pb-4"><div className="flex items-center gap-2"><span className="text-[10px] font-bold uppercase tracking-[0.15em] text-cyan-400/60">War Room · Pre-Jogo</span><span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-white/[0.06] text-white/45">{status}</span></div></div>
+function Divider() {
+  return <div className="h-px bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" />
 }
 
-function Divider() { return <div className="h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" /> }
-
-function SectionLabel({ children, icon }: { children: React.ReactNode; icon?: string }) {
-  return <div className="flex items-center gap-2 mb-4">{icon && <span className="text-[12px] text-cyan-400/50">{icon}</span>}<h4 className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/45">{children}</h4></div>
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/50 mb-3.5">{children}</h4>
 }
 
-function Chip({ icon, label, value, score }: { icon: string; label: string; value: string; score: number }) {
-  const c = score >= 70 ? 'bg-emerald-500/10 text-emerald-300 border-emerald-400/15' : score >= 50 ? 'bg-blue-500/10 text-blue-300 border-blue-400/15' : 'bg-white/[0.04] text-white/45 border-white/[0.08]'
-  return <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border ${c}`}><span className="opacity-60">{icon}</span><span className="text-white/45">{label}</span><span className="font-bold">{value}</span></span>
+function CoverageBadge({ status }: { status: 'rich' | 'partial' | 'basic' | 'unavailable' }) {
+  const cfg =
+    status === 'rich'
+      ? { c: 'bg-emerald-500/12 text-emerald-300 border-emerald-400/15', t: 'Rico' }
+      : status === 'partial'
+      ? { c: 'bg-amber-500/12 text-amber-300 border-amber-400/15', t: 'Parcial' }
+      : status === 'basic'
+      ? { c: 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15', t: 'Basico' }
+      : { c: 'bg-white/[0.05] text-white/45 border-white/[0.06]', t: 'Limitado' }
+  return <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${cfg.c}`}>{cfg.t}</span>
 }
 
-function Metric({ label, value, accent }: { label: string; value: string; accent: string }) {
-  const c = accent === 'emerald' ? 'text-emerald-400' : accent === 'amber' ? 'text-amber-400' : accent === 'rose' ? 'text-rose-400' : 'text-white/85'
-  return <div><span className={`text-[22px] font-bold ${c} block leading-tight`}>{value}</span><span className="text-[11px] text-white/45">{label}</span></div>
-}
-
-function Bar({ label, pct, color }: { label: string; pct: number; color: string }) {
-  const c = color === 'emerald' ? 'from-emerald-500 to-emerald-400' : color === 'cyan' ? 'from-cyan-500 to-cyan-400' : 'from-blue-500 to-blue-400'
-  return <div><div className="flex items-center justify-between mb-1"><span className="text-[11px] text-white/50">{label}</span><span className="text-[12px] text-white/85 font-bold tabular-nums">{pct}%</span></div><div className="h-1.5 rounded-full bg-white/[0.05] overflow-hidden"><div className={`h-full bg-gradient-to-r ${c}`} style={{ width: `${pct}%` }} /></div></div>
-}
-
-function TeamCol({ name, form, venue, venueLabel, align }: { name: string; form?: TeamFormSummary; venue?: TeamFormSummary; venueLabel: string; align: 'left' | 'right' }) {
-  const ta = align === 'right' ? 'text-right' : 'text-left'
-  const fj = align === 'right' ? 'justify-end' : 'justify-start'
+function ScoreOrb({ score }: { score: PreMatchScore }) {
+  const conf = score.confidence
+  const tone = score.overallScore >= 70 ? 'from-emerald-500/25 via-cyan-500/15' : score.overallScore >= 50 ? 'from-blue-500/22 via-cyan-500/15' : 'from-white/[0.06] via-white/[0.03]'
   return (
-    <div className={ta}>
-      <p className="text-[15px] font-bold text-white mb-2.5 truncate">{name}</p>
-      {form ? (<>
-        <div className={`flex gap-1 mb-3 ${fj}`}>{form.formString.split(' ').map((r, i) => <span key={i} className={`h-7 w-7 rounded-lg flex items-center justify-center text-[10px] font-bold ${r === 'W' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/15' : r === 'D' ? 'bg-amber-500/15 text-amber-300 border border-amber-400/10' : 'bg-rose-500/15 text-rose-300 border border-rose-400/10'}`}>{r === 'W' ? 'V' : r === 'D' ? 'E' : 'D'}</span>)}</div>
-        <div className="space-y-1.5 text-[12px]">
-          <div className={`flex items-center gap-3 ${fj}`}><span className="text-white/40">Pro</span><span className="text-emerald-400 font-bold tabular-nums">{form.summary.goalsFor}</span></div>
-          <div className={`flex items-center gap-3 ${fj}`}><span className="text-white/40">Contra</span><span className="text-rose-400 font-bold tabular-nums">{form.summary.goalsAgainst}</span></div>
-          <div className={`flex items-center gap-3 ${fj}`}><span className="text-white/40">Saldo</span><span className={`font-bold tabular-nums ${form.summary.goalsFor - form.summary.goalsAgainst > 0 ? 'text-emerald-400' : form.summary.goalsFor - form.summary.goalsAgainst < 0 ? 'text-rose-400' : 'text-white/55'}`}>{form.summary.goalsFor - form.summary.goalsAgainst > 0 ? '+' : ''}{form.summary.goalsFor - form.summary.goalsAgainst}</span></div>
-        </div>
-        {venue && venue.matches.length >= 2 && <div className="mt-3 pt-3 border-t border-white/[0.05]"><p className="text-[10px] text-white/35 uppercase tracking-wider mb-1">{venueLabel}</p><p className="text-[11px] text-white/55"><span className="text-emerald-400/70">{venue.summary.wins}V</span> {venue.summary.draws}E <span className="text-rose-400/70">{venue.summary.losses}D</span></p></div>}
-      </>) : <p className="text-[11px] text-white/30">Forma indisponivel</p>}
+    <div className="flex items-center gap-3 shrink-0">
+      <div className="text-right">
+        <span className="text-[10px] text-white/40 uppercase tracking-wider block font-semibold">Score</span>
+        <span className="text-[10px] text-white/35 block">conf. {conf}</span>
+      </div>
+      <div className={`relative h-[72px] w-[72px] rounded-2xl bg-gradient-to-br ${tone} to-blue-500/5 border border-cyan-400/25 flex flex-col items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]`}>
+        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/8 to-transparent pointer-events-none" />
+        <span className="relative text-[28px] font-bold text-white leading-none tabular-nums">{score.overallScore}</span>
+        <span className="relative text-[9px] text-cyan-300/65 mt-0.5 font-medium">/100</span>
+      </div>
     </div>
   )
 }
 
-function AdvContent({ data, homeName, awayName }: { data: PreMatchAdvancedResult; homeName: string; awayName: string }) {
-  const hasAbs = data.absences.home.injuries.length + data.absences.away.injuries.length + data.absences.home.suspensions.length + data.absences.away.suspensions.length > 0
-  const hasScorers = data.scorers.home.players.length + data.scorers.away.players.length > 0
-  if (!hasAbs && !hasScorers) return <p className="text-[12px] text-white/35">Provider nao retornou ausencias ou goleadores para esta liga.</p>
+function Chip({ label, value, score, neutral }: { label: string; value: string; score?: number; neutral?: boolean }) {
+  const c = neutral
+    ? 'bg-white/[0.04] text-white/55 border-white/[0.07]'
+    : (score ?? 0) >= 70
+    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-400/15'
+    : (score ?? 0) >= 50
+    ? 'bg-blue-500/10 text-blue-300 border-blue-400/15'
+    : 'bg-white/[0.04] text-white/45 border-white/[0.07]'
   return (
-    <div className="space-y-4">
-      {hasAbs && <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><p className="text-[10px] uppercase tracking-wider text-white/35 mb-2">{homeName} · Ausencias</p>{data.absences.home.injuries.map((p, i) => <p key={i} className="text-[12px] text-rose-400/80 flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{p.name}</p>)}{data.absences.home.suspensions.map((p, i) => <p key={i} className="text-[12px] text-amber-400/80 flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" />{p.name}</p>)}</div><div><p className="text-[10px] uppercase tracking-wider text-white/35 mb-2">{awayName} · Ausencias</p>{data.absences.away.injuries.map((p, i) => <p key={i} className="text-[12px] text-rose-400/80 flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{p.name}</p>)}{data.absences.away.suspensions.map((p, i) => <p key={i} className="text-[12px] text-amber-400/80 flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" />{p.name}</p>)}</div></div>}
-      {hasScorers && <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-white/[0.04]"><div><p className="text-[10px] uppercase tracking-wider text-white/35 mb-2">{homeName} · Goleadores</p>{data.scorers.home.players.map((p, i) => <p key={i} className="text-[12px] text-white/65">{p.name} <span className="text-emerald-400 font-bold ml-1">{p.goals}g</span>{p.assists ? <span className="text-blue-400 ml-1">{p.assists}a</span> : null}</p>)}</div><div><p className="text-[10px] uppercase tracking-wider text-white/35 mb-2">{awayName} · Goleadores</p>{data.scorers.away.players.map((p, i) => <p key={i} className="text-[12px] text-white/65">{p.name} <span className="text-emerald-400 font-bold ml-1">{p.goals}g</span>{p.assists ? <span className="text-blue-400 ml-1">{p.assists}a</span> : null}</p>)}</div></div>}
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border ${c}`}>
+      <span className="text-white/45">{label}</span>
+      <span className="font-bold">{value}</span>
+    </span>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB BAR
+// ═══════════════════════════════════════════════════════════════════════════
+
+function TabBar({ active, onChange, showAuditoria, elencoLoaded, patternCount }: { active: TabKey; onChange: (k: TabKey) => void; showAuditoria: boolean; elencoLoaded: boolean; patternCount: number }) {
+  const tabs: { key: TabKey; label: string; badge?: string | number }[] = [
+    { key: 'visao', label: 'Visao' },
+    { key: 'forma', label: 'Forma' },
+    { key: 'gols', label: 'Gols' },
+    { key: 'elenco', label: 'Elenco', badge: elencoLoaded ? '✓' : 'on demand' },
+    { key: 'padroes', label: 'Padroes', badge: patternCount > 0 ? patternCount : undefined },
+  ]
+  if (showAuditoria) tabs.push({ key: 'auditoria', label: 'Auditoria' })
+
+  return (
+    <div className="px-5 pb-1 border-y border-white/[0.05] bg-gradient-to-b from-white/[0.015] to-transparent">
+      <div className="flex gap-0.5 overflow-x-auto scrollbar-none -mx-1 px-1 py-2">
+        {tabs.map(t => {
+          const isActive = active === t.key
+          return (
+            <button
+              key={t.key}
+              onClick={() => onChange(t.key)}
+              type="button"
+              className={`relative px-3.5 py-2 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${isActive ? 'bg-white/[0.08] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'text-white/50 hover:text-white/80 hover:bg-white/[0.03]'}`}
+            >
+              {t.label}
+              {t.badge !== undefined && (
+                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md ${isActive ? 'bg-cyan-500/20 text-cyan-300' : 'bg-white/[0.06] text-white/45'}`}>{t.badge}</span>
+              )}
+              {isActive && <span className="absolute inset-x-3 -bottom-[9px] h-[2px] bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full" />}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB: VISAO
+// ═══════════════════════════════════════════════════════════════════════════
+
+function TabVisao({ data, score, homeName, awayName, homeAccent, awayAccent, balanceLabel, isAdvanced }: { data: PreMatchIntelligenceResult; score: PreMatchScore | null; homeName: string; awayName: string; homeAccent: TeamAccent; awayAccent: TeamAccent; balanceLabel: string; isAdvanced: boolean }) {
+  const h2h = data.h2h
+  const total = h2h ? Math.max(h2h.total, 1) : 0
+
+  return (
+    <div>
+      {/* A. Leitura executiva */}
+      <div className="px-7 pt-6 pb-5">
+        <SectionLabel>Leitura Executiva</SectionLabel>
+        <p className="text-[14px] text-white/85 leading-relaxed font-medium">
+          {score?.mainRead || data.executiveSummary}
+        </p>
+        {score && score.homeStrength.evidence.length + score.awayStrength.evidence.length + (score.goalsTrend.evidence.length || 0) > 0 && (
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2.5">
+            {[...score.homeStrength.evidence.slice(0, 1), ...score.goalsTrend.evidence.slice(0, 1), ...score.awayStrength.evidence.slice(0, 1)]
+              .filter(Boolean)
+              .slice(0, 3)
+              .map((ev, i) => (
+                <div key={i} className="rounded-xl bg-white/[0.025] border border-white/[0.05] px-3.5 py-2.5">
+                  <span className="text-[11px] text-white/65 leading-snug">{ev}</span>
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+
+      <Divider />
+
+      {/* B. Mapa do Confronto */}
+      <div className="px-7 py-6 relative">
+        <SectionLabel>Mapa do Confronto</SectionLabel>
+        <div className="grid grid-cols-[1fr_auto_1fr] gap-5 sm:gap-7 items-start">
+          <TeamColumn name={homeName} accent={homeAccent} form={data.homeForm} venue={data.homeAtHome} venueLabel="Em casa" align="left" />
+          <VsCenter score={score} balanceLabel={balanceLabel} h2hTotal={h2h?.total} />
+          <TeamColumn name={awayName} accent={awayAccent} form={data.awayForm} venue={data.awayAway} venueLabel="Fora" align="right" />
+        </div>
+
+        {/* Mini comparator rails */}
+        {score && (
+          <div className="mt-6 space-y-2">
+            <ComparatorRail label="Forca" left={score.homeStrength.score} right={score.awayStrength.score} leftAccent={homeAccent} rightAccent={awayAccent} />
+            <ComparatorRail label="Gols" left={Math.round(score.goalsTrend.score * 0.6)} right={Math.round(score.goalsTrend.score * 0.4)} leftAccent={homeAccent} rightAccent={awayAccent} muted />
+            <ComparatorRail label="Disciplina" left={Math.round(score.disciplineRisk.score / 2)} right={Math.round(score.disciplineRisk.score / 2)} leftAccent={homeAccent} rightAccent={awayAccent} muted />
+          </div>
+        )}
+      </div>
+
+      <Divider />
+
+      {/* C. H2H Rail */}
+      <div className="px-7 py-6">
+        <SectionLabel>Confronto Direto</SectionLabel>
+        {h2h && total > 0 ? (
+          <H2HRail h2h={h2h} homeName={homeName} awayName={awayName} homeAccent={homeAccent} awayAccent={awayAccent} recent={isAdvanced ? data.recentMeetings : undefined} />
+        ) : (
+          <p className="text-[12px] text-white/40">Confronto direto indisponivel no provider.</p>
+        )}
+      </div>
+
+      <Divider />
+
+      {/* D. Watch Points */}
+      <div className="px-7 py-6">
+        <SectionLabel>Pontos de Atencao</SectionLabel>
+        {score && score.watchPoints.length > 0 ? (
+          <ul className="space-y-2.5">
+            {score.watchPoints.map((wp, i) => (
+              <li key={i} className="flex items-start gap-3">
+                <span className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${wp.severity === 'attention' ? 'bg-amber-400' : wp.severity === 'critical' ? 'bg-rose-400' : 'bg-cyan-400/70'}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-[13px] text-white/85 font-semibold">{wp.label}</span>
+                    {wp.timing && <span className="text-[10px] text-white/40 font-medium uppercase tracking-wider">{wp.timing}</span>}
+                  </div>
+                  <p className="text-[12px] text-white/55 leading-snug mt-0.5">{wp.detail}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-[12px] text-white/40">Nenhum ponto de atencao gerado pela leitura atual.</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB: FORMA
+// ═══════════════════════════════════════════════════════════════════════════
+
+function TabForma({ data, homeName, awayName, homeAccent, awayAccent }: { data: PreMatchIntelligenceResult; homeName: string; awayName: string; homeAccent: TeamAccent; awayAccent: TeamAccent }) {
+  const hf = data.homeForm
+  const af = data.awayForm
+  const hh = data.homeAtHome
+  const aa = data.awayAway
+
+  if (!hf && !af) {
+    return (
+      <div className="px-7 py-10 text-center">
+        <p className="text-[13px] text-white/55 font-medium">Provider nao retornou forma recente suficiente.</p>
+        <p className="text-[11px] text-white/35 mt-1">A leitura usa H2H, perfil de gols e Base GoalSense quando disponivel.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {/* General form */}
+      <div className="px-7 pt-6 pb-5">
+        <SectionLabel>Ultimos 5 Jogos</SectionLabel>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <FormCard form={hf} teamName={homeName} accent={homeAccent} />
+          <FormCard form={af} teamName={awayName} accent={awayAccent} />
+        </div>
+      </div>
+
+      <Divider />
+
+      {/* Home at home / Away away */}
+      <div className="px-7 py-6">
+        <SectionLabel>Mando vs Visita</SectionLabel>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <VenueCard form={hh} teamName={homeName} accent={homeAccent} label="Em casa" />
+          <VenueCard form={aa} teamName={awayName} accent={awayAccent} label="Fora" />
+        </div>
+      </div>
+
+      {/* Match list (if rich) */}
+      {(hf?.matches.length || af?.matches.length) && (
+        <>
+          <Divider />
+          <div className="px-7 py-6">
+            <SectionLabel>Ultimos Resultados</SectionLabel>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {hf && <RecentMatchList form={hf} teamName={homeName} />}
+              {af && <RecentMatchList form={af} teamName={awayName} />}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function FormCard({ form, teamName, accent }: { form?: TeamFormSummary; teamName: string; accent: TeamAccent }) {
+  if (!form) {
+    return (
+      <div className="rounded-2xl bg-white/[0.025] border border-white/[0.05] px-5 py-4">
+        <p className="text-[13px] text-white font-bold mb-2 truncate">{teamName}</p>
+        <p className="text-[11px] text-white/40">Forma indisponivel no provider.</p>
+      </div>
+    )
+  }
+  const { wins, draws, losses, goalsFor, goalsAgainst } = form.summary
+  const n = form.matches.length
+  const avg = n > 0 ? ((goalsFor + goalsAgainst) / n).toFixed(1) : '0.0'
+  const winPct = n > 0 ? Math.round((wins / n) * 100) : 0
+  return (
+    <div className="rounded-2xl border border-white/[0.06] bg-gradient-to-br from-white/[0.02] to-white/[0.01] px-5 py-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[13px] text-white font-bold truncate flex-1 pr-2">{teamName}</p>
+        <span className="text-[10px] uppercase tracking-wider text-white/40 font-semibold">{n}j</span>
+      </div>
+      <div className="flex gap-1 mb-4">
+        {form.formString.split(' ').map((r, i) => (
+          <span key={i} className={`h-7 w-7 rounded-lg flex items-center justify-center text-[10px] font-bold tabular-nums ${r === 'W' ? 'bg-emerald-500/22 text-emerald-300 border border-emerald-400/20' : r === 'D' ? 'bg-amber-500/15 text-amber-300 border border-amber-400/15' : 'bg-rose-500/18 text-rose-300 border border-rose-400/15'}`}>
+            {r === 'W' ? 'V' : r === 'D' ? 'E' : 'D'}
+          </span>
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <Stat value={`${wins}V`} label="Vitorias" tone="emerald" />
+        <Stat value={`${draws}E`} label="Empates" tone="amber" />
+        <Stat value={`${losses}D`} label="Derrotas" tone="rose" />
+      </div>
+      <div className="mt-3 pt-3 border-t border-white/[0.05] grid grid-cols-3 gap-2 text-center">
+        <Stat value={String(goalsFor)} label="Gols pro" tone="emerald" small />
+        <Stat value={String(goalsAgainst)} label="Sofridos" tone="rose" small />
+        <Stat value={avg} label="Media/j" tone="white" small />
+      </div>
+      <div className="mt-3 flex items-center gap-2 text-[11px]">
+        <span className="text-white/40">Aproveitamento</span>
+        <div className="flex-1 h-1.5 rounded-full bg-white/[0.05] overflow-hidden">
+          <div className="h-full rounded-full" style={{ width: `${winPct}%`, background: `linear-gradient(90deg, ${accent.from}, ${accent.to})` }} />
+        </div>
+        <span className="text-white/85 font-bold tabular-nums">{winPct}%</span>
+      </div>
+    </div>
+  )
+}
+
+function VenueCard({ form, teamName, accent, label }: { form?: TeamFormSummary; teamName: string; accent: TeamAccent; label: string }) {
+  if (!form || form.matches.length < 2) {
+    return (
+      <div className="rounded-2xl bg-white/[0.02] border border-white/[0.05] px-5 py-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[12px] text-white/85 font-semibold truncate flex-1 pr-2">{teamName}</p>
+          <span className="text-[9px] uppercase tracking-wider text-white/35 font-semibold">{label}</span>
+        </div>
+        <p className="text-[11px] text-white/40">Amostra insuficiente.</p>
+      </div>
+    )
+  }
+  const { wins, draws, losses, goalsFor, goalsAgainst } = form.summary
+  const n = form.matches.length
+  const reading = wins / n >= 0.6 ? 'Forte' : wins / n >= 0.35 ? 'Regular' : 'Fraco'
+  const readingTone = reading === 'Forte' ? 'text-emerald-400' : reading === 'Regular' ? 'text-amber-400' : 'text-rose-400'
+  return (
+    <div className="rounded-2xl border border-white/[0.06] bg-gradient-to-br from-white/[0.025] to-white/[0.01] px-5 py-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[12px] text-white font-bold truncate flex-1 pr-2">{teamName}</p>
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] font-bold uppercase tracking-wider ${readingTone}`}>{reading}</span>
+          <span className="text-[9px] uppercase tracking-wider text-white/35 font-semibold">{label}</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 mb-3 text-[11px]">
+        <span className="text-emerald-400 font-bold">{wins}V</span>
+        <span className="text-amber-400">{draws}E</span>
+        <span className="text-rose-400">{losses}D</span>
+        <span className="text-white/30 ml-auto">em {n}j</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-white/[0.05] overflow-hidden mb-2 flex">
+        <div className="h-full" style={{ width: `${(wins / n) * 100}%`, background: `linear-gradient(90deg, ${accent.from}, ${accent.to})` }} />
+        <div className="h-full bg-white/[0.10]" style={{ width: `${(draws / n) * 100}%` }} />
+        <div className="h-full bg-rose-500/40" style={{ width: `${(losses / n) * 100}%` }} />
+      </div>
+      <div className="flex items-center justify-between text-[11px]">
+        <span className="text-white/45">Gols</span>
+        <span><span className="text-emerald-400 font-bold">{goalsFor}</span> <span className="text-white/25">·</span> <span className="text-rose-400 font-bold">{goalsAgainst}</span></span>
+      </div>
+    </div>
+  )
+}
+
+function RecentMatchList({ form, teamName }: { form: TeamFormSummary; teamName: string }) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wider text-white/40 mb-2 font-semibold">{teamName}</p>
+      <div className="space-y-1">
+        {form.matches.slice(0, 5).map((m, i) => {
+          const isHome = m.wasHome
+          const opp = isHome ? m.awayTeam : m.homeTeam
+          const gf = isHome ? m.homeScore ?? 0 : m.awayScore ?? 0
+          const ga = isHome ? m.awayScore ?? 0 : m.homeScore ?? 0
+          const tone = m.resultForTeam === 'W' ? 'text-emerald-400' : m.resultForTeam === 'L' ? 'text-rose-400' : 'text-amber-400'
+          return (
+            <div key={i} className="flex items-center gap-2.5 text-[11px] py-1">
+              <span className={`h-1.5 w-1.5 rounded-full ${m.resultForTeam === 'W' ? 'bg-emerald-400' : m.resultForTeam === 'L' ? 'bg-rose-400' : 'bg-amber-400'}`} />
+              <span className="text-white/30 tabular-nums w-12 shrink-0">{new Date(m.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
+              <span className="text-white/55 truncate flex-1">{isHome ? '' : '@ '}{opp}</span>
+              <span className={`font-bold tabular-nums ${tone}`}>{gf}-{ga}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB: GOLS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function TabGols({ data, homeName, awayName, homeAccent, awayAccent }: { data: PreMatchIntelligenceResult; homeName: string; awayName: string; homeAccent: TeamAccent; awayAccent: TeamAccent }) {
+  const gp = data.goalsProfile
+  const h2h = data.h2h
+
+  if (!gp) {
+    return (
+      <div className="px-7 py-10 text-center">
+        <p className="text-[13px] text-white/55 font-medium">Sem amostra suficiente para perfil ofensivo.</p>
+      </div>
+    )
+  }
+
+  const trend = gp.over25Pct >= 60 || gp.avgGoalsPerMatch >= 2.8 ? 'Forte' : gp.over25Pct >= 45 ? 'Moderada' : 'Baixa'
+  const trendTone = trend === 'Forte' ? 'text-emerald-400' : trend === 'Moderada' ? 'text-amber-400' : 'text-white/55'
+
+  return (
+    <div>
+      {/* Headline metrics */}
+      <div className="px-7 pt-6 pb-5">
+        <div className="grid grid-cols-3 gap-3">
+          <BigMetric value={String(gp.avgGoalsPerMatch)} label="Media/jogo" tone="emerald" />
+          <BigMetric value={`${gp.bothScoredPct}%`} label="Ambos marcam" tone={gp.bothScoredPct >= 55 ? 'amber' : 'white'} />
+          <BigMetric value={trend} label="Tendencia" tone={trend === 'Forte' ? 'emerald' : trend === 'Moderada' ? 'amber' : 'white'} valueClassName={trendTone} />
+        </div>
+      </div>
+
+      <Divider />
+
+      {/* Over bars */}
+      <div className="px-7 py-6">
+        <SectionLabel>Linhas de Over</SectionLabel>
+        <div className="space-y-3">
+          <Bar label="Over 1.5" pct={gp.over15Pct} from="#06b6d4" to="#3b82f6" />
+          <Bar label="Over 2.5" pct={gp.over25Pct} from="#10b981" to="#34d399" />
+          <Bar label="Ambos marcam" pct={gp.bothScoredPct} from="#f59e0b" to="#fb923c" />
+        </div>
+      </div>
+
+      <Divider />
+
+      {/* Per-team goals */}
+      <div className="px-7 py-6">
+        <SectionLabel>Gols por Equipe</SectionLabel>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <TeamGoalsCard teamName={homeName} accent={homeAccent} avgFor={gp.homeAvgFor} avgAgainst={gp.homeAvgAgainst} side="Mandante" />
+          <TeamGoalsCard teamName={awayName} accent={awayAccent} avgFor={gp.awayAvgFor} avgAgainst={gp.awayAvgAgainst} side="Visitante" />
+        </div>
+      </div>
+
+      {/* H2H goals */}
+      {h2h && h2h.total > 0 && (
+        <>
+          <Divider />
+          <div className="px-7 py-6">
+            <SectionLabel>Gols no Confronto Direto</SectionLabel>
+            <div className="grid grid-cols-3 gap-3">
+              <BigMetric value={String(h2h.homeGoals)} label={`${homeName.split(' ')[0]} pro`} tone="emerald" />
+              <BigMetric value={String(h2h.awayGoals)} label={`${awayName.split(' ')[0]} pro`} tone="emerald" />
+              <BigMetric value={((h2h.homeGoals + h2h.awayGoals) / h2h.total).toFixed(1)} label={`Media / ${h2h.total}j`} tone="white" />
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="px-7 pb-5">
+        <p className="text-[10px] text-white/35">Amostra: {gp.sampleSize} jogos · leitura, nao previsao.</p>
+      </div>
+    </div>
+  )
+}
+
+function TeamGoalsCard({ teamName, accent, avgFor, avgAgainst, side }: { teamName: string; accent: TeamAccent; avgFor: number; avgAgainst: number; side: string }) {
+  return (
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[12px] text-white font-bold truncate flex-1 pr-2">{teamName}</p>
+        <span className="text-[9px] uppercase tracking-wider text-white/40 font-semibold">{side}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <span className="text-[22px] font-bold leading-none tabular-nums" style={{ color: accent.from === '#3b82f6' ? '#60a5fa' : accent.from }}>{avgFor.toFixed(1)}</span>
+          <p className="text-[10px] text-white/45 mt-1 font-medium">Marcados/jogo</p>
+        </div>
+        <div>
+          <span className="text-[22px] font-bold leading-none tabular-nums text-rose-400">{avgAgainst.toFixed(1)}</span>
+          <p className="text-[10px] text-white/45 mt-1 font-medium">Sofridos/jogo</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB: ELENCO
+// ═══════════════════════════════════════════════════════════════════════════
+
+function TabElenco({ adv, loading, onLoad, homeName, awayName }: { adv: PreMatchAdvancedResult | null; loading: boolean; onLoad: () => void; homeName: string; awayName: string }) {
+  if (!adv) {
+    return (
+      <div className="px-7 py-8">
+        <div className="rounded-2xl border border-white/[0.07] bg-gradient-to-br from-cyan-500/[0.04] via-blue-500/[0.03] to-transparent px-6 py-7 text-center">
+          <h3 className="text-[16px] text-white font-bold mb-1.5">Elenco e Disponibilidade</h3>
+          <p className="text-[12px] text-white/60 leading-relaxed max-w-md mx-auto mb-5">
+            Ausencias, suspensoes, pendurados, goleadores e jogadores-chave quando o provider disponibiliza.
+          </p>
+          <button
+            onClick={onLoad}
+            disabled={loading}
+            type="button"
+            className="px-5 py-2.5 rounded-xl text-[12px] font-bold bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-200 border border-cyan-400/25 hover:from-cyan-500/30 hover:to-blue-500/30 disabled:opacity-40 transition-all"
+          >
+            {loading ? 'Carregando...' : 'Carregar analise avancada'}
+          </button>
+          <p className="text-[10px] text-white/35 mt-3 font-medium">Consulta sob demanda · preserva limite da API.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const hasAbs = adv.absences.home.injuries.length + adv.absences.away.injuries.length + adv.absences.home.suspensions.length + adv.absences.away.suspensions.length > 0
+  const hasScorers = adv.scorers.home.players.length + adv.scorers.away.players.length > 0
+
+  if (!hasAbs && !hasScorers) {
+    return (
+      <div className="px-7 py-10 text-center">
+        <p className="text-[13px] text-white/55 font-medium">Provider nao retornou dados de elenco para esta liga.</p>
+        {adv.limitations.length > 0 && (
+          <ul className="mt-3 space-y-1">{adv.limitations.slice(0, 3).map((l, i) => <li key={i} className="text-[11px] text-white/35">· {l}</li>)}</ul>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {hasAbs && (
+        <div className="px-7 pt-6 pb-5">
+          <SectionLabel>Ausencias</SectionLabel>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <AbsenceColumn teamName={homeName} report={adv.absences.home} />
+            <AbsenceColumn teamName={awayName} report={adv.absences.away} />
+          </div>
+        </div>
+      )}
+
+      {hasScorers && (
+        <>
+          {hasAbs && <Divider />}
+          <div className="px-7 py-6">
+            <SectionLabel>Goleadores</SectionLabel>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <ScorersColumn teamName={homeName} report={adv.scorers.home} />
+              <ScorersColumn teamName={awayName} report={adv.scorers.away} />
+            </div>
+          </div>
+        </>
+      )}
+
+      {adv.riskFlags.length > 0 && (
+        <>
+          <Divider />
+          <div className="px-7 py-5">
+            <SectionLabel>Sinais</SectionLabel>
+            <div className="space-y-1.5">
+              {adv.riskFlags.map((f, i) => (
+                <div key={i} className="flex items-start gap-2.5 text-[12px]">
+                  <span className={`mt-1 h-1.5 w-1.5 rounded-full shrink-0 ${f.severity === 'attention' ? 'bg-amber-400' : f.severity === 'critical' ? 'bg-rose-400' : 'bg-cyan-400/70'}`} />
+                  <div><span className="text-white/85 font-semibold">{f.label}</span><span className="text-white/45 ml-1.5">{f.detail}</span></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function AbsenceColumn({ teamName, report }: { teamName: string; report: PreMatchAdvancedResult['absences']['home'] }) {
+  const empty = report.injuries.length + report.suspensions.length === 0
+  return (
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-4">
+      <p className="text-[10px] uppercase tracking-wider text-white/40 mb-3 font-semibold">{teamName}</p>
+      {empty ? (
+        <p className="text-[11px] text-white/35">Sem ausencias reportadas.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {report.injuries.map((p, i) => (
+            <div key={`i-${i}`} className="flex items-center gap-2.5 text-[12px]">
+              <span className="h-1.5 w-1.5 rounded-full bg-rose-400 shrink-0" />
+              <span className="text-white/85 font-medium truncate">{p.name}</span>
+              <span className="text-[10px] text-rose-400/70 ml-auto uppercase tracking-wider font-semibold">Lesao</span>
+            </div>
+          ))}
+          {report.suspensions.map((p, i) => (
+            <div key={`s-${i}`} className="flex items-center gap-2.5 text-[12px]">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
+              <span className="text-white/85 font-medium truncate">{p.name}</span>
+              <span className="text-[10px] text-amber-400/70 ml-auto uppercase tracking-wider font-semibold">Suspenso</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ScorersColumn({ teamName, report }: { teamName: string; report: PreMatchAdvancedResult['scorers']['home'] }) {
+  return (
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-4">
+      <p className="text-[10px] uppercase tracking-wider text-white/40 mb-3 font-semibold">{teamName}</p>
+      {report.players.length === 0 ? (
+        <p className="text-[11px] text-white/35">Sem destaque ofensivo na liga.</p>
+      ) : (
+        <div className="space-y-2">
+          {report.players.map((p, i) => (
+            <div key={i} className="flex items-center gap-2.5 text-[12px]">
+              <span className="text-white/85 font-medium truncate flex-1">{p.name}</span>
+              <span className="text-emerald-400 font-bold tabular-nums">{p.goals}g</span>
+              {p.assists ? <span className="text-blue-400 font-bold tabular-nums">{p.assists}a</span> : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB: PADROES
+// ═══════════════════════════════════════════════════════════════════════════
+
+function TabPadroes({ patterns, hasActivePatterns, score, isAdvanced }: { patterns: PreMatchPatternReadiness[]; hasActivePatterns: boolean; score: PreMatchScore | null; isAdvanced: boolean }) {
+  if (!hasActivePatterns) {
+    return (
+      <div className="px-7 py-8">
+        <div className="rounded-2xl border border-white/[0.07] bg-gradient-to-br from-amber-500/[0.04] via-orange-500/[0.025] to-transparent px-6 py-7 text-center">
+          <h3 className="text-[16px] text-white font-bold mb-1.5">Nenhum radar ativo</h3>
+          <p className="text-[12px] text-white/60 leading-relaxed max-w-md mx-auto mb-1">
+            Configure padroes no Command Center para transformar esta leitura em alerta operacional ao vivo.
+          </p>
+          <p className="text-[10px] text-white/35 mt-3 font-medium uppercase tracking-wider">Pre-jogo nunca dispara alerta · prepara o monitoramento</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (patterns.length === 0) {
+    return (
+      <div className="px-7 py-10 text-center">
+        <p className="text-[13px] text-white/55 font-medium">Nenhum padrao se aplica a este confronto.</p>
+        <p className="text-[11px] text-white/35 mt-1">Isso pode acontecer por escopo (favoritos, ligas, times) ou por condicoes.</p>
+      </div>
+    )
+  }
+
+  const visible = isAdvanced ? patterns : patterns.filter(p => p.readiness !== 'not_applicable')
+
+  return (
+    <div className="px-7 py-6 space-y-2">
+      <SectionLabel>Padroes Monitoraveis</SectionLabel>
+      {visible.map(r => <PatternRow key={r.patternId} r={r} />)}
+      {score && score.watchPoints.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-white/[0.05]">
+          <p className="text-[10px] uppercase tracking-wider text-white/40 mb-2 font-semibold">Watch Points Operacionais</p>
+          <ul className="space-y-1.5">
+            {score.watchPoints.map((wp, i) => (
+              <li key={i} className="flex items-start gap-2.5 text-[12px]">
+                <span className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${wp.severity === 'attention' ? 'bg-amber-400' : 'bg-cyan-400/70'}`} />
+                <span className="text-white/70">{wp.label}</span>
+                <span className="text-white/40">· {wp.detail}{wp.timing ? ` · ${wp.timing}` : ''}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PatternRow({ r }: { r: PreMatchPatternReadiness }) {
+  const cfg =
+    r.readiness === 'ready'
+      ? { dot: 'bg-emerald-400', label: 'Pronto', tone: 'text-emerald-300' }
+      : r.readiness === 'needs_live_data'
+      ? { dot: 'bg-cyan-400/70', label: 'Aguarda live', tone: 'text-cyan-300' }
+      : r.readiness === 'needs_more_data'
+      ? { dot: 'bg-amber-400/70', label: 'Mais dados', tone: 'text-amber-300' }
+      : { dot: 'bg-white/30', label: 'N/A', tone: 'text-white/40' }
+  return (
+    <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] px-4 py-3">
+      <div className="flex items-start gap-3">
+        <span className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${cfg.dot}`} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="text-[13px] text-white/90 font-semibold truncate">{r.patternName}</span>
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${cfg.tone}`}>{cfg.label}</span>
+            {r.triggerWindow && <span className="text-[10px] text-white/45 font-medium">· {r.triggerWindow}</span>}
+          </div>
+          <p className="text-[11px] text-white/55 mt-1 leading-snug">{r.reason}</p>
+          {r.watchPoint && <p className="text-[11px] text-white/40 mt-1 leading-snug italic">{r.watchPoint}</p>}
+          {r.requiredData.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {r.requiredData.map((d, i) => <span key={i} className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/[0.04] text-white/40 font-semibold">{d}</span>)}
+            </div>
+          )}
+        </div>
+        {r.confidencePreview > 0 && <span className="text-[11px] text-white/55 tabular-nums font-bold">{r.confidencePreview}%</span>}
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB: AUDITORIA
+// ═══════════════════════════════════════════════════════════════════════════
+
+function TabAuditoria({ data, homeId, awayId }: { data: PreMatchIntelligenceResult; homeId?: string | number; awayId?: string | number }) {
+  const rows: [string, string][] = [
+    ['Status cobertura', data.status],
+    ['Confianca', data.confidence],
+    ['home id', homeId ? String(homeId) : 'nao resolvido'],
+    ['away id', awayId ? String(awayId) : 'nao resolvido'],
+    ['Forma home', data.homeForm ? `${data.homeForm.matches.length} jogos` : 'indisponivel'],
+    ['Forma away', data.awayForm ? `${data.awayForm.matches.length} jogos` : 'indisponivel'],
+    ['Casa (mandante)', data.homeAtHome ? `${data.homeAtHome.matches.length} jogos` : 'indisponivel'],
+    ['Fora (visitante)', data.awayAway ? `${data.awayAway.matches.length} jogos` : 'indisponivel'],
+    ['H2H', data.h2h ? `${data.h2h.total} confrontos` : 'indisponivel'],
+    ['Gols profile', data.goalsProfile ? `amostra ${data.goalsProfile.sampleSize}` : 'indisponivel'],
+    ['Disciplina', data.disciplineProfile ? data.disciplineProfile.trend : 'indisponivel'],
+  ]
+
+  return (
+    <div className="px-7 py-6 space-y-5">
+      <div>
+        <SectionLabel>Resolucao e Cobertura</SectionLabel>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+          {rows.map(([k, v]) => (
+            <div key={k} className="flex items-center justify-between rounded-lg bg-white/[0.02] border border-white/[0.04] px-3 py-2">
+              <span className="text-[11px] text-white/45">{k}</span>
+              <span className="text-[11px] text-white/85 font-semibold tabular-nums">{v}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {data.dataSources.length > 0 && (
+        <div>
+          <SectionLabel>Fontes</SectionLabel>
+          <div className="flex flex-wrap gap-1.5">
+            {data.dataSources.map((s, i) => <span key={i} className="text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-400/15">{s}</span>)}
+          </div>
+        </div>
+      )}
+
+      {data.limitations.length > 0 && (
+        <div>
+          <SectionLabel>Limitacoes</SectionLabel>
+          <ul className="space-y-1">
+            {data.limitations.map((l, i) => (
+              <li key={i} className="text-[11px] text-amber-400/70 flex items-start gap-2"><span className="text-amber-400/50 mt-0.5">!</span><span>{l}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SHARED: TeamColumn, VsCenter, ComparatorRail, H2HRail, Bar, Stat, BigMetric
+// ═══════════════════════════════════════════════════════════════════════════
+
+function TeamColumn({ name, accent, form, venue, venueLabel, align }: { name: string; accent: TeamAccent; form?: TeamFormSummary; venue?: TeamFormSummary; venueLabel: string; align: 'left' | 'right' }) {
+  const ta = align === 'right' ? 'text-right' : 'text-left'
+  const fj = align === 'right' ? 'justify-end' : 'justify-start'
+  return (
+    <div className={ta}>
+      <div className={`flex items-center gap-2 mb-2.5 ${fj}`}>
+        <span className="h-2.5 w-2.5 rounded-full" style={{ background: `linear-gradient(135deg, ${accent.from}, ${accent.to})`, boxShadow: `0 0 12px ${accent.soft}` }} />
+        <p className="text-[14px] font-bold text-white truncate">{name}</p>
+      </div>
+      {form ? (
+        <>
+          <div className={`flex gap-1 mb-3 ${fj}`}>
+            {form.formString.split(' ').map((r, i) => (
+              <span key={i} className={`h-7 w-7 rounded-lg flex items-center justify-center text-[10px] font-bold ${r === 'W' ? 'bg-emerald-500/22 text-emerald-300 border border-emerald-400/20' : r === 'D' ? 'bg-amber-500/15 text-amber-300 border border-amber-400/15' : 'bg-rose-500/18 text-rose-300 border border-rose-400/15'}`}>
+                {r === 'W' ? 'V' : r === 'D' ? 'E' : 'D'}
+              </span>
+            ))}
+          </div>
+          <div className="space-y-1 text-[12px]">
+            <div className={`flex items-center gap-3 ${fj}`}><span className="text-white/40">Pro</span><span className="text-emerald-400 font-bold tabular-nums">{form.summary.goalsFor}</span></div>
+            <div className={`flex items-center gap-3 ${fj}`}><span className="text-white/40">Contra</span><span className="text-rose-400 font-bold tabular-nums">{form.summary.goalsAgainst}</span></div>
+            <div className={`flex items-center gap-3 ${fj}`}>
+              <span className="text-white/40">Saldo</span>
+              <span className={`font-bold tabular-nums ${form.summary.goalsFor - form.summary.goalsAgainst > 0 ? 'text-emerald-400' : form.summary.goalsFor - form.summary.goalsAgainst < 0 ? 'text-rose-400' : 'text-white/55'}`}>
+                {form.summary.goalsFor - form.summary.goalsAgainst > 0 ? '+' : ''}
+                {form.summary.goalsFor - form.summary.goalsAgainst}
+              </span>
+            </div>
+          </div>
+          {venue && venue.matches.length >= 2 && (
+            <div className="mt-3 pt-3 border-t border-white/[0.05]">
+              <p className="text-[10px] text-white/35 uppercase tracking-wider mb-1 font-semibold">{venueLabel}</p>
+              <p className="text-[11px] text-white/65">
+                <span className="text-emerald-400 font-bold">{venue.summary.wins}V</span> {venue.summary.draws}E <span className="text-rose-400 font-bold">{venue.summary.losses}D</span>
+              </p>
+            </div>
+          )}
+        </>
+      ) : (
+        <p className="text-[11px] text-white/30">Forma indisponivel</p>
+      )}
+    </div>
+  )
+}
+
+function VsCenter({ score, balanceLabel, h2hTotal }: { score: PreMatchScore | null; balanceLabel: string; h2hTotal?: number }) {
+  const balanceTone = !score
+    ? 'text-white/40'
+    : score.balance.score >= 65
+    ? 'text-white/70'
+    : score.homeStrength.score > score.awayStrength.score + 10
+    ? 'text-blue-300'
+    : score.awayStrength.score > score.homeStrength.score + 10
+    ? 'text-emerald-300'
+    : 'text-white/55'
+  return (
+    <div className="flex flex-col items-center justify-start pt-1 gap-2.5">
+      <div className="relative h-16 w-16 rounded-full bg-gradient-to-br from-white/[0.07] via-white/[0.04] to-white/[0.02] border border-white/[0.10] flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+        <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.08),transparent_55%)] pointer-events-none" />
+        <span className="relative text-[11px] text-white/55 font-bold tracking-[0.18em]">VS</span>
+      </div>
+      <span className={`text-[11px] font-bold uppercase tracking-wider ${balanceTone}`}>{balanceLabel}</span>
+      {h2hTotal !== undefined && <span className="text-[10px] text-white/35 font-medium">{h2hTotal} confrontos</span>}
+    </div>
+  )
+}
+
+function ComparatorRail({ label, left, right, leftAccent, rightAccent, muted }: { label: string; left: number; right: number; leftAccent: TeamAccent; rightAccent: TeamAccent; muted?: boolean }) {
+  const total = Math.max(left + right, 1)
+  const lp = (left / total) * 100
+  const rp = (right / total) * 100
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-[10px] text-white/40 w-20 shrink-0 font-semibold uppercase tracking-wider">{label}</span>
+      <div className="flex-1 flex h-1.5 rounded-full overflow-hidden bg-white/[0.04]">
+        <div className="h-full" style={{ width: `${lp}%`, background: muted ? `linear-gradient(90deg, ${leftAccent.from}80, ${leftAccent.to}80)` : `linear-gradient(90deg, ${leftAccent.from}, ${leftAccent.to})` }} />
+        <div className="h-full" style={{ width: `${rp}%`, background: muted ? `linear-gradient(90deg, ${rightAccent.from}80, ${rightAccent.to}80)` : `linear-gradient(90deg, ${rightAccent.from}, ${rightAccent.to})` }} />
+      </div>
+      <span className="text-[10px] text-white/55 tabular-nums font-bold w-14 text-right">{left}–{right}</span>
+    </div>
+  )
+}
+
+function H2HRail({ h2h, homeName, awayName, homeAccent, awayAccent, recent }: { h2h: PreMatchIntelligenceResult['h2h']; homeName: string; awayName: string; homeAccent: TeamAccent; awayAccent: TeamAccent; recent?: PreMatchIntelligenceResult['recentMeetings'] }) {
+  if (!h2h) return null
+  const total = h2h.total
+  const hp = (h2h.homeWins / total) * 100
+  const dp = (h2h.draws / total) * 100
+  const ap = (h2h.awayWins / total) * 100
+  const avgGoals = ((h2h.homeGoals + h2h.awayGoals) / total).toFixed(1)
+  const homeShort = homeName.split(' ')[0]
+  const awayShort = awayName.split(' ')[0]
+  const exhibitedTotal = h2h.homeWins + h2h.draws + h2h.awayWins
+  const isPartial = exhibitedTotal < total
+  return (
+    <div>
+      <div className="h-3.5 w-full rounded-full overflow-hidden bg-white/[0.04] flex shadow-[inset_0_1px_0_rgba(0,0,0,0.4)]">
+        <div className="h-full transition-all" style={{ width: `${hp}%`, background: `linear-gradient(90deg, ${homeAccent.from}, ${homeAccent.to})` }} />
+        <div className="h-full bg-white/[0.18]" style={{ width: `${dp}%` }} />
+        <div className="h-full transition-all" style={{ width: `${ap}%`, background: `linear-gradient(90deg, ${awayAccent.from}, ${awayAccent.to})` }} />
+      </div>
+      <div className="flex justify-between items-center mt-3 text-[12px]">
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-sm" style={{ background: `linear-gradient(135deg, ${homeAccent.from}, ${homeAccent.to})` }} />
+          <span className="text-white/85 font-bold tabular-nums">{h2h.homeWins}V</span>
+          <span className="text-white/45">{homeShort}</span>
+        </div>
+        <div className="text-white/55 font-medium">{h2h.draws} empates</div>
+        <div className="flex items-center gap-2">
+          <span className="text-white/45">{awayShort}</span>
+          <span className="text-white/85 font-bold tabular-nums">{h2h.awayWins}V</span>
+          <span className="h-2 w-2 rounded-sm" style={{ background: `linear-gradient(135deg, ${awayAccent.from}, ${awayAccent.to})` }} />
+        </div>
+      </div>
+      <p className="text-[11px] text-white/50 mt-3.5 leading-snug">
+        Media historica: <span className="text-white/85 font-bold">{avgGoals} gols/jogo</span> · {total} confrontos analisados
+      </p>
+      {isPartial && <p className="text-[10px] text-amber-400/65 mt-1">Resumo H2H parcial retornado pelo provider.</p>}
+      {recent && recent.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-white/[0.04] space-y-1">
+          {recent.slice(0, 3).map((m, i) => (
+            <div key={i} className="flex items-center gap-3 text-[11px]">
+              <span className="text-white/30 tabular-nums w-16 shrink-0">{new Date(m.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
+              <span className="text-white/55 flex-1 truncate text-right">{m.homeTeam}</span>
+              <span className="text-white/90 font-bold tabular-nums">{m.homeScore}-{m.awayScore}</span>
+              <span className="text-white/55 flex-1 truncate">{m.awayTeam}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Bar({ label, pct, from, to }: { label: string; pct: number; from: string; to: string }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[12px] text-white/65 font-medium">{label}</span>
+        <span className="text-[14px] text-white font-bold tabular-nums">{pct}%</span>
+      </div>
+      <div className="h-2 rounded-full bg-white/[0.04] overflow-hidden">
+        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${from}, ${to})` }} />
+      </div>
+    </div>
+  )
+}
+
+function Stat({ value, label, tone, small }: { value: string; label: string; tone: 'emerald' | 'amber' | 'rose' | 'white'; small?: boolean }) {
+  const c = tone === 'emerald' ? 'text-emerald-400' : tone === 'amber' ? 'text-amber-400' : tone === 'rose' ? 'text-rose-400' : 'text-white/90'
+  return (
+    <div>
+      <span className={`${small ? 'text-[14px]' : 'text-[16px]'} font-bold ${c} block leading-none tabular-nums`}>{value}</span>
+      <span className="text-[10px] text-white/45 block mt-1 font-medium">{label}</span>
+    </div>
+  )
+}
+
+function BigMetric({ value, label, tone, valueClassName }: { value: string; label: string; tone: 'emerald' | 'amber' | 'rose' | 'white'; valueClassName?: string }) {
+  const c = valueClassName || (tone === 'emerald' ? 'text-emerald-400' : tone === 'amber' ? 'text-amber-400' : tone === 'rose' ? 'text-rose-400' : 'text-white')
+  return (
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3.5">
+      <span className={`text-[26px] font-bold ${c} block leading-none tabular-nums`}>{value}</span>
+      <span className="text-[10px] text-white/50 block mt-1.5 font-semibold uppercase tracking-wider">{label}</span>
     </div>
   )
 }
