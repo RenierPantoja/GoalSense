@@ -47,16 +47,21 @@ function hashString(s: string) {
   return Math.abs(h)
 }
 
-function getTeamAccent(teamName: string, side: 'home' | 'away'): TeamAccent {
-  // Default: keep mandante on cool blue/cyan, visitante on emerald, plus stable hash variation
-  if (side === 'home') {
-    const idx = hashString(teamName) % ACCENT_PALETTE.length
-    // Bias home toward cool tones so the rail reads instantly
-    return [ACCENT_PALETTE[0], ACCENT_PALETTE[6], ACCENT_PALETTE[5]][idx % 3]
+function getTeamAccent(teamName: string, side: 'home' | 'away', opponentName?: string): TeamAccent {
+  // Cool-toned palettes for home, warm-toned for away — keeps H2H rail readable.
+  const COOL = [ACCENT_PALETTE[0], ACCENT_PALETTE[6], ACCENT_PALETTE[5]] as const // blue/cyan, indigo, teal
+  const WARM = [ACCENT_PALETTE[1], ACCENT_PALETTE[3], ACCENT_PALETTE[4], ACCENT_PALETTE[2]] as const // emerald, fuchsia, rose, amber
+  const pool = side === 'home' ? COOL : WARM
+  const idx = hashString(teamName) % pool.length
+  let chosen = pool[idx]
+  // If both sides happen to land on similar hue, force away to a different bucket.
+  if (opponentName && side === 'away') {
+    const homeChosen = COOL[hashString(opponentName) % COOL.length]
+    if (homeChosen.from === chosen.from) {
+      chosen = pool[(idx + 1) % pool.length]
+    }
   }
-  const idx = hashString(teamName) % ACCENT_PALETTE.length
-  // Bias away toward warm tones for contrast
-  return [ACCENT_PALETTE[1], ACCENT_PALETTE[3], ACCENT_PALETTE[4], ACCENT_PALETTE[2]][idx % 4]
+  return chosen
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -86,8 +91,8 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
     return getPreMatchPatternReadiness({ homeName, awayName, activePatterns: a, preMatchData: data, score, isFavoriteTeam })
   }, [homeName, awayName, data, score, getActivePatterns, isFavoriteTeam])
 
-  const homeAccent = useMemo(() => getTeamAccent(homeName, 'home'), [homeName])
-  const awayAccent = useMemo(() => getTeamAccent(awayName, 'away'), [awayName])
+  const homeAccent = useMemo(() => getTeamAccent(homeName, 'home', awayName), [homeName, awayName])
+  const awayAccent = useMemo(() => getTeamAccent(awayName, 'away', homeName), [awayName, homeName])
 
   const loadAdv = async () => {
     setAdvLoading(true)
@@ -315,8 +320,18 @@ function TabBar({ active, onChange, showAuditoria, elencoLoaded, patternCount }:
   if (showAuditoria) tabs.push({ key: 'auditoria', label: 'Auditoria' })
 
   return (
-    <div className="px-5 pb-1 border-y border-white/[0.05] bg-gradient-to-b from-white/[0.015] to-transparent">
-      <div className="flex gap-0.5 overflow-x-auto scrollbar-none -mx-1 px-1 py-2">
+    <div className="px-5 border-y border-white/[0.05] bg-gradient-to-b from-white/[0.015] to-transparent">
+      {/*
+        IMPORTANT: overflow-x-auto + overflow-y-visible would still trigger
+        an implicit vertical scrollbar in modern browsers (per CSS spec, when
+        one axis is auto/scroll, the other can no longer be visible).
+        We force overflow-y: hidden + no-scrollbar to kill the phantom vertical bar
+        and any horizontal track on platforms with chunky scrollbars.
+      */}
+      <div
+        className="flex gap-0.5 -mx-1 px-1 py-2 no-scrollbar"
+        style={{ overflowX: 'auto', overflowY: 'hidden' }}
+      >
         {tabs.map(t => {
           const isActive = active === t.key
           return (
@@ -324,13 +339,13 @@ function TabBar({ active, onChange, showAuditoria, elencoLoaded, patternCount }:
               key={t.key}
               onClick={() => onChange(t.key)}
               type="button"
-              className={`relative px-3.5 py-2 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${isActive ? 'bg-white/[0.08] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'text-white/50 hover:text-white/80 hover:bg-white/[0.03]'}`}
+              className={`relative px-3.5 py-2 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${isActive ? 'bg-white/[0.08] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'text-white/55 hover:text-white/85 hover:bg-white/[0.03]'}`}
             >
               {t.label}
               {t.badge !== undefined && (
-                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md ${isActive ? 'bg-cyan-500/20 text-cyan-300' : 'bg-white/[0.06] text-white/45'}`}>{t.badge}</span>
+                <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md ${isActive ? 'bg-cyan-500/20 text-cyan-300' : 'bg-white/[0.06] text-white/50'}`}>{t.badge}</span>
               )}
-              {isActive && <span className="absolute inset-x-3 -bottom-[9px] h-[2px] bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full" />}
+              {isActive && <span className="absolute inset-x-3 -bottom-[1px] h-[2px] bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full" />}
             </button>
           )
         })}
@@ -404,29 +419,47 @@ function TabVisao({ data, score, homeName, awayName, homeAccent, awayAccent, bal
 
       <Divider />
 
-      {/* D. Watch Points */}
+      {/* D. Watch Points — always show honest universal points if engine empty */}
       <div className="px-7 py-6">
         <SectionLabel>Pontos de Atencao</SectionLabel>
-        {score && score.watchPoints.length > 0 ? (
-          <ul className="space-y-2.5">
-            {score.watchPoints.map((wp, i) => (
-              <li key={i} className="flex items-start gap-3">
-                <span className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${wp.severity === 'attention' ? 'bg-amber-400' : wp.severity === 'critical' ? 'bg-rose-400' : 'bg-cyan-400/70'}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <span className="text-[13px] text-white/85 font-semibold">{wp.label}</span>
-                    {wp.timing && <span className="text-[10px] text-white/40 font-medium uppercase tracking-wider">{wp.timing}</span>}
-                  </div>
-                  <p className="text-[12px] text-white/55 leading-snug mt-0.5">{wp.detail}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-[12px] text-white/40">Nenhum ponto de atencao gerado pela leitura atual.</p>
-        )}
+        <WatchPointsList score={score} hasGoalsProfile={!!data.goalsProfile} hasH2h={!!data.h2h} />
       </div>
     </div>
+  )
+}
+
+function WatchPointsList({ score, hasGoalsProfile, hasH2h }: { score: PreMatchScore | null; hasGoalsProfile: boolean; hasH2h: boolean }) {
+  const enginePoints = score?.watchPoints ?? []
+  // Universal fallback watch points — observable phases of any match.
+  // Used when the engine cannot produce data-driven points.
+  const universal: { label: string; detail: string; timing: string; severity: 'info' | 'attention' }[] = [
+    { label: 'Inicio do jogo', detail: 'Observar ritmo, posse e primeiras finalizacoes nos minutos iniciais.', timing: '0\'-20\'', severity: 'info' },
+    { label: 'Ajuste pos-intervalo', detail: 'Reacao imediata apos o intervalo costuma definir o tom do jogo.', timing: '45\'-60\'', severity: 'info' },
+    { label: 'Reta final', detail: 'Volume ofensivo e desgaste fisico aumentam o risco de gol e cartao.', timing: '70\'-90\'', severity: 'attention' },
+  ]
+  const points = enginePoints.length >= 2 ? enginePoints : universal
+  return (
+    <>
+      <ul className="space-y-2.5">
+        {points.map((wp, i) => (
+          <li key={i} className="flex items-start gap-3">
+            <span className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${wp.severity === 'attention' ? 'bg-amber-400' : wp.severity === 'critical' ? 'bg-rose-400' : 'bg-cyan-400/70'}`} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-[13px] text-white/85 font-semibold">{wp.label}</span>
+                {wp.timing && <span className="text-[10px] text-white/45 font-medium uppercase tracking-wider tabular-nums">{wp.timing}</span>}
+              </div>
+              <p className="text-[12px] text-white/60 leading-snug mt-0.5">{wp.detail}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {enginePoints.length < 2 && (
+        <p className="text-[10px] text-white/35 mt-3 leading-snug">
+          Pontos universais aplicados — {hasGoalsProfile ? 'perfil de gols disponivel reforca a leitura' : hasH2h ? 'apenas H2H disponivel para reforco' : 'sem amostra recente para personalizar'}.
+        </p>
+      )}
+    </>
   )
 }
 
@@ -439,40 +472,49 @@ function TabForma({ data, homeName, awayName, homeAccent, awayAccent }: { data: 
   const af = data.awayForm
   const hh = data.homeAtHome
   const aa = data.awayAway
-
-  if (!hf && !af) {
-    return (
-      <div className="px-7 py-10 text-center">
-        <p className="text-[13px] text-white/55 font-medium">Provider nao retornou forma recente suficiente.</p>
-        <p className="text-[11px] text-white/35 mt-1">A leitura usa H2H, perfil de gols e Base GoalSense quando disponivel.</p>
-      </div>
-    )
-  }
+  const hasAnyForm = !!(hf || af)
+  const hasAnyVenue = !!(hh && hh.matches.length >= 2) || !!(aa && aa.matches.length >= 2)
 
   return (
     <div>
-      {/* General form */}
-      <div className="px-7 pt-6 pb-5">
-        <SectionLabel>Ultimos 5 Jogos</SectionLabel>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <FormCard form={hf} teamName={homeName} accent={homeAccent} />
-          <FormCard form={af} teamName={awayName} accent={awayAccent} />
+      {/* Status overview — categories + reason */}
+      {!hasAnyForm && (
+        <div className="px-7 pt-6 pb-2">
+          <SectionLabel>Status da Forma</SectionLabel>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <StatusTile title="Forma geral" status="indisponivel" detail="Provider nao retornou ultimos jogos suficientes." />
+            <StatusTile title="Casa / Fora" status="indisponivel" detail="Sem amostra para recorte mandante / visitante." />
+            <StatusTile title="Base GoalSense" status={data.dataSources.includes('Base GoalSense') ? 'parcial' : 'indisponivel'} detail={data.dataSources.includes('Base GoalSense') ? 'Historico GoalSense usado em outras leituras.' : 'Base ainda sem amostra deste confronto.'} />
+          </div>
+          <p className="text-[11px] text-white/40 mt-3 leading-snug">A leitura usa H2H, perfil de gols e Base GoalSense quando disponivel. A cada partida concluida, a Base fortalece a forma deste time.</p>
         </div>
-      </div>
+      )}
 
-      <Divider />
+      {hasAnyForm && (
+        <div className="px-7 pt-6 pb-5">
+          <SectionLabel>Ultimos 5 Jogos</SectionLabel>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <FormCard form={hf} teamName={homeName} accent={homeAccent} />
+            <FormCard form={af} teamName={awayName} accent={awayAccent} />
+          </div>
+        </div>
+      )}
+
+      {hasAnyForm && <Divider />}
 
       {/* Home at home / Away away */}
-      <div className="px-7 py-6">
-        <SectionLabel>Mando vs Visita</SectionLabel>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <VenueCard form={hh} teamName={homeName} accent={homeAccent} label="Em casa" />
-          <VenueCard form={aa} teamName={awayName} accent={awayAccent} label="Fora" />
+      {hasAnyVenue && (
+        <div className="px-7 py-6">
+          <SectionLabel>Mando vs Visita</SectionLabel>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <VenueCard form={hh} teamName={homeName} accent={homeAccent} label="Em casa" />
+            <VenueCard form={aa} teamName={awayName} accent={awayAccent} label="Fora" />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Match list (if rich) */}
-      {(hf?.matches.length || af?.matches.length) && (
+      {((hf?.matches.length ?? 0) + (af?.matches.length ?? 0) > 0) && (
         <>
           <Divider />
           <div className="px-7 py-6">
@@ -484,6 +526,31 @@ function TabForma({ data, homeName, awayName, homeAccent, awayAccent }: { data: 
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function StatusTile({ title, status, detail }: { title: string; status: 'disponivel' | 'parcial' | 'indisponivel' | 'sob_demanda' | 'nao_consultado'; detail: string }) {
+  const cfg =
+    status === 'disponivel'
+      ? { c: 'bg-emerald-500/10 text-emerald-300 border-emerald-400/15', t: 'Disponivel', dot: 'bg-emerald-400' }
+      : status === 'parcial'
+      ? { c: 'bg-amber-500/10 text-amber-300 border-amber-400/15', t: 'Parcial', dot: 'bg-amber-400' }
+      : status === 'sob_demanda'
+      ? { c: 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15', t: 'Sob demanda', dot: 'bg-cyan-400' }
+      : status === 'nao_consultado'
+      ? { c: 'bg-white/[0.05] text-white/55 border-white/[0.07]', t: 'Nao consultado', dot: 'bg-white/40' }
+      : { c: 'bg-white/[0.04] text-white/45 border-white/[0.06]', t: 'Indisponivel', dot: 'bg-white/30' }
+  return (
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[12px] text-white/85 font-semibold">{title}</p>
+        <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${cfg.c}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
+          {cfg.t}
+        </span>
+      </div>
+      <p className="text-[11px] text-white/55 leading-snug">{detail}</p>
     </div>
   )
 }
@@ -612,10 +679,42 @@ function TabGols({ data, homeName, awayName, homeAccent, awayAccent }: { data: P
   const gp = data.goalsProfile
   const h2h = data.h2h
 
+  // No goals profile — try to make it useful with H2H + watch points
   if (!gp) {
+    const h2hAvg = h2h && h2h.total > 0 ? ((h2h.homeGoals + h2h.awayGoals) / h2h.total).toFixed(1) : null
     return (
-      <div className="px-7 py-10 text-center">
-        <p className="text-[13px] text-white/55 font-medium">Sem amostra suficiente para perfil ofensivo.</p>
+      <div>
+        <div className="px-7 pt-6 pb-2">
+          <SectionLabel>Status do Perfil Ofensivo</SectionLabel>
+          <StatusTile title="Perfil de gols" status="indisponivel" detail="Sem amostra recente suficiente do provider." />
+        </div>
+
+        {h2hAvg && (
+          <>
+            <Divider />
+            <div className="px-7 py-6">
+              <SectionLabel>Referencia Historica</SectionLabel>
+              <div className="grid grid-cols-2 gap-3">
+                <BigMetric value={h2hAvg} label="Media H2H gols/j" tone="emerald" />
+                <BigMetric value={`${h2h!.total}j`} label="Confrontos" tone="white" />
+              </div>
+              <p className="text-[11px] text-white/50 mt-3 leading-snug">
+                Sem perfil recente, o H2H e a referencia mais confiavel. Monitorar volume ofensivo no inicio para confirmar tendencia.
+              </p>
+            </div>
+          </>
+        )}
+
+        <Divider />
+        <div className="px-7 py-6">
+          <SectionLabel>O Que Monitorar Ao Vivo</SectionLabel>
+          <ul className="space-y-2 text-[12px] text-white/65">
+            <li className="flex items-start gap-2.5"><span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-cyan-400/70 shrink-0" /><span>Ritmo ofensivo nos primeiros 20 minutos define se o jogo abre cedo.</span></li>
+            <li className="flex items-start gap-2.5"><span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-cyan-400/70 shrink-0" /><span>Finalizacoes na trave costumam preceder gols nos minutos seguintes.</span></li>
+            <li className="flex items-start gap-2.5"><span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" /><span>Apos 60', troca de ritmo aumenta risco de gol em ambos os lados.</span></li>
+          </ul>
+          <p className="text-[10px] text-white/35 mt-3 leading-snug">Perfil sera fortalecido pela Base GoalSense conforme partidas forem registradas.</p>
+        </div>
       </div>
     )
   }
@@ -708,54 +807,69 @@ function TabElenco({ adv, loading, onLoad, homeName, awayName }: { adv: PreMatch
   if (!adv) {
     return (
       <div className="px-7 py-8">
-        <div className="rounded-2xl border border-white/[0.07] bg-gradient-to-br from-cyan-500/[0.04] via-blue-500/[0.03] to-transparent px-6 py-7 text-center">
-          <h3 className="text-[16px] text-white font-bold mb-1.5">Elenco e Disponibilidade</h3>
-          <p className="text-[12px] text-white/60 leading-relaxed max-w-md mx-auto mb-5">
-            Ausencias, suspensoes, pendurados, goleadores e jogadores-chave quando o provider disponibiliza.
-          </p>
-          <button
-            onClick={onLoad}
-            disabled={loading}
-            type="button"
-            className="px-5 py-2.5 rounded-xl text-[12px] font-bold bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-200 border border-cyan-400/25 hover:from-cyan-500/30 hover:to-blue-500/30 disabled:opacity-40 transition-all"
-          >
-            {loading ? 'Carregando...' : 'Carregar analise avancada'}
-          </button>
-          <p className="text-[10px] text-white/35 mt-3 font-medium">Consulta sob demanda · preserva limite da API.</p>
+        <div className="rounded-2xl border border-white/[0.07] bg-gradient-to-br from-cyan-500/[0.04] via-blue-500/[0.03] to-transparent px-6 py-7">
+          <div className="text-center">
+            <h3 className="text-[16px] text-white font-bold mb-1.5">Elenco e Disponibilidade</h3>
+            <p className="text-[12px] text-white/60 leading-relaxed max-w-md mx-auto mb-5">
+              Carrega ausencias, suspensoes, pendurados, goleadores e jogadores-chave quando o provider disponibiliza.
+            </p>
+            <button
+              onClick={onLoad}
+              disabled={loading}
+              type="button"
+              className="px-5 py-2.5 rounded-xl text-[12px] font-bold bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-200 border border-cyan-400/25 hover:from-cyan-500/30 hover:to-blue-500/30 disabled:opacity-40 transition-all"
+            >
+              {loading ? 'Carregando...' : 'Carregar analise avancada'}
+            </button>
+            <p className="text-[10px] text-white/35 mt-3 font-medium">Consulta sob demanda · preserva limite da API.</p>
+          </div>
+          <div className="mt-6 pt-5 border-t border-white/[0.05] grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[['Ausencias', 'Lesoes do provider'], ['Suspensos', 'Cartao acumulado'], ['Goleadores', 'Top da liga'], ['Pendurados', 'Se provider expor']].map(([t, d]) => (
+              <div key={t} className="rounded-lg bg-white/[0.025] border border-white/[0.04] px-3 py-2">
+                <p className="text-[10px] text-white/85 font-bold uppercase tracking-wider">{t}</p>
+                <p className="text-[10px] text-white/45 mt-0.5 leading-snug">{d}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     )
   }
 
-  const hasAbs = adv.absences.home.injuries.length + adv.absences.away.injuries.length + adv.absences.home.suspensions.length + adv.absences.away.suspensions.length > 0
+  const hasInjuries = adv.absences.home.injuries.length + adv.absences.away.injuries.length > 0
+  const hasSuspensions = adv.absences.home.suspensions.length + adv.absences.away.suspensions.length > 0
+  const hasAbs = hasInjuries || hasSuspensions
   const hasScorers = adv.scorers.home.players.length + adv.scorers.away.players.length > 0
-
-  if (!hasAbs && !hasScorers) {
-    return (
-      <div className="px-7 py-10 text-center">
-        <p className="text-[13px] text-white/55 font-medium">Provider nao retornou dados de elenco para esta liga.</p>
-        {adv.limitations.length > 0 && (
-          <ul className="mt-3 space-y-1">{adv.limitations.slice(0, 3).map((l, i) => <li key={i} className="text-[11px] text-white/35">· {l}</li>)}</ul>
-        )}
-      </div>
-    )
-  }
 
   return (
     <div>
-      {hasAbs && (
-        <div className="px-7 pt-6 pb-5">
-          <SectionLabel>Ausencias</SectionLabel>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <AbsenceColumn teamName={homeName} report={adv.absences.home} />
-            <AbsenceColumn teamName={awayName} report={adv.absences.away} />
-          </div>
+      {/* Status header — always show category status after load */}
+      <div className="px-7 pt-6 pb-2">
+        <SectionLabel>Status por Categoria</SectionLabel>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+          <StatusTile title="Lesoes" status={hasInjuries ? 'disponivel' : 'indisponivel'} detail={hasInjuries ? `${adv.absences.home.injuries.length + adv.absences.away.injuries.length} reportadas pelo provider` : 'Provider nao retornou lesoes para esta liga.'} />
+          <StatusTile title="Suspensos" status={hasSuspensions ? 'disponivel' : 'indisponivel'} detail={hasSuspensions ? `${adv.absences.home.suspensions.length + adv.absences.away.suspensions.length} reportados` : 'Sem suspensoes ou cobertura limitada.'} />
+          <StatusTile title="Goleadores" status={hasScorers ? 'disponivel' : 'indisponivel'} detail={hasScorers ? 'Top da liga consultado' : 'Liga nao identificada ou sem cobertura.'} />
+          <StatusTile title="Jogadores-chave" status="indisponivel" detail="Cobertura ainda nao exposta pelo provider." />
         </div>
+      </div>
+
+      {hasAbs && (
+        <>
+          <Divider />
+          <div className="px-7 py-6">
+            <SectionLabel>Ausencias</SectionLabel>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <AbsenceColumn teamName={homeName} report={adv.absences.home} />
+              <AbsenceColumn teamName={awayName} report={adv.absences.away} />
+            </div>
+          </div>
+        </>
       )}
 
       {hasScorers && (
         <>
-          {hasAbs && <Divider />}
+          <Divider />
           <div className="px-7 py-6">
             <SectionLabel>Goleadores</SectionLabel>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -775,12 +889,21 @@ function TabElenco({ adv, loading, onLoad, homeName, awayName }: { adv: PreMatch
               {adv.riskFlags.map((f, i) => (
                 <div key={i} className="flex items-start gap-2.5 text-[12px]">
                   <span className={`mt-1 h-1.5 w-1.5 rounded-full shrink-0 ${f.severity === 'attention' ? 'bg-amber-400' : f.severity === 'critical' ? 'bg-rose-400' : 'bg-cyan-400/70'}`} />
-                  <div><span className="text-white/85 font-semibold">{f.label}</span><span className="text-white/45 ml-1.5">{f.detail}</span></div>
+                  <div><span className="text-white/85 font-semibold">{f.label}</span><span className="text-white/55 ml-1.5">{f.detail}</span></div>
                 </div>
               ))}
             </div>
           </div>
         </>
+      )}
+
+      {adv.limitations.length > 0 && (
+        <div className="px-7 pb-5">
+          <p className="text-[10px] uppercase tracking-wider text-white/40 mb-1.5 font-semibold">Limitacoes do provider</p>
+          <ul className="space-y-1">
+            {adv.limitations.slice(0, 4).map((l, i) => <li key={i} className="text-[11px] text-amber-400/65 flex items-start gap-2"><span className="text-amber-400/45 mt-0.5">!</span><span>{l}</span></li>)}
+          </ul>
+        </div>
       )}
     </div>
   )
@@ -842,14 +965,36 @@ function ScorersColumn({ teamName, report }: { teamName: string; report: PreMatc
 
 function TabPadroes({ patterns, hasActivePatterns, score, isAdvanced }: { patterns: PreMatchPatternReadiness[]; hasActivePatterns: boolean; score: PreMatchScore | null; isAdvanced: boolean }) {
   if (!hasActivePatterns) {
+    const examples: { name: string; description: string; window: string }[] = [
+      { name: 'Pressao por gol', description: 'Volume ofensivo sem gol em jogo equilibrado.', window: '55\'-90\'' },
+      { name: 'Reta final perigosa', description: 'Empate ou diferenca minima na reta final.', window: '70\'-90\'' },
+      { name: 'Over tendencia', description: 'Perfil de gols + ritmo confirmando jogo aberto.', window: '0\'-90\'' },
+      { name: 'Favorito em risco', description: 'Favorito sem dominio nos primeiros 30 minutos.', window: '0\'-30\'' },
+    ]
     return (
-      <div className="px-7 py-8">
-        <div className="rounded-2xl border border-white/[0.07] bg-gradient-to-br from-amber-500/[0.04] via-orange-500/[0.025] to-transparent px-6 py-7 text-center">
+      <div className="px-7 py-7 space-y-5">
+        <div className="rounded-2xl border border-white/[0.07] bg-gradient-to-br from-amber-500/[0.04] via-orange-500/[0.025] to-transparent px-6 py-6">
           <h3 className="text-[16px] text-white font-bold mb-1.5">Nenhum radar ativo</h3>
-          <p className="text-[12px] text-white/60 leading-relaxed max-w-md mx-auto mb-1">
-            Configure padroes no Command Center para transformar esta leitura em alerta operacional ao vivo.
+          <p className="text-[12px] text-white/65 leading-relaxed max-w-md">
+            Pre-jogo nao dispara alerta. Configure padroes no Command Center para monitorar condicoes ao vivo.
           </p>
-          <p className="text-[10px] text-white/35 mt-3 font-medium uppercase tracking-wider">Pre-jogo nunca dispara alerta · prepara o monitoramento</p>
+          <p className="text-[10px] text-white/40 mt-3 font-medium uppercase tracking-wider">Pre-jogo prepara monitoramento · alertas sao gerados ao vivo</p>
+        </div>
+
+        <div>
+          <SectionLabel>Exemplos de Padroes Uteis</SectionLabel>
+          <p className="text-[11px] text-white/45 mb-3">Apenas referencia — nao sao radares ativos. Configure-os no Command Center para receberem dados deste confronto.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {examples.map(ex => (
+              <div key={ex.name} className="rounded-xl border border-white/[0.05] bg-white/[0.02] px-4 py-3">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[12px] text-white font-bold">{ex.name}</p>
+                  <span className="text-[10px] text-cyan-300/70 font-bold tabular-nums">{ex.window}</span>
+                </div>
+                <p className="text-[11px] text-white/55 leading-snug">{ex.description}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     )
@@ -878,7 +1023,7 @@ function TabPadroes({ patterns, hasActivePatterns, score, isAdvanced }: { patter
               <li key={i} className="flex items-start gap-2.5 text-[12px]">
                 <span className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${wp.severity === 'attention' ? 'bg-amber-400' : 'bg-cyan-400/70'}`} />
                 <span className="text-white/70">{wp.label}</span>
-                <span className="text-white/40">· {wp.detail}{wp.timing ? ` · ${wp.timing}` : ''}</span>
+                <span className="text-white/45">· {wp.detail}{wp.timing ? ` · ${wp.timing}` : ''}</span>
               </li>
             ))}
           </ul>
@@ -926,31 +1071,26 @@ function PatternRow({ r }: { r: PreMatchPatternReadiness }) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function TabAuditoria({ data, homeId, awayId }: { data: PreMatchIntelligenceResult; homeId?: string | number; awayId?: string | number }) {
-  const rows: [string, string][] = [
-    ['Status cobertura', data.status],
-    ['Confianca', data.confidence],
-    ['home id', homeId ? String(homeId) : 'nao resolvido'],
-    ['away id', awayId ? String(awayId) : 'nao resolvido'],
-    ['Forma home', data.homeForm ? `${data.homeForm.matches.length} jogos` : 'indisponivel'],
-    ['Forma away', data.awayForm ? `${data.awayForm.matches.length} jogos` : 'indisponivel'],
-    ['Casa (mandante)', data.homeAtHome ? `${data.homeAtHome.matches.length} jogos` : 'indisponivel'],
-    ['Fora (visitante)', data.awayAway ? `${data.awayAway.matches.length} jogos` : 'indisponivel'],
-    ['H2H', data.h2h ? `${data.h2h.total} confrontos` : 'indisponivel'],
-    ['Gols profile', data.goalsProfile ? `amostra ${data.goalsProfile.sampleSize}` : 'indisponivel'],
-    ['Disciplina', data.disciplineProfile ? data.disciplineProfile.trend : 'indisponivel'],
+  type BlockStatus = 'disponivel' | 'parcial' | 'indisponivel' | 'sob_demanda' | 'nao_consultado'
+  const blocks: { title: string; status: BlockStatus; detail: string }[] = [
+    { title: 'Team ID mandante', status: homeId ? 'disponivel' : 'indisponivel', detail: homeId ? `Resolvido: ${homeId}` : 'Nao resolvido pelo provider.' },
+    { title: 'Team ID visitante', status: awayId ? 'disponivel' : 'indisponivel', detail: awayId ? `Resolvido: ${awayId}` : 'Nao resolvido pelo provider.' },
+    { title: 'Forma geral', status: data.homeForm && data.awayForm ? 'disponivel' : data.homeForm || data.awayForm ? 'parcial' : 'indisponivel', detail: data.homeForm && data.awayForm ? `${data.homeForm.matches.length}j / ${data.awayForm.matches.length}j` : 'Provider sem amostra suficiente.' },
+    { title: 'Forma casa/fora', status: data.homeAtHome && data.awayAway ? 'disponivel' : data.homeAtHome || data.awayAway ? 'parcial' : 'indisponivel', detail: data.homeAtHome && data.awayAway ? `${data.homeAtHome.matches.length}j em casa / ${data.awayAway.matches.length}j fora` : 'Recorte mandante/visitante limitado.' },
+    { title: 'Perfil de gols', status: data.goalsProfile ? (data.goalsProfile.sampleSize >= 6 ? 'disponivel' : 'parcial') : 'indisponivel', detail: data.goalsProfile ? `Amostra ${data.goalsProfile.sampleSize}` : 'Sem amostra suficiente.' },
+    { title: 'Disciplina', status: data.disciplineProfile && data.disciplineProfile.trend !== 'unknown' ? 'disponivel' : 'indisponivel', detail: data.disciplineProfile?.trend ? `Tendencia: ${data.disciplineProfile.trend}` : 'Provider sem eventos disciplinares recentes.' },
+    { title: 'H2H', status: data.h2h ? 'disponivel' : 'indisponivel', detail: data.h2h ? `${data.h2h.total} confrontos analisados` : 'Provider nao retornou H2H.' },
+    { title: 'Elenco avancado', status: 'sob_demanda', detail: 'Carregado apenas via aba Elenco para preservar quota.' },
+    { title: 'Base GoalSense', status: data.dataSources.includes('Base GoalSense') ? 'parcial' : 'nao_consultado', detail: data.dataSources.includes('Base GoalSense') ? 'Historico GoalSense aplicado em fallback.' : 'Sem amostra acumulada deste confronto.' },
+    { title: 'Cache GoalSense', status: data.dataSources.includes('Cache GoalSense') ? 'disponivel' : 'nao_consultado', detail: data.dataSources.includes('Cache GoalSense') ? 'Resposta servida do cache.' : 'Resposta direta do provider.' },
   ]
 
   return (
     <div className="px-7 py-6 space-y-5">
       <div>
-        <SectionLabel>Resolucao e Cobertura</SectionLabel>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-          {rows.map(([k, v]) => (
-            <div key={k} className="flex items-center justify-between rounded-lg bg-white/[0.02] border border-white/[0.04] px-3 py-2">
-              <span className="text-[11px] text-white/45">{k}</span>
-              <span className="text-[11px] text-white/85 font-semibold tabular-nums">{v}</span>
-            </div>
-          ))}
+        <SectionLabel>Status dos Blocos</SectionLabel>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {blocks.map(b => <StatusTile key={b.title} title={b.title} status={b.status} detail={b.detail} />)}
         </div>
       </div>
 
@@ -965,7 +1105,7 @@ function TabAuditoria({ data, homeId, awayId }: { data: PreMatchIntelligenceResu
 
       {data.limitations.length > 0 && (
         <div>
-          <SectionLabel>Limitacoes</SectionLabel>
+          <SectionLabel>Limitacoes Detectadas</SectionLabel>
           <ul className="space-y-1">
             {data.limitations.map((l, i) => (
               <li key={i} className="text-[11px] text-amber-400/70 flex items-start gap-2"><span className="text-amber-400/50 mt-0.5">!</span><span>{l}</span></li>
@@ -973,6 +1113,13 @@ function TabAuditoria({ data, homeId, awayId }: { data: PreMatchIntelligenceResu
           </ul>
         </div>
       )}
+
+      <div className="rounded-xl bg-white/[0.02] border border-white/[0.05] px-4 py-3">
+        <p className="text-[10px] uppercase tracking-wider text-white/40 font-semibold mb-1.5">Confianca Geral</p>
+        <p className="text-[12px] text-white/75 leading-snug">
+          Status: <span className="text-white font-bold">{data.status}</span> · Confianca: <span className="text-white font-bold">{data.confidence}</span>
+        </p>
+      </div>
     </div>
   )
 }
