@@ -4,7 +4,7 @@
  */
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { RefreshCw, Zap, ChevronRight, AlertCircle, Plus, Activity, Target, Eye, BarChart3, Sparkles, X, Settings2 } from 'lucide-react'
+import { RefreshCw, Zap, ChevronRight, AlertCircle, Plus, Activity, Target, Eye, BarChart3, Sparkles, X } from 'lucide-react'
 import { getLiveFixtures, type LiveFixture } from '@/lib/apiClient'
 import { storeFixtureForNavigation } from '@/lib/matchNavigation'
 import { ClubLogo } from '@/components/ui/ClubLogo'
@@ -288,7 +288,7 @@ export function CommandCenterPage() {
 
       {/* ═══ CONTENT ═══ */}
       {activeTab === 'cockpit' && <CockpitView hasIntelligence={hasIntelligence} decisionMatch={decisionMatch} decisionHit={decisionHit} decisionDiscovery={decisionDiscovery} patternHits={patternHits} discoveries={discoveries} changes={changes} fixtures={fixtures} openMatch={openMatch} isAdvanced={isAdvanced} activePatternCount={activePatternCount} enabledCount={enabledCount} triggeredAlerts={getRecentTriggered(5)} onGoToPatterns={() => setActiveTab('patterns')} navigate={navigate} templates={templates} createFromTemplate={createFromTemplate} />}
-      {activeTab === 'patterns' && <PatternsView patterns={patterns} templates={templates} createFromTemplate={createFromTemplate} createPattern={createPattern} updatePattern={updatePattern} togglePattern={togglePattern} deletePattern={deletePattern} isAdvanced={isAdvanced} showBuilder={showBuilder} setShowBuilder={setShowBuilder} discoveryConfig={discoveryConfig} updateDiscoveryConfig={updateDiscoveryConfig} />}
+      {activeTab === 'patterns' && <PatternsView patterns={patterns} templates={templates} createFromTemplate={createFromTemplate} createPattern={createPattern} updatePattern={updatePattern} togglePattern={togglePattern} deletePattern={deletePattern} isAdvanced={isAdvanced} showBuilder={showBuilder} setShowBuilder={setShowBuilder} discoveryConfig={discoveryConfig} updateDiscoveryConfig={updateDiscoveryConfig} triggeredAlerts={triggeredAlerts} />}
       {activeTab === 'scanner' && <ScannerView hasIntelligence={hasIntelligence} entries={scannerEntries} openMatch={openMatch} isAdvanced={isAdvanced} onGoToPatterns={() => setActiveTab('patterns')} />}
       {activeTab === 'alerts' && <AlertsView triggeredAlerts={getRecentTriggered(30)} isAdvanced={isAdvanced} openMatch={openMatch} fixtures={fixtures} navigate={navigate} />}
       {activeTab === 'performance' && <PerformanceView patterns={patterns} triggeredAlerts={triggeredAlerts} isAdvanced={isAdvanced} />}
@@ -402,83 +402,680 @@ function SideAction({ label, onClick }: { label: string; onClick: () => void }) 
 }
 
 
-// ═══ PATTERNS VIEW ═══
-function PatternsView({ patterns, templates, createFromTemplate, createPattern, updatePattern, togglePattern, deletePattern, isAdvanced, showBuilder, setShowBuilder, discoveryConfig, updateDiscoveryConfig }: { patterns: Pattern[]; templates: PatternTemplate[]; createFromTemplate: (id: string) => Pattern | null; createPattern: (p: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => Pattern; updatePattern: (id: string, patch: Partial<Pattern>) => void; togglePattern: (id: string) => void; deletePattern: (id: string) => void; isAdvanced: boolean; showBuilder: boolean; setShowBuilder: (v: boolean) => void; discoveryConfig: AutoDiscoveryConfig; updateDiscoveryConfig: (p: Partial<AutoDiscoveryConfig>) => void }) {
-  const [showConfig, setShowConfig] = useState(false)
-  const [editingPattern, setEditingPattern] = useState<Pattern | null>(null)
-  const handleEdit = (p: Pattern) => { setEditingPattern(p); setShowBuilder(true) }
-  const handleDuplicate = (p: Pattern) => { createPattern({ ...p, name: `${p.name} (cópia)`, status: 'paused', isTemplate: false, templateId: undefined }) }
-  const handleSave = (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => { if (editingPattern) { updatePattern(editingPattern.id, data); setEditingPattern(null) } else { createPattern(data) }; setShowBuilder(false) }
-  const handleActivateAuto = () => { updateDiscoveryConfig({ enabled: true, userConfigured: true }); setShowConfig(false) }
+// ═══ PATTERN STUDIO ═══════════════════════════════════════════════════════
+// Helpers
+const COND_LABELS: Record<PatternConditionType, string> = { is_live: 'Jogo ao vivo', is_final_phase: 'Reta final (70\'+)', is_pre_live: 'Começa em breve', minute_between: 'Minuto entre', score_tied: 'Placar empatado', score_diff_lte: 'Diferença gols ≤', favorite_involved: 'Favorito envolvido', shots_recent_gte: 'Finalizações ≥', shots_on_target_gte: 'No alvo ≥', corners_gte: 'Escanteios ≥', cards_gte: 'Cartões ≥', possession_gte: 'Posse ≥', goals_total_gte: 'Gols totais ≥', goals_total_lte: 'Gols totais ≤', away_shots_on_target_gte: 'Visitante no alvo ≥', away_goals_gte: 'Gols visitante ≥', away_possession_gte: 'Posse visitante ≥' }
 
+function formatConditionHuman(c: PatternCondition): string {
+  const v = (k: string) => Number(c.params[k] ?? 0)
+  switch (c.type) {
+    case 'is_live': return 'Partida ao vivo'
+    case 'is_final_phase': return 'Reta final (após 70\')'
+    case 'is_pre_live': return `Começa em até ${v('minutes') || 60} minutos`
+    case 'minute_between': return `Entre ${v('min')}\' e ${v('max')}\''`
+    case 'score_tied': return 'Placar empatado'
+    case 'score_diff_lte': return v('maxDiff') === 0 ? 'Placar empatado' : `Diferença no placar até ${v('maxDiff')} gol${v('maxDiff') === 1 ? '' : 's'}`
+    case 'favorite_involved': return 'Favorito envolvido'
+    case 'shots_recent_gte': return `Pelo menos ${v('value')} finalizações recentes`
+    case 'shots_on_target_gte': return `Pelo menos ${v('value')} chutes no alvo`
+    case 'corners_gte': return `${v('value')}+ escanteios`
+    case 'cards_gte': return `${v('value')}+ cartões`
+    case 'possession_gte': return `Posse acima de ${v('value')}%`
+    case 'goals_total_gte': return `${v('value')}+ gols na partida`
+    case 'goals_total_lte': return `Até ${v('value')} gol${v('value') === 1 ? '' : 's'} na partida`
+    case 'away_shots_on_target_gte': return `Visitante com ${v('value')}+ chutes no alvo`
+    case 'away_goals_gte': return `Visitante com ${v('value')}+ gols`
+    case 'away_possession_gte': return `Visitante com posse acima de ${v('value')}%`
+  }
+}
+
+type TemplateCategory = 'pressao' | 'reta_final' | 'favoritos' | 'gols' | 'disciplina' | 'visitante'
+
+function categorizeTemplate(t: PatternTemplate): TemplateCategory {
+  const id = t.id.toLowerCase()
+  if (id.includes('card')) return 'disciplina'
+  if (id.includes('away') || id.includes('dangerous_away') || id.includes('visitante')) return 'visitante'
+  if (id.includes('favorite') || id.includes('underdog')) return 'favoritos'
+  if (id.includes('open') || id.includes('over') || id.includes('locked')) return 'gols'
+  if (id.includes('final') || id.includes('late') || id.includes('hot_second')) return 'reta_final'
+  return 'pressao'
+}
+const CATEGORY_LABELS: Record<TemplateCategory, string> = { pressao: 'Pressão ofensiva', reta_final: 'Reta final', favoritos: 'Favoritos e zebras', gols: 'Gols', disciplina: 'Disciplina', visitante: 'Visitante / mandante' }
+
+// ═══ MODAL SHELL — premium overlay with backdrop blur, escape, body scroll lock
+function ModalShell({ open, onClose, title, subtitle, children, footer, maxWidth = 'max-w-3xl' }: { open: boolean; onClose: () => void; title: string; subtitle?: string; children: React.ReactNode; footer?: React.ReactNode; maxWidth?: string }) {
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', handler); document.body.style.overflow = prev }
+  }, [open, onClose])
+  if (!open) return null
   return (
-    <div className="space-y-6">
-      {showBuilder && <PatternBuilderPanel onSave={handleSave} onCancel={() => { setShowBuilder(false); setEditingPattern(null) }} initial={editingPattern} />}
-      {showConfig && <AutoConfigPanel config={discoveryConfig} onChange={updateDiscoveryConfig} onClose={() => setShowConfig(false)} onActivate={handleActivateAuto} />}
-
-      {/* Motor automático */}
-      <section className="rounded-[20px] border border-white/[0.08] bg-gradient-to-r from-white/[0.02] to-transparent p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-[15px] font-semibold text-white/75">Motor automático</h3>
-            <p className="text-[12px] text-white/40 mt-1">{discoveryConfig.enabled && discoveryConfig.userConfigured ? 'Configurado e monitorando — detectando sinais automaticamente' : 'Desligado — configure para permitir descobertas sem padrões manuais'}</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 animate-fadeIn" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="absolute inset-0 bg-black/65 backdrop-blur-md" onClick={onClose} />
+      <div className={`relative w-full ${maxWidth} max-h-[92vh] flex flex-col rounded-[28px] border border-white/[0.08] bg-gradient-to-br from-[#0a0d14] via-[#0b1018] to-[#0c1322] shadow-[0_40px_120px_-30px_rgba(0,0,0,0.7)] overflow-hidden`}>
+        <div className="px-7 pt-6 pb-5 border-b border-white/[0.05] flex items-start gap-4">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-[18px] font-bold text-white/95 tracking-tight">{title}</h3>
+            {subtitle && <p className="text-[12px] text-white/55 mt-1 leading-relaxed">{subtitle}</p>}
           </div>
-          <button onClick={() => setShowConfig(true)} className={`px-5 py-2.5 rounded-xl text-[12px] font-semibold transition-all ${discoveryConfig.enabled && discoveryConfig.userConfigured ? 'bg-emerald-500/12 text-emerald-300 border border-emerald-500/20' : 'bg-cyan-500/12 text-cyan-300 border border-cyan-500/20 hover:bg-cyan-500/18'}`} type="button">{discoveryConfig.enabled && discoveryConfig.userConfigured ? 'Configurado ✓' : 'Configurar motor'}</button>
+          <button onClick={onClose} type="button" className="h-9 w-9 rounded-xl flex items-center justify-center text-white/45 border border-white/[0.07] hover:text-white/85 hover:border-white/[0.12] transition-all shrink-0" aria-label="Fechar"><X size={16} /></button>
         </div>
-      </section>
-
-      {/* Meus padrões */}
-      {patterns.length > 0 && (<section><div className="flex items-center justify-between mb-4"><h3 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-white/55">Radares configurados</h3><button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} className="px-4 py-2 rounded-xl text-[11px] font-semibold text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500/15 flex items-center gap-1.5 transition-colors" type="button"><Plus size={12} />Criar padrão</button></div><div className="space-y-2.5">{patterns.map(p => (<div key={p.id} className={`flex items-center gap-4 rounded-[18px] border bg-white/[0.012] px-6 py-4 ${p.status === 'active' ? 'border-white/[0.08]' : 'border-white/[0.05] opacity-70'}`}><div className={`h-3 w-3 rounded-full shrink-0 ${p.status === 'active' ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.3)]' : 'bg-white/20'}`} /><div className="flex-1 min-w-0"><span className="text-[14px] font-medium text-white/85 block">{p.name}</span><span className="text-[12px] text-white/40 block mt-0.5">{p.description || `${p.conditions.length} condições`}{p.scope !== 'all' ? ` · ${p.scope === 'favorites_only' ? 'Favoritos' : p.scope === 'specific_leagues' ? `${p.scopeFilter?.length || 0} ligas` : `${p.scopeFilter?.length || 0} times`}` : ''} · Conf ≥{p.minConfidence}%</span>{isAdvanced && <span className="text-[11px] text-white/25 font-mono mt-0.5 block">action:{p.action} · scope:{p.scope}</span>}</div><button onClick={() => handleEdit(p)} className="text-[11px] text-white/40 hover:text-white/70 px-3 py-1.5 rounded-lg hover:bg-white/[0.04] transition-all" type="button">Editar</button><button onClick={() => handleDuplicate(p)} className="text-[11px] text-white/40 hover:text-white/70 px-3 py-1.5 rounded-lg hover:bg-white/[0.04] transition-all" type="button">Duplicar</button><button onClick={() => togglePattern(p.id)} className={`text-[11px] px-4 py-1.5 rounded-lg border transition-all font-medium ${p.status === 'active' ? 'border-emerald-500/20 text-emerald-400/80 bg-emerald-500/8' : 'border-white/[0.06] text-white/35'}`} type="button">{p.status === 'active' ? 'Ativo' : 'Pausado'}</button><button onClick={() => deletePattern(p.id)} className="text-[13px] text-white/25 hover:text-rose-400/70 transition-colors px-2" type="button">×</button></div>))}</div></section>)}
-
-      {/* Templates */}
-      <section><div className="flex items-center justify-between mb-4"><h3 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-white/55">Templates recomendados</h3>{!showBuilder && patterns.length === 0 && <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} className="px-4 py-2 rounded-xl text-[11px] font-semibold text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500/15 flex items-center gap-1.5 transition-colors" type="button"><Plus size={12} />Personalizado</button>}</div><div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">{templates.map(t => { const active = patterns.some(p => p.templateId === t.id && p.status === 'active'); return (<div key={t.id} className="rounded-[18px] border border-white/[0.06] bg-white/[0.01] p-5 hover:border-white/[0.1] hover:bg-white/[0.018] transition-all"><div className="flex items-start justify-between mb-2.5"><div><span className="text-[14px] font-medium text-white/80 block">{t.name}</span><span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg mt-1.5 inline-block ${t.severity === 'critical' ? 'bg-rose-500/12 text-rose-400/70' : t.severity === 'attention' ? 'bg-amber-500/10 text-amber-400/60' : 'bg-white/[0.04] text-white/35'}`}>{t.severity}</span></div>{active ? <span className="text-[11px] text-emerald-400/70 font-medium">✓ Ativo</span> : <button onClick={() => createFromTemplate(t.id)} className="px-3.5 py-1.5 rounded-lg text-[11px] font-medium text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500/15 transition-colors" type="button">Ativar</button>}</div><p className="text-[12px] text-white/45 leading-relaxed">{t.description}</p></div>) })}</div></section>
+        <div className="flex-1 overflow-y-auto px-7 py-5 sidebar-scroll">{children}</div>
+        {footer && <div className="px-7 py-4 border-t border-white/[0.05] bg-white/[0.012] flex items-center gap-2 justify-end flex-wrap">{footer}</div>}
+      </div>
     </div>
   )
 }
 
-// ═══ AUTO CONFIG PANEL ═══
-function AutoConfigPanel({ config, onChange, onClose, onActivate }: { config: AutoDiscoveryConfig; onChange: (p: Partial<AutoDiscoveryConfig>) => void; onClose: () => void; onActivate: () => void }) {
-  return (<div className="rounded-[20px] border border-cyan-500/15 bg-gradient-to-b from-cyan-500/[0.025] to-transparent p-7">
-    <div className="flex items-center justify-between mb-2"><h3 className="text-[18px] font-semibold text-white/80">Configurar motor automático</h3><button onClick={onClose} className="text-white/30 hover:text-white/60 p-1" type="button"><X size={18} /></button></div>
-    <p className="text-[13px] text-white/40 mb-6">O motor automático só começa a procurar sinais depois que você salvar esta configuração.</p>
-    <div className="space-y-5">
-      <div><h4 className="text-[12px] font-semibold text-white/55 mb-3 uppercase tracking-wider">Cobertura</h4><div className="grid grid-cols-2 gap-3"><Toggle label="Monitorar favoritos" checked={config.monitorFavorites} onChange={v => onChange({ monitorFavorites: v })} /><Toggle label="Ligas principais" checked={config.monitorMainLeagues} onChange={v => onChange({ monitorMainLeagues: v })} /><Toggle label="Todas as ligas" checked={config.monitorAllLeagues} onChange={v => onChange({ monitorAllLeagues: v })} /></div></div>
-      <div className="border-t border-white/[0.06] pt-5"><h4 className="text-[12px] font-semibold text-white/55 mb-3 uppercase tracking-wider">Momentos do jogo</h4><div className="grid grid-cols-2 gap-3"><Toggle label="Incluir pré-jogo" checked={config.includePreMatch} onChange={v => onChange({ includePreMatch: v })} /><Toggle label="Incluir ao vivo" checked={config.includeLive} onChange={v => onChange({ includeLive: v })} /></div></div>
-      <div className="border-t border-white/[0.06] pt-5"><h4 className="text-[12px] font-semibold text-white/55 mb-3 uppercase tracking-wider">Qualidade e alertas</h4><div className="grid grid-cols-2 gap-3"><div><span className="text-[11px] text-white/45 block mb-1.5">Confiança mínima</span><input type="number" value={config.minConfidence} onChange={e => onChange({ minConfidence: Number(e.target.value) })} className="w-24 h-9 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] text-white/90 outline-none focus:border-white/[0.15]" min={20} max={95} /></div><div><span className="text-[11px] text-white/45 block mb-1.5">Max alertas/jogo</span><input type="number" value={config.maxAlertsPerMatch} onChange={e => onChange({ maxAlertsPerMatch: Number(e.target.value) })} className="w-24 h-9 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] text-white/90 outline-none focus:border-white/[0.15]" min={1} max={10} /></div><Toggle label="Registrar alerta automaticamente" checked={config.registerAlertAuto} onChange={v => onChange({ registerAlertAuto: v })} /></div>{config.registerAlertAuto && <p className="text-[11px] text-cyan-400/40 mt-2">Alertas automáticos serão registrados em /app/alerts e acompanhados pelo motor de resolução.</p>}</div>
-    </div>
-    <button onClick={onActivate} className="w-full mt-6 py-3.5 rounded-xl text-[13px] font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/25 hover:bg-cyan-500/22 transition-colors" type="button">Salvar e ativar motor</button>
-  </div>)
+// ═══ PREMIUM TOGGLE
+function PremiumToggle({ checked, onChange, ariaLabel, size = 'md' }: { checked: boolean; onChange: (v: boolean) => void; ariaLabel?: string; size?: 'sm' | 'md' }) {
+  const w = size === 'sm' ? 'w-9 h-5' : 'w-11 h-6'
+  const knob = size === 'sm' ? 'h-4 w-4' : 'h-5 w-5'
+  const pos = size === 'sm' ? (checked ? 'translate-x-[18px]' : 'translate-x-[2px]') : (checked ? 'translate-x-[22px]' : 'translate-x-[2px]')
+  return (
+    <button type="button" role="switch" aria-checked={checked} aria-pressed={checked} aria-label={ariaLabel} onClick={() => onChange(!checked)} className={`relative ${w} rounded-full transition-all ${checked ? 'bg-gradient-to-r from-emerald-500/40 to-cyan-500/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_18px_-4px_rgba(52,211,153,0.4)]' : 'bg-white/[0.06] border border-white/[0.05]'}`}>
+      <span className={`absolute top-1/2 -translate-y-1/2 ${knob} rounded-full transition-all shadow-[0_2px_6px_-2px_rgba(0,0,0,0.6)] ${pos} ${checked ? 'bg-emerald-300' : 'bg-white/55'}`} />
+    </button>
+  )
 }
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) { return (<button onClick={() => onChange(!checked)} className="flex items-center gap-3 text-left py-1" type="button"><div className={`w-9 h-5 rounded-full transition-colors shrink-0 ${checked ? 'bg-cyan-500/35' : 'bg-white/[0.08]'}`}><div className={`w-4 h-4 rounded-full mt-[2px] transition-all ${checked ? 'ml-[18px] bg-cyan-400' : 'ml-[2px] bg-white/30'}`} /></div><span className="text-[12px] text-white/55">{label}</span></button>) }
 
-// ═══ PATTERN BUILDER ═══
-const COND_LABELS: Record<PatternConditionType, string> = { is_live: 'Jogo ao vivo', is_final_phase: 'Reta final (70\'+)', is_pre_live: 'Começa em breve', minute_between: 'Minuto entre', score_tied: 'Placar empatado', score_diff_lte: 'Diferença gols ≤', favorite_involved: 'Favorito envolvido', shots_recent_gte: 'Finalizações ≥', shots_on_target_gte: 'No alvo ≥', corners_gte: 'Escanteios ≥', cards_gte: 'Cartões ≥', possession_gte: 'Posse ≥', goals_total_gte: 'Gols totais ≥', goals_total_lte: 'Gols totais ≤', away_shots_on_target_gte: 'Visitante no alvo ≥', away_goals_gte: 'Gols visitante ≥', away_possession_gte: 'Posse visitante ≥' }
+// ═══ TOGGLE WITH LABEL
+function ToggleWithLabel({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-start gap-3 py-2 cursor-pointer">
+      <PremiumToggle checked={checked} onChange={onChange} ariaLabel={label} size="sm" />
+      <div className="flex-1 min-w-0 -mt-0.5">
+        <span className="text-[12px] text-white/85 font-medium block leading-tight">{label}</span>
+        {hint && <span className="text-[11px] text-white/45 leading-snug block mt-0.5">{hint}</span>}
+      </div>
+    </label>
+  )
+}
 
-function PatternBuilderPanel({ onSave, onCancel, initial }: { onSave: (p: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void; onCancel: () => void; initial?: Pattern | null }) {
-  const [name, setName] = useState(initial?.name || ''); const [desc, setDesc] = useState(initial?.description || ''); const [severity, setSeverity] = useState<'critical' | 'attention' | 'info'>(initial?.severity || 'attention'); const [scope, setScope] = useState<'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams'>(initial?.scope || 'all'); const [scopeFilter, setScopeFilter] = useState<string[]>(initial?.scopeFilter || []); const [scopeInput, setScopeInput] = useState(''); const [minConf, setMinConf] = useState(initial?.minConfidence ?? 50); const [action, setAction] = useState<'register_alert' | 'suggest_only' | 'highlight'>(initial?.action || 'register_alert'); const [conditions, setConditions] = useState<PatternCondition[]>(initial?.conditions || [{ type: 'is_live', params: {} }])
-  const addCond = (type: PatternConditionType) => { const params: Record<string, number | string | boolean> = {}; if (type === 'minute_between') { params.min = 60; params.max = 90 } else if (type === 'score_diff_lte') { params.maxDiff = 1 } else if (type === 'goals_total_lte') { params.value = 1 } else if (type === 'is_pre_live') { params.minutes = 60 } else if (['shots_recent_gte', 'shots_on_target_gte', 'corners_gte', 'cards_gte', 'goals_total_gte', 'away_shots_on_target_gte', 'away_goals_gte'].includes(type)) { params.value = 3 } else if (['possession_gte', 'away_possession_gte'].includes(type)) { params.value = 58 }; setConditions(prev => [...prev, { type, params }]) }
-  const updateParam = (idx: number, key: string, val: number) => { setConditions(prev => prev.map((c, i) => i === idx ? { ...c, params: { ...c.params, [key]: val } } : c)) }
-  const save = () => { if (!name.trim() || conditions.length === 0) return; onSave({ name: name.trim(), description: desc.trim(), conditions, severity, status: initial?.status || 'active', isTemplate: initial?.isTemplate || false, templateId: initial?.templateId, scope, scopeFilter: (scope === 'specific_leagues' || scope === 'specific_teams') ? scopeFilter : undefined, minConfidence: minConf, action, maxTriggersPerMatch: 2, antiDuplicateWindow: 5 }) }
-  const addScopeItem = () => { if (scopeInput.trim() && !scopeFilter.includes(scopeInput.trim())) { setScopeFilter(prev => [...prev, scopeInput.trim()]); setScopeInput('') } }
+// ═══ CONDITIONS EDITOR — shared between TemplateConfigModal and CustomPatternModal
+function ConditionsEditor({ conditions, onChange }: { conditions: PatternCondition[]; onChange: (c: PatternCondition[]) => void }) {
+  const addCond = (type: PatternConditionType) => {
+    const params: Record<string, number | string | boolean> = {}
+    if (type === 'minute_between') { params.min = 60; params.max = 90 }
+    else if (type === 'score_diff_lte') { params.maxDiff = 1 }
+    else if (type === 'goals_total_lte') { params.value = 1 }
+    else if (type === 'is_pre_live') { params.minutes = 60 }
+    else if (['shots_recent_gte', 'shots_on_target_gte', 'corners_gte', 'cards_gte', 'goals_total_gte', 'away_shots_on_target_gte', 'away_goals_gte'].includes(type)) { params.value = 3 }
+    else if (['possession_gte', 'away_possession_gte'].includes(type)) { params.value = 58 }
+    onChange([...conditions, { type, params }])
+  }
+  const updateParam = (idx: number, key: string, val: number) => {
+    onChange(conditions.map((c, i) => i === idx ? { ...c, params: { ...c.params, [key]: val } } : c))
+  }
+  const removeCond = (idx: number) => onChange(conditions.filter((_, j) => j !== idx))
 
-  return (<div className="rounded-[20px] border border-cyan-500/15 bg-gradient-to-b from-cyan-500/[0.02] to-transparent p-7">
-    <div className="flex items-center justify-between mb-2"><h3 className="text-[18px] font-semibold text-white/80">{initial ? 'Editar padrão' : 'Criar padrão personalizado'}</h3><button onClick={onCancel} className="text-white/30 hover:text-white/60 p-1" type="button"><X size={18} /></button></div>
-    <p className="text-[13px] text-white/40 mb-6">Defina exatamente quais sinais o GoalSense deve procurar nas partidas.</p>
-    <div className="space-y-6">
-      {/* Identidade */}
-      <div className="space-y-3"><h4 className="text-[12px] font-semibold text-white/55 uppercase tracking-wider">Identidade do radar</h4><input value={name} onChange={e => setName(e.target.value)} placeholder="Nome do padrão" className="w-full h-11 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 text-[13px] text-white/90 placeholder:text-white/30 outline-none focus:border-white/[0.15]" /><input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descrição — quando este padrão é útil?" className="w-full h-11 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 text-[13px] text-white/90 placeholder:text-white/30 outline-none focus:border-white/[0.15]" /><div><span className="text-[11px] text-white/45 block mb-2">Severidade</span><div className="flex gap-2">{(['critical', 'attention', 'info'] as const).map(s => (<button key={s} onClick={() => setSeverity(s)} className={`px-4 py-2 rounded-xl text-[12px] font-medium border transition-all ${severity === s ? (s === 'critical' ? 'border-rose-500/25 text-rose-300 bg-rose-500/10' : s === 'attention' ? 'border-amber-500/25 text-amber-300 bg-amber-500/10' : 'border-white/[0.12] text-white/70 bg-white/[0.04]') : 'border-white/[0.05] text-white/30 hover:text-white/50'}`} type="button">{s === 'critical' ? 'Crítico' : s === 'attention' ? 'Atenção' : 'Informação'}</button>))}</div></div></div>
-      {/* Escopo */}
-      <div className="border-t border-white/[0.06] pt-5"><h4 className="text-[12px] font-semibold text-white/55 uppercase tracking-wider mb-3">Escopo de análise</h4><div className="flex gap-2 flex-wrap">{(['all', 'favorites_only', 'specific_leagues', 'specific_teams'] as const).map(s => (<button key={s} onClick={() => setScope(s)} className={`px-4 py-2 rounded-xl text-[12px] font-medium border transition-all ${scope === s ? 'border-white/[0.15] text-white/80 bg-white/[0.05]' : 'border-white/[0.05] text-white/35 hover:text-white/55'}`} type="button">{s === 'all' ? 'Todos os jogos' : s === 'favorites_only' ? 'Apenas favoritos' : s === 'specific_leagues' ? 'Ligas específicas' : 'Times específicos'}</button>))}</div>{(scope === 'specific_leagues' || scope === 'specific_teams') && (<div className="mt-3"><div className="flex gap-2"><input value={scopeInput} onChange={e => setScopeInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addScopeItem()} placeholder={scope === 'specific_leagues' ? 'Nome da liga' : 'Nome do time'} className="flex-1 h-9 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-[12px] text-white placeholder:text-white/25 outline-none" /><button onClick={addScopeItem} className="px-3 text-[12px] text-cyan-400/70 hover:text-cyan-400 font-medium" type="button">Adicionar</button></div>{scopeFilter.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{scopeFilter.map((f, i) => (<span key={i} className="text-[11px] text-white/60 bg-white/[0.05] px-3 py-1.5 rounded-lg flex items-center gap-2">{f}<button onClick={() => setScopeFilter(prev => prev.filter((_, j) => j !== i))} className="text-white/30 hover:text-rose-400/70" type="button">×</button></span>))}</div>}</div>)}</div>
-      {/* Condições */}
-      <div className="border-t border-white/[0.06] pt-5"><h4 className="text-[12px] font-semibold text-white/55 uppercase tracking-wider mb-3">Condições de disparo ({conditions.length})</h4><div className="space-y-2">{conditions.map((c, i) => { const hasValue = c.params.value !== undefined || c.params.maxDiff !== undefined; const hasMinMax = c.params.min !== undefined; return (<div key={i} className="flex items-center gap-3 rounded-xl bg-white/[0.03] px-5 py-3 border border-white/[0.06]"><span className="text-[13px] text-white/65 flex-1">{COND_LABELS[c.type] || c.type}</span>{hasMinMax && <><input type="number" value={Number(c.params.min) || 0} onChange={e => updateParam(i, 'min', Number(e.target.value))} className="w-16 h-8 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 text-[12px] text-white/90 text-center outline-none" /><span className="text-[12px] text-white/30">até</span><input type="number" value={Number(c.params.max) || 90} onChange={e => updateParam(i, 'max', Number(e.target.value))} className="w-16 h-8 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 text-[12px] text-white/90 text-center outline-none" /></>}{hasValue && <input type="number" value={Number(c.params.value ?? c.params.maxDiff) || 0} onChange={e => updateParam(i, c.params.value !== undefined ? 'value' : 'maxDiff', Number(e.target.value))} className="w-16 h-8 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 text-[12px] text-white/90 text-center outline-none" />}<button onClick={() => setConditions(prev => prev.filter((_, j) => j !== i))} className="text-[13px] text-white/25 hover:text-rose-400/70 transition-colors" type="button">×</button></div>) })}</div><div className="flex flex-wrap gap-2 mt-3">{(Object.keys(COND_LABELS) as PatternConditionType[]).filter(t => !conditions.some(c => c.type === t)).map(t => (<button key={t} onClick={() => addCond(t)} className="text-[11px] text-white/40 hover:text-white/65 bg-white/[0.025] hover:bg-white/[0.04] px-3 py-1.5 rounded-lg border border-white/[0.05] transition-all" type="button">+ {COND_LABELS[t]}</button>))}</div></div>
-      {/* Ação */}
-      <div className="border-t border-white/[0.06] pt-5"><h4 className="text-[12px] font-semibold text-white/55 uppercase tracking-wider mb-3">Ação ao detectar</h4><div className="flex gap-2">{(['register_alert', 'suggest_only', 'highlight'] as const).map(a => (<button key={a} onClick={() => setAction(a)} className={`px-4 py-2 rounded-xl text-[12px] font-medium border transition-all ${action === a ? 'border-white/[0.15] text-white/80 bg-white/[0.05]' : 'border-white/[0.05] text-white/35 hover:text-white/55'}`} type="button">{a === 'register_alert' ? 'Registrar alerta' : a === 'suggest_only' ? 'Apenas sugerir' : 'Destacar no scanner'}</button>))}</div></div>
-      {/* Confiança */}
-      <div className="border-t border-white/[0.06] pt-5"><h4 className="text-[12px] font-semibold text-white/55 uppercase tracking-wider mb-2">Confiança mínima</h4><p className="text-[11px] text-white/35 mb-3">Quanto maior, menos alertas falsos, porém menos sinais encontrados.</p><input type="number" value={minConf} onChange={e => setMinConf(Number(e.target.value))} className="w-24 h-9 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] text-white/90 outline-none focus:border-white/[0.15]" min={20} max={95} /><span className="text-[12px] text-white/35 ml-2">%</span></div>
-      {/* Footer */}
-      <div className="border-t border-white/[0.06] pt-5 flex justify-end gap-3"><button onClick={onCancel} className="px-5 py-2.5 rounded-xl text-[12px] text-white/35 hover:text-white/55 border border-white/[0.06] transition-colors" type="button">Cancelar</button><button onClick={save} disabled={!name.trim() || conditions.length === 0} className="px-6 py-2.5 rounded-xl text-[12px] font-semibold text-cyan-300 bg-cyan-500/12 border border-cyan-500/25 hover:bg-cyan-500/18 disabled:opacity-30 disabled:cursor-not-allowed transition-all" type="button">{initial ? 'Salvar alterações' : 'Criar padrão'}</button></div>
+  return (
+    <div>
+      <div className="space-y-2">
+        {conditions.map((c, i) => {
+          const hasValue = c.params.value !== undefined || c.params.maxDiff !== undefined
+          const hasMinMax = c.params.min !== undefined
+          return (
+            <div key={i} className="rounded-xl bg-white/[0.025] border border-white/[0.06] px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className="text-[12px] text-white/85 flex-1 font-medium">{COND_LABELS[c.type] || c.type}</span>
+                {hasMinMax && (
+                  <div className="flex items-center gap-1.5">
+                    <input type="number" value={Number(c.params.min) || 0} onChange={e => updateParam(i, 'min', Number(e.target.value))} className="w-14 h-7 rounded-md border border-white/[0.08] bg-white/[0.04] px-2 text-[11px] text-white/95 text-center tabular-nums outline-none focus:border-cyan-400/40" />
+                    <span className="text-[10px] text-white/45 font-medium">até</span>
+                    <input type="number" value={Number(c.params.max) || 90} onChange={e => updateParam(i, 'max', Number(e.target.value))} className="w-14 h-7 rounded-md border border-white/[0.08] bg-white/[0.04] px-2 text-[11px] text-white/95 text-center tabular-nums outline-none focus:border-cyan-400/40" />
+                  </div>
+                )}
+                {hasValue && (
+                  <input type="number" value={Number(c.params.value ?? c.params.maxDiff) || 0} onChange={e => updateParam(i, c.params.value !== undefined ? 'value' : 'maxDiff', Number(e.target.value))} className="w-16 h-7 rounded-md border border-white/[0.08] bg-white/[0.04] px-2 text-[11px] text-white/95 text-center tabular-nums outline-none focus:border-cyan-400/40" />
+                )}
+                <button onClick={() => removeCond(i)} type="button" className="text-white/35 hover:text-rose-400 transition-colors px-1" aria-label="Remover condição">×</button>
+              </div>
+              <p className="text-[11px] text-white/55 mt-1.5 leading-snug italic">{formatConditionHuman(c)}</p>
+            </div>
+          )
+        })}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {(Object.keys(COND_LABELS) as PatternConditionType[]).filter(t => !conditions.some(c => c.type === t)).map(t => (
+          <button key={t} onClick={() => addCond(t)} type="button" className="text-[11px] text-white/55 hover:text-white/90 bg-white/[0.025] hover:bg-white/[0.05] px-3 py-1.5 rounded-lg border border-white/[0.05] hover:border-white/[0.1] transition-all">+ {COND_LABELS[t]}</button>
+        ))}
+      </div>
     </div>
-  </div>)
+  )
+}
+
+// ═══ SEVERITY PICKER
+function SeverityPicker({ value, onChange }: { value: 'critical' | 'attention' | 'info'; onChange: (v: 'critical' | 'attention' | 'info') => void }) {
+  const opts: { v: 'critical' | 'attention' | 'info'; label: string; cls: string }[] = [
+    { v: 'critical', label: 'Crítico', cls: 'border-rose-400/30 text-rose-300 bg-rose-500/12' },
+    { v: 'attention', label: 'Atenção', cls: 'border-amber-400/30 text-amber-300 bg-amber-500/12' },
+    { v: 'info', label: 'Informação', cls: 'border-cyan-400/25 text-cyan-300 bg-cyan-500/10' },
+  ]
+  return (
+    <div className="flex gap-2">
+      {opts.map(o => (
+        <button key={o.v} onClick={() => onChange(o.v)} type="button" className={`px-3.5 py-2 rounded-xl text-[12px] font-semibold border transition-all ${value === o.v ? o.cls : 'border-white/[0.06] text-white/45 hover:text-white/75 hover:border-white/[0.1]'}`}>{o.label}</button>
+      ))}
+    </div>
+  )
+}
+
+// ═══ ACTION PICKER
+function ActionPicker({ value, onChange }: { value: 'register_alert' | 'suggest_only' | 'highlight'; onChange: (v: 'register_alert' | 'suggest_only' | 'highlight') => void }) {
+  const opts: { v: 'register_alert' | 'suggest_only' | 'highlight'; label: string; hint: string }[] = [
+    { v: 'register_alert', label: 'Registrar alerta', hint: 'Vai para /app/alerts e é acompanhado pelo motor de resolução.' },
+    { v: 'suggest_only', label: 'Apenas sugerir', hint: 'Aparece no Scanner e Cockpit, mas não dispara alerta.' },
+    { v: 'highlight', label: 'Destacar no Scanner', hint: 'Apenas marca visualmente sem registrar nada.' },
+  ]
+  return (
+    <div className="space-y-2">
+      {opts.map(o => (
+        <button key={o.v} onClick={() => onChange(o.v)} type="button" className={`w-full flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition-all ${value === o.v ? 'border-cyan-400/30 bg-cyan-500/8' : 'border-white/[0.06] bg-white/[0.015] hover:border-white/[0.1] hover:bg-white/[0.025]'}`}>
+          <span className={`mt-0.5 h-3.5 w-3.5 rounded-full shrink-0 border-2 ${value === o.v ? 'border-cyan-400 bg-cyan-500/40' : 'border-white/25'}`}>{value === o.v && <span className="block h-full w-full rounded-full bg-cyan-300 scale-50" />}</span>
+          <div className="flex-1 min-w-0">
+            <span className={`text-[12px] font-bold block ${value === o.v ? 'text-white/95' : 'text-white/75'}`}>{o.label}</span>
+            <span className="text-[11px] text-white/55 leading-snug block mt-0.5">{o.hint}</span>
+          </div>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ═══ SCOPE PICKER
+function ScopePicker({ scope, onChange }: { scope: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams'; onChange: (s: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams') => void }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {([
+        ['all', 'Todos os jogos'],
+        ['favorites_only', 'Apenas favoritos'],
+      ] as const).map(([v, label]) => (
+        <button key={v} onClick={() => onChange(v)} type="button" className={`px-3.5 py-2 rounded-xl text-[12px] font-semibold border transition-all ${scope === v ? 'border-white/[0.18] text-white bg-white/[0.06]' : 'border-white/[0.06] text-white/55 hover:text-white/85 hover:border-white/[0.1]'}`}>{label}</button>
+      ))}
+      <span className="px-3.5 py-2 rounded-xl text-[11px] font-medium border border-dashed border-white/[0.08] text-white/35">Ligas/times específicos · em breve</span>
+    </div>
+  )
+}
+
+// ═══ TEMPLATE CONFIG MODAL
+function TemplateConfigModal({ open, template, existingPattern, onClose, onSave }: { open: boolean; template: PatternTemplate | null; existingPattern: Pattern | null; onClose: () => void; onSave: (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void }) {
+  const initial = existingPattern || (template ? {
+    name: template.name, description: template.description,
+    conditions: [...template.conditions], severity: template.severity,
+    status: 'active' as const, isTemplate: true, templateId: template.id,
+    scope: 'all' as const, scopeFilter: undefined as string[] | undefined,
+    minConfidence: 50, action: 'register_alert' as const,
+    maxTriggersPerMatch: 2, antiDuplicateWindow: 5,
+  } : null)
+
+  const [conditions, setConditions] = useState<PatternCondition[]>(initial?.conditions || [])
+  const [severity, setSeverity] = useState<'critical' | 'attention' | 'info'>(initial?.severity || 'attention')
+  const [action, setAction] = useState<'register_alert' | 'suggest_only' | 'highlight'>(initial?.action || 'register_alert')
+  const [scope, setScope] = useState<'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams'>(initial?.scope || 'all')
+  const [minConf, setMinConf] = useState<number>(initial?.minConfidence ?? 50)
+
+  useEffect(() => {
+    if (!open) return
+    setConditions(initial?.conditions || [])
+    setSeverity(initial?.severity || 'attention')
+    setAction(initial?.action || 'register_alert')
+    setScope(initial?.scope || 'all')
+    setMinConf(initial?.minConfidence ?? 50)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, template?.id, existingPattern?.id])
+
+  if (!open || !template) return null
+
+  const cat = categorizeTemplate(template)
+
+  const buildPatternData = (status: 'active' | 'paused'): Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'> => ({
+    name: template.name,
+    description: template.description,
+    conditions,
+    severity,
+    status,
+    isTemplate: true,
+    templateId: template.id,
+    scope,
+    scopeFilter: undefined,
+    minConfidence: minConf,
+    action,
+    maxTriggersPerMatch: 2,
+    antiDuplicateWindow: 5,
+  })
+
+  const handleSaveActive = () => { onSave(buildPatternData('active')); onClose() }
+  const handleSavePaused = () => { onSave(buildPatternData('paused')); onClose() }
+
+  return (
+    <ModalShell open={open} onClose={onClose} title={template.name} subtitle={template.description} maxWidth="max-w-3xl"
+      footer={
+        <>
+          <button onClick={onClose} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/55 border border-white/[0.07] hover:text-white/85 hover:border-white/[0.12] transition-colors">Cancelar</button>
+          <button onClick={handleSavePaused} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-all">Salvar pausado</button>
+          <button onClick={handleSaveActive} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-bold bg-gradient-to-r from-cyan-500/22 to-blue-500/22 text-cyan-200 border border-cyan-400/30 hover:from-cyan-500/32 hover:to-blue-500/32 transition-all">{existingPattern ? 'Salvar alterações e ativar' : 'Salvar e ativar'}</button>
+        </>
+      }
+    >
+      <div className="flex items-center gap-2 mb-5 flex-wrap">
+        <span className="text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md bg-white/[0.05] text-white/65 border border-white/[0.08]">Template GoalSense</span>
+        <span className="text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md bg-white/[0.04] text-white/65 border border-white/[0.07]">{CATEGORY_LABELS[cat]}</span>
+        <span className={`text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md border ${severity === 'critical' ? 'bg-rose-500/12 text-rose-300 border-rose-400/20' : severity === 'attention' ? 'bg-amber-500/12 text-amber-300 border-amber-400/20' : 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15'}`}>{severity === 'critical' ? 'Crítico' : severity === 'attention' ? 'Atenção' : 'Info'}</span>
+      </div>
+
+      <Section title="O que este radar procura">
+        <p className="text-[12px] text-white/75 leading-relaxed">{template.description}</p>
+        <ul className="mt-3 space-y-1.5">
+          {conditions.map((c, i) => (
+            <li key={i} className="flex items-start gap-2 text-[11px] text-white/65"><span className="mt-1 h-1 w-1 rounded-full bg-cyan-400/70 shrink-0" /><span>{formatConditionHuman(c)}</span></li>
+          ))}
+        </ul>
+      </Section>
+
+      <Section title="Condições">
+        <ConditionsEditor conditions={conditions} onChange={setConditions} />
+      </Section>
+
+      <Section title="Severidade">
+        <SeverityPicker value={severity} onChange={setSeverity} />
+      </Section>
+
+      <Section title="Escopo">
+        <ScopePicker scope={scope} onChange={setScope} />
+      </Section>
+
+      <Section title="Ação ao detectar">
+        <ActionPicker value={action} onChange={setAction} />
+      </Section>
+
+      <Section title="Confiança mínima" hint="Quanto maior, menos alertas falsos e mais rigor.">
+        <div className="flex items-center gap-3">
+          <input type="range" min={20} max={95} value={minConf} onChange={e => setMinConf(Number(e.target.value))} className="flex-1 accent-cyan-400" />
+          <input type="number" value={minConf} onChange={e => setMinConf(Number(e.target.value))} className="w-20 h-9 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-[13px] text-white/95 tabular-nums text-center outline-none focus:border-cyan-400/40" min={20} max={95} />
+          <span className="text-[12px] text-white/55 font-semibold">%</span>
+        </div>
+      </Section>
+    </ModalShell>
+  )
+}
+
+function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-5 last:mb-0">
+      <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/55 mb-2.5">{title}</h4>
+      {hint && <p className="text-[11px] text-white/50 mb-2.5 leading-snug">{hint}</p>}
+      {children}
+    </section>
+  )
+}
+
+// ═══ CUSTOM PATTERN MODAL
+function CustomPatternModal({ open, initial, onClose, onSave }: { open: boolean; initial: Pattern | null; onClose: () => void; onSave: (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void }) {
+  const [name, setName] = useState(initial?.name || '')
+  const [desc, setDesc] = useState(initial?.description || '')
+  const [severity, setSeverity] = useState<'critical' | 'attention' | 'info'>(initial?.severity || 'attention')
+  const [scope, setScope] = useState<'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams'>(initial?.scope || 'all')
+  const [minConf, setMinConf] = useState(initial?.minConfidence ?? 50)
+  const [action, setAction] = useState<'register_alert' | 'suggest_only' | 'highlight'>(initial?.action || 'register_alert')
+  const [conditions, setConditions] = useState<PatternCondition[]>(initial?.conditions || [{ type: 'is_live', params: {} }])
+
+  useEffect(() => {
+    if (!open) return
+    setName(initial?.name || '')
+    setDesc(initial?.description || '')
+    setSeverity(initial?.severity || 'attention')
+    setScope(initial?.scope || 'all')
+    setMinConf(initial?.minConfidence ?? 50)
+    setAction(initial?.action || 'register_alert')
+    setConditions(initial?.conditions || [{ type: 'is_live', params: {} }])
+  }, [open, initial])
+
+  if (!open) return null
+
+  const canSave = name.trim().length > 0 && conditions.length > 0
+  const buildData = (status: 'active' | 'paused'): Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'> => ({
+    name: name.trim(),
+    description: desc.trim(),
+    conditions,
+    severity,
+    status,
+    isTemplate: initial?.isTemplate || false,
+    templateId: initial?.templateId,
+    scope,
+    scopeFilter: undefined,
+    minConfidence: minConf,
+    action,
+    maxTriggersPerMatch: initial?.maxTriggersPerMatch ?? 2,
+    antiDuplicateWindow: initial?.antiDuplicateWindow ?? 5,
+  })
+
+  return (
+    <ModalShell open={open} onClose={onClose} title={initial ? 'Editar radar' : 'Criar radar personalizado'} subtitle="Monte suas próprias regras para o GoalSense monitorar partidas em tempo real." maxWidth="max-w-3xl"
+      footer={
+        <>
+          <button onClick={onClose} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/55 border border-white/[0.07] hover:text-white/85 hover:border-white/[0.12] transition-colors">Cancelar</button>
+          <button onClick={() => { onSave(buildData('paused')); onClose() }} disabled={!canSave} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar pausado</button>
+          <button onClick={() => { onSave(buildData('active')); onClose() }} disabled={!canSave} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-bold bg-gradient-to-r from-cyan-500/22 to-blue-500/22 text-cyan-200 border border-cyan-400/30 hover:from-cyan-500/32 hover:to-blue-500/32 disabled:opacity-30 disabled:cursor-not-allowed transition-all">{initial ? 'Salvar e ativar' : 'Criar e ativar'}</button>
+        </>
+      }
+    >
+      <Section title="Identidade">
+        <div className="space-y-2.5">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome do radar" className="w-full h-11 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 text-[13px] text-white/95 placeholder:text-white/35 outline-none focus:border-cyan-400/40" />
+          <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descrição — quando este radar é útil?" className="w-full h-11 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 text-[13px] text-white/95 placeholder:text-white/35 outline-none focus:border-cyan-400/40" />
+        </div>
+        <div className="mt-3"><SeverityPicker value={severity} onChange={setSeverity} /></div>
+      </Section>
+
+      <Section title="Escopo">
+        <ScopePicker scope={scope} onChange={setScope} />
+      </Section>
+
+      <Section title={`Condições (${conditions.length})`} hint="Cada condição precisa ser satisfeita para o radar disparar.">
+        <ConditionsEditor conditions={conditions} onChange={setConditions} />
+      </Section>
+
+      <Section title="Ação ao detectar">
+        <ActionPicker value={action} onChange={setAction} />
+      </Section>
+
+      <Section title="Confiança mínima" hint="Quanto maior, menos alertas falsos.">
+        <div className="flex items-center gap-3">
+          <input type="range" min={20} max={95} value={minConf} onChange={e => setMinConf(Number(e.target.value))} className="flex-1 accent-cyan-400" />
+          <input type="number" value={minConf} onChange={e => setMinConf(Number(e.target.value))} className="w-20 h-9 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-[13px] text-white/95 tabular-nums text-center outline-none focus:border-cyan-400/40" min={20} max={95} />
+          <span className="text-[12px] text-white/55 font-semibold">%</span>
+        </div>
+      </Section>
+
+      <Section title="Revisão">
+        <div className="rounded-xl bg-white/[0.025] border border-white/[0.06] px-4 py-3 space-y-1.5">
+          <p className="text-[12px] text-white/85 font-semibold">{name.trim() || 'Sem nome'}</p>
+          {desc && <p className="text-[11px] text-white/55 leading-snug">{desc}</p>}
+          <div className="flex items-center gap-2 flex-wrap pt-1">
+            <span className="text-[10px] text-white/55">Quando:</span>
+            {conditions.map((c, i) => <span key={i} className="text-[10px] text-white/75 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.05]">{formatConditionHuman(c)}</span>)}
+          </div>
+          <p className="text-[11px] text-white/55 pt-1">Ação: <span className="text-white/85 font-semibold">{action === 'register_alert' ? 'Registrar alerta' : action === 'suggest_only' ? 'Apenas sugerir' : 'Destacar'}</span> · Confiança ≥ {minConf}%</p>
+        </div>
+      </Section>
+    </ModalShell>
+  )
+}
+
+// ═══ AUTO DISCOVERY CONFIG MODAL
+function AutoDiscoveryConfigModal({ open, config, onClose, onChange, onActivate, onDeactivate }: { open: boolean; config: AutoDiscoveryConfig; onClose: () => void; onChange: (p: Partial<AutoDiscoveryConfig>) => void; onActivate: () => void; onDeactivate: () => void }) {
+  const isActive = config.enabled && config.userConfigured
+  return (
+    <ModalShell open={open} onClose={onClose} title="Motor automático" subtitle="Configure como o GoalSense pode sugerir ou registrar descobertas automáticas." maxWidth="max-w-2xl"
+      footer={
+        <>
+          <button onClick={onClose} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/55 border border-white/[0.07] hover:text-white/85 hover:border-white/[0.12] transition-colors">Cancelar</button>
+          {isActive && <button onClick={onDeactivate} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-rose-300 border border-rose-400/20 bg-rose-500/8 hover:bg-rose-500/15 transition-all">Desativar motor</button>}
+          <button onClick={onActivate} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-bold bg-gradient-to-r from-cyan-500/22 to-blue-500/22 text-cyan-200 border border-cyan-400/30 hover:from-cyan-500/32 hover:to-blue-500/32 transition-all">{isActive ? 'Salvar configuração' : 'Salvar e ativar motor'}</button>
+        </>
+      }
+    >
+      <Section title="Cobertura">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <ToggleWithLabel label="Monitorar favoritos" hint="Inclui partidas com times favoritos." checked={config.monitorFavorites} onChange={v => onChange({ monitorFavorites: v })} />
+          <ToggleWithLabel label="Ligas principais" hint="Brasileirão, Premier League, La Liga, etc." checked={config.monitorMainLeagues} onChange={v => onChange({ monitorMainLeagues: v })} />
+          <ToggleWithLabel label="Todas as ligas" hint="Inclui partidas de todas as competições disponíveis." checked={config.monitorAllLeagues} onChange={v => onChange({ monitorAllLeagues: v })} />
+        </div>
+      </Section>
+
+      <Section title="Momentos do jogo">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <ToggleWithLabel label="Incluir pré-jogo" hint="Sinais antes da bola rolar." checked={config.includePreMatch} onChange={v => onChange({ includePreMatch: v })} />
+          <ToggleWithLabel label="Incluir ao vivo" hint="Sinais durante a partida." checked={config.includeLive} onChange={v => onChange({ includeLive: v })} />
+        </div>
+      </Section>
+
+      <Section title="Qualidade">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <span className="text-[11px] text-white/55 block mb-1.5 font-medium">Confiança mínima</span>
+            <input type="number" value={config.minConfidence} onChange={e => onChange({ minConfidence: Number(e.target.value) })} className="w-full h-10 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-[13px] text-white/95 tabular-nums outline-none focus:border-cyan-400/40" min={20} max={95} />
+          </div>
+          <div>
+            <span className="text-[11px] text-white/55 block mb-1.5 font-medium">Máx. alertas/jogo</span>
+            <input type="number" value={config.maxAlertsPerMatch} onChange={e => onChange({ maxAlertsPerMatch: Number(e.target.value) })} className="w-full h-10 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-[13px] text-white/95 tabular-nums outline-none focus:border-cyan-400/40" min={1} max={10} />
+          </div>
+          <div className="sm:col-span-2">
+            <span className="text-[11px] text-white/55 block mb-1.5 font-medium">Janela anti-duplicidade (min)</span>
+            <input type="number" value={config.antiDuplicateMinutes} onChange={e => onChange({ antiDuplicateMinutes: Number(e.target.value) })} className="w-full h-10 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-[13px] text-white/95 tabular-nums outline-none focus:border-cyan-400/40" min={1} max={60} />
+          </div>
+        </div>
+      </Section>
+
+      <Section title="Ação">
+        <ToggleWithLabel label="Registrar alerta automaticamente" hint="Quando ativo, descobertas viram alertas em /app/alerts e são acompanhadas pelo motor de resolução. Quando desligado, descobertas só aparecem como sugestões no Cockpit/Scanner." checked={config.registerAlertAuto} onChange={v => onChange({ registerAlertAuto: v })} />
+      </Section>
+
+      <div className="rounded-xl border border-cyan-400/15 bg-cyan-500/[0.04] px-4 py-3 mt-2">
+        <p className="text-[11px] text-cyan-200/80 leading-relaxed">
+          <span className="font-bold">Segurança:</span> o motor automático só roda após salvar e ativar. Se configurado como apenas sugerir, ele <span className="font-bold">não registra alertas</span>.
+        </p>
+      </div>
+    </ModalShell>
+  )
+}
+
+// ═══ PATTERN STUDIO (PatternsView)
+function PatternsView({ patterns, templates, createFromTemplate, createPattern, updatePattern, togglePattern, deletePattern, isAdvanced, showBuilder, setShowBuilder, discoveryConfig, updateDiscoveryConfig, triggeredAlerts }: { patterns: Pattern[]; templates: PatternTemplate[]; createFromTemplate: (id: string) => Pattern | null; createPattern: (p: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => Pattern; updatePattern: (id: string, patch: Partial<Pattern>) => void; togglePattern: (id: string) => void; deletePattern: (id: string) => void; isAdvanced: boolean; showBuilder: boolean; setShowBuilder: (v: boolean) => void; discoveryConfig: AutoDiscoveryConfig; updateDiscoveryConfig: (p: Partial<AutoDiscoveryConfig>) => void; triggeredAlerts: TriggeredAlert[] }) {
+  const [showAutoConfig, setShowAutoConfig] = useState(false)
+  const [editingPattern, setEditingPattern] = useState<Pattern | null>(null)
+  const [templateModal, setTemplateModal] = useState<{ template: PatternTemplate; existing: Pattern | null } | null>(null)
+  const [categoryFilter, setCategoryFilter] = useState<TemplateCategory | 'all'>('all')
+
+  const handleCustomSave = (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => {
+    if (editingPattern) updatePattern(editingPattern.id, data)
+    else createPattern(data)
+    setEditingPattern(null)
+  }
+
+  const handleTemplateSave = (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => {
+    if (templateModal?.existing) updatePattern(templateModal.existing.id, data)
+    else createPattern(data)
+  }
+
+  const handleTemplateToggle = (template: PatternTemplate) => {
+    const existing = patterns.find(p => p.templateId === template.id)
+    if (existing) {
+      // Toggle active/paused
+      togglePattern(existing.id)
+    } else {
+      // First activation — open config modal
+      setTemplateModal({ template, existing: null })
+    }
+  }
+
+  const handleTemplateConfigure = (template: PatternTemplate) => {
+    const existing = patterns.find(p => p.templateId === template.id) || null
+    setTemplateModal({ template, existing })
+  }
+
+  const handleActivateAuto = () => { updateDiscoveryConfig({ enabled: true, userConfigured: true }); setShowAutoConfig(false) }
+  const handleDeactivateAuto = () => { updateDiscoveryConfig({ enabled: false }); setShowAutoConfig(false) }
+
+  const isAutoActive = discoveryConfig.enabled && discoveryConfig.userConfigured
+  const activeCount = patterns.filter(p => p.status === 'active').length
+  const pausedCount = patterns.filter(p => p.status === 'paused').length
+  const triggeredTodayCount = triggeredAlerts.filter(t => t.timestamp.startsWith(new Date().toISOString().split('T')[0])).length
+
+  const visibleTemplates = templates.filter(t => categoryFilter === 'all' || categorizeTemplate(t) === categoryFilter)
+
+  return (
+    <div className="space-y-6">
+      {/* Modals */}
+      <CustomPatternModal open={showBuilder} initial={editingPattern} onClose={() => { setShowBuilder(false); setEditingPattern(null) }} onSave={handleCustomSave} />
+      <TemplateConfigModal open={!!templateModal} template={templateModal?.template || null} existingPattern={templateModal?.existing || null} onClose={() => setTemplateModal(null)} onSave={handleTemplateSave} />
+      <AutoDiscoveryConfigModal open={showAutoConfig} config={discoveryConfig} onClose={() => setShowAutoConfig(false)} onChange={updateDiscoveryConfig} onActivate={handleActivateAuto} onDeactivate={handleDeactivateAuto} />
+
+      {/* Header */}
+      <header className="rounded-[20px] border border-white/[0.06] bg-gradient-to-br from-white/[0.02] to-transparent p-6">
+        <div className="flex items-start justify-between gap-4 mb-5 flex-wrap">
+          <div>
+            <h2 className="text-[20px] font-bold text-white/95 tracking-tight">Pattern Studio</h2>
+            <p className="text-[12px] text-white/60 mt-1 max-w-[600px]">Configure radares manuais e o motor automático para detectar sinais reais nas partidas.</p>
+          </div>
+          <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-bold text-cyan-200 bg-gradient-to-r from-cyan-500/15 to-blue-500/15 border border-cyan-400/25 hover:from-cyan-500/25 hover:to-blue-500/25 transition-all flex items-center gap-1.5"><Plus size={14} />Criar radar personalizado</button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-px rounded-xl overflow-hidden border border-white/[0.05] bg-white/[0.01]">
+          <CounterCell label="Ativos" value={activeCount} tone="emerald" />
+          <CounterCell label="Pausados" value={pausedCount} tone="white" />
+          <CounterCell label="Templates" value={templates.length} tone="cyan" />
+          <CounterCell label="Motor auto" value={isAutoActive ? 'On' : 'Off'} tone={isAutoActive ? 'emerald' : 'white'} />
+          <CounterCell label="Disparos hoje" value={triggeredTodayCount} tone={triggeredTodayCount > 0 ? 'amber' : 'white'} />
+        </div>
+      </header>
+
+      {/* Motor automático — compact card */}
+      <section className={`rounded-2xl border ${isAutoActive ? 'border-emerald-400/20 bg-gradient-to-r from-emerald-500/[0.04] via-cyan-500/[0.02] to-transparent' : 'border-white/[0.07] bg-gradient-to-r from-white/[0.02] to-transparent'} p-5`}>
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${isAutoActive ? 'bg-emerald-500/15 border border-emerald-400/25' : 'bg-white/[0.04] border border-white/[0.08]'}`}><Sparkles size={16} className={isAutoActive ? 'text-emerald-300' : 'text-white/55'} /></div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-[14px] font-bold text-white/95">Motor automático</h3>
+              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${isAutoActive ? 'bg-emerald-500/12 text-emerald-300 border-emerald-400/20' : 'bg-white/[0.04] text-white/55 border-white/[0.07]'}`}>{isAutoActive ? 'Monitorando' : 'Desligado'}</span>
+            </div>
+            <p className="text-[11px] text-white/55 mt-0.5 leading-snug">
+              {isAutoActive
+                ? `Confiança ≥ ${discoveryConfig.minConfidence}% · ${discoveryConfig.registerAlertAuto ? 'Registrando alertas' : 'Apenas sugerindo'} · ${discoveryConfig.monitorAllLeagues ? 'todas as ligas' : discoveryConfig.monitorMainLeagues ? 'ligas principais' : 'favoritos'}`
+                : 'Configure o motor para o GoalSense detectar sinais sem você criar padrões.'}
+            </p>
+          </div>
+          <PremiumToggle checked={isAutoActive} onChange={(v) => { if (v && !discoveryConfig.userConfigured) setShowAutoConfig(true); else updateDiscoveryConfig({ enabled: v }) }} ariaLabel="Motor automático" />
+          <button onClick={() => setShowAutoConfig(true)} type="button" className="px-3.5 py-2 rounded-xl text-[11px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-all">Configurar motor</button>
+        </div>
+      </section>
+
+      {/* Radares configurados */}
+      {patterns.length > 0 ? (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/65">Radares configurados</h3>
+            <span className="text-[10px] text-white/45 font-semibold">{activeCount} ativos · {pausedCount} pausados</span>
+          </div>
+          <div className="space-y-2">
+            {patterns.map(p => <ConfiguredRadarRow key={p.id} pattern={p} triggeredAlerts={triggeredAlerts} onToggle={() => togglePattern(p.id)} onEdit={() => { setEditingPattern(p); setShowBuilder(true) }} onDuplicate={() => { createPattern({ ...p, name: `${p.name} (cópia)`, status: 'paused', isTemplate: false, templateId: undefined }) }} onDelete={() => deletePattern(p.id)} isAdvanced={isAdvanced} />)}
+          </div>
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.008] p-7 text-center">
+          <p className="text-[14px] text-white/85 font-semibold">Você ainda não configurou nenhum radar</p>
+          <p className="text-[12px] text-white/55 mt-1">Comece por um template ou crie seu próprio padrão.</p>
+        </section>
+      )}
+
+      {/* Templates */}
+      <section>
+        <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+          <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/65">Templates recomendados</h3>
+          <div className="flex flex-wrap gap-1.5">
+            {([
+              ['all', 'Todos'],
+              ...(Object.entries(CATEGORY_LABELS) as [TemplateCategory, string][]),
+            ] as [TemplateCategory | 'all', string][]).map(([k, label]) => {
+              const active = categoryFilter === k
+              const count = k === 'all' ? templates.length : templates.filter(t => categorizeTemplate(t) === k).length
+              return (
+                <button key={k} onClick={() => setCategoryFilter(k)} type="button" className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all flex items-center gap-1.5 ${active ? 'bg-white/[0.09] text-white border border-white/[0.14]' : 'text-white/55 border border-white/[0.06] hover:text-white/85 hover:border-white/[0.1]'}`}>
+                  {label}
+                  {count > 0 && <span className={`text-[10px] tabular-nums px-1.5 py-0.5 rounded-md ${active ? 'bg-cyan-500/22 text-cyan-200' : 'bg-white/[0.06] text-white/55'}`}>{count}</span>}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {visibleTemplates.map(t => {
+            const existing = patterns.find(p => p.templateId === t.id) || null
+            const isActiveTpl = !!existing && existing.status === 'active'
+            return <TemplateCard key={t.id} template={t} existing={existing} isActive={isActiveTpl} onToggle={() => handleTemplateToggle(t)} onConfigure={() => handleTemplateConfigure(t)} />
+          })}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+// ═══ TEMPLATE CARD
+function TemplateCard({ template, existing, isActive, onToggle, onConfigure }: { template: PatternTemplate; existing: Pattern | null; isActive: boolean; onToggle: () => void; onConfigure: () => void }) {
+  const cat = categorizeTemplate(template)
+  const sevTone = template.severity === 'critical' ? 'bg-rose-500/12 text-rose-300 border-rose-400/20' : template.severity === 'attention' ? 'bg-amber-500/12 text-amber-300 border-amber-400/20' : 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15'
+  return (
+    <div className={`group rounded-2xl border ${isActive ? 'border-emerald-400/25 bg-gradient-to-br from-emerald-500/[0.04] via-cyan-500/[0.02] to-transparent' : 'border-white/[0.06] bg-white/[0.012]'} p-4 transition-all hover:border-white/[0.12]`}>
+      <div className="flex items-start justify-between gap-3 mb-2.5">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+            <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${sevTone}`}>{template.severity === 'critical' ? 'Crítico' : template.severity === 'attention' ? 'Atenção' : 'Info'}</span>
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-white/55">{CATEGORY_LABELS[cat]}</span>
+            {existing && existing.status === 'paused' && <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-white/[0.05] text-white/65 border border-white/[0.07]">Pausado</span>}
+          </div>
+          <h4 className="text-[13px] font-bold text-white/95 truncate">{template.name}</h4>
+        </div>
+        <PremiumToggle checked={isActive} onChange={onToggle} ariaLabel={`Ativar template ${template.name}`} size="sm" />
+      </div>
+      <p className="text-[11px] text-white/65 leading-snug mb-3 line-clamp-2">{template.description}</p>
+      <div className="flex flex-wrap gap-1 mb-3">
+        {template.conditions.slice(0, 3).map((c, i) => (
+          <span key={i} className="text-[10px] text-white/65 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.05]">{formatConditionHuman(c)}</span>
+        ))}
+        {template.conditions.length > 3 && <span className="text-[10px] text-white/45">+{template.conditions.length - 3}</span>}
+      </div>
+      <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.04]">
+        <span className="text-[10px] text-white/45">Confiança sugerida: <span className="text-white/75 font-semibold">{template.defaultConfidence}</span></span>
+        <button onClick={onConfigure} type="button" className="text-[11px] font-semibold text-cyan-300 hover:text-cyan-200 transition-colors">Configurar →</button>
+      </div>
+    </div>
+  )
+}
+
+// ═══ CONFIGURED RADAR ROW
+function ConfiguredRadarRow({ pattern, triggeredAlerts, onToggle, onEdit, onDuplicate, onDelete, isAdvanced }: { pattern: Pattern; triggeredAlerts: TriggeredAlert[]; onToggle: () => void; onEdit: () => void; onDuplicate: () => void; onDelete: () => void; isAdvanced: boolean }) {
+  const isActive = pattern.status === 'active'
+  const lastHit = triggeredAlerts.find(t => t.patternId === pattern.id)?.timestamp || null
+  const hits = triggeredAlerts.filter(t => t.patternId === pattern.id).length
+  const sevTone = pattern.severity === 'critical' ? 'bg-rose-500/12 text-rose-300 border-rose-400/20' : pattern.severity === 'attention' ? 'bg-amber-500/12 text-amber-300 border-amber-400/20' : 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15'
+  const origin = pattern.isTemplate || pattern.templateId ? 'Template' : 'Personalizado'
+
+  return (
+    <div className={`rounded-2xl border ${isActive ? 'border-white/[0.08]' : 'border-white/[0.05] opacity-75'} bg-gradient-to-r from-white/[0.012] to-transparent px-5 py-4`}>
+      <div className="flex items-center gap-4 flex-wrap">
+        <PremiumToggle checked={isActive} onChange={onToggle} ariaLabel={`Ativar ${pattern.name}`} size="sm" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+            <h4 className="text-[13px] font-bold text-white/95 truncate">{pattern.name}</h4>
+            <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${sevTone}`}>{pattern.severity === 'critical' ? 'Crítico' : pattern.severity === 'attention' ? 'Atenção' : 'Info'}</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-white/[0.04] text-white/65 border border-white/[0.07]">{origin}</span>
+          </div>
+          <div className="flex items-center gap-3 text-[11px] text-white/55 flex-wrap">
+            <span>{pattern.conditions.length} {pattern.conditions.length === 1 ? 'condição' : 'condições'}</span>
+            <span>· Conf ≥ {pattern.minConfidence}%</span>
+            <span>· {pattern.action === 'register_alert' ? 'Alerta' : pattern.action === 'suggest_only' ? 'Sugerir' : 'Destacar'}</span>
+            <span>· {pattern.scope === 'all' ? 'Todos' : 'Favoritos'}</span>
+            {hits > 0 && <span>· <span className="text-white/85 font-semibold">{hits}</span> {hits === 1 ? 'disparo' : 'disparos'}</span>}
+            {lastHit && <span>· Último {new Date(lastHit).toLocaleDateString('pt-BR')}</span>}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button onClick={onEdit} type="button" className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/65 hover:text-white/95 hover:bg-white/[0.05] transition-all">Editar</button>
+          <button onClick={onDuplicate} type="button" className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/65 hover:text-white/95 hover:bg-white/[0.05] transition-all">Duplicar</button>
+          <button onClick={onDelete} type="button" className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/45 hover:text-rose-300 hover:bg-rose-500/8 transition-all" aria-label="Excluir">Excluir</button>
+        </div>
+      </div>
+      {isAdvanced && (
+        <div className="mt-2 pt-2 border-t border-white/[0.04] text-[10px] text-white/45 font-mono">
+          id:{pattern.id.slice(0, 12)} · template:{pattern.templateId || 'custom'} · max/jogo:{pattern.maxTriggersPerMatch} · anti-dup:{pattern.antiDuplicateWindow}min
+        </div>
+      )}
+    </div>
+  )
 }
 
 
@@ -588,8 +1185,9 @@ function ScannerView({ hasIntelligence, entries, openMatch, isAdvanced, onGoToPa
   )
 }
 
-function CounterCell({ label, value, tone }: { label: string; value: number; tone: 'rose' | 'amber' | 'cyan' | 'emerald' | 'white' }) {
-  const c = value > 0
+function CounterCell({ label, value, tone }: { label: string; value: number | string; tone: 'rose' | 'amber' | 'cyan' | 'emerald' | 'white' }) {
+  const isPositive = typeof value === 'number' ? value > 0 : value !== 'Off' && value !== '—' && value !== '0'
+  const c = isPositive
     ? tone === 'rose' ? 'text-rose-300' : tone === 'amber' ? 'text-amber-300' : tone === 'cyan' ? 'text-cyan-300' : tone === 'emerald' ? 'text-emerald-300' : 'text-white/85'
     : 'text-white/25'
   return (
