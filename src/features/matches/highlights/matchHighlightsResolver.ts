@@ -30,7 +30,7 @@ export async function resolveHighlights(homeName: string, awayName: string): Pro
   const emptyDebug: HighlightDebug = { feedCount: 0, candidates: 0, reason: '', normalizedHome: homeNorm, normalizedAway: awayNorm, firstTitles: [], topSimilarities: [] }
 
   try {
-    console.info('[highlights] start', { home: homeName, away: awayName, homeNorm, awayNorm })
+    if (import.meta.env.DEV) console.info('[highlights] start', { home: homeName, away: awayName, homeNorm, awayNorm })
 
     const res = await fetch('/api/scorebat-videos')
     if (!res.ok) return { highlights: [], debug: { ...emptyDebug, reason: `fetch failed: ${res.status}` } }
@@ -38,7 +38,7 @@ export async function resolveHighlights(homeName: string, awayName: string): Pro
     const data = await res.json()
     const videos: any[] = Array.isArray(data) ? data : (data.videos || data.response || [])
 
-    console.info('[highlights] feed_count', videos.length)
+    if (import.meta.env.DEV) console.info('[highlights] feed_count', videos.length)
     if (videos.length === 0) return { highlights: [], debug: { ...emptyDebug, reason: 'empty feed' } }
 
     const firstTitles = videos.slice(0, 10).map((v: any) => v.title || '')
@@ -73,7 +73,7 @@ export async function resolveHighlights(homeName: string, awayName: string): Pro
     allScores.sort((a, b) => b.total - a.total)
     const topSims = allScores.slice(0, 5)
 
-    console.info('[highlights] top_similarities', topSims)
+    if (import.meta.env.DEV) console.info('[highlights] top_similarities', topSims)
 
     if (candidates.length === 0) {
       return { highlights: [], debug: { feedCount: videos.length, candidates: 0, reason: 'no match (score < 4)', normalizedHome: homeNorm, normalizedAway: awayNorm, firstTitles, topSimilarities: topSims } }
@@ -89,10 +89,10 @@ export async function resolveHighlights(homeName: string, awayName: string): Pro
       date: c.video.date || '',
     }))
 
-    console.info('[highlights] selected', selected.length, selected[0]?.title)
+    if (import.meta.env.DEV) console.info('[highlights] selected', selected.length, selected[0]?.title)
     return { highlights: selected, debug: { feedCount: videos.length, candidates: candidates.length, reason: 'matched', normalizedHome: homeNorm, normalizedAway: awayNorm, firstTitles, topSimilarities: topSims } }
   } catch (err) {
-    console.info('[highlights] error', err)
+    if (import.meta.env.DEV) console.info('[highlights] error', err)
     return { highlights: [], debug: { ...emptyDebug, reason: 'exception' } }
   }
 }

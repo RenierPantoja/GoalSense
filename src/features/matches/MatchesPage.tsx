@@ -829,9 +829,9 @@ function SidebarNextCard({ match: m, onClick }: { match: FDMatch; onClick: () =>
           <div className="flex items-center gap-1.5">
             {m.competition.emblem && <img src={m.competition.emblem} alt="" className="h-4 w-4 object-contain opacity-50" />}
           </div>
-          <span className="text-[8px] text-white/20">{translateComp(m.competition.name)}</span>
-          {contextBadge && <span className={`text-[7px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md border ${contextBadge.style}`}>{contextBadge.label}</span>}
-          <span className="text-[8px] text-cyan-400/0 group-hover:text-cyan-400/70 font-semibold transition-colors">Analisar →</span>
+          <span className="text-[10px] text-white/30">{translateComp(m.competition.name)}</span>
+          {contextBadge && <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md border ${contextBadge.style}`}>{contextBadge.label}</span>}
+          <span className="text-[10px] text-cyan-400/0 group-hover:text-cyan-400/80 font-semibold transition-colors">Analisar →</span>
         </div>
       </div>
     </div>
@@ -921,7 +921,7 @@ function AgendaRow({ match: m, onClick, isLast }: { match: FDMatch; onClick: () 
         ) : (
           <div>
             <span className="text-[13px] font-bold tabular-nums text-white/55 block">{time}</span>
-            {soon && <span className="text-[8px] font-bold text-amber-400/80 mt-0.5 block">Em breve</span>}
+            {soon && <span className="text-[10px] font-bold text-amber-400/90 mt-0.5 block">Em breve</span>}
           </div>
         )}
       </div>

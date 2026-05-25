@@ -37,7 +37,6 @@ export function LiveRadarPage() {
 
   // Helper: open match detail inline
   const openMatch = useCallback((fixture: LiveFixture) => {
-    console.log('[LiveRadar] Opening match inline:', fixture.homeTeam.name, 'x', fixture.awayTeam.name)
     setExpandedFixture(fixture)
   }, [])
 

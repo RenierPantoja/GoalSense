@@ -940,26 +940,26 @@ function GroupedTimeline({ events, homeName, awayName }: { events: { clock: stri
         <h3 className="text-[11px] font-bold uppercase tracking-[0.15em] text-white/30">Linha do tempo</h3>
         <div className="flex gap-1">
           {[['all','Todos'],['goals','Gols'],['cards','Cart.'],['subs','Subst.'],['shots','Fin.']].map(([k, l]) => (
-            <button key={k} onClick={() => setFilter(k)} className={`px-2 py-0.5 rounded text-[8px] font-medium ${filter === k ? 'bg-white/[0.08] text-white/60' : 'text-white/20 hover:text-white/40'}`}>{l}</button>
+            <button key={k} onClick={() => setFilter(k)} className={`px-2 py-0.5 rounded text-[10px] font-medium ${filter === k ? 'bg-white/[0.08] text-white/70' : 'text-white/30 hover:text-white/50'}`}>{l}</button>
           ))}
         </div>
       </div>
       <div className={`${filtered.length > 6 ? 'max-h-[450px] overflow-y-auto' : ''} pr-1 scroll-smooth space-y-1.5`}>
         {firstHalf.length > 0 && (
           <div>
-            <div className="flex items-center gap-2 mb-2"><span className="text-[8px] font-bold uppercase tracking-widest text-white/15">1T</span><div className="flex-1 h-px bg-white/[0.03]" /></div>
+            <div className="flex items-center gap-2 mb-2"><span className="text-[10px] font-bold uppercase tracking-widest text-white/30">1T</span><div className="flex-1 h-px bg-white/[0.03]" /></div>
             <div className="space-y-1">{firstHalf.map((ev, i) => renderEvent(ev, i))}</div>
           </div>
         )}
         {secondHalf.length > 0 && (
           <div className="mt-3">
-            <div className="flex items-center gap-2 mb-2"><span className="text-[8px] font-bold uppercase tracking-widest text-white/15">2T</span><div className="flex-1 h-px bg-white/[0.03]" /></div>
+            <div className="flex items-center gap-2 mb-2"><span className="text-[10px] font-bold uppercase tracking-widest text-white/30">2T</span><div className="flex-1 h-px bg-white/[0.03]" /></div>
             <div className="space-y-1">{secondHalf.map((ev, i) => renderEvent(ev, i + 100))}</div>
           </div>
         )}
         {extraTime.length > 0 && (
           <div className="mt-3">
-            <div className="flex items-center gap-2 mb-2"><span className="text-[8px] font-bold uppercase tracking-widest text-white/15">ACR</span><div className="flex-1 h-px bg-white/[0.03]" /></div>
+            <div className="flex items-center gap-2 mb-2"><span className="text-[10px] font-bold uppercase tracking-widest text-white/30">ACR</span><div className="flex-1 h-px bg-white/[0.03]" /></div>
             <div className="space-y-1">{extraTime.map((ev, i) => renderEvent(ev, i + 200))}</div>
           </div>
         )}
@@ -1038,13 +1038,13 @@ function RosterPanel({ team, logo, players, eventMap }: { team: string; logo: st
         <span className={`text-[11px] font-medium flex-1 truncate ${hasGoal ? 'text-emerald-400' : hasAssist ? 'text-cyan-400' : hasRed ? 'text-rose-400' : isBench ? 'text-white/40' : 'text-white/70'}`}>{p.name}</span>
         <div className="flex items-center gap-1 flex-wrap justify-end">
           {badges.map((b, bi) => (
-            <span key={bi} className={`inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-medium ${getBadgeStyle(b.type)}`}>{b.label}</span>
+            <span key={bi} className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${getBadgeStyle(b.type)}`}>{b.label}</span>
           ))}
-          {badges.length === 0 && p.goal && <span className="text-[8px] text-emerald-400 bg-emerald-500/10 rounded px-1.5 py-0.5">GOL</span>}
+          {badges.length === 0 && p.goal && <span className="text-[10px] text-emerald-400 bg-emerald-500/10 rounded px-1.5 py-0.5">GOL</span>}
           {badges.length === 0 && p.yellowCard && <span className="h-2.5 w-1.5 rounded-sm bg-amber-400/80" />}
           {badges.length === 0 && p.redCard && <span className="h-2.5 w-1.5 rounded-sm bg-rose-500/80" />}
-          {badges.length === 0 && p.subbed && !p.starter && <span className="text-[8px] text-cyan-400/60">ENT</span>}
-          {badges.length === 0 && p.subbed && p.starter && <span className="text-[8px] text-white/20">SAIU</span>}
+          {badges.length === 0 && p.subbed && !p.starter && <span className="text-[10px] text-cyan-400/70">ENT</span>}
+          {badges.length === 0 && p.subbed && p.starter && <span className="text-[10px] text-white/35">SAIU</span>}
         </div>
       </div>
     )
@@ -1280,7 +1280,7 @@ function MatchDetailFavorites({ home, away, league, leagueLogo, utcDate }: { hom
 
   return (
     <div className="flex items-center gap-1">
-      {(isHomeFav || isAwayFav) && <span className="text-[8px] text-rose-400/50 mr-1">Favorito em campo</span>}
+      {(isHomeFav || isAwayFav) && <span className="text-[10px] text-rose-400/60 mr-1">Favorito em campo</span>}
       <FavoriteButton
         active={isMatchFav}
         onClick={() => toggleFavoriteMatch({ canonicalMatchId: matchId, homeTeam: home.name, awayTeam: away.name, competition: league, utcDate })}

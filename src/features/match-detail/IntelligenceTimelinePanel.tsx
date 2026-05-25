@@ -42,7 +42,7 @@ export function IntelligenceTimelinePanel({ homeName, awayName, fixtureId, final
             {/* Content */}
             <div className="pb-3 flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
-                <span className={`text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${item.phase === 'prematch' ? 'bg-cyan-500/8 text-cyan-400/60' : item.phase === 'live' ? 'bg-amber-500/8 text-amber-400/60' : 'bg-white/[0.04] text-white/30'}`}>{item.phase === 'prematch' ? 'Pré-jogo' : item.phase === 'live' ? 'Ao vivo' : 'Pós-jogo'}</span>
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${item.phase === 'prematch' ? 'bg-cyan-500/10 text-cyan-400/80' : item.phase === 'live' ? 'bg-amber-500/10 text-amber-400/80' : 'bg-white/[0.05] text-white/45'}`}>{item.phase === 'prematch' ? 'Pré-jogo' : item.phase === 'live' ? 'Ao vivo' : 'Pós-jogo'}</span>
                 {item.minute && <span className="text-[10px] text-white/25 tabular-nums">{item.minute}'</span>}
               </div>
               <p className="text-[12px] text-white/65 font-medium">{item.title}</p>

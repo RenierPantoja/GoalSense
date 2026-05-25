@@ -42,12 +42,3 @@ export function App() {
     </Routes>
   )
 }
-
-function ComingSoon({ title }: { title: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-24">
-      <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
-      <p className="mt-2 text-sm text-[var(--text-muted)]">Em desenvolvimento</p>
-    </div>
-  )
-}

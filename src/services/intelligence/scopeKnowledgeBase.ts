@@ -95,11 +95,6 @@ function teamKey(team: { id?: number | string; name: string }) {
   return `${(team.name || '').trim().toLowerCase()}`
 }
 
-/** Snapshot accessor — returns a fresh KB every call, no caching. Cheap. */
-export function getScopeKnowledge(): ScopeKnowledge {
-  return loadKb()
-}
-
 /** Helper for ScopePicker: combined available leagues sorted by recency/frequency. */
 export function getKnownLeagues(): string[] {
   const kb = loadKb()

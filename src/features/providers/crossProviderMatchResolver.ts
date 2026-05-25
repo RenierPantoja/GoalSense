@@ -121,7 +121,7 @@ export function resolveMatch(input: ResolverInput, candidates: EspnCandidate[]):
       { homeName: bestCandidate.homeName, awayName: bestCandidate.awayName }
     )
     if (!strict) {
-      console.warn('[match-resolver-rejected]', {
+      if (import.meta.env.DEV) console.warn('[match-resolver-rejected]', {
         expected: `${input.homeName} vs ${input.awayName}`,
         got: `${bestCandidate.homeName} vs ${bestCandidate.awayName}`,
         score: bestScore,
@@ -175,7 +175,7 @@ export async function resolveToEspnEventId(fixture: ResolverInput): Promise<stri
     const result = resolveMatch(fixture, candidates)
 
     if (result.resolvedProvider === 'espn' && result.espnEventId) {
-      console.info('[match-resolver]', {
+      if (import.meta.env.DEV) console.info('[match-resolver]', {
         fixture: `${fixture.homeName} vs ${fixture.awayName}`,
         resolvedProvider: result.resolvedProvider,
         confidence: result.confidence,

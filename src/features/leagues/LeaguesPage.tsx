@@ -3,7 +3,7 @@
  * Uses football-data.org competitions + api-football standings.
  */
 import { useEffect, useState, useMemo } from 'react'
-import { Search, X, Trophy, Globe2, Star, ChevronRight, Shield } from 'lucide-react'
+import { Search, X, Trophy, Globe2, ChevronRight, Shield } from 'lucide-react'
 import { useFavorites } from '@/context/FavoritesContext'
 import { FavoriteButton } from '@/components/ui/FavoriteButton'
 
