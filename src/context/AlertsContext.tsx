@@ -128,7 +128,9 @@ function loadCommandAlerts(): CommandCenterAlert[] {
     const raw = localStorage.getItem(CMD_ALERTS_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
+    if (!Array.isArray(parsed)) return []
+    // Defensive cap: same as registerCommandAlert (most recent first)
+    return parsed.slice(0, 100)
   } catch { return [] }
 }
 
