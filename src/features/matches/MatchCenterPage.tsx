@@ -680,17 +680,12 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       {/* DIAGNOSTIC PANEL */}
       {stats.length > 0 && <DiagnosticPanel stats={stats} homeName={home.name} awayName={away.name} homeScore={home.score} awayScore={away.score} elapsed={elapsed} events={events} />}
 
-      {/* 3. LIVE PRESSURE CENTER */}
+      {/* 3. LIVE PRESSURE CENTER — hidden for scheduled */}
+      {!isMatchScheduled && (
       <div id="sec-pressao">
-        {isMatchScheduled ? (
-          <div className="rounded-[18px] border border-white/[0.06] bg-white/[0.02] p-5">
-            <h4 className="text-[13px] font-semibold text-white/50 mb-1">Press�o ao vivo aguardando in�cio</h4>
-            <p className="text-[11px] text-white/30">O gr�fico de press�o ser� ativado automaticamente quando eventos reais da partida come�arem a chegar.</p>
-          </div>
-        ) : (
-          <LivePressureGraph events={events} commentary={commentary} homeName={home.name} awayName={away.name} elapsed={elapsed} homeColors={home.colors} awayColors={away.colors} />
-        )}
+        <LivePressureGraph events={events} commentary={commentary} homeName={home.name} awayName={away.name} elapsed={elapsed} homeColors={home.colors} awayColors={away.colors} />
       </div>
+      )}
 
       {/* 4. TACTICAL SNAPSHOT */}
       {!isMatchScheduled && (

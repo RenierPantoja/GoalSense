@@ -95,25 +95,29 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
       )}
 
       {/* ═══ COMPARATIVO ═══ */}
-      {(data.homeForm || data.awayForm) && (
+      {(data.homeForm || data.awayForm) ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {data.homeForm && <TeamFormCard form={data.homeForm} label="Mandante" homeAway={data.homeAtHome} homeAwayLabel="Em casa" />}
           {data.awayForm && <TeamFormCard form={data.awayForm} label="Visitante" homeAway={data.awayAway} homeAwayLabel="Fora" />}
         </div>
+      ) : (
+        <div className="gs-card py-4 text-center"><p className="text-[12px] text-white/40">Forma recente indisponível no provider</p><p className="text-[11px] text-white/25 mt-1">O GoalSense tentou buscar os últimos jogos, mas o provider não retornou dados suficientes.</p></div>
       )}
 
       {/* ═══ PERFIL DE GOLS ═══ */}
-      {gp && (
+      {gp ? (
         <div className="gs-card">
           <h4 className="gs-section-title mb-3">Perfil de gols</h4>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Metric label="Média/jogo" value={String(gp.avgGoalsPerMatch)} sub={gp.avgGoalsPerMatch >= 2.5 ? 'Forte' : gp.avgGoalsPerMatch >= 1.8 ? 'Moderada' : 'Baixa'} />
+            <Metric label="Media/jogo" value={String(gp.avgGoalsPerMatch)} sub={gp.avgGoalsPerMatch >= 2.5 ? 'Forte' : gp.avgGoalsPerMatch >= 1.8 ? 'Moderada' : 'Baixa'} />
             <Metric label="Over 2.5" value={`${gp.over25Pct}%`} sub={gp.over25Pct >= 60 ? 'Forte' : 'Moderada'} />
             <Metric label="Over 1.5" value={`${gp.over15Pct}%`} />
             <Metric label="Ambos marcam" value={`${gp.bothScoredPct}%`} sub={gp.bothScoredPct >= 60 ? 'Frequente' : ''} />
           </div>
-          {isAdvanced && <div className="mt-3 pt-3 border-t border-white/[0.04] grid grid-cols-2 gap-2 text-[11px] text-white/35"><span>{homeName.split(' ')[0]}: {gp.homeAvgFor} pró · {gp.homeAvgAgainst} contra</span><span>{awayName.split(' ')[0]}: {gp.awayAvgFor} pró · {gp.awayAvgAgainst} contra</span></div>}
+          {isAdvanced && <div className="mt-3 pt-3 border-t border-white/[0.04] grid grid-cols-2 gap-2 text-[11px] text-white/35"><span>{homeName.split(' ')[0]}: {gp.homeAvgFor} pro - {gp.homeAvgAgainst} contra</span><span>{awayName.split(' ')[0]}: {gp.awayAvgFor} pro - {gp.awayAvgAgainst} contra</span></div>}
         </div>
+      ) : (
+        <div className="gs-card py-4 text-center"><p className="text-[12px] text-white/40">Perfil de gols indisponivel</p><p className="text-[11px] text-white/25 mt-1">Sem jogos recentes suficientes para calcular tendencia.</p></div>
       )}
 
       {/* ═══ DISCIPLINA ═══ */}
