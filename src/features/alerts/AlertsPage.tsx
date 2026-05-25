@@ -234,7 +234,7 @@ function AlertModal({ onClose, editing, prefill }: { onClose: () => void; editin
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div onClick={e => e.stopPropagation()} className="w-full max-w-[480px] mx-4 rounded-[24px] border border-white/[0.08] bg-[#0d111a] p-6 shadow-[0_24px_80px_-20px_rgba(0,0,0,0.8)] animate-scaleIn">
         <h2 className="text-[16px] font-bold text-white/80 mb-5">{editing ? 'Editar alerta' : 'Criar alerta'}</h2>
 

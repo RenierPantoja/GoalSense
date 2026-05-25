@@ -19,7 +19,7 @@ export function OnboardingModal({ onDismiss }: { onDismiss: () => void }) {
   const go = (path: string) => { onDismiss(); navigate(path) }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onDismiss}>
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onDismiss}>
       <div onClick={e => e.stopPropagation()} className="w-full max-w-[600px] rounded-[28px] border border-white/[0.08] bg-[#0b1018] p-8 shadow-[0_32px_100px_-20px_rgba(0,0,0,0.8)] animate-scaleIn">
         <h2 className="text-[22px] font-bold text-white/90 mb-2">Bem-vindo ao GoalSense</h2>
         <p className="text-[14px] text-white/45 mb-6">Uma central de inteligência para acompanhar partidas, criar padrões, receber alertas e validar resultados.</p>
