@@ -306,9 +306,10 @@ function CockpitView({ hasIntelligence, decisionMatch, decisionHit, decisionDisc
             </div>
           </section>
         ) : (
-          <section className="rounded-2xl border border-white/[0.04] bg-white/[0.008] p-8 text-center">
-            <p className="text-[14px] text-white/40">Nenhum sinal detectado agora</p>
-            <p className="text-[12px] text-white/25 mt-1">Monitorando {fixtures.length} partidas com {activePatternCount} padrões ativos</p>
+          <section className="rounded-2xl border border-white/[0.05] bg-gradient-to-br from-white/[0.015] to-transparent p-8 text-center">
+            <div className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-white/[0.04] border border-white/[0.06] mb-3"><Eye size={16} className="text-white/45" /></div>
+            <p className="text-[15px] text-white/85 font-semibold">Nenhum sinal detectado agora</p>
+            <p className="text-[12px] text-white/55 mt-1">O motor está monitorando <span className="text-white/85 font-bold">{fixtures.length}</span> {fixtures.length === 1 ? 'partida' : 'partidas'} com <span className="text-white/85 font-bold">{activePatternCount}</span> {activePatternCount === 1 ? 'radar ativo' : 'radares ativos'}.</p>
           </section>
         )}
 
@@ -415,31 +416,561 @@ function PatternBuilderPanel({ onSave, onCancel, initial }: { onSave: (p: Omit<P
 
 
 // ═══ SCANNER ═══
+type ScannerFilter = 'all' | 'critical' | 'attention' | 'favorites' | 'live' | 'soon' | 'rich'
+
 function ScannerView({ hasIntelligence, entries, openMatch, isAdvanced, onGoToPatterns }: { hasIntelligence: boolean; entries: ScannerEntry[]; openMatch: (fx: LiveFixture) => void; isAdvanced: boolean; onGoToPatterns: () => void }) {
-  if (!hasIntelligence) { return (<div className="gs-empty"><Eye size={24} className="mx-auto text-white/20 mb-3" /><p className="text-[14px] text-white/50 font-medium">Nenhum radar configurado</p><p className="text-[12px] text-white/35 mt-1.5 max-w-[400px] mx-auto">Crie um padrão ou configure o modo automático para começar a escanear partidas.</p><div className="flex justify-center gap-3 mt-5"><button onClick={onGoToPatterns} className="gs-btn-primary" type="button">Ativar template</button><button onClick={onGoToPatterns} className="gs-btn-secondary" type="button">Configurar automático</button></div></div>) }
-  if (entries.length === 0) { return (<div className="rounded-2xl border border-white/[0.04] bg-white/[0.006] p-10 text-center"><p className="text-[14px] text-white/40">Nenhum sinal detectado agora</p><p className="text-[12px] text-white/25 mt-1">O motor está analisando partidas ao vivo com os padrões configurados.</p></div>) }
-  return (<div className="space-y-4"><p className="text-[12px] text-white/35">{entries.length} {entries.length === 1 ? 'jogo com sinal' : 'jogos com sinais'} detectados</p><div className="space-y-2">{entries.map(entry => { const fx = entry.fixture; return (<div key={fx.id} onClick={() => openMatch(fx)} className="group flex items-center gap-3 rounded-xl border border-white/[0.04] bg-white/[0.006] px-5 py-3.5 cursor-pointer hover:border-white/[0.08] transition-all" role="button"><span className={`text-[9px] font-bold uppercase px-2.5 py-1 rounded-lg shrink-0 ${entry.priority === 'critical' ? 'bg-rose-500/10 text-rose-400/70' : entry.priority === 'attention' ? 'bg-amber-500/8 text-amber-400/60' : 'bg-cyan-500/6 text-cyan-400/50'}`}>{entry.priority === 'critical' ? 'CRÍT' : entry.priority === 'attention' ? 'ATEN' : 'OBS'}</span><span className={`text-[11px] font-medium tabular-nums w-9 shrink-0 ${isLiveFx(fx) ? 'text-emerald-400' : 'text-white/25'}`}>{isLiveFx(fx) ? `${fx.status.elapsed || ''}'` : ''}</span><ClubLogo src={fx.homeTeam.logo} name={fx.homeTeam.name} size={18} /><span className="text-[13px] text-white/65 truncate flex-1">{fx.homeTeam.name} {fx.score.home ?? '-'}:{fx.score.away ?? '-'} {fx.awayTeam.name}</span><ClubLogo src={fx.awayTeam.logo} name={fx.awayTeam.name} size={18} /><span className="text-[11px] text-white/35 shrink-0 max-w-[120px] truncate">{entry.reason}</span><span className="text-[11px] text-white/25 tabular-nums shrink-0">{entry.confidence}%</span>{isAdvanced && <span className="text-[9px] text-white/15 font-mono shrink-0">{entry.patterns.length}p</span>}<ChevronRight size={12} className="text-white/15 group-hover:text-white/35 shrink-0" /></div>) })}</div></div>)
+  const { isFavoriteTeam } = useFavorites()
+  const [filter, setFilter] = useState<ScannerFilter>('all')
+
+  // Empty state — no intelligence configured
+  if (!hasIntelligence) {
+    return (
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6">
+        <section className="rounded-[20px] border border-white/[0.06] bg-gradient-to-br from-white/[0.02] via-white/[0.008] to-transparent p-10 text-center">
+          <div className="inline-flex items-center justify-center h-12 w-12 rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-4"><Eye size={20} className="text-white/40" /></div>
+          <h3 className="text-[18px] font-semibold text-white/85 mb-1.5">Scanner operacional</h3>
+          <p className="text-[12px] text-white/55 max-w-[420px] mx-auto leading-relaxed">Somente partidas com padrões ou descobertas ativas aparecem aqui. Configure um radar para o motor começar a detectar sinais reais.</p>
+          <div className="flex justify-center gap-2.5 mt-5">
+            <button onClick={onGoToPatterns} className="px-4 py-2.5 rounded-xl text-[12px] font-semibold bg-cyan-500/12 text-cyan-300 border border-cyan-500/20 hover:bg-cyan-500/18 transition-colors" type="button">Ativar template</button>
+            <button onClick={onGoToPatterns} className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/55 border border-white/[0.07] hover:text-white/80 hover:border-white/[0.12] transition-colors" type="button">Configurar automático</button>
+          </div>
+        </section>
+        <ScannerSidebar entries={[]} isFavoriteTeam={isFavoriteTeam} />
+      </div>
+    )
+  }
+
+  // Counters per category
+  const liveCount = entries.filter(e => isLiveFx(e.fixture)).length
+  const soonCount = entries.filter(e => !isLiveFx(e.fixture) && new Date(e.fixture.date).getTime() - Date.now() <= 60 * 60 * 1000).length
+  const criticalCount = entries.filter(e => e.priority === 'critical').length
+  const attentionCount = entries.filter(e => e.priority === 'attention').length
+  const favCount = entries.filter(e => isFavoriteTeam(e.fixture.homeTeam.name) || isFavoriteTeam(e.fixture.awayTeam.name)).length
+  const richCount = entries.filter(e => e.fixture.provider === 'espn').length
+
+  const filteredEntries = entries.filter(e => {
+    if (filter === 'all') return true
+    if (filter === 'critical') return e.priority === 'critical'
+    if (filter === 'attention') return e.priority === 'attention'
+    if (filter === 'favorites') return isFavoriteTeam(e.fixture.homeTeam.name) || isFavoriteTeam(e.fixture.awayTeam.name)
+    if (filter === 'live') return isLiveFx(e.fixture)
+    if (filter === 'soon') return !isLiveFx(e.fixture) && new Date(e.fixture.date).getTime() - Date.now() <= 60 * 60 * 1000
+    if (filter === 'rich') return e.fixture.provider === 'espn'
+    return true
+  })
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6">
+      <div className="space-y-5">
+        {/* Header */}
+        <header className="rounded-[20px] border border-white/[0.06] bg-gradient-to-br from-white/[0.02] to-transparent p-6">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-[20px] font-bold text-white/90 tracking-tight">Scanner operacional</h2>
+              <p className="text-[12px] text-white/55 mt-1">Somente partidas com padrões ou descobertas ativas aparecem aqui.</p>
+            </div>
+            <div className="text-right shrink-0"><span className="text-[26px] font-bold text-white/90 tabular-nums leading-none">{entries.length}</span><span className="text-[10px] text-white/45 uppercase tracking-wider block mt-1 font-semibold">{entries.length === 1 ? 'sinal' : 'sinais'}</span></div>
+          </div>
+          {/* Counter strip */}
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-px rounded-xl overflow-hidden border border-white/[0.05] bg-white/[0.01]">
+            <CounterCell label="Críticos" value={criticalCount} tone="rose" />
+            <CounterCell label="Atenção" value={attentionCount} tone="amber" />
+            <CounterCell label="Favoritos" value={favCount} tone="cyan" />
+            <CounterCell label="Ao vivo" value={liveCount} tone="emerald" />
+            <CounterCell label="Em breve" value={soonCount} tone="cyan" />
+            <CounterCell label="Dados ricos" value={richCount} tone="white" />
+          </div>
+        </header>
+
+        {/* Filter pills */}
+        <div className="flex flex-wrap gap-1.5">
+          {([
+            ['all', 'Todos', entries.length],
+            ['critical', 'Críticos', criticalCount],
+            ['attention', 'Atenção', attentionCount],
+            ['favorites', 'Favoritos', favCount],
+            ['live', 'Ao vivo', liveCount],
+            ['soon', 'Em breve', soonCount],
+            ['rich', 'Dados ricos', richCount],
+          ] as [ScannerFilter, string, number][]).map(([key, label, count]) => {
+            const isActive = filter === key
+            return (
+              <button key={key} onClick={() => setFilter(key)} type="button" className={`px-3.5 py-1.5 rounded-full text-[11px] font-semibold transition-all flex items-center gap-1.5 ${isActive ? 'bg-white/[0.09] text-white border border-white/[0.14] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'text-white/55 border border-white/[0.06] hover:text-white/85 hover:border-white/[0.1]'}`}>
+                {label}
+                {count > 0 && <span className={`text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-md ${isActive ? 'bg-cyan-500/22 text-cyan-200' : 'bg-white/[0.06] text-white/55'}`}>{count}</span>}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Entries */}
+        {filteredEntries.length === 0 ? (
+          <div className="rounded-2xl border border-white/[0.05] bg-white/[0.008] p-10 text-center">
+            <p className="text-[13px] text-white/55 font-medium">{entries.length === 0 ? 'Nenhum sinal detectado agora' : 'Nenhum sinal nesta categoria'}</p>
+            <p className="text-[11px] text-white/35 mt-1">{entries.length === 0 ? 'O motor está analisando partidas com os padrões configurados.' : 'Selecione outro filtro acima para ver outros sinais.'}</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredEntries.map(entry => <ScannerRow key={entry.fixture.id} entry={entry} openMatch={openMatch} isAdvanced={isAdvanced} isFavoriteTeam={isFavoriteTeam} />)}
+          </div>
+        )}
+      </div>
+
+      <ScannerSidebar entries={entries} isFavoriteTeam={isFavoriteTeam} />
+    </div>
+  )
+}
+
+function CounterCell({ label, value, tone }: { label: string; value: number; tone: 'rose' | 'amber' | 'cyan' | 'emerald' | 'white' }) {
+  const c = value > 0
+    ? tone === 'rose' ? 'text-rose-300' : tone === 'amber' ? 'text-amber-300' : tone === 'cyan' ? 'text-cyan-300' : tone === 'emerald' ? 'text-emerald-300' : 'text-white/85'
+    : 'text-white/25'
+  return (
+    <div className="px-3 py-2.5 text-center bg-[#080d16]">
+      <span className={`text-[18px] font-bold tabular-nums block leading-none ${c}`}>{value}</span>
+      <span className="text-[9px] text-white/45 uppercase tracking-wider block mt-1 font-semibold">{label}</span>
+    </div>
+  )
+}
+
+function ScannerRow({ entry, openMatch, isAdvanced, isFavoriteTeam }: { entry: ScannerEntry; openMatch: (fx: LiveFixture) => void; isAdvanced: boolean; isFavoriteTeam: (name: string) => boolean }) {
+  const fx = entry.fixture
+  const live = isLiveFx(fx)
+  const isFav = isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name)
+  const accentBorder = entry.priority === 'critical' ? 'border-l-rose-400/55' : entry.priority === 'attention' ? 'border-l-amber-400/55' : 'border-l-cyan-400/45'
+  const statusLabel = live ? 'Batendo' : entry.topPattern ? 'Pronto' : 'Sugerido'
+  const statusColor = live ? 'bg-emerald-500/12 text-emerald-300 border-emerald-400/20' : entry.topPattern ? 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15' : 'bg-white/[0.04] text-white/55 border-white/[0.07]'
+
+  return (
+    <div onClick={() => openMatch(fx)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') openMatch(fx) }} className={`group relative rounded-2xl border border-l-2 ${accentBorder} border-white/[0.05] bg-gradient-to-r from-white/[0.012] to-white/[0.005] hover:border-white/[0.1] hover:bg-white/[0.018] cursor-pointer transition-all`}>
+      <div className="px-5 py-4">
+        {/* Top row */}
+        <div className="flex items-center gap-3 mb-2.5">
+          <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${entry.priority === 'critical' ? 'bg-rose-500/12 text-rose-300 border-rose-400/20' : entry.priority === 'attention' ? 'bg-amber-500/12 text-amber-300 border-amber-400/20' : 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15'}`}>
+            {entry.priority === 'critical' ? 'Crítico' : entry.priority === 'attention' ? 'Atenção' : 'Observar'}
+          </span>
+          <span className="text-[12px] text-white/85 font-bold flex-1 truncate">{entry.reason || 'Sinal detectado'}</span>
+          {isFav && <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-400/15">Favorito</span>}
+          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${statusColor}`}>{statusLabel}</span>
+        </div>
+
+        {/* Match line */}
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <ClubLogo src={fx.homeTeam.logo} name={fx.homeTeam.name} size={22} />
+          <span className="text-[13px] text-white/85 font-semibold truncate">{fx.homeTeam.name}</span>
+          <span className="text-[14px] text-white font-bold tabular-nums px-2">{fx.score.home ?? '-'}<span className="text-white/25 mx-1">:</span>{fx.score.away ?? '-'}</span>
+          <span className="text-[13px] text-white/85 font-semibold truncate">{fx.awayTeam.name}</span>
+          <ClubLogo src={fx.awayTeam.logo} name={fx.awayTeam.name} size={22} />
+        </div>
+
+        {/* Meta + evidence */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className={`inline-flex items-center gap-1 text-[11px] font-medium tabular-nums ${live ? 'text-emerald-400' : 'text-white/45'}`}>
+            {live ? <><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> {fx.status.elapsed || 0}'</> : <>⏰ {new Date(fx.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>}
+          </span>
+          <span className="text-[11px] text-white/45 truncate">{fx.league.name}</span>
+          {entry.topPattern && entry.topPattern.reasons.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap">
+              {entry.topPattern.reasons.slice(0, 2).map((r, i) => (
+                <span key={i} className="text-[10px] text-white/55 bg-white/[0.04] px-2 py-0.5 rounded-md border border-white/[0.05]">{r}</span>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-2 ml-auto">
+            <ConfidenceBar value={entry.confidence} />
+            <span className="text-[12px] text-white/85 font-bold tabular-nums">{entry.confidence}%</span>
+            <ChevronRight size={14} className="text-white/25 group-hover:text-white/65 transition-colors" />
+          </div>
+        </div>
+        {isAdvanced && entry.topPattern && (
+          <div className="mt-2 pt-2 border-t border-white/[0.04] text-[10px] text-white/35 font-mono">
+            cond:{entry.topPattern.matchedConditions}/{entry.topPattern.totalConditions} · sev:{entry.topPattern.severity} · provider:{fx.provider}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ConfidenceBar({ value }: { value: number }) {
+  const tone = value >= 75 ? 'from-emerald-500 to-emerald-400' : value >= 50 ? 'from-cyan-500 to-blue-500' : 'from-white/30 to-white/20'
+  return (
+    <div className="hidden sm:block w-16 h-1.5 rounded-full bg-white/[0.05] overflow-hidden">
+      <div className={`h-full rounded-full bg-gradient-to-r ${tone}`} style={{ width: `${Math.min(100, Math.max(0, value))}%` }} />
+    </div>
+  )
+}
+
+function ScannerSidebar({ entries, isFavoriteTeam }: { entries: ScannerEntry[]; isFavoriteTeam: (name: string) => boolean }) {
+  const totalEntries = entries.length
+  const fav = entries.filter(e => isFavoriteTeam(e.fixture.homeTeam.name) || isFavoriteTeam(e.fixture.awayTeam.name)).length
+  const live = entries.filter(e => isLiveFx(e.fixture)).length
+  const espn = entries.filter(e => e.fixture.provider === 'espn').length
+
+  return (
+    <aside className="space-y-3">
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.012] p-4">
+        <h4 className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/55 mb-3">Resumo dos sinais</h4>
+        <div className="space-y-2">
+          <SidebarRow label="Sinais totais" value={totalEntries} />
+          <SidebarRow label="Críticos" value={entries.filter(e => e.priority === 'critical').length} tone="rose" />
+          <SidebarRow label="Atenção" value={entries.filter(e => e.priority === 'attention').length} tone="amber" />
+          <SidebarRow label="Observar" value={entries.filter(e => e.priority === 'watch').length} tone="cyan" />
+        </div>
+      </div>
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.012] p-4">
+        <h4 className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/55 mb-3">Origem</h4>
+        <div className="space-y-2">
+          <SidebarRow label="Padrões manuais" value={entries.filter(e => e.topPattern !== null).length} tone="white" />
+          <SidebarRow label="Descoberta automática" value={entries.filter(e => e.topPattern === null).length} tone="cyan" />
+          <SidebarRow label="Cobertura ESPN" value={espn} tone="emerald" />
+          <SidebarRow label="Favoritos envolvidos" value={fav} tone="cyan" />
+          <SidebarRow label="Ao vivo agora" value={live} tone="emerald" />
+        </div>
+      </div>
+      <div className="rounded-2xl border border-white/[0.06] bg-gradient-to-br from-cyan-500/[0.03] via-transparent to-transparent p-4">
+        <h4 className="text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-300/80 mb-2">Como funciona</h4>
+        <p className="text-[11px] text-white/55 leading-relaxed">
+          Cada linha é uma partida onde pelo menos um padrão configurado ou uma descoberta do motor automático bateu. Clique para abrir a análise completa.
+        </p>
+      </div>
+    </aside>
+  )
+}
+
+function SidebarRow({ label, value, tone }: { label: string; value: number; tone?: 'rose' | 'amber' | 'cyan' | 'emerald' | 'white' }) {
+  const c = value > 0
+    ? tone === 'rose' ? 'text-rose-300' : tone === 'amber' ? 'text-amber-300' : tone === 'cyan' ? 'text-cyan-300' : tone === 'emerald' ? 'text-emerald-300' : 'text-white/85'
+    : 'text-white/35'
+  return (
+    <div className="flex items-center justify-between text-[12px]">
+      <span className="text-white/55">{label}</span>
+      <span className={`font-bold tabular-nums ${c}`}>{value}</span>
+    </div>
+  )
 }
 
 // ═══ ALERTS ═══
+type AlertFilter = 'all' | 'pending' | 'confirmed' | 'partial' | 'failed' | 'expired'
+
 function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, navigate }: { triggeredAlerts: TriggeredAlert[]; isAdvanced: boolean; openMatch: (fx: LiveFixture) => void; fixtures: LiveFixture[]; navigate: (path: string) => void }) {
-  if (triggeredAlerts.length === 0) { return (<div className="gs-empty"><Zap size={24} className="mx-auto text-white/20 mb-3" /><p className="text-[14px] text-white/50">Nenhum alerta disparado</p><p className="text-[12px] text-white/35 mt-1">Quando padrões baterem em jogos ao vivo, os alertas aparecerão aqui</p><button onClick={() => navigate('/app/alerts')} className="gs-btn-secondary mt-4" type="button">Gerenciar alertas →</button></div>) }
-  return (<div className="space-y-4"><div className="flex items-center justify-between"><h3 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/35">Alertas disparados</h3><button onClick={() => navigate('/app/alerts')} className="text-[11px] text-cyan-400/50 hover:text-cyan-400 font-medium transition-colors" type="button">Ver em /app/alerts →</button></div><div className="space-y-2">{triggeredAlerts.map(t => { const fx = fixtures.find(f => f.id === t.fixtureId); const sl = t.status === 'pending' ? 'Pendente' : t.status === 'confirmed' ? 'Confirmado' : (t.status as string) === 'confirmed_partial' ? 'Parcial' : t.status === 'failed' ? 'Falhou' : t.status === 'expired' ? 'Expirado' : 'Desconhecido'; const sc = t.status === 'confirmed' ? 'bg-emerald-500/10 text-emerald-400' : t.status === 'failed' ? 'bg-rose-500/10 text-rose-400' : t.status === 'pending' ? 'bg-amber-500/10 text-amber-400' : 'bg-white/[0.04] text-white/35'; return (<div key={t.id} onClick={() => fx && openMatch(fx)} className={`rounded-xl border border-white/[0.04] bg-white/[0.006] px-5 py-3.5 ${fx ? 'cursor-pointer hover:border-white/[0.08]' : ''} transition-all`} role={fx ? 'button' : undefined}><div className="flex items-center justify-between mb-1.5"><div className="flex items-center gap-2"><span className="text-[13px] font-medium text-white/65">{t.patternName}</span><span className="text-[11px] text-white/30 tabular-nums">{t.confidence}%</span>{(t.status === 'confirmed' || t.status === 'failed' || (t.status as string) === 'confirmed_partial') && <span className="text-[8px] px-1.5 py-0.5 rounded bg-cyan-500/6 text-cyan-400/50 border border-cyan-500/8">Jornada completa</span>}</div><span className={`text-[9px] font-semibold px-2.5 py-1 rounded-lg ${sc}`}>{sl}</span></div><div className="flex items-center gap-2 text-[11px] text-white/40"><span>{t.homeTeam} x {t.awayTeam}</span>{t.minute && <span>· {t.minute}'</span>}<span>· {t.league}</span></div>{isAdvanced && <div className="mt-1.5 text-[10px] text-white/20 font-mono">{t.reasons.slice(0, 3).join(' · ')} | {t.scoreAtTrigger.home}-{t.scoreAtTrigger.away}</div>}<span className="text-[10px] text-white/20 mt-1 block">{new Date(t.timestamp).toLocaleString('pt-BR')}</span></div>) })}</div></div>)
+  const [filter, setFilter] = useState<AlertFilter>('all')
+
+  // Counts per status
+  const counts = useMemo(() => ({
+    all: triggeredAlerts.length,
+    pending: triggeredAlerts.filter(t => t.status === 'pending').length,
+    confirmed: triggeredAlerts.filter(t => t.status === 'confirmed').length,
+    partial: triggeredAlerts.filter(t => (t.status as string) === 'confirmed_partial').length,
+    failed: triggeredAlerts.filter(t => t.status === 'failed').length,
+    expired: triggeredAlerts.filter(t => t.status === 'expired' || t.status === 'unknown').length,
+  }), [triggeredAlerts])
+
+  const visible = useMemo(() => {
+    if (filter === 'all') return triggeredAlerts
+    if (filter === 'pending') return triggeredAlerts.filter(t => t.status === 'pending')
+    if (filter === 'confirmed') return triggeredAlerts.filter(t => t.status === 'confirmed')
+    if (filter === 'partial') return triggeredAlerts.filter(t => (t.status as string) === 'confirmed_partial')
+    if (filter === 'failed') return triggeredAlerts.filter(t => t.status === 'failed')
+    if (filter === 'expired') return triggeredAlerts.filter(t => t.status === 'expired' || t.status === 'unknown')
+    return triggeredAlerts
+  }, [filter, triggeredAlerts])
+
+  if (triggeredAlerts.length === 0) {
+    return (
+      <div className="rounded-[20px] border border-white/[0.06] bg-gradient-to-br from-white/[0.02] via-white/[0.008] to-transparent p-10 text-center">
+        <div className="inline-flex items-center justify-center h-12 w-12 rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-4"><Zap size={20} className="text-white/40" /></div>
+        <h3 className="text-[18px] font-semibold text-white/85 mb-1.5">Nenhum alerta disparado ainda</h3>
+        <p className="text-[12px] text-white/55 max-w-[480px] mx-auto leading-relaxed">Quando um padrão bater, o Command Center registrará aqui e também em <span className="text-cyan-300 font-semibold">/app/alerts</span>.</p>
+        <button onClick={() => navigate('/app/alerts')} className="mt-5 px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/60 border border-white/[0.07] hover:text-white/85 hover:border-white/[0.12] transition-colors" type="button">Ver gerenciador de alertas →</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6">
+      <div className="space-y-5">
+        {/* Header */}
+        <header className="rounded-[20px] border border-white/[0.06] bg-gradient-to-br from-white/[0.02] to-transparent p-6">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-[20px] font-bold text-white/90 tracking-tight">Alertas disparados</h2>
+              <p className="text-[12px] text-white/55 mt-1">Eventos registrados pelo Command Center e enviados para <span className="text-cyan-300/80 font-semibold">/app/alerts</span>.</p>
+            </div>
+            <button onClick={() => navigate('/app/alerts')} className="px-3.5 py-2 rounded-xl text-[11px] font-semibold text-cyan-300 bg-cyan-500/10 border border-cyan-400/20 hover:bg-cyan-500/15 transition-colors whitespace-nowrap" type="button">Ver em /app/alerts</button>
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-px rounded-xl overflow-hidden border border-white/[0.05] bg-white/[0.01]">
+            <CounterCell label="Total" value={counts.all} tone="white" />
+            <CounterCell label="Pendentes" value={counts.pending} tone="amber" />
+            <CounterCell label="Confirmados" value={counts.confirmed} tone="emerald" />
+            <CounterCell label="Parciais" value={counts.partial} tone="cyan" />
+            <CounterCell label="Falhados" value={counts.failed} tone="rose" />
+            <CounterCell label="Expirados" value={counts.expired} tone="white" />
+          </div>
+        </header>
+
+        {/* Filter pills */}
+        <div className="flex flex-wrap gap-1.5">
+          {([
+            ['all', 'Todos', counts.all],
+            ['pending', 'Pendentes', counts.pending],
+            ['confirmed', 'Confirmados', counts.confirmed],
+            ['partial', 'Parciais', counts.partial],
+            ['failed', 'Falhados', counts.failed],
+            ['expired', 'Expirados', counts.expired],
+          ] as [AlertFilter, string, number][]).map(([key, label, count]) => {
+            const isActive = filter === key
+            return (
+              <button key={key} onClick={() => setFilter(key)} type="button" className={`px-3.5 py-1.5 rounded-full text-[11px] font-semibold transition-all flex items-center gap-1.5 ${isActive ? 'bg-white/[0.09] text-white border border-white/[0.14]' : 'text-white/55 border border-white/[0.06] hover:text-white/85 hover:border-white/[0.1]'}`}>
+                {label}
+                {count > 0 && <span className={`text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-md ${isActive ? 'bg-cyan-500/22 text-cyan-200' : 'bg-white/[0.06] text-white/55'}`}>{count}</span>}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Alert log */}
+        {visible.length === 0 ? (
+          <div className="rounded-2xl border border-white/[0.05] bg-white/[0.008] p-8 text-center">
+            <p className="text-[12px] text-white/55">Nenhum alerta nesta categoria.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {visible.map(t => <AlertRow key={t.id} t={t} fx={fixtures.find(f => f.id === t.fixtureId)} openMatch={openMatch} isAdvanced={isAdvanced} />)}
+          </div>
+        )}
+      </div>
+
+      <aside className="space-y-3">
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.012] p-4">
+          <h4 className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/55 mb-3">Saúde dos alertas</h4>
+          <div className="space-y-2">
+            <SidebarRow label="Pendentes" value={counts.pending} tone="amber" />
+            <SidebarRow label="Confirmados" value={counts.confirmed} tone="emerald" />
+            <SidebarRow label="Parciais" value={counts.partial} tone="cyan" />
+            <SidebarRow label="Falhados" value={counts.failed} tone="rose" />
+            <SidebarRow label="Expirados" value={counts.expired} />
+          </div>
+        </div>
+        <div className="rounded-2xl border border-white/[0.06] bg-gradient-to-br from-cyan-500/[0.03] via-transparent to-transparent p-4">
+          <h4 className="text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-300/80 mb-2">Como ler</h4>
+          <p className="text-[11px] text-white/55 leading-relaxed">
+            <span className="text-amber-300 font-semibold">Pendente</span> aguarda resolução. <span className="text-emerald-300 font-semibold">Confirmado</span> teve evento previsto. <span className="text-cyan-300 font-semibold">Parcial</span> teve evidência mas não fechou. <span className="text-rose-300 font-semibold">Falhado</span> não confirmou. <span className="text-white/65 font-semibold">Expirado</span> chegou ao fim sem evidência.
+          </p>
+        </div>
+        <button onClick={() => navigate('/app/alerts')} className="w-full px-3 py-2.5 rounded-xl text-[12px] font-medium text-white/65 border border-white/[0.07] hover:text-white/90 hover:border-white/[0.12] transition-colors" type="button">Abrir gerenciador →</button>
+      </aside>
+    </div>
+  )
+}
+
+function AlertRow({ t, fx, openMatch, isAdvanced }: { t: TriggeredAlert; fx?: LiveFixture; openMatch: (fx: LiveFixture) => void; isAdvanced: boolean }) {
+  const status = t.status as string
+  const cfg =
+    status === 'confirmed' ? { label: 'Confirmado', cls: 'bg-emerald-500/12 text-emerald-300 border-emerald-400/20', accent: 'border-l-emerald-400/55', dot: 'bg-emerald-400' }
+    : status === 'confirmed_partial' ? { label: 'Parcial', cls: 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15', accent: 'border-l-cyan-400/45', dot: 'bg-cyan-400' }
+    : status === 'failed' ? { label: 'Falhou', cls: 'bg-rose-500/12 text-rose-300 border-rose-400/20', accent: 'border-l-rose-400/55', dot: 'bg-rose-400' }
+    : status === 'expired' ? { label: 'Expirado', cls: 'bg-white/[0.05] text-white/55 border-white/[0.07]', accent: 'border-l-white/25', dot: 'bg-white/40' }
+    : status === 'pending' ? { label: 'Pendente', cls: 'bg-amber-500/12 text-amber-300 border-amber-400/20', accent: 'border-l-amber-400/55', dot: 'bg-amber-400' }
+    : { label: 'Desconhecido', cls: 'bg-white/[0.05] text-white/55 border-white/[0.07]', accent: 'border-l-white/20', dot: 'bg-white/30' }
+  const journeyComplete = status === 'confirmed' || status === 'failed' || status === 'confirmed_partial'
+
+  return (
+    <div onClick={() => fx && openMatch(fx)} role={fx ? 'button' : undefined} tabIndex={fx ? 0 : undefined} className={`relative rounded-2xl border border-l-2 ${cfg.accent} border-white/[0.05] bg-gradient-to-r from-white/[0.012] to-white/[0.005] ${fx ? 'cursor-pointer hover:border-white/[0.1] hover:bg-white/[0.018]' : ''} transition-all`}>
+      <div className="px-5 py-4">
+        <div className="flex items-center gap-3 mb-2">
+          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${cfg.dot} ${status === 'pending' ? 'animate-pulse' : ''}`} />
+          <span className="text-[13px] font-bold text-white/90 truncate flex-1">{t.patternName}</span>
+          <span className="text-[11px] text-white/65 tabular-nums font-bold">{t.confidence}%</span>
+          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${cfg.cls}`}>{cfg.label}</span>
+        </div>
+        <div className="flex items-center gap-2 text-[12px] text-white/65 flex-wrap">
+          <span className="font-semibold">{t.homeTeam}</span>
+          <span className="text-white/85 font-bold tabular-nums px-1">{t.scoreAtTrigger.home}-{t.scoreAtTrigger.away}</span>
+          <span className="font-semibold">{t.awayTeam}</span>
+          {t.minute && <span className="text-white/45">· {t.minute}'</span>}
+          <span className="text-white/45 truncate">· {t.league}</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-cyan-500/8 text-cyan-300/80 border border-cyan-400/12 ml-auto whitespace-nowrap">Command Center</span>
+          {journeyComplete && <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-white/[0.05] text-white/65 border border-white/[0.07]">Jornada</span>}
+        </div>
+        {t.reasons.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2.5">
+            {t.reasons.slice(0, 3).map((r, i) => <span key={i} className="text-[10px] text-white/55 bg-white/[0.04] px-2 py-0.5 rounded-md border border-white/[0.05]">{r}</span>)}
+          </div>
+        )}
+        {isAdvanced && (
+          <div className="mt-2 pt-2 border-t border-white/[0.04] grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-white/45 font-mono">
+            <span>id: {t.id.slice(0, 8)}</span>
+            <span>created: {new Date(t.timestamp).toLocaleTimeString('pt-BR')}</span>
+            <span>min: {t.minute || '-'}</span>
+            <span>fixture: {t.fixtureId}</span>
+          </div>
+        )}
+        <div className="mt-1.5 text-[10px] text-white/35">{new Date(t.timestamp).toLocaleString('pt-BR')}</div>
+      </div>
+    </div>
+  )
 }
 
 // ═══ PERFORMANCE ═══
 function PerformanceView({ patterns, triggeredAlerts, isAdvanced }: { patterns: Pattern[]; triggeredAlerts: TriggeredAlert[]; isAdvanced: boolean }) {
-  const stats = useMemo(() => patterns.map(p => { const a = triggeredAlerts.filter(t => t.patternId === p.id); const confirmed = a.filter(t => t.status === 'confirmed').length; const partial = a.filter(t => (t.status as string) === 'confirmed_partial').length; const failed = a.filter(t => t.status === 'failed').length; const expired = a.filter(t => t.status === 'expired').length; const unknown = a.filter(t => t.status === 'unknown').length; const resolved = confirmed + failed; const hitRate = resolved >= 5 ? Math.round((confirmed / resolved) * 100) : null; const avgConf = a.length > 0 ? Math.round(a.reduce((s, x) => s + x.confidence, 0) / a.length) : null; const needsReview = (unknown > 3 && unknown > confirmed) || (resolved >= 5 && (hitRate ?? 100) < 30); const reviewReason = unknown > 3 ? 'Muitos alertas sem dados' : (resolved >= 5 && (hitRate ?? 100) < 30) ? 'Taxa baixa' : ''; return { pattern: p, total: a.length, confirmed, partial, failed, expired, unknown, hitRate, avgConf, lastHit: a[0]?.timestamp || null, needsReview, reviewReason } }), [patterns, triggeredAlerts])
-  const totalD = triggeredAlerts.length; const totalC = triggeredAlerts.filter(t => t.status === 'confirmed').length; const totalF = triggeredAlerts.filter(t => t.status === 'failed').length; const pNeedReview = stats.filter(s => s.needsReview)
+  const stats = useMemo(() => patterns.map(p => { const a = triggeredAlerts.filter(t => t.patternId === p.id); const confirmed = a.filter(t => t.status === 'confirmed').length; const partial = a.filter(t => (t.status as string) === 'confirmed_partial').length; const failed = a.filter(t => t.status === 'failed').length; const expired = a.filter(t => t.status === 'expired').length; const unknown = a.filter(t => t.status === 'unknown').length; const resolved = confirmed + failed; const hitRate = resolved >= 5 ? Math.round((confirmed / resolved) * 100) : null; const avgConf = a.length > 0 ? Math.round(a.reduce((s, x) => s + x.confidence, 0) / a.length) : null; const needsReview = (unknown > 3 && unknown > confirmed) || (resolved >= 5 && (hitRate ?? 100) < 30); const reviewReason = unknown > 3 ? 'Muitos alertas sem dados' : (resolved >= 5 && (hitRate ?? 100) < 30) ? 'Taxa baixa' : ''; return { pattern: p, total: a.length, confirmed, partial, failed, expired, unknown, resolved, hitRate, avgConf, lastHit: a[0]?.timestamp || null, needsReview, reviewReason } }), [patterns, triggeredAlerts])
 
-  if (patterns.length === 0) { return (<div className="gs-empty"><BarChart3 size={24} className="mx-auto text-white/20 mb-3" /><p className="text-[14px] text-white/50">Sem dados de performance</p><p className="text-[12px] text-white/35 mt-1">Ative padrões para começar a medir resultados</p></div>) }
+  const totalDispatched = triggeredAlerts.length
+  const totalConfirmed = triggeredAlerts.filter(t => t.status === 'confirmed').length
+  const totalPartial = triggeredAlerts.filter(t => (t.status as string) === 'confirmed_partial').length
+  const totalFailed = triggeredAlerts.filter(t => t.status === 'failed').length
+  const totalPending = triggeredAlerts.filter(t => t.status === 'pending').length
+  const totalExpired = triggeredAlerts.filter(t => t.status === 'expired' || t.status === 'unknown').length
+  const totalResolved = totalConfirmed + totalFailed
+  const overallHitRate = totalResolved >= 5 ? Math.round((totalConfirmed / totalResolved) * 100) : null
+  const avgConfidence = triggeredAlerts.length > 0 ? Math.round(triggeredAlerts.reduce((s, t) => s + t.confidence, 0) / triggeredAlerts.length) : null
+  const activePatterns = patterns.filter(p => p.status === 'active').length
+  const patternsNeedingReview = stats.filter(s => s.needsReview)
 
-  return (<div className="space-y-6">
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3"><MCard label="Disparos" value={totalD} color="white" /><MCard label="Confirmados" value={totalC} color="emerald" /><MCard label="Falhados" value={totalF} color="rose" /><MCard label="Padrões" value={patterns.length} color="cyan" /></div>
-    {pNeedReview.length > 0 && (<section className="rounded-xl border border-amber-500/12 bg-amber-500/[0.02] p-5"><h4 className="text-[12px] font-semibold text-amber-400/60 mb-2">Padrões que precisam de revisão</h4><div className="space-y-2">{pNeedReview.map(s => (<div key={s.pattern.id} className="flex items-center justify-between"><span className="text-[12px] text-white/55">{s.pattern.name}</span><span className="text-[11px] text-amber-400/50">{s.reviewReason}</span></div>))}</div></section>)}
-    <section><h4 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/35 mb-3">Por padrão</h4><div className="space-y-2">{stats.map(s => (<div key={s.pattern.id} className="rounded-xl border border-white/[0.04] bg-white/[0.006] px-5 py-3.5"><div className="flex items-center justify-between mb-1"><span className="text-[13px] font-medium text-white/65">{s.pattern.name}</span><span className={`text-[9px] px-2.5 py-1 rounded-lg ${s.pattern.status === 'active' ? 'bg-emerald-500/8 text-emerald-400/60' : 'bg-white/[0.03] text-white/20'}`}>{s.pattern.status}</span></div><div className="flex items-center gap-4 text-[11px] text-white/40 flex-wrap"><span>{s.total} disparos</span>{s.hitRate !== null ? <span className="text-emerald-400/70 font-medium">Taxa: {s.hitRate}%</span> : <span className="text-white/25">Insuficiente ({s.confirmed + s.failed}/5)</span>}{s.partial > 0 && <span className="text-cyan-400/50">Parciais: {s.partial}</span>}{s.avgConf !== null && <span>Conf: {s.avgConf}%</span>}{s.lastHit && <span>Último: {new Date(s.lastHit).toLocaleDateString('pt-BR')}</span>}</div>{isAdvanced && <div className="mt-1.5 text-[10px] text-white/20 font-mono">✓{s.confirmed} · ~{s.partial} · ✗{s.failed} · ⏱{s.expired} · ?{s.unknown}</div>}</div>))}</div></section>
-    <PreMatchOutcomeSection isAdvanced={isAdvanced} />
-  </div>)
+  if (patterns.length === 0) {
+    return (
+      <div className="rounded-[20px] border border-white/[0.06] bg-gradient-to-br from-white/[0.02] via-white/[0.008] to-transparent p-10 text-center">
+        <div className="inline-flex items-center justify-center h-12 w-12 rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-4"><BarChart3 size={20} className="text-white/40" /></div>
+        <h3 className="text-[18px] font-semibold text-white/85 mb-1.5">Sem dados suficientes</h3>
+        <p className="text-[12px] text-white/55 max-w-[440px] mx-auto leading-relaxed">Ative padrões e deixe o sistema acumular resoluções reais. Taxa de acerto aparece com 5 ou mais resoluções (confirmadas + falhadas).</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6">
+      <div className="space-y-5">
+        {/* Header */}
+        <header className="rounded-[20px] border border-white/[0.06] bg-gradient-to-br from-white/[0.02] to-transparent p-6">
+          <div>
+            <h2 className="text-[20px] font-bold text-white/90 tracking-tight">Performance dos radares</h2>
+            <p className="text-[12px] text-white/55 mt-1">Mede padrões disparados, resoluções e jornadas pré-jogo vs resultado.</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-px rounded-xl overflow-hidden border border-white/[0.05] bg-white/[0.01] mt-5">
+            <CounterCell label="Padrões ativos" value={activePatterns} tone="cyan" />
+            <CounterCell label="Disparos" value={totalDispatched} tone="white" />
+            <CounterCell label="Confirmados" value={totalConfirmed} tone="emerald" />
+            <CounterCell label="Falhados" value={totalFailed} tone="rose" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-px rounded-xl overflow-hidden border border-white/[0.05] bg-white/[0.01] mt-px">
+            <CounterCell label="Pendentes" value={totalPending} tone="amber" />
+            <CounterCell label="Parciais" value={totalPartial} tone="cyan" />
+            <CounterCell label="Expirados" value={totalExpired} tone="white" />
+            <div className="px-3 py-2.5 text-center bg-[#080d16]">
+              <span className={`text-[18px] font-bold tabular-nums block leading-none ${overallHitRate !== null ? 'text-emerald-300' : 'text-white/35'}`}>{overallHitRate !== null ? `${overallHitRate}%` : '—'}</span>
+              <span className="text-[9px] text-white/45 uppercase tracking-wider block mt-1 font-semibold">Taxa de acerto</span>
+            </div>
+          </div>
+          {overallHitRate === null && totalDispatched > 0 && (
+            <p className="text-[10px] text-white/45 mt-3 leading-snug">Taxa só aparece com pelo menos 5 resoluções (confirmadas + falhadas). Atualmente: {totalResolved}/5.</p>
+          )}
+          {avgConfidence !== null && (
+            <p className="text-[11px] text-white/55 mt-2">Confiança média no disparo: <span className="text-white/85 font-bold tabular-nums">{avgConfidence}%</span></p>
+          )}
+        </header>
+
+        {/* Patterns needing review */}
+        {patternsNeedingReview.length > 0 && (
+          <section className="rounded-2xl border border-amber-500/15 bg-gradient-to-br from-amber-500/[0.04] via-transparent to-transparent p-5">
+            <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-300 mb-3">Padrões para revisar</h4>
+            <div className="space-y-2">
+              {patternsNeedingReview.map(s => (
+                <div key={s.pattern.id} className="flex items-center justify-between gap-3 text-[12px]">
+                  <span className="text-white/85 font-semibold truncate">{s.pattern.name}</span>
+                  <span className="text-amber-300/80 text-[11px] font-medium shrink-0">{s.reviewReason}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Per-pattern breakdown */}
+        <section>
+          <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/55 mb-3">Por padrão</h4>
+          <div className="space-y-2">
+            {stats.map(s => <PatternStatRow key={s.pattern.id} s={s} isAdvanced={isAdvanced} />)}
+          </div>
+        </section>
+
+        {/* Pre-match outcome */}
+        <PreMatchOutcomeSection isAdvanced={isAdvanced} />
+      </div>
+
+      <aside className="space-y-3">
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.012] p-4">
+          <h4 className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/55 mb-3">Saúde da amostra</h4>
+          <div className="space-y-2">
+            <SidebarRow label="Resoluções válidas" value={totalResolved} tone={totalResolved >= 5 ? 'emerald' : 'amber'} />
+            <SidebarRow label="Padrões ativos" value={activePatterns} tone="cyan" />
+            <SidebarRow label="Padrões para revisar" value={patternsNeedingReview.length} tone={patternsNeedingReview.length > 0 ? 'amber' : 'white'} />
+          </div>
+        </div>
+        <div className="rounded-2xl border border-white/[0.06] bg-gradient-to-br from-cyan-500/[0.03] via-transparent to-transparent p-4">
+          <h4 className="text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-300/80 mb-2">Critérios de cálculo</h4>
+          <ul className="text-[11px] text-white/65 leading-relaxed space-y-1.5">
+            <li>· Taxa = confirmados ÷ (confirmados + falhados)</li>
+            <li>· Mínimo: 5 resoluções para exibir taxa</li>
+            <li>· Pendentes, parciais e expirados não entram no denominador</li>
+            <li>· Confiança usa todos os disparos</li>
+          </ul>
+        </div>
+        {totalDispatched < 5 && (
+          <div className="rounded-2xl border border-amber-500/15 bg-amber-500/[0.04] p-4">
+            <h4 className="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-300 mb-1.5">Dados insuficientes</h4>
+            <p className="text-[11px] text-white/65 leading-relaxed">Faltam {Math.max(0, 5 - totalDispatched)} disparos para começar a calcular taxas confiáveis.</p>
+          </div>
+        )}
+      </aside>
+    </div>
+  )
+}
+
+function PatternStatRow({ s, isAdvanced }: { s: { pattern: Pattern; total: number; confirmed: number; partial: number; failed: number; expired: number; unknown: number; resolved: number; hitRate: number | null; avgConf: number | null; lastHit: string | null; needsReview: boolean; reviewReason: string }; isAdvanced: boolean }) {
+  const total = Math.max(s.total, 1)
+  const confirmedPct = (s.confirmed / total) * 100
+  const partialPct = (s.partial / total) * 100
+  const failedPct = (s.failed / total) * 100
+  const sampleStatus = s.resolved >= 5 ? 'utilizável' : s.resolved >= 2 ? 'em observação' : 'insuficiente'
+  const sampleTone = s.resolved >= 5 ? 'text-emerald-300' : s.resolved >= 2 ? 'text-cyan-300' : 'text-white/55'
+
+  return (
+    <div className="rounded-2xl border border-white/[0.05] bg-gradient-to-r from-white/[0.012] to-white/[0.005] px-5 py-4">
+      <div className="flex items-center justify-between gap-3 mb-2.5">
+        <span className="text-[13px] font-bold text-white/90 truncate flex-1">{s.pattern.name}</span>
+        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${s.pattern.status === 'active' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-400/15' : 'bg-white/[0.04] text-white/45 border border-white/[0.06]'}`}>{s.pattern.status === 'active' ? 'Ativo' : 'Pausado'}</span>
+        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-white/[0.04] ${sampleTone} border border-white/[0.06] whitespace-nowrap`}>{sampleStatus}</span>
+      </div>
+      {s.total > 0 && (
+        <div className="h-1.5 rounded-full bg-white/[0.04] overflow-hidden flex mb-2.5">
+          <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all" style={{ width: `${confirmedPct}%` }} />
+          <div className="h-full bg-gradient-to-r from-cyan-500 to-cyan-400 transition-all" style={{ width: `${partialPct}%` }} />
+          <div className="h-full bg-gradient-to-r from-rose-500 to-rose-400 transition-all" style={{ width: `${failedPct}%` }} />
+        </div>
+      )}
+      <div className="flex items-center gap-3 text-[11px] text-white/65 flex-wrap">
+        <span><span className="text-white/85 font-bold tabular-nums">{s.total}</span> disparos</span>
+        <span className="text-emerald-300">✓ {s.confirmed}</span>
+        {s.partial > 0 && <span className="text-cyan-300">~ {s.partial}</span>}
+        {s.failed > 0 && <span className="text-rose-300">✗ {s.failed}</span>}
+        {s.expired > 0 && <span className="text-white/45">⏱ {s.expired}</span>}
+        {s.hitRate !== null ? (
+          <span className="ml-auto text-[12px] font-bold tabular-nums text-emerald-300">Taxa {s.hitRate}%</span>
+        ) : (
+          <span className="ml-auto text-[10px] text-white/45 font-medium">Amostra {s.resolved}/5</span>
+        )}
+      </div>
+      <div className="flex items-center gap-3 text-[11px] text-white/45 mt-1.5 flex-wrap">
+        {s.avgConf !== null && <span>Confiança média: <span className="text-white/75 font-semibold tabular-nums">{s.avgConf}%</span></span>}
+        {s.lastHit && <span>Último: {new Date(s.lastHit).toLocaleDateString('pt-BR')}</span>}
+      </div>
+      {isAdvanced && (
+        <div className="mt-2 pt-2 border-t border-white/[0.04] text-[10px] text-white/45 font-mono">
+          ✓{s.confirmed} · ~{s.partial} · ✗{s.failed} · ⏱{s.expired} · ?{s.unknown}
+        </div>
+      )}
+    </div>
+  )
 }
 function PreMatchOutcomeSection({ isAdvanced }: { isAdvanced: boolean }) {
   const summary = useMemo(() => buildPreMatchOutcomeSummary(), [])
@@ -461,4 +992,3 @@ function PreMatchOutcomeSection({ isAdvanced }: { isAdvanced: boolean }) {
   )
 }
 
-function MCard({ label, value, color }: { label: string; value: number; color: string }) { const cc = value > 0 ? (color === 'emerald' ? 'text-emerald-400' : color === 'cyan' ? 'text-cyan-400' : color === 'rose' ? 'text-rose-400' : 'text-white/70') : 'text-white/20'; return (<div className="rounded-xl border border-white/[0.04] bg-white/[0.006] px-4 py-3.5 text-center"><span className={`text-[20px] font-bold tabular-nums block ${cc}`}>{value}</span><span className="text-[10px] text-white/35">{label}</span></div>) }
