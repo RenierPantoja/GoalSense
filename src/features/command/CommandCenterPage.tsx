@@ -134,6 +134,73 @@ export function CommandCenterPage() {
     return runAutoDiscovery(fixtures, statsMap, isFavoriteTeam, discoveryConfig)
   }, [hasAutoDiscovery, fixtures, statsMap, isFavoriteTeam, discoveryConfig])
 
+  // ─── Auto Discovery → Alert (ONLY when registerAlertAuto is on) ──────────
+  // Honors: hasAutoDiscovery + discoveryConfig.registerAlertAuto + minConfidence threshold.
+  // Anti-duplicate is enforced inside registerCommandAlert (5min window per pattern+fixture).
+  useEffect(() => {
+    if (!hasAutoDiscovery) return
+    if (!discoveryConfig.registerAlertAuto) return
+    for (const d of discoveries) {
+      if (d.confidence < discoveryConfig.minConfidence) continue
+      const fx = d.fixture
+      const fxStats = statsMap.get(fx.id)
+      // Stable synthetic patternId per discovery type so dedup + resolution work consistently.
+      const syntheticPatternId = `auto_${d.type}`
+      const patternName = d.insight || 'Descoberta automática'
+      // Severity inferred from discovery type — final phase / favorite risk are higher signal.
+      const inferredSeverity: 'critical' | 'attention' | 'info' =
+        d.type === 'final_phase' || d.type === 'favorite_risk' ? 'attention'
+        : d.type === 'pressure' || d.type === 'dominance' || d.type === 'open_game' ? 'info'
+        : 'info'
+      triggerAlert({
+        patternId: syntheticPatternId,
+        patternName,
+        fixtureId: fx.id,
+        homeTeam: fx.homeTeam.name,
+        awayTeam: fx.awayTeam.name,
+        league: fx.league.name,
+        minute: fx.status.elapsed,
+        confidence: d.confidence,
+        reasons: [d.evidence].filter(Boolean),
+        timestamp: new Date().toISOString(),
+        status: 'pending',
+        scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 },
+      })
+      registerCommandAlert({
+        source: 'command_center',
+        patternId: syntheticPatternId,
+        patternName,
+        fixtureId: fx.id,
+        homeTeam: fx.homeTeam.name,
+        awayTeam: fx.awayTeam.name,
+        competition: fx.league.name,
+        minuteAtTrigger: fx.status.elapsed,
+        scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 },
+        confidence: d.confidence,
+        severity: inferredSeverity,
+        evidences: [d.evidence].filter(Boolean),
+        status: 'pending',
+        triggerSnapshot: {
+          minute: fx.status.elapsed,
+          homeScore: fx.score.home ?? 0,
+          awayScore: fx.score.away ?? 0,
+          status: fx.status.short,
+          competition: fx.league.name,
+          provider: fx.provider,
+          homeTeam: fx.homeTeam.name,
+          awayTeam: fx.awayTeam.name,
+          homeLogo: fx.homeTeam.logo,
+          awayLogo: fx.awayTeam.logo,
+          favoriteInvolved: isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name),
+          conditionsMatched: 0,
+          conditionsTotal: 0,
+          confidenceAtTrigger: d.confidence,
+          ...(fxStats ? { stats: fxStats } : {}),
+        },
+      })
+    }
+  }, [hasAutoDiscovery, discoveryConfig.registerAlertAuto, discoveryConfig.minConfidence, discoveries, triggerAlert, registerCommandAlert, isFavoriteTeam, statsMap])
+
   // ─── Scanner (ONLY signals) ────────────────────────────────────────────────
   const scannerEntries = useMemo((): ScannerEntry[] => {
     if (!hasIntelligence) return []
@@ -661,7 +728,7 @@ function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, navigate
     all: triggeredAlerts.length,
     pending: triggeredAlerts.filter(t => t.status === 'pending').length,
     confirmed: triggeredAlerts.filter(t => t.status === 'confirmed').length,
-    partial: triggeredAlerts.filter(t => (t.status as string) === 'confirmed_partial').length,
+    partial: triggeredAlerts.filter(t => t.status === 'confirmed_partial').length,
     failed: triggeredAlerts.filter(t => t.status === 'failed').length,
     expired: triggeredAlerts.filter(t => t.status === 'expired' || t.status === 'unknown').length,
   }), [triggeredAlerts])
@@ -670,7 +737,7 @@ function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, navigate
     if (filter === 'all') return triggeredAlerts
     if (filter === 'pending') return triggeredAlerts.filter(t => t.status === 'pending')
     if (filter === 'confirmed') return triggeredAlerts.filter(t => t.status === 'confirmed')
-    if (filter === 'partial') return triggeredAlerts.filter(t => (t.status as string) === 'confirmed_partial')
+    if (filter === 'partial') return triggeredAlerts.filter(t => t.status === 'confirmed_partial')
     if (filter === 'failed') return triggeredAlerts.filter(t => t.status === 'failed')
     if (filter === 'expired') return triggeredAlerts.filter(t => t.status === 'expired' || t.status === 'unknown')
     return triggeredAlerts
@@ -814,11 +881,11 @@ function AlertRow({ t, fx, openMatch, isAdvanced }: { t: TriggeredAlert; fx?: Li
 
 // ═══ PERFORMANCE ═══
 function PerformanceView({ patterns, triggeredAlerts, isAdvanced }: { patterns: Pattern[]; triggeredAlerts: TriggeredAlert[]; isAdvanced: boolean }) {
-  const stats = useMemo(() => patterns.map(p => { const a = triggeredAlerts.filter(t => t.patternId === p.id); const confirmed = a.filter(t => t.status === 'confirmed').length; const partial = a.filter(t => (t.status as string) === 'confirmed_partial').length; const failed = a.filter(t => t.status === 'failed').length; const expired = a.filter(t => t.status === 'expired').length; const unknown = a.filter(t => t.status === 'unknown').length; const resolved = confirmed + failed; const hitRate = resolved >= 5 ? Math.round((confirmed / resolved) * 100) : null; const avgConf = a.length > 0 ? Math.round(a.reduce((s, x) => s + x.confidence, 0) / a.length) : null; const needsReview = (unknown > 3 && unknown > confirmed) || (resolved >= 5 && (hitRate ?? 100) < 30); const reviewReason = unknown > 3 ? 'Muitos alertas sem dados' : (resolved >= 5 && (hitRate ?? 100) < 30) ? 'Taxa baixa' : ''; return { pattern: p, total: a.length, confirmed, partial, failed, expired, unknown, resolved, hitRate, avgConf, lastHit: a[0]?.timestamp || null, needsReview, reviewReason } }), [patterns, triggeredAlerts])
+  const stats = useMemo(() => patterns.map(p => { const a = triggeredAlerts.filter(t => t.patternId === p.id); const confirmed = a.filter(t => t.status === 'confirmed').length; const partial = a.filter(t => t.status === 'confirmed_partial').length; const failed = a.filter(t => t.status === 'failed').length; const expired = a.filter(t => t.status === 'expired').length; const unknown = a.filter(t => t.status === 'unknown').length; const resolved = confirmed + failed; const hitRate = resolved >= 5 ? Math.round((confirmed / resolved) * 100) : null; const avgConf = a.length > 0 ? Math.round(a.reduce((s, x) => s + x.confidence, 0) / a.length) : null; const needsReview = (unknown > 3 && unknown > confirmed) || (resolved >= 5 && (hitRate ?? 100) < 30); const reviewReason = unknown > 3 ? 'Muitos alertas sem dados' : (resolved >= 5 && (hitRate ?? 100) < 30) ? 'Taxa baixa' : ''; return { pattern: p, total: a.length, confirmed, partial, failed, expired, unknown, resolved, hitRate, avgConf, lastHit: a[0]?.timestamp || null, needsReview, reviewReason } }), [patterns, triggeredAlerts])
 
   const totalDispatched = triggeredAlerts.length
   const totalConfirmed = triggeredAlerts.filter(t => t.status === 'confirmed').length
-  const totalPartial = triggeredAlerts.filter(t => (t.status as string) === 'confirmed_partial').length
+  const totalPartial = triggeredAlerts.filter(t => t.status === 'confirmed_partial').length
   const totalFailed = triggeredAlerts.filter(t => t.status === 'failed').length
   const totalPending = triggeredAlerts.filter(t => t.status === 'pending').length
   const totalExpired = triggeredAlerts.filter(t => t.status === 'expired' || t.status === 'unknown').length

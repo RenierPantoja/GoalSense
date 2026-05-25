@@ -82,7 +82,7 @@ export interface PatternHit {
 
 // ─── Triggered Alert ─────────────────────────────────────────────────────────
 
-export type TriggeredAlertStatus = 'pending' | 'confirmed' | 'failed' | 'expired' | 'unknown'
+export type TriggeredAlertStatus = 'pending' | 'confirmed' | 'confirmed_partial' | 'failed' | 'expired' | 'unknown'
 
 export interface TriggeredAlert {
   id: string
