@@ -119,7 +119,7 @@ export function evaluatePattern(
   if (pattern.status !== 'active') return null
   if (pattern.conditions.length === 0) return null
 
-  // Scope check
+  // ── Scope check (legacy modes: favorites_only / specific_leagues / specific_teams) ──
   if (pattern.scope === 'favorites_only') {
     if (!isFavoriteTeam(fixture.homeTeam.name) && !isFavoriteTeam(fixture.awayTeam.name)) return null
   } else if (pattern.scope === 'specific_leagues' && pattern.scopeFilter && pattern.scopeFilter.length > 0) {
@@ -131,6 +131,32 @@ export function evaluatePattern(
     const awayLower = fixture.awayTeam.name.toLowerCase()
     const matches = pattern.scopeFilter.some(f => { const fl = f.toLowerCase(); return homeLower.includes(fl) || fl.includes(homeLower) || awayLower.includes(fl) || fl.includes(awayLower) })
     if (!matches) return null
+  }
+
+  // ── Advanced exclusion filters (additive, backward compatible) ──
+  if (pattern.excludeLeagues && pattern.excludeLeagues.length > 0) {
+    const leagueLower = fixture.league.name.toLowerCase()
+    const excluded = pattern.excludeLeagues.some(f => leagueLower.includes(f.toLowerCase()) || f.toLowerCase().includes(leagueLower))
+    if (excluded) return null
+  }
+  if (pattern.excludeTeams && pattern.excludeTeams.length > 0) {
+    const homeLower = fixture.homeTeam.name.toLowerCase()
+    const awayLower = fixture.awayTeam.name.toLowerCase()
+    const excluded = pattern.excludeTeams.some(f => { const fl = f.toLowerCase(); return homeLower.includes(fl) || fl.includes(homeLower) || awayLower.includes(fl) || fl.includes(awayLower) })
+    if (excluded) return null
+  }
+
+  // ── State filters ──
+  const isLive = fixture.status.short === 'LIVE' || fixture.status.short === 'HT' || fixture.status.short === '1H' || fixture.status.short === '2H'
+  const isScheduled = fixture.status.short === 'NS' || fixture.status.short === 'TBD'
+  if (pattern.onlyLive && !isLive) return null
+  if (pattern.onlyPreMatch && !isScheduled) return null
+
+  // ── Rich data filter (only matches with stats from a rich provider) ──
+  if (pattern.requireRichData) {
+    const hasStats = !!stats && (stats.shots !== undefined || stats.shotsOnTarget !== undefined || stats.possession !== undefined)
+    const isRichProvider = fixture.provider === 'espn'
+    if (!hasStats && !isRichProvider) return null
   }
 
   const ctx: EvalContext = { fixture, stats, isFavoriteTeam }

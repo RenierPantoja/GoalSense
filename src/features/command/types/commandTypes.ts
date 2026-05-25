@@ -47,6 +47,12 @@ export interface Pattern {
   templateId?: string
   scope: PatternScope
   scopeFilter?: string[]
+  // Advanced scope filters (optional, additive — backward compatible)
+  excludeLeagues?: string[]
+  excludeTeams?: string[]
+  requireRichData?: boolean
+  onlyLive?: boolean
+  onlyPreMatch?: boolean
   minConfidence: number
   action: PatternAction
   maxTriggersPerMatch: number
