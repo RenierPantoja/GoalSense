@@ -26,6 +26,12 @@ interface FDMatch {
   matchday: number
   utcDate: string
   area?: { name: string }
+  // ─── Provenance tracking — preserves rich enrichment path downstream ───
+  // When a row originally came from ESPN (with a real ESPN event ID),
+  // we keep the provider and ID so MatchCenterPage can hit ESPN summary directly.
+  _provider?: 'football_data' | 'espn'
+  _espnEventId?: string
+  venue?: string | null
 }
 
 type FilterKey = 'all' | 'main' | 'live' | 'upcoming' | 'finished' | 'brazil' | 'europe' | 'relevant' | 'soon' | 'dominant' | 'favorites'
@@ -50,6 +56,9 @@ async function fetchEspnAsCalendar(selectedDate: string): Promise<FDMatch[]> {
       matchday: 0,
       utcDate: fx.date || new Date().toISOString(),
       area: { name: fx.league?.country || '' },
+      _provider: 'espn',
+      _espnEventId: String(fx.id),
+      venue: fx.venue || null,
     }))
     // Filter by selected local date
     return converted.filter(m => isMatchOnSelectedLocalDate(m.utcDate, selectedDate))
@@ -163,7 +172,9 @@ export function MatchesPage() {
 
       // Parse football-data
       if (fdResult.status === 'fulfilled' && fdResult.value?.matches) {
-        fdMatches = (fdResult.value.matches as FDMatch[]).filter(m => isMatchOnSelectedLocalDate(m.utcDate, date))
+        fdMatches = (fdResult.value.matches as FDMatch[])
+          .filter(m => isMatchOnSelectedLocalDate(m.utcDate, date))
+          .map(m => ({ ...m, _provider: 'football_data' as const }))
       }
 
       // Parse ESPN as fallback/supplement
@@ -179,18 +190,30 @@ export function MatchesPage() {
           matchday: 0,
           utcDate: fx.date || new Date().toISOString(),
           area: { name: fx.league?.country || '' },
+          _provider: 'espn',
+          _espnEventId: String(fx.id),
+          venue: fx.venue || null,
         })).filter((m: FDMatch) => isMatchOnSelectedLocalDate(m.utcDate, date))
       }
 
       // Merge: football-data first (better data), ESPN fills gaps
       if (fdMatches.length > 0) {
-        // Add ESPN matches not already in football-data (by team name check)
+        // Add ESPN matches not already in football-data (by team name check).
+        // For duplicates, copy ESPN provenance onto the kept football-data row so
+        // MatchCenterPage can still try the rich ESPN summary path.
         for (const em of espnMatches) {
-          const duplicate = fdMatches.some(fd =>
+          const dupIndex = fdMatches.findIndex(fd =>
             fd.homeTeam.shortName.toLowerCase().includes(em.homeTeam.shortName.toLowerCase().slice(0, 5)) &&
             fd.awayTeam.shortName.toLowerCase().includes(em.awayTeam.shortName.toLowerCase().slice(0, 5))
           )
-          if (!duplicate) fdMatches.push(em)
+          if (dupIndex >= 0) {
+            const dup = fdMatches[dupIndex]
+            if (!dup._espnEventId && em._espnEventId) {
+              fdMatches[dupIndex] = { ...dup, _espnEventId: em._espnEventId, venue: dup.venue || em.venue }
+            }
+          } else {
+            fdMatches.push(em)
+          }
         }
         setMatches(dedupeMatches(fdMatches).map(m => ({ ...m, competition: { ...m.competition, name: normalizeCompetitionName(m.competition.name) } })))
       } else {
@@ -244,9 +267,28 @@ export function MatchesPage() {
 
   const openMatch = (m: FDMatch) => {
     const { label, live } = mapStatus(m.status)
-    const fx: LiveFixture = { id: m.id, provider: 'football_data', externalId: m.id, league: { id: 0, name: m.competition.name, logo: m.competition.emblem, country: m.area?.name || '', season: 2026 }, status: { long: label, short: live ? 'LIVE' : m.status === 'FINISHED' ? 'FT' : 'NS', elapsed: null }, homeTeam: { id: m.homeTeam.id, name: m.homeTeam.shortName || m.homeTeam.name, logo: m.homeTeam.crest }, awayTeam: { id: m.awayTeam.id, name: m.awayTeam.shortName || m.awayTeam.name, logo: m.awayTeam.crest }, score: { home: m.score.fullTime.home, away: m.score.fullTime.away }, venue: null, referee: null, date: m.utcDate, raw: m.status }
+    // Preserve real provider provenance — if we have an ESPN event id (either as
+    // primary source or via dedupe enrichment), prefer the ESPN path because
+    // MatchCenterPage's rich enrichment is gated on provider === 'espn'.
+    const hasEspnId = !!m._espnEventId
+    const realProvider: 'football_data' | 'espn' = hasEspnId ? 'espn' : (m._provider || 'football_data')
+    const realId = hasEspnId && m._espnEventId ? Number(m._espnEventId) : m.id
+    const fx: LiveFixture = {
+      id: realId,
+      provider: realProvider,
+      externalId: realId,
+      league: { id: 0, name: m.competition.name, logo: m.competition.emblem, country: m.area?.name || '', season: 2026 },
+      status: { long: label, short: live ? 'LIVE' : m.status === 'FINISHED' ? 'FT' : 'NS', elapsed: null },
+      homeTeam: { id: m.homeTeam.id, name: m.homeTeam.shortName || m.homeTeam.name, logo: m.homeTeam.crest },
+      awayTeam: { id: m.awayTeam.id, name: m.awayTeam.shortName || m.awayTeam.name, logo: m.awayTeam.crest },
+      score: { home: m.score.fullTime.home, away: m.score.fullTime.away },
+      venue: m.venue || null,
+      referee: null,
+      date: m.utcDate,
+      raw: m.status,
+    }
     storeFixtureForNavigation(fx)
-    navigate(`/app/matches/${m.id}`, { state: { fixture: fx } })
+    navigate(`/app/matches/${realId}`, { state: { fixture: fx } })
   }
 
   const fmtDate = (d: string) => formatSelectedDateLabel(d)

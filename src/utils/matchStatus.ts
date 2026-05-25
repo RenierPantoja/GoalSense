@@ -5,12 +5,12 @@
 
 export type NormalizedStatus = 'scheduled' | 'live' | 'halftime' | 'finished' | 'postponed' | 'cancelled' | 'unknown'
 
-const SCHEDULED = new Set(['SCHEDULED', 'TIMED', 'PRE', 'NS', 'STATUS_SCHEDULED', 'STATUS_PRE_GAME', 'scheduled', 'pre', 'TBD'])
-const LIVE = new Set(['LIVE', 'IN_PLAY', 'STATUS_IN_PROGRESS', 'STATUS_FIRST_HALF', 'STATUS_SECOND_HALF', 'in', 'live', '1H', '2H', 'ET', 'BT', 'P'])
-const HALFTIME = new Set(['HT', 'HALFTIME', 'STATUS_HALFTIME', 'STATUS_END_PERIOD', 'PAUSED'])
-const FINISHED = new Set(['FINISHED', 'FT', 'AET', 'PEN', 'STATUS_FULL_TIME', 'STATUS_FINAL', 'post', 'final', 'AWD', 'WO'])
-const POSTPONED = new Set(['POSTPONED', 'PPD', 'PST'])
-const CANCELLED = new Set(['CANCELLED', 'CANCELED', 'SUSPENDED', 'CANC', 'ABD'])
+const SCHEDULED = new Set(['SCHEDULED', 'TIMED', 'PRE', 'NS', 'STATUS_SCHEDULED', 'STATUS_PRE_GAME', 'scheduled', 'pre', 'TBD', 'Agendado', 'agendado'])
+const LIVE = new Set(['LIVE', 'IN_PLAY', 'STATUS_IN_PROGRESS', 'STATUS_FIRST_HALF', 'STATUS_SECOND_HALF', 'in', 'live', '1H', '2H', 'ET', 'BT', 'P', 'Ao vivo', 'ao vivo'])
+const HALFTIME = new Set(['HT', 'HALFTIME', 'STATUS_HALFTIME', 'STATUS_END_PERIOD', 'PAUSED', 'Intervalo', 'intervalo'])
+const FINISHED = new Set(['FINISHED', 'FT', 'AET', 'PEN', 'STATUS_FULL_TIME', 'STATUS_FINAL', 'post', 'final', 'AWD', 'WO', 'Encerrado', 'encerrado'])
+const POSTPONED = new Set(['POSTPONED', 'PPD', 'PST', 'Adiado', 'adiado'])
+const CANCELLED = new Set(['CANCELLED', 'CANCELED', 'SUSPENDED', 'CANC', 'ABD', 'Cancelado', 'cancelado'])
 
 export function normalizeMatchStatus(rawStatus?: string, rawState?: string): NormalizedStatus {
   const s = (rawStatus || '').trim()

@@ -87,14 +87,25 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
 
       const isEspnFixture = fixtureState?.provider === 'espn'
 
-      // Attempt 1: Try ESPN summary by route ID � ONLY if fixture is from ESPN
+      // Date for ESPN scoreboard search — use the fixture's actual date, not today.
+      // ESPN scoreboard accepts YYYYMMDD; falls back to today if no fixture date.
+      const fixtureDate = fixtureState?.date ? new Date(fixtureState.date) : new Date()
+      const fixtureDateKey = (() => {
+        try { return fixtureDate.toISOString().split('T')[0].replace(/-/g, '') }
+        catch { return new Date().toISOString().split('T')[0].replace(/-/g, '') }
+      })()
+
+      // Attempt 1: Try ESPN summary by route ID — ONLY if fixture is from ESPN.
+      // Strict validation in tryEspnSummary protects against ID collisions.
       if (isEspnFixture) {
         const summaryData = await tryEspnSummary(effectiveFixtureId, expectedHome, expectedAway)
         if (summaryData) { setData(summaryData); setError(null); return }
       }
 
-      // Attempt 2: Search ESPN by team names (works for all providers, returns full data)
-      const searchData = await searchEspnScoreboard(expectedHome, expectedAway)
+      // Attempt 2: Search ESPN scoreboard by team names.
+      // Provider-agnostic — recovers rich data even when fixture came from football-data.
+      // Uses the fixture's actual date so finished/scheduled matches enrich correctly.
+      const searchData = await searchEspnScoreboard(expectedHome, expectedAway, fixtureDateKey)
       if (searchData) { setData(searchData); setError(null); return }
 
       // Attempt 3: Try provider-specific data (non-ESPN or ESPN failed)
@@ -159,12 +170,14 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
     } catch { return null }
   }
 
-  /** Search ESPN scoreboard for a match by team names. */
-  async function searchEspnScoreboard(expectedHome: string, expectedAway: string): Promise<MatchData | null> {
+  /** Search ESPN scoreboard for a match by team names. Accepts a YYYYMMDD date so
+   * matches from past/future dates can also be enriched (not just today). */
+  async function searchEspnScoreboard(expectedHome: string, expectedAway: string, dateKey?: string): Promise<MatchData | null> {
     try {
-      // Use our ESPN function with today's date to include finished matches
+      // Use our ESPN function with the fixture's date (default: today).
       const today = new Date().toISOString().split('T')[0].replace(/-/g, '')
-      const res = await fetch(`/api/espn-live?date=${today}`)
+      const dk = dateKey || today
+      const res = await fetch(`/api/espn-live?date=${dk}`)
       if (!res.ok) return null
       const json = await res.json()
       const fixtures = json.fixtures || []
@@ -188,6 +201,29 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
         // Final validation
         if (isSameMatchStrict({ homeName: expectedHome, awayName: expectedAway }, { homeName: sumHome, awayName: sumAway })) {
           return parseEspn(sumJson)
+        }
+      }
+      // If date-based search failed and we weren't already looking at today, retry today.
+      // Catches mismatched timezones (e.g. fixture date Mexico, ESPN scoreboard UTC).
+      if (dk !== today) {
+        const retryRes = await fetch(`/api/espn-live?date=${today}`)
+        if (!retryRes.ok) return null
+        const retryJson = await retryRes.json()
+        const retryFixtures = retryJson.fixtures || []
+        for (const fx of retryFixtures) {
+          const eName = fx.homeTeam?.name || ''
+          const aName = fx.awayTeam?.name || ''
+          if (!isSameMatchStrict({ homeName: expectedHome, awayName: expectedAway }, { homeName: eName, awayName: aName })) continue
+          const sumRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${fx.id}`)
+          if (!sumRes.ok) continue
+          const sumJson = await sumRes.json()
+          const sumComp = sumJson.header?.competitions?.[0]
+          if (!sumComp?.competitors || sumComp.competitors.length < 2) continue
+          const sumHome = sumComp.competitors.find((c: any) => c.homeAway === 'home')?.team?.displayName || ''
+          const sumAway = sumComp.competitors.find((c: any) => c.homeAway === 'away')?.team?.displayName || ''
+          if (isSameMatchStrict({ homeName: expectedHome, awayName: expectedAway }, { homeName: sumHome, awayName: sumAway })) {
+            return parseEspn(sumJson)
+          }
         }
       }
       return null
@@ -444,7 +480,9 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
   // Record finished fixtures to Knowledge Base
   useEffect(() => {
     if (!data || !fixtureState) return
-    if (!isFinishedMatch(data.status)) return
+    // Check BOTH status sources — Portuguese labels from MatchesPage path
+    // (e.g. "Encerrado") only get correctly normalized via fixtureState.status.short ("FT").
+    if (!isFinishedMatch(data.status) && !isFinishedMatch(fixtureState.status.short)) return
     try {
       const canonicalId = buildCanonicalMatchId(data.home.name, data.away.name, fixtureState.date)
       recordFinishedFixture({
