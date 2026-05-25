@@ -496,8 +496,11 @@ function categorizeTemplate(t: PatternTemplate): TemplateCategory {
 const CATEGORY_LABELS: Record<TemplateCategory, string> = { pressao: 'Pressão ofensiva', reta_final: 'Reta final', favoritos: 'Favoritos e zebras', gols: 'Gols', disciplina: 'Disciplina', visitante: 'Visitante / mandante' }
 
 // ═══ MODAL SHELL — premium overlay rendered via portal so it escapes any
-// stacking context (navbar uses sticky+backdrop-blur which creates one).
-// z-[1000] sits well above the navbar (z-50) and any sidebar.
+// ═══ MODAL SHELL — Apple-like dark glass surface. Avoids blue-tinted neon
+// by using a near-neutral slate gradient and a soft, broad shadow instead
+// of a heavy bloom. Header copy is reduced to title + subtitle + a discrete
+// status row; severity/category badges live inside the body, not the header,
+// to avoid the "promo banner" look.
 function ModalShell({ open, onClose, title, subtitle, headerExtra, children, footer, maxWidth = 'max-w-3xl' }: { open: boolean; onClose: () => void; title: string; subtitle?: string; headerExtra?: React.ReactNode; children: React.ReactNode; footer?: React.ReactNode; maxWidth?: string }) {
   useEffect(() => {
     if (!open) return
@@ -513,18 +516,18 @@ function ModalShell({ open, onClose, title, subtitle, headerExtra, children, foo
   const titleId = `modal-title-${title.replace(/\s+/g, '-').toLowerCase()}`
   return createPortal(
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-6 animate-fadeIn" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={onClose} aria-hidden="true" />
-      <div className={`relative w-full ${maxWidth} max-h-[calc(100vh-24px)] sm:max-h-[calc(100vh-48px)] flex flex-col rounded-[22px] sm:rounded-[28px] border border-white/[0.08] bg-gradient-to-br from-[#0a0d14] via-[#0b1018] to-[#0c1322] shadow-[0_40px_120px_-30px_rgba(0,0,0,0.8)] overflow-hidden animate-scaleIn`}>
-        <div className="px-6 sm:px-7 pt-5 pb-4 sm:pt-6 sm:pb-5 border-b border-white/[0.06] flex items-start gap-4 shrink-0">
+      <div className="absolute inset-0 bg-black/65 backdrop-blur-md" onClick={onClose} aria-hidden="true" />
+      <div className={`relative w-full ${maxWidth} max-h-[calc(100vh-24px)] sm:max-h-[calc(100vh-48px)] flex flex-col rounded-[18px] sm:rounded-[20px] border border-white/[0.07] bg-[#0b0d12] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.02)_inset] overflow-hidden animate-scaleIn`}>
+        <div className="px-6 sm:px-7 pt-5 pb-4 sm:pt-6 sm:pb-5 border-b border-white/[0.05] flex items-start gap-4 shrink-0">
           <div className="flex-1 min-w-0">
-            <h3 id={titleId} className="text-[16px] sm:text-[18px] font-bold text-white/95 tracking-tight">{title}</h3>
-            {subtitle && <p className="text-[12px] text-white/55 mt-1 leading-relaxed">{subtitle}</p>}
+            <h3 id={titleId} className="text-[17px] sm:text-[19px] font-semibold text-white/95 tracking-tight">{title}</h3>
+            {subtitle && <p className="text-[12px] text-white/50 mt-1 leading-relaxed">{subtitle}</p>}
             {headerExtra && <div className="mt-3">{headerExtra}</div>}
           </div>
-          <button onClick={onClose} type="button" className="h-9 w-9 rounded-xl flex items-center justify-center text-white/55 border border-white/[0.07] hover:text-white/95 hover:border-white/[0.12] transition-all shrink-0" aria-label="Fechar"><X size={16} /></button>
+          <button onClick={onClose} type="button" className="h-9 w-9 rounded-lg flex items-center justify-center text-white/45 hover:text-white/90 hover:bg-white/[0.04] transition-all shrink-0" aria-label="Fechar"><X size={15} /></button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 sm:px-7 py-5 sidebar-scroll min-h-0">{children}</div>
-        {footer && <div className="px-6 sm:px-7 py-3.5 border-t border-white/[0.06] bg-white/[0.012] flex items-center gap-2 justify-end flex-wrap shrink-0">{footer}</div>}
+        <div className="flex-1 overflow-y-auto px-6 sm:px-7 py-6 sidebar-scroll min-h-0">{children}</div>
+        {footer && <div className="px-6 sm:px-7 py-3.5 border-t border-white/[0.05] bg-white/[0.008] flex items-center gap-2 justify-end flex-wrap shrink-0">{footer}</div>}
       </div>
     </div>,
     document.body
@@ -625,12 +628,14 @@ function ConditionsEditor({ conditions, onChange }: { conditions: PatternConditi
   )
 }
 
-// ═══ SEVERITY PICKER — premium cards with microcopy and example use
+// ═══ SEVERITY PICKER — quiet, native priority cards.
+// Three compact cards. The active state uses a thin colored hairline and a
+// barely-there tinted background; no glow, no oversized shadow.
 function SeverityPicker({ value, onChange }: { value: 'critical' | 'attention' | 'info'; onChange: (v: 'critical' | 'attention' | 'info') => void }) {
   const opts: { v: 'critical' | 'attention' | 'info'; label: string; hint: string; example: string; activeCls: string; dot: string }[] = [
-    { v: 'critical', label: 'Crítico', hint: 'Sinal forte que merece atenção imediata.', example: 'Ex.: pressão extrema na reta final.', activeCls: 'border-rose-400/40 bg-rose-500/[0.08] shadow-[0_0_24px_-12px_rgba(251,113,133,0.5)]', dot: 'bg-rose-400' },
-    { v: 'attention', label: 'Atenção', hint: 'Sinal relevante, mas não urgente.', example: 'Ex.: jogo aberto com gols possíveis.', activeCls: 'border-amber-400/40 bg-amber-500/[0.08] shadow-[0_0_24px_-12px_rgba(251,191,36,0.5)]', dot: 'bg-amber-400' },
-    { v: 'info', label: 'Informação', hint: 'Apenas observação contextual.', example: 'Ex.: estatística interessante para análise.', activeCls: 'border-cyan-400/40 bg-cyan-500/[0.08] shadow-[0_0_24px_-12px_rgba(34,211,238,0.5)]', dot: 'bg-cyan-400' },
+    { v: 'critical', label: 'Crítico', hint: 'Sinal forte, atenção imediata.', example: 'Ex.: pressão extrema na reta final.', activeCls: 'border-rose-300/30 bg-rose-500/[0.05]', dot: 'bg-rose-300/85' },
+    { v: 'attention', label: 'Atenção', hint: 'Sinal relevante, sem urgência.', example: 'Ex.: jogo aberto com gols possíveis.', activeCls: 'border-amber-300/30 bg-amber-500/[0.05]', dot: 'bg-amber-300/85' },
+    { v: 'info', label: 'Informação', hint: 'Observação contextual.', example: 'Ex.: estatística para análise.', activeCls: 'border-cyan-300/25 bg-cyan-500/[0.04]', dot: 'bg-cyan-300/85' },
   ]
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -641,14 +646,15 @@ function SeverityPicker({ value, onChange }: { value: 'critical' | 'attention' |
             key={o.v}
             onClick={() => onChange(o.v)}
             type="button"
-            className={`text-left rounded-2xl border px-4 py-3.5 transition-all ${isActive ? o.activeCls : 'border-white/[0.06] bg-white/[0.015] hover:border-white/[0.12] hover:bg-white/[0.025]'}`}
+            aria-pressed={isActive}
+            className={`text-left rounded-xl border px-4 py-3.5 transition-colors duration-200 ${isActive ? o.activeCls : 'border-white/[0.06] bg-white/[0.012] hover:border-white/[0.1] hover:bg-white/[0.02]'}`}
           >
             <div className="flex items-center gap-2 mb-1.5">
-              <span className={`h-2.5 w-2.5 rounded-full ${o.dot} ${isActive ? 'shadow-[0_0_10px_currentColor]' : 'opacity-60'}`} />
-              <span className={`text-[13px] font-bold ${isActive ? 'text-white/95' : 'text-white/85'}`}>{o.label}</span>
+              <span className={`h-1.5 w-1.5 rounded-full ${o.dot} ${isActive ? '' : 'opacity-50'}`} />
+              <span className={`text-[13px] font-semibold tracking-tight ${isActive ? 'text-white/95' : 'text-white/80'}`}>{o.label}</span>
             </div>
-            <p className="text-[11px] text-white/65 leading-snug">{o.hint}</p>
-            <p className="text-[10px] text-white/35 leading-snug mt-1.5 italic">{o.example}</p>
+            <p className="text-[11px] text-white/55 leading-snug">{o.hint}</p>
+            <p className="text-[10.5px] text-white/35 leading-snug mt-1.5">{o.example}</p>
           </button>
         )
       })}
@@ -672,49 +678,58 @@ function ToggleSettingRow({ title, description, checked, onChange }: { title: st
   )
 }
 
-// ═══ WIZARD PROGRESS RAIL — Apple/Linear-like horizontal step rail.
-// Replaces the old vertical sidebar. Steps connect via a thin track with a
-// cyan progress fill that grows as the user advances. Each step shows a
-// circular indicator (number, ✓ for complete, glow for active) and a label.
+// ═══ WIZARD PROGRESS RAIL — minimalist segmented bar (Apple/Linear style).
+// 6 thin segments fill from left as the user advances. Labels are small,
+// uppercase, and only the active step is highlighted. No glow, no neon —
+// the active segment uses a soft cyan accent and the completed ones a
+// neutral white tint.
 type WizardStep<K extends string> = { key: K; label: string; valid: boolean; required: boolean }
 
 function WizardProgressRail<K extends string>({ steps, current, onSelect }: { steps: WizardStep<K>[]; current: K; onSelect: (k: K) => void }) {
   const currentIndex = Math.max(0, steps.findIndex(s => s.key === current))
-  const total = steps.length
-  const progressPct = total > 1 ? Math.min(100, (currentIndex / (total - 1)) * 100) : 0
   return (
-    <nav aria-label="Etapas" className="relative">
-      {/* Track + fill (desktop only — clean horizontal rail) */}
-      <div className="hidden sm:block absolute left-3 right-3 top-[15px] h-[2px] rounded-full bg-white/[0.06]" aria-hidden />
-      <div
-        className="hidden sm:block absolute left-3 top-[15px] h-[2px] rounded-full bg-gradient-to-r from-cyan-400/70 via-cyan-400/45 to-cyan-300/15 transition-all duration-500 ease-out shadow-[0_0_14px_-4px_rgba(34,211,238,0.55)]"
-        style={{ width: `calc((100% - 24px) * ${progressPct / 100})` }}
-        aria-hidden
-      />
-      <ol className="relative z-10 flex items-start gap-2 sm:gap-3 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1" style={{ overflowY: 'hidden' }}>
+    <nav aria-label="Etapas" className="select-none">
+      {/* Segments */}
+      <div className="flex items-center gap-1.5">
         {steps.map((s, i) => {
           const isActive = current === s.key
-          const isComplete = s.valid && i < currentIndex
+          const isComplete = i < currentIndex
           return (
-            <li key={s.key} className="shrink-0 sm:flex-1 sm:min-w-0">
+            <button
+              key={s.key}
+              onClick={() => onSelect(s.key)}
+              type="button"
+              aria-current={isActive ? 'step' : undefined}
+              aria-label={`Passo ${i + 1}: ${s.label}`}
+              className={`group relative flex-1 h-[3px] rounded-full transition-all duration-300 ease-out ${isActive
+                ? 'bg-cyan-300/80'
+                : isComplete
+                  ? 'bg-white/35'
+                  : 'bg-white/[0.06] hover:bg-white/[0.1]'}`}
+            />
+          )
+        })}
+      </div>
+      {/* Labels */}
+      <ol className="mt-3 flex items-start gap-1.5">
+        {steps.map((s, i) => {
+          const isActive = current === s.key
+          const isComplete = i < currentIndex
+          return (
+            <li key={s.key} className="flex-1 min-w-0">
               <button
                 onClick={() => onSelect(s.key)}
                 type="button"
-                aria-current={isActive ? 'step' : undefined}
-                className="group flex sm:flex-col items-center sm:items-start gap-2 sm:gap-1.5 w-full text-left"
+                className="group block w-full text-left"
               >
-                <span className={`h-8 w-8 rounded-full flex items-center justify-center text-[12px] font-bold tabular-nums shrink-0 transition-all ${isActive
-                  ? 'bg-gradient-to-br from-cyan-400/35 to-blue-500/35 text-cyan-50 border border-cyan-300/55 shadow-[0_0_24px_-4px_rgba(34,211,238,0.7),inset_0_1px_0_rgba(255,255,255,0.1)]'
-                  : isComplete
-                    ? 'bg-emerald-500/22 text-emerald-200 border border-emerald-400/35 shadow-[0_0_18px_-8px_rgba(52,211,153,0.55)]'
-                    : 'bg-[#0a0d14] text-white/55 border border-white/[0.1] group-hover:border-white/[0.18] group-hover:text-white/85'}`}>
-                  {isComplete ? '✓' : i + 1}
-                </span>
-                <div className="min-w-0">
-                  <span className={`text-[11px] font-semibold whitespace-nowrap block leading-tight transition-colors ${isActive ? 'text-white/95' : isComplete ? 'text-white/75' : 'text-white/55 group-hover:text-white/85'}`}>{s.label}</span>
-                  {s.required && !s.valid && !isActive && <span className="hidden sm:block text-[10px] text-amber-300/85 leading-tight font-medium">obrigatório</span>}
-                  {isComplete && <span className="hidden sm:block text-[10px] text-emerald-300/70 leading-tight font-medium">concluído</span>}
+                <div className="flex items-center gap-1.5">
+                  <span className={`tabular-nums text-[10px] font-semibold transition-colors ${isActive ? 'text-cyan-200/85' : isComplete ? 'text-white/55' : 'text-white/30 group-hover:text-white/55'}`}>
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  {isComplete && <span className="text-[10px] text-white/45" aria-hidden>✓</span>}
                 </div>
+                <span className={`block text-[11px] mt-0.5 leading-tight truncate transition-colors ${isActive ? 'text-white/90 font-medium' : isComplete ? 'text-white/55' : 'text-white/35 group-hover:text-white/55'}`}>{s.label}</span>
+                {s.required && !s.valid && !isActive && <span className="hidden sm:block text-[10px] text-amber-300/70 leading-tight font-medium mt-0.5">obrigatório</span>}
               </button>
             </li>
           )
@@ -724,25 +739,27 @@ function WizardProgressRail<K extends string>({ steps, current, onSelect }: { st
   )
 }
 
-// ═══ WIZARD STEP HEADER — editorial title block for each step.
-function WizardStepHeader({ index, total, title, description }: { index: number; total: number; title: string; description?: string }) {
+// ═══ WIZARD STEP HEADER — editorial title block (Apple Settings vibe).
+// Small uppercase kicker, generous title, soft description.
+function WizardStepHeader({ index, total, title, description, kicker }: { index: number; total: number; title: string; description?: string; kicker?: string }) {
   return (
-    <header className="mb-6">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300/85">Passo {index} de {total}</span>
-        <span className="h-px flex-1 bg-gradient-to-r from-cyan-400/30 to-transparent" />
-      </div>
-      <h3 className="text-[20px] sm:text-[22px] font-bold text-white/95 tracking-tight leading-[1.15]">{title}</h3>
-      {description && <p className="text-[13px] text-white/65 leading-relaxed mt-2 max-w-[600px]">{description}</p>}
+    <header className="mb-7">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40 block mb-2">
+        {kicker || `Passo ${index} de ${total}`}
+      </span>
+      <h3 className="text-[22px] sm:text-[24px] font-semibold text-white/95 tracking-tight leading-[1.15]">{title}</h3>
+      {description && <p className="text-[13px] text-white/55 leading-relaxed mt-2 max-w-[600px]">{description}</p>}
     </header>
   )
 }
 
-// ═══ RADAR SUMMARY PANEL — premium contextual side panel.
-// Shows live identity, scope chips, action, conditions, and a small flow
-// diagram explaining how the radar runs. Replaces the old MiniRadarPreview.
+// ═══ RADAR INSPECTOR PANEL — native side panel inspector (Apple vibe).
+// Vertical stack of small grouped blocks separated by hairlines instead
+// of a dense table. Status row at top, key/value rows below, then a
+// numbered operational flow at the bottom. Avoids saturated colors;
+// uses neutral tones with single-color accents only when meaningful.
 type DraftStatus = 'draft' | 'paused' | 'active'
-function RadarSummaryPanel({ name, status, severity, scope, scopeFilter, matches, action, minConf, conditions, requireRichData, onlyLive, onlyPreMatch, currentStepLabel, totalSteps, currentStepIndex }: {
+function RadarInspectorPanel({ name, status, severity, scope, scopeFilter, matches, action, minConf, conditions, requireRichData, onlyLive, onlyPreMatch, currentStepLabel, totalSteps, currentStepIndex, canSave }: {
   name: string
   status: DraftStatus
   severity: 'critical' | 'attention' | 'info'
@@ -758,102 +775,151 @@ function RadarSummaryPanel({ name, status, severity, scope, scopeFilter, matches
   currentStepLabel?: string
   totalSteps?: number
   currentStepIndex?: number
+  canSave?: boolean
 }) {
   const sevLabel = severity === 'critical' ? 'Crítico' : severity === 'attention' ? 'Atenção' : 'Informação'
-  const sevTone = severity === 'critical' ? 'text-rose-300' : severity === 'attention' ? 'text-amber-300' : 'text-cyan-300'
+  const sevDot = severity === 'critical' ? 'bg-rose-400/80' : severity === 'attention' ? 'bg-amber-400/80' : 'bg-cyan-400/80'
+  const scopeCount = scope === 'specific_leagues' || scope === 'specific_teams' ? (scopeFilter?.length || 0) : scope === 'specific_matches' ? (matches?.length || 0) : 0
   const scopeLabel = scope === 'favorites_only' ? 'Favoritos'
-    : scope === 'specific_leagues' ? `${scopeFilter?.length || 0} liga${(scopeFilter?.length || 0) === 1 ? '' : 's'}`
-    : scope === 'specific_teams' ? `${scopeFilter?.length || 0} time${(scopeFilter?.length || 0) === 1 ? '' : 's'}`
-    : scope === 'specific_matches' ? `${matches?.length || 0} partida${(matches?.length || 0) === 1 ? '' : 's'}`
+    : scope === 'specific_leagues' ? `${scopeCount} liga${scopeCount === 1 ? '' : 's'}`
+    : scope === 'specific_teams' ? `${scopeCount} time${scopeCount === 1 ? '' : 's'}`
+    : scope === 'specific_matches' ? `${scopeCount} partida${scopeCount === 1 ? '' : 's'}`
     : 'Todos os jogos'
-  const actionLabel = action === 'register_alert' ? 'Registra alerta' : action === 'suggest_only' ? 'Apenas sugere' : 'Destaca'
-  const actionTone = action === 'register_alert' ? 'text-emerald-300' : action === 'suggest_only' ? 'text-white/75' : 'text-cyan-300'
+  const actionLabel = action === 'register_alert' ? 'Registra alerta' : action === 'suggest_only' ? 'Sugere' : 'Destaca'
   const statusLabel = status === 'active' ? 'Ativo' : status === 'paused' ? 'Pausado' : 'Rascunho'
-  const statusTone = status === 'active' ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/25'
-    : status === 'paused' ? 'bg-white/[0.05] text-white/65 border-white/[0.08]'
-    : 'bg-cyan-500/12 text-cyan-200 border-cyan-400/22'
+  const statusDot = status === 'active' ? 'bg-emerald-400/85' : status === 'paused' ? 'bg-white/40' : 'bg-cyan-300/70'
 
-  // Flow diagram steps and which one is the "current" focus, derived from
-  // the wizard step index. The flow is conceptual (what happens in production).
-  const flowSteps = [
-    { label: 'Avalia partidas', hint: 'em paralelo, no escopo definido' },
-    { label: 'Detecta padrão', hint: 'todas as condições verdadeiras' },
-    { label: action === 'register_alert' ? 'Registra alerta' : action === 'suggest_only' ? 'Sugere no Cockpit' : 'Destaca no Scanner', hint: action === 'register_alert' ? 'envia para /app/alerts' : action === 'suggest_only' ? 'visível mas sem alerta' : 'apenas marca no Scanner' },
-    { label: 'Resolve resultado', hint: action === 'register_alert' ? 'motor confirma ou descarta' : 'sem acompanhamento' },
+  const flow = [
+    { label: 'Avalia partidas', hint: 'no escopo definido' },
+    { label: 'Detecta sinal', hint: 'todas as condições verdadeiras' },
+    {
+      label: action === 'register_alert' ? 'Envia para Alertas' : action === 'suggest_only' ? 'Sugere no Cockpit' : 'Marca no Scanner',
+      hint: action === 'register_alert' ? 'aparece em /app/alerts' : action === 'suggest_only' ? 'sem registrar alerta' : 'sem registrar alerta',
+    },
+    {
+      label: 'Resolve resultado',
+      hint: action === 'register_alert' ? 'motor confirma ou descarta' : 'sem acompanhamento',
+    },
   ]
 
   return (
-    <section className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.03] via-white/[0.012] to-transparent p-4 sticky top-0 backdrop-blur-sm">
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/40">Resumo</span>
-        <span className={`text-[9px] font-bold uppercase tracking-[0.14em] px-2 py-0.5 rounded-md border ${statusTone}`}>{statusLabel}</span>
-        {currentStepLabel && totalSteps && typeof currentStepIndex === 'number' && (
-          <span className="ml-auto text-[10px] text-white/45 tabular-nums">{currentStepIndex + 1}/{totalSteps}</span>
-        )}
+    <section className="rounded-[16px] border border-white/[0.06] bg-white/[0.012] overflow-hidden">
+      {/* Inspector header */}
+      <div className="px-4 pt-4 pb-3 border-b border-white/[0.05]">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Inspector</span>
+          {currentStepLabel && totalSteps && typeof currentStepIndex === 'number' && (
+            <span className="ml-auto text-[10px] text-white/35 tabular-nums">{currentStepIndex + 1}/{totalSteps}</span>
+          )}
+        </div>
+        <h4 className="text-[14px] font-semibold text-white/95 truncate mt-2 leading-tight">{name || 'Sem nome'}</h4>
+        <div className="flex items-center gap-2 mt-1.5">
+          <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
+          <span className="text-[11px] text-white/55">{statusLabel}{currentStepLabel ? ` · ${currentStepLabel}` : ''}</span>
+        </div>
       </div>
 
-      {/* Identity */}
-      <h4 className="text-[14px] font-bold text-white/95 truncate leading-tight">{name || 'Sem nome'}</h4>
-      <p className="text-[11px] text-white/55 truncate mt-0.5">{currentStepLabel || 'Configurando radar'}</p>
-
-      {/* Stats grid */}
-      <dl className="mt-4 space-y-2 text-[11px]">
-        <div className="flex items-center justify-between gap-2"><dt className="text-white/55">Severidade</dt><dd className={`font-bold ${sevTone}`}>{sevLabel}</dd></div>
-        <div className="flex items-center justify-between gap-2"><dt className="text-white/55">Escopo</dt><dd className="text-white/95 font-semibold truncate max-w-[60%] text-right">{scopeLabel}</dd></div>
-        <div className="flex items-center justify-between gap-2"><dt className="text-white/55">Ação</dt><dd className={`font-bold ${actionTone}`}>{actionLabel}</dd></div>
-        <div className="flex items-center justify-between gap-2"><dt className="text-white/55">Confiança</dt><dd className="text-white/95 font-bold tabular-nums">≥ {minConf}%</dd></div>
-        <div className="flex items-center justify-between gap-2"><dt className="text-white/55">Condições</dt><dd className="text-white/95 font-bold tabular-nums">{conditions.length}</dd></div>
+      {/* Key/Value rows */}
+      <dl className="px-4 py-3 space-y-2.5 border-b border-white/[0.05]">
+        <Row label="Severidade">
+          <span className="flex items-center gap-1.5">
+            <span className={`h-1.5 w-1.5 rounded-full ${sevDot}`} />
+            <span className="text-white/90 font-medium">{sevLabel}</span>
+          </span>
+        </Row>
+        <Row label="Escopo">
+          <span className="text-white/90 font-medium truncate max-w-[60%] text-right">{scopeLabel}</span>
+        </Row>
+        <Row label="Ação">
+          <span className="text-white/90 font-medium">{actionLabel}</span>
+        </Row>
+        <Row label="Confiança">
+          <span className="text-white/90 font-semibold tabular-nums">≥ {minConf}%</span>
+        </Row>
+        <Row label="Condições">
+          <span className="text-white/90 font-semibold tabular-nums">{conditions.length}</span>
+        </Row>
       </dl>
 
       {/* Filter badges */}
       {(onlyLive || onlyPreMatch || requireRichData) && (
-        <div className="mt-3 pt-3 border-t border-white/[0.05] flex flex-wrap gap-1">
-          {onlyLive && <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/12 text-emerald-300 border border-emerald-400/20">Ao vivo</span>}
-          {onlyPreMatch && <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-500/12 text-cyan-300 border border-cyan-400/20">Pré-jogo</span>}
-          {requireRichData && <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-white/[0.05] text-white/75 border border-white/[0.08]">Dados ricos</span>}
+        <div className="px-4 py-3 border-b border-white/[0.05] flex flex-wrap gap-1.5">
+          {onlyLive && <InspectorBadge tone="emerald">Ao vivo</InspectorBadge>}
+          {onlyPreMatch && <InspectorBadge tone="cyan">Pré-jogo</InspectorBadge>}
+          {requireRichData && <InspectorBadge tone="neutral">Dados ricos</InspectorBadge>}
         </div>
       )}
 
-      {/* Flow diagram */}
-      <div className="mt-4 pt-4 border-t border-white/[0.05]">
-        <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-white/40 block mb-2.5">Fluxo do radar</span>
-        <ol className="space-y-2">
-          {flowSteps.map((s, i) => (
-            <li key={i} className="flex items-start gap-2.5">
-              <span className="mt-[1px] h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-bold tabular-nums text-white/65 bg-white/[0.04] border border-white/[0.08] shrink-0">{i + 1}</span>
+      {/* Flow */}
+      <div className="px-4 py-4 border-b border-white/[0.05]">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35 block mb-3">Fluxo operacional</span>
+        <ol className="space-y-2.5">
+          {flow.map((s, i) => (
+            <li key={i} className="flex items-start gap-3">
+              <span className="mt-[2px] h-[18px] w-[18px] rounded-full flex items-center justify-center text-[9px] font-semibold tabular-nums text-white/55 bg-white/[0.04] border border-white/[0.06] shrink-0">{i + 1}</span>
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] text-white/85 font-semibold leading-tight">{s.label}</p>
-                <p className="text-[10px] text-white/45 leading-tight mt-0.5">{s.hint}</p>
+                <p className="text-[12px] text-white/85 font-medium leading-tight">{s.label}</p>
+                <p className="text-[10.5px] text-white/40 leading-tight mt-0.5">{s.hint}</p>
               </div>
             </li>
           ))}
         </ol>
       </div>
+
+      {/* Footer ready state */}
+      <div className="px-4 py-3 flex items-center gap-2">
+        <span className={`h-1.5 w-1.5 rounded-full ${canSave ? 'bg-emerald-400/85' : 'bg-amber-400/70'}`} />
+        <span className={`text-[11px] ${canSave ? 'text-white/75' : 'text-white/55'}`}>{canSave ? 'Pronto para salvar' : 'Preencha os campos obrigatórios'}</span>
+      </div>
     </section>
   )
 }
 
-// ═══ ACTION CARDS — used in step "Escopo e ação"
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-2 text-[11.5px]">
+      <dt className="text-white/45">{label}</dt>
+      <dd className="text-right">{children}</dd>
+    </div>
+  )
+}
+
+function InspectorBadge({ children, tone }: { children: React.ReactNode; tone: 'emerald' | 'cyan' | 'neutral' }) {
+  const cls = tone === 'emerald' ? 'bg-emerald-500/8 text-emerald-200/85 border-emerald-400/15'
+    : tone === 'cyan' ? 'bg-cyan-500/8 text-cyan-200/85 border-cyan-400/15'
+    : 'bg-white/[0.04] text-white/65 border-white/[0.06]'
+  return <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md border ${cls}`}>{children}</span>
+}
+
+// ═══ ACTION CARDS — quiet horizontal cards. Active state uses a thin
+// hairline and a barely-tinted background. No glow.
 function ActionCardPicker({ value, onChange }: { value: 'register_alert' | 'suggest_only' | 'highlight'; onChange: (v: 'register_alert' | 'suggest_only' | 'highlight') => void }) {
-  const opts: { v: 'register_alert' | 'suggest_only' | 'highlight'; label: string; hint: string; badge: string; badgeTone: string }[] = [
-    { v: 'register_alert', label: 'Registrar alerta', hint: 'Vai para /app/alerts e é acompanhado pelo motor de resolução.', badge: 'Envia para /app/alerts', badgeTone: 'bg-emerald-500/12 text-emerald-300 border-emerald-400/20' },
-    { v: 'suggest_only', label: 'Apenas sugerir', hint: 'Aparece no Cockpit e Scanner, mas não dispara alerta.', badge: 'Não dispara alerta', badgeTone: 'bg-white/[0.05] text-white/65 border-white/[0.07]' },
-    { v: 'highlight', label: 'Destacar no Scanner', hint: 'Apenas marca visualmente sem registrar nada.', badge: 'Visual', badgeTone: 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15' },
+  const opts: { v: 'register_alert' | 'suggest_only' | 'highlight'; label: string; hint: string; badge: string; badgeTone: string; activeCls: string }[] = [
+    { v: 'register_alert', label: 'Registrar alerta', hint: 'Vai para /app/alerts e é acompanhado pelo motor de resolução.', badge: 'Alerta', badgeTone: 'bg-emerald-500/10 text-emerald-200/85 border-emerald-400/20', activeCls: 'border-emerald-300/25 bg-emerald-500/[0.04]' },
+    { v: 'suggest_only', label: 'Apenas sugerir', hint: 'Aparece no Cockpit e no Scanner sem registrar alerta.', badge: 'Sugestão', badgeTone: 'bg-white/[0.04] text-white/65 border-white/[0.08]', activeCls: 'border-white/[0.12] bg-white/[0.025]' },
+    { v: 'highlight', label: 'Destacar no Scanner', hint: 'Marca visualmente sem registrar nada.', badge: 'Visual', badgeTone: 'bg-cyan-500/10 text-cyan-200/85 border-cyan-400/15', activeCls: 'border-cyan-300/25 bg-cyan-500/[0.04]' },
   ]
   return (
     <div className="grid grid-cols-1 gap-2">
       {opts.map(o => {
         const isActive = value === o.v
         return (
-          <button key={o.v} onClick={() => onChange(o.v)} type="button" className={`w-full flex items-start gap-3 rounded-2xl border px-4 py-3.5 text-left transition-all ${isActive ? 'border-cyan-400/35 bg-cyan-500/[0.08] shadow-[0_0_24px_-12px_rgba(34,211,238,0.45)]' : 'border-white/[0.06] bg-white/[0.015] hover:border-white/[0.12] hover:bg-white/[0.025]'}`}>
-            <span className={`mt-0.5 h-4 w-4 rounded-full shrink-0 border-2 ${isActive ? 'border-cyan-400 bg-cyan-500/40' : 'border-white/30'}`}>{isActive && <span className="block h-full w-full rounded-full bg-cyan-300 scale-50" />}</span>
+          <button
+            key={o.v}
+            onClick={() => onChange(o.v)}
+            type="button"
+            aria-pressed={isActive}
+            className={`group w-full flex items-start gap-3 rounded-xl border px-4 py-3.5 text-left transition-colors duration-200 ${isActive ? o.activeCls : 'border-white/[0.06] bg-white/[0.012] hover:border-white/[0.1] hover:bg-white/[0.022]'}`}
+          >
+            <span className={`mt-[3px] h-3.5 w-3.5 rounded-full shrink-0 border transition-colors ${isActive ? 'border-white/65 bg-white/85' : 'border-white/25 bg-transparent group-hover:border-white/45'}`}>
+              {isActive && <span className="block h-full w-full rounded-full" />}
+            </span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className={`text-[13px] font-bold ${isActive ? 'text-white/95' : 'text-white/85'}`}>{o.label}</span>
-                <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${o.badgeTone}`}>{o.badge}</span>
+                <span className={`text-[13px] font-semibold tracking-tight ${isActive ? 'text-white/95' : 'text-white/85'}`}>{o.label}</span>
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md border ${o.badgeTone}`}>{o.badge}</span>
               </div>
-              <p className="text-[11px] text-white/65 leading-snug mt-1">{o.hint}</p>
+              <p className="text-[11.5px] text-white/55 leading-snug mt-1">{o.hint}</p>
             </div>
           </button>
         )
@@ -899,12 +965,12 @@ function ScopePicker({ scope, scopeFilter, matches, excludeLeagues, excludeTeams
         {modes.map(m => {
           const isActive = scope === m.v
           return (
-            <button key={m.v} onClick={() => onScopeChange(m.v)} type="button" className={`text-left rounded-2xl border px-4 py-3 transition-all ${isActive ? 'border-cyan-400/35 bg-cyan-500/[0.07] shadow-[0_0_20px_-12px_rgba(34,211,238,0.4)]' : 'border-white/[0.06] bg-white/[0.015] hover:border-white/[0.12] hover:bg-white/[0.025]'}`}>
+            <button key={m.v} onClick={() => onScopeChange(m.v)} type="button" aria-pressed={isActive} className={`group text-left rounded-xl border px-4 py-3 transition-colors duration-200 ${isActive ? 'border-white/[0.18] bg-white/[0.04]' : 'border-white/[0.06] bg-white/[0.012] hover:border-white/[0.12] hover:bg-white/[0.022]'}`}>
               <div className="flex items-start gap-2.5">
-                <span className={`mt-0.5 h-3.5 w-3.5 rounded-full shrink-0 border-2 ${isActive ? 'border-cyan-400 bg-cyan-500/40' : 'border-white/30'}`}>{isActive && <span className="block h-full w-full rounded-full bg-cyan-300 scale-50" />}</span>
+                <span className={`mt-[2px] h-3.5 w-3.5 rounded-full shrink-0 border transition-colors ${isActive ? 'border-white/65 bg-white/85' : 'border-white/25 bg-transparent group-hover:border-white/45'}`} />
                 <div className="flex-1 min-w-0">
-                  <span className={`text-[12px] font-bold block ${isActive ? 'text-white/95' : 'text-white/85'}`}>{m.label}</span>
-                  <span className="text-[11px] text-white/55 leading-snug block mt-0.5">{m.hint}</span>
+                  <span className={`text-[12.5px] font-semibold block tracking-tight ${isActive ? 'text-white/95' : 'text-white/80'}`}>{m.label}</span>
+                  <span className="text-[11px] text-white/50 leading-snug block mt-0.5">{m.hint}</span>
                 </div>
               </div>
             </button>
@@ -1089,62 +1155,63 @@ function ChipMultiPicker({ label, placeholder, options, selected, onChange, empt
   )
 }
 
-// ═══ CONFIDENCE SLIDER — visual ruler with sensible/balanced/strict zones
+// ═══ CONFIDENCE SLIDER — calibration ruler. Big numeric display, large
+// slider, three-zone label. No glow, neutral surface.
 function ConfidenceSlider({ value, onChange, action }: { value: number; onChange: (v: number) => void; action: 'register_alert' | 'suggest_only' | 'highlight' }) {
-  const zone = value < 45 ? 'sensible' : value < 70 ? 'balanced' : 'strict'
+  const zone = value < 60 ? 'sensible' : value < 75 ? 'balanced' : 'strict'
   const zoneLabel = zone === 'sensible' ? 'Sensível' : zone === 'balanced' ? 'Equilibrado' : 'Rigoroso'
-  const zoneTone = zone === 'sensible' ? 'text-amber-300' : zone === 'balanced' ? 'text-cyan-300' : 'text-emerald-300'
+  const zoneTone = zone === 'sensible' ? 'text-amber-200/85' : zone === 'balanced' ? 'text-cyan-200/85' : 'text-emerald-200/85'
   const zoneHint = zone === 'sensible'
-    ? 'Mais alertas, com menor rigor — bom para descobrir padrões novos.'
+    ? 'Mais sinais, menor rigor.'
     : zone === 'balanced'
-    ? 'Equilíbrio entre volume e qualidade — recomendado para uso geral.'
-    : 'Menos alertas, só sinais muito fortes — bom para foco em alta convicção.'
+    ? 'Equilíbrio entre volume e qualidade.'
+    : 'Menos sinais, maior rigor.'
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.025] to-transparent p-5">
-        <div className="flex items-baseline justify-between mb-3">
-          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/55">Confiança mínima</span>
+      <div className="rounded-xl border border-white/[0.07] bg-white/[0.012] p-5">
+        <div className="flex items-baseline justify-between mb-4">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">Confiança mínima</span>
           <span className="flex items-baseline gap-1.5">
-            <span className="text-[36px] font-bold tabular-nums text-white/95 leading-none">{value}</span>
-            <span className="text-[14px] text-white/45 font-semibold">%</span>
+            <span className="text-[40px] font-semibold tabular-nums text-white/95 leading-none tracking-tight">{value}</span>
+            <span className="text-[14px] text-white/40 font-medium">%</span>
           </span>
         </div>
         {/* Slider */}
-        <div className="relative pt-1">
-          <input
-            type="range"
-            min={20}
-            max={95}
-            value={value}
-            onChange={e => onChange(Math.min(100, Math.max(0, Number(e.target.value))))}
-            className="w-full accent-cyan-400 cursor-pointer"
-          />
-          {/* Zones ruler */}
-          <div className="grid grid-cols-3 mt-2 gap-1 text-[10px] font-semibold uppercase tracking-wider">
-            <span className={`${zone === 'sensible' ? 'text-amber-300' : 'text-white/35'}`}>Sensível</span>
-            <span className={`text-center ${zone === 'balanced' ? 'text-cyan-300' : 'text-white/35'}`}>Equilibrado</span>
-            <span className={`text-right ${zone === 'strict' ? 'text-emerald-300' : 'text-white/35'}`}>Rigoroso</span>
-          </div>
+        <input
+          type="range"
+          min={20}
+          max={95}
+          value={value}
+          onChange={e => onChange(Math.min(100, Math.max(0, Number(e.target.value))))}
+          className="w-full accent-white cursor-pointer"
+          aria-label="Confiança mínima em porcentagem"
+        />
+        {/* Zone ruler */}
+        <div className="grid grid-cols-3 mt-3 gap-1 text-[10px] font-semibold uppercase tracking-wider">
+          <span className={`${zone === 'sensible' ? 'text-amber-200/85' : 'text-white/30'}`}>Sensível</span>
+          <span className={`text-center ${zone === 'balanced' ? 'text-cyan-200/85' : 'text-white/30'}`}>Equilibrado</span>
+          <span className={`text-right ${zone === 'strict' ? 'text-emerald-200/85' : 'text-white/30'}`}>Rigoroso</span>
         </div>
-        <div className="mt-4 flex items-center gap-3">
-          <span className={`text-[11px] font-bold uppercase tracking-wider ${zoneTone}`}>{zoneLabel}</span>
-          <span className="text-[11px] text-white/65 leading-snug">{zoneHint}</span>
+        <div className="mt-4 pt-4 border-t border-white/[0.05] flex items-center gap-3">
+          <span className={`text-[11px] font-semibold uppercase tracking-wider ${zoneTone}`}>{zoneLabel}</span>
+          <span className="text-[11.5px] text-white/55 leading-snug">{zoneHint}</span>
           <input
             type="number"
             value={value}
             onChange={e => onChange(Math.min(100, Math.max(0, Number(e.target.value))))}
-            className="ml-auto w-16 h-9 rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 text-[12px] text-white/95 tabular-nums text-center outline-none focus:border-cyan-400/40"
+            className="ml-auto w-16 h-9 rounded-lg border border-white/[0.07] bg-white/[0.025] px-2 text-[12px] text-white/90 tabular-nums text-center outline-none focus:border-white/35 focus:bg-white/[0.04] transition-colors"
             min={0}
             max={100}
+            aria-label="Valor numérico da confiança"
           />
         </div>
       </div>
-      <div className="rounded-2xl border border-cyan-400/15 bg-cyan-500/[0.04] px-4 py-3.5">
-        <p className="text-[12px] text-white/85 leading-relaxed">
-          O radar só dispara com confiança ≥ <span className="text-white/95 font-bold tabular-nums">{value}%</span>.
-          {action === 'register_alert' && <> Alertas serão registrados em <span className="text-cyan-300 font-semibold">/app/alerts</span> e acompanhados pelo motor de resolução.</>}
+      <div className="rounded-xl border border-white/[0.06] bg-white/[0.008] px-4 py-3">
+        <p className="text-[12px] text-white/75 leading-relaxed">
+          Este radar só dispara com confiança ≥ <span className="text-white/95 font-semibold tabular-nums">{value}%</span>.
+          {action === 'register_alert' && <> Alertas serão acompanhados pelo motor de resolução em <span className="text-white/85 font-medium">/app/alerts</span>.</>}
           {action === 'suggest_only' && <> Aparecerá apenas como sugestão no Cockpit, sem registrar alerta.</>}
-          {action === 'highlight' && <> Apenas destaca a partida no Scanner sem registrar nada.</>}
+          {action === 'highlight' && <> Apenas destaca a partida no Scanner.</>}
         </p>
       </div>
     </div>
@@ -1240,12 +1307,11 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
   return (
     <ModalShell open={open} onClose={onClose} title={template.name} subtitle={template.description} maxWidth="max-w-[1180px]"
       headerExtra={
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-400/20">{existingPattern ? 'Editando radar' : 'Rascunho'}</span>
-          <span className="text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md bg-white/[0.05] text-white/65 border border-white/[0.08]">Template GoalSense</span>
-          <span className="text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md bg-white/[0.04] text-white/65 border border-white/[0.07]">{CATEGORY_LABELS[cat]}</span>
-          <span className={`text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md border ${severity === 'critical' ? 'bg-rose-500/12 text-rose-300 border-rose-400/20' : severity === 'attention' ? 'bg-amber-500/12 text-amber-300 border-amber-400/20' : 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15'}`}>{severity === 'critical' ? 'Crítico' : severity === 'attention' ? 'Atenção' : 'Info'}</span>
-          {existingPattern && <span className={`text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md border ${existingPattern.status === 'active' ? 'bg-emerald-500/12 text-emerald-300 border-emerald-400/20' : 'bg-white/[0.05] text-white/65 border-white/[0.07]'}`}>{existingPattern.status === 'active' ? 'Ativo' : 'Pausado'}</span>}
+        <div className="flex items-center gap-2 flex-wrap text-[11px] text-white/45">
+          <span className={`h-1.5 w-1.5 rounded-full ${existingPattern ? (existingPattern.status === 'active' ? 'bg-emerald-400/85' : 'bg-white/40') : 'bg-cyan-300/70'}`} />
+          <span className="text-white/55">{existingPattern ? (existingPattern.status === 'active' ? 'Editando radar ativo' : 'Editando radar pausado') : 'Configurando template'}</span>
+          <span className="text-white/20">·</span>
+          <span className="text-white/45">{CATEGORY_LABELS[cat]}</span>
         </div>
       }
       footer={
@@ -1254,7 +1320,7 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
           {stepIndex > 0 && <button onClick={goPrev} type="button" className="px-3.5 py-2.5 rounded-xl text-[12px] font-medium text-white/75 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-all">Voltar</button>}
           {!isLast && <button onClick={goNext} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-all">Próximo</button>}
           <button onClick={() => { onSave(buildPatternData('paused')); onClose() }} disabled={!canSave} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar pausado</button>
-          <button onClick={() => { onSave(buildPatternData('active')); onClose() }} disabled={!canSave} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-bold bg-gradient-to-r from-cyan-500/22 to-blue-500/22 text-cyan-200 border border-cyan-400/30 hover:from-cyan-500/32 hover:to-blue-500/32 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-[0_0_28px_-8px_rgba(34,211,238,0.6)]">Salvar e ativar</button>
+          <button onClick={() => { onSave(buildPatternData('active')); onClose() }} disabled={!canSave} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold text-white bg-white/[0.95] hover:bg-white border border-white/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200" style={{ color: '#0b0d12' }}>Salvar e ativar</button>
         </>
       }
     >
@@ -1350,9 +1416,9 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
           </div>
         </div>
 
-        {/* Radar summary right */}
+        {/* Inspector right */}
         <aside className="lg:col-span-4 hidden lg:block">
-          <RadarSummaryPanel
+          <RadarInspectorPanel
             name={template.name}
             status={existingPattern ? (existingPattern.status === 'active' ? 'active' : 'paused') : 'draft'}
             severity={severity}
@@ -1368,6 +1434,7 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
             currentStepLabel={steps[stepIndex]?.label}
             totalSteps={steps.length}
             currentStepIndex={stepIndex}
+            canSave={canSave}
           />
         </aside>
       </div>
@@ -1377,9 +1444,9 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <section className="mb-5 last:mb-0">
-      <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/55 mb-2.5">{title}</h4>
-      {hint && <p className="text-[11px] text-white/50 mb-2.5 leading-snug">{hint}</p>}
+    <section className="mb-6 last:mb-0">
+      <h4 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40 mb-2.5">{title}</h4>
+      {hint && <p className="text-[11px] text-white/45 mb-3 leading-snug">{hint}</p>}
       {children}
     </section>
   )
@@ -1546,9 +1613,9 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
   return (
     <ModalShell open={open} onClose={onClose} title={initial ? 'Editar radar' : 'Criar radar personalizado'} subtitle="Configure uma regra inteligente para o GoalSense monitorar partidas em tempo real." maxWidth="max-w-[1200px]"
       headerExtra={
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-400/20">{initial ? 'Editando radar' : 'Rascunho'}</span>
-          {initial && <span className={`text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md border ${initial.status === 'active' ? 'bg-emerald-500/12 text-emerald-300 border-emerald-400/20' : 'bg-white/[0.05] text-white/65 border-white/[0.07]'}`}>{initial.status === 'active' ? 'Ativo' : 'Pausado'}</span>}
+        <div className="flex items-center gap-2 text-[11px] text-white/45">
+          <span className={`h-1.5 w-1.5 rounded-full ${initial ? (initial.status === 'active' ? 'bg-emerald-400/85' : 'bg-white/40') : 'bg-cyan-300/70'}`} />
+          <span className="text-white/55">{initial ? (initial.status === 'active' ? 'Editando radar ativo' : 'Editando radar pausado') : 'Rascunho'}</span>
         </div>
       }
       footer={
@@ -1557,7 +1624,7 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
           {stepIndex > 0 && <button onClick={goPrev} type="button" className="px-3.5 py-2.5 rounded-xl text-[12px] font-medium text-white/75 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-all">Voltar</button>}
           {stepIndex < steps.length - 1 && <button onClick={goNext} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-all">Próximo</button>}
           <button onClick={() => { onSave(buildData('paused')); onClose() }} disabled={!canSave} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar pausado</button>
-          <button onClick={() => { onSave(buildData('active')); onClose() }} disabled={!canSave} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-bold bg-gradient-to-r from-cyan-500/22 to-blue-500/22 text-cyan-200 border border-cyan-400/30 hover:from-cyan-500/32 hover:to-blue-500/32 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-[0_0_28px_-8px_rgba(34,211,238,0.6)]">{initial ? 'Salvar e ativar' : 'Criar e ativar'}</button>
+          <button onClick={() => { onSave(buildData('active')); onClose() }} disabled={!canSave} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold text-white bg-white/[0.95] hover:bg-white border border-white/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200" style={{ color: '#0b0d12' }}>{initial ? 'Salvar e ativar' : 'Criar e ativar'}</button>
         </>
       }
     >
@@ -1573,30 +1640,32 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
             {step === 'identity' && (
               <>
                 <WizardStepHeader index={1} total={steps.length} title="Dê identidade ao radar" description="Escolha um nome claro e uma severidade para organizar seus sinais." />
-                <div className="space-y-5">
+                <div className="space-y-6">
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/55 block mb-2">Nome do radar</label>
+                    <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40 block mb-2">Nome do radar</label>
                     <input
                       value={name}
                       onChange={e => setName(e.target.value)}
-                      placeholder="Ex.: Pressão visitante na reta final"
+                      placeholder="Ex.: Pressão final com placar curto"
                       autoFocus
-                      className={`w-full h-14 rounded-2xl border bg-white/[0.025] px-5 text-[16px] font-semibold text-white/95 placeholder:text-white/30 placeholder:font-normal outline-none transition-all focus:bg-white/[0.04] focus:shadow-[0_0_28px_-12px_rgba(34,211,238,0.5)] ${name.trim() ? 'border-white/[0.1] focus:border-cyan-400/45' : 'border-amber-400/25 focus:border-amber-400/45'}`}
+                      className={`w-full h-14 rounded-xl border bg-white/[0.018] px-5 text-[16px] font-medium text-white/95 placeholder:text-white/25 placeholder:font-normal outline-none transition-colors duration-200 ${name.trim() ? 'border-white/[0.08] focus:border-white/30 focus:bg-white/[0.03]' : 'border-amber-300/20 focus:border-amber-300/40'}`}
                     />
-                    {!hasName && <p className="text-[11px] text-amber-300/85 mt-2 font-medium">O nome é obrigatório.</p>}
+                    {!hasName && <p className="text-[11px] text-amber-300/75 mt-2">O nome é obrigatório.</p>}
+                    <p className="text-[11px] text-white/40 mt-2 leading-snug">Use um nome curto que descreva o sinal que você quer monitorar.</p>
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/55 block mb-2">Descrição (opcional)</label>
+                    <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40 block mb-2">Descrição</label>
                     <input
                       value={desc}
                       onChange={e => setDesc(e.target.value)}
                       placeholder="Quando este radar é útil?"
-                      className="w-full h-12 rounded-xl border border-white/[0.08] bg-white/[0.025] px-4 text-[13px] text-white/95 placeholder:text-white/35 outline-none transition-all focus:border-cyan-400/40 focus:bg-white/[0.04]"
+                      className="w-full h-12 rounded-xl border border-white/[0.07] bg-white/[0.018] px-4 text-[13px] text-white/90 placeholder:text-white/25 outline-none transition-colors duration-200 focus:border-white/30 focus:bg-white/[0.03]"
                     />
+                    <p className="text-[11px] text-white/40 mt-2">Use para lembrar quando este radar é útil.</p>
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/55 block mb-2">Severidade</label>
-                    <p className="text-[11px] text-white/45 mb-3 leading-snug">Reflete a urgência do sinal no Scanner e nos alertas.</p>
+                    <label className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40 block mb-2">Severidade</label>
+                    <p className="text-[11px] text-white/40 mb-3 leading-snug">Define a urgência operacional do sinal no Scanner e nos alertas.</p>
                     <SeverityPicker value={severity} onChange={setSeverity} />
                   </div>
                 </div>
@@ -1657,9 +1726,9 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
           </div>
         </div>
 
-        {/* Right panel — radar summary */}
+        {/* Inspector right */}
         <aside className="lg:col-span-4 hidden lg:block">
-          <RadarSummaryPanel
+          <RadarInspectorPanel
             name={name.trim()}
             status={initial ? (initial.status === 'active' ? 'active' : 'paused') : 'draft'}
             severity={severity}
@@ -1675,6 +1744,7 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
             currentStepLabel={steps[stepIndex]?.label}
             totalSteps={steps.length}
             currentStepIndex={stepIndex}
+            canSave={canSave}
           />
         </aside>
       </div>
@@ -1686,14 +1756,18 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
 function AutoDiscoveryConfigModal({ open, config, onClose, onChange, onActivate, onDeactivate }: { open: boolean; config: AutoDiscoveryConfig; onClose: () => void; onChange: (p: Partial<AutoDiscoveryConfig>) => void; onActivate: () => void; onDeactivate: () => void }) {
   const isActive = config.enabled && config.userConfigured
   const statusLabel = isActive ? 'Monitorando' : config.userConfigured ? 'Configurado' : 'Desligado'
-  const statusTone = isActive ? 'bg-emerald-500/12 text-emerald-300 border-emerald-400/20' : config.userConfigured ? 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15' : 'bg-white/[0.05] text-white/55 border-white/[0.07]'
   return (
     <ModalShell open={open} onClose={onClose} title="Motor automático" subtitle="Configure como o GoalSense pode sugerir ou registrar descobertas automáticas." maxWidth="max-w-[1040px]"
       headerExtra={
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md border ${statusTone}`}>{statusLabel}</span>
-          <span className="text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md bg-white/[0.04] text-white/65 border border-white/[0.07]">Confiança ≥ {config.minConfidence}%</span>
-          <span className={`text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md border ${config.registerAlertAuto ? 'bg-emerald-500/12 text-emerald-300 border-emerald-400/20' : 'bg-white/[0.04] text-white/65 border-white/[0.07]'}`}>{config.registerAlertAuto ? 'Registrando alertas' : 'Apenas sugerindo'}</span>
+        <div className="flex items-center gap-3 text-[11px] text-white/45">
+          <span className="flex items-center gap-1.5">
+            <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-emerald-400/85' : config.userConfigured ? 'bg-cyan-300/80' : 'bg-white/30'}`} />
+            <span className="text-white/55">{statusLabel}</span>
+          </span>
+          <span className="text-white/20">·</span>
+          <span>Confiança ≥ <span className="text-white/75 font-medium tabular-nums">{config.minConfidence}%</span></span>
+          <span className="text-white/20">·</span>
+          <span className={config.registerAlertAuto ? 'text-emerald-200/75' : 'text-white/45'}>{config.registerAlertAuto ? 'Registrando alertas' : 'Apenas sugerindo'}</span>
         </div>
       }
       footer={
@@ -1701,29 +1775,25 @@ function AutoDiscoveryConfigModal({ open, config, onClose, onChange, onActivate,
           <button onClick={onClose} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/65 border border-white/[0.07] hover:text-white/95 hover:border-white/[0.12] transition-colors mr-auto">Cancelar</button>
           {isActive && <button onClick={onDeactivate} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-rose-300 border border-rose-400/20 bg-rose-500/8 hover:bg-rose-500/15 transition-all">Desativar motor</button>}
           {config.userConfigured && !isActive && <button onClick={() => onChange({ enabled: false })} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-all">Salvar configuração</button>}
-          <button onClick={onActivate} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-bold bg-gradient-to-r from-cyan-500/22 to-blue-500/22 text-cyan-200 border border-cyan-400/30 hover:from-cyan-500/32 hover:to-blue-500/32 transition-all">{isActive ? 'Salvar configuração' : 'Salvar e ativar motor'}</button>
+          <button onClick={onActivate} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold bg-white/[0.95] hover:bg-white border border-white/30 transition-colors duration-200" style={{ color: '#0b0d12' }}>{isActive ? 'Salvar configuração' : 'Salvar e ativar motor'}</button>
         </>
       }
     >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* HERO STATUS — full width banner at top of grid */}
+        {/* HERO STATUS — quiet native banner */}
         <div className="lg:col-span-2">
-          <div className={`rounded-2xl border bg-gradient-to-br p-5 ${isActive
-            ? 'border-emerald-400/25 from-emerald-500/[0.07] via-emerald-500/[0.03] to-transparent shadow-[0_0_40px_-16px_rgba(52,211,153,0.4)]'
-            : config.userConfigured
-              ? 'border-cyan-400/22 from-cyan-500/[0.06] via-blue-500/[0.025] to-transparent'
-              : 'border-white/[0.08] from-white/[0.03] via-white/[0.012] to-transparent'}`}>
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.012] p-5">
             <div className="flex items-start gap-4">
-              <div className={`h-12 w-12 rounded-xl flex items-center justify-center shrink-0 ${isActive ? 'bg-emerald-500/20 border border-emerald-400/35' : config.userConfigured ? 'bg-cyan-500/15 border border-cyan-400/25' : 'bg-white/[0.05] border border-white/[0.08]'}`}>
-                <span className={`h-2.5 w-2.5 rounded-full ${isActive ? 'bg-emerald-400 animate-pulse shadow-[0_0_12px_rgba(52,211,153,0.6)]' : config.userConfigured ? 'bg-cyan-400' : 'bg-white/30'}`} />
+              <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 border ${isActive ? 'bg-emerald-500/[0.06] border-emerald-400/15' : config.userConfigured ? 'bg-white/[0.04] border-white/[0.08]' : 'bg-white/[0.03] border-white/[0.06]'}`}>
+                <span className={`h-2 w-2 rounded-full ${isActive ? 'bg-emerald-400/85 animate-pulse' : config.userConfigured ? 'bg-cyan-300/80' : 'bg-white/30'}`} />
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="text-[15px] font-bold text-white/95 mb-1">
+                <h4 className="text-[14px] font-semibold text-white/95 mb-0.5 tracking-tight">
                   {isActive ? 'Motor automático monitorando' : config.userConfigured ? 'Motor configurado, mas pausado' : 'Motor automático desligado'}
                 </h4>
-                <p className="text-[12px] text-white/65 leading-relaxed">
+                <p className="text-[12px] text-white/55 leading-relaxed">
                   {isActive
-                    ? <>Descobrindo padrões em partidas reais com confiança ≥ <span className="text-white/95 font-semibold tabular-nums">{config.minConfidence}%</span>. {config.registerAlertAuto ? 'Registrando alertas automaticamente.' : 'Apenas sugerindo, sem registrar alerta.'}</>
+                    ? <>Descobrindo padrões com confiança ≥ <span className="text-white/85 font-medium tabular-nums">{config.minConfidence}%</span>. {config.registerAlertAuto ? 'Registrando alertas automaticamente.' : 'Apenas sugerindo, sem registrar alerta.'}</>
                     : config.userConfigured
                       ? 'Configuração salva. Ative o motor para começar a monitorar partidas.'
                       : 'Configure as preferências abaixo e ative para que o GoalSense procure padrões automaticamente.'}
@@ -1736,7 +1806,7 @@ function AutoDiscoveryConfigModal({ open, config, onClose, onChange, onActivate,
         {/* LEFT COLUMN */}
         <div className="space-y-5">
           <Section title="Cobertura" hint="Quais partidas o motor pode analisar.">
-            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.012] px-5 py-3">
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.008] px-5 py-3">
               <ToggleSettingRow title="Monitorar favoritos" description="Inclui partidas com times favoritos." checked={config.monitorFavorites} onChange={v => onChange({ monitorFavorites: v })} />
               <ToggleSettingRow title="Ligas principais" description="Brasileirão, Premier League, La Liga e equivalentes." checked={config.monitorMainLeagues} onChange={v => onChange({ monitorMainLeagues: v })} />
               <ToggleSettingRow title="Todas as ligas" description="Inclui partidas de todas as competições disponíveis." checked={config.monitorAllLeagues} onChange={v => onChange({ monitorAllLeagues: v })} />
@@ -1744,7 +1814,7 @@ function AutoDiscoveryConfigModal({ open, config, onClose, onChange, onActivate,
           </Section>
 
           <Section title="Momentos do jogo" hint="Quando o motor pode procurar sinais.">
-            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.012] px-5 py-3">
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.008] px-5 py-3">
               <ToggleSettingRow title="Incluir pré-jogo" description="Sinais antes da bola rolar (forma, H2H, perfil de gols)." checked={config.includePreMatch} onChange={v => onChange({ includePreMatch: v })} />
               <ToggleSettingRow title="Incluir ao vivo" description="Sinais durante a partida com base em estatísticas reais." checked={config.includeLive} onChange={v => onChange({ includeLive: v })} />
             </div>
@@ -1754,7 +1824,7 @@ function AutoDiscoveryConfigModal({ open, config, onClose, onChange, onActivate,
         {/* RIGHT COLUMN */}
         <div className="space-y-5">
           <Section title="Qualidade" hint="Limites para evitar ruído e duplicidade.">
-            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.012] p-4 space-y-3">
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.008] p-4 space-y-3">
               <div>
                 <label className="text-[11px] text-white/65 block mb-1.5 font-medium">Confiança mínima</label>
                 <div className="flex items-center gap-3">
@@ -1777,18 +1847,18 @@ function AutoDiscoveryConfigModal({ open, config, onClose, onChange, onActivate,
           </Section>
 
           <Section title="Ação" hint="O que fazer quando o motor descobrir um sinal.">
-            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.012] px-5 py-3">
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.008] px-5 py-3">
               <ToggleSettingRow title="Registrar alerta automaticamente" description="Quando ativo, descobertas viram alertas em /app/alerts e são acompanhadas pelo motor de resolução. Quando desligado, descobertas só aparecem como sugestões no Cockpit/Scanner." checked={config.registerAlertAuto} onChange={v => onChange({ registerAlertAuto: v })} />
             </div>
           </Section>
 
           <Section title="Segurança">
-            <div className="rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/[0.06] via-blue-500/[0.025] to-transparent px-4 py-3.5">
-              <p className="text-[11px] text-white/85 leading-relaxed">
-                <span className="text-cyan-200 font-bold">Motor automático só roda após salvar e ativar.</span><br />
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.008] px-4 py-3.5">
+              <p className="text-[11.5px] text-white/75 leading-relaxed">
+                <span className="text-white/95 font-semibold">Motor automático só roda após salvar e ativar.</span><br />
                 {config.registerAlertAuto
-                  ? <>Descobertas com confiança ≥ <span className="text-white/95 font-bold tabular-nums">{config.minConfidence}%</span> serão registradas automaticamente em <span className="text-cyan-300 font-semibold">/app/alerts</span>.</>
-                  : <>Configurado como <span className="text-white/95 font-semibold">apenas sugerir</span> — o motor <span className="text-white/95 font-bold">não registrará alertas</span>.</>
+                  ? <>Descobertas com confiança ≥ <span className="text-white/90 font-semibold tabular-nums">{config.minConfidence}%</span> serão registradas automaticamente em <span className="text-white/85 font-medium">/app/alerts</span>.</>
+                  : <>Configurado como <span className="text-white/90 font-semibold">apenas sugerir</span> — o motor <span className="text-white/95 font-semibold">não registrará alertas</span>.</>
                 }
               </p>
             </div>
