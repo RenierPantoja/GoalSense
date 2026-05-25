@@ -175,27 +175,27 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
   return (
     <WarRoomShell>
       {/* ═══ HEADER ═══ */}
-      <div className="px-7 pt-6 pb-5 relative">
+      <div className="px-7 pt-5 pb-4 relative">
         <div className="absolute top-0 right-0 w-[320px] h-[140px] rounded-full blur-[80px] pointer-events-none" style={{ background: `radial-gradient(circle, ${homeAccent.soft}, transparent 70%)` }} />
         <div className="relative flex items-start justify-between gap-6">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2.5 mb-2">
-              <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-400/65">War Room · Pre-Jogo</span>
+            <div className="flex items-center gap-2.5 mb-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-400/70">War Room · Pre-Jogo</span>
               <CoverageBadge status={data.status} />
             </div>
             <h2 className="text-[22px] sm:text-[24px] font-bold text-white tracking-tight leading-tight mb-1.5 truncate">
-              <span style={{ color: homeAccent.from === '#3b82f6' ? undefined : undefined }}>{homeName}</span>
-              <span className="text-white/25 font-normal mx-2">vs</span>
+              <span>{homeName}</span>
+              <span className="text-white/30 font-normal mx-2">vs</span>
               <span>{awayName}</span>
             </h2>
-            <p className="text-[13px] text-white/60 leading-relaxed">{data.preview?.summary || 'Leitura em construcao com dados disponiveis.'}</p>
+            <p className="text-[13px] text-white/65 leading-relaxed">{data.preview?.summary || 'Leitura em construcao com dados disponiveis.'}</p>
           </div>
           {score && <ScoreOrb score={score} />}
         </div>
 
         {/* Quick chips */}
         {score && (
-          <div className="relative flex flex-wrap gap-1.5 mt-4">
+          <div className="relative flex flex-wrap gap-1.5 mt-3.5">
             <Chip label="Equilibrio" value={balanceLabel} score={score.balance.score} />
             <Chip label="Gols" value={score.goalsTrend.label} score={score.goalsTrend.score} />
             <Chip label="Disciplina" value={score.disciplineRisk.label} score={score.disciplineRisk.score} />
@@ -362,24 +362,32 @@ function TabVisao({ data, score, homeName, awayName, homeAccent, awayAccent, bal
   const h2h = data.h2h
   const total = h2h ? Math.max(h2h.total, 1) : 0
 
+  // Executive reading helpers
+  const evidences = useMemo(() => buildExecutiveEvidences(data, score), [data, score])
+  const recommendation = useMemo(() => buildRecommendation(data, score, homeName, awayName), [data, score, homeName, awayName])
+
   return (
     <div>
-      {/* A. Leitura executiva */}
-      <div className="px-7 pt-6 pb-5">
+      {/* A. Leitura executiva — premium block */}
+      <div className="px-7 pt-5 pb-4">
         <SectionLabel>Leitura Executiva</SectionLabel>
-        <p className="text-[14px] text-white/85 leading-relaxed font-medium">
+        <p className="text-[15px] text-white/95 leading-relaxed font-semibold tracking-tight">
           {score?.mainRead || data.executiveSummary}
         </p>
-        {score && score.homeStrength.evidence.length + score.awayStrength.evidence.length + (score.goalsTrend.evidence.length || 0) > 0 && (
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2.5">
-            {[...score.homeStrength.evidence.slice(0, 1), ...score.goalsTrend.evidence.slice(0, 1), ...score.awayStrength.evidence.slice(0, 1)]
-              .filter(Boolean)
-              .slice(0, 3)
-              .map((ev, i) => (
-                <div key={i} className="rounded-xl bg-white/[0.025] border border-white/[0.05] px-3.5 py-2.5">
-                  <span className="text-[11px] text-white/65 leading-snug">{ev}</span>
-                </div>
-              ))}
+        {evidences.length > 0 && (
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {evidences.slice(0, 3).map((ev, i) => (
+              <div key={i} className="flex items-start gap-2 rounded-xl bg-white/[0.03] border border-white/[0.06] px-3 py-2">
+                <span className={`mt-1 h-1.5 w-1.5 rounded-full shrink-0 ${ev.tone === 'positive' ? 'bg-emerald-400' : ev.tone === 'warn' ? 'bg-amber-400' : 'bg-cyan-400/70'}`} />
+                <span className="text-[11px] text-white/75 leading-snug">{ev.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {recommendation && (
+          <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-cyan-400/15 bg-gradient-to-r from-cyan-500/[0.06] to-blue-500/[0.04] px-4 py-2.5">
+            <span className="mt-0.5 text-[10px] text-cyan-300/80 font-bold uppercase tracking-wider shrink-0">Recomendacao</span>
+            <p className="text-[12px] text-white/85 leading-snug font-medium">{recommendation}</p>
           </div>
         )}
       </div>
@@ -387,80 +395,116 @@ function TabVisao({ data, score, homeName, awayName, homeAccent, awayAccent, bal
       <Divider />
 
       {/* B. Mapa do Confronto */}
-      <div className="px-7 py-6 relative">
+      <div className="px-7 pt-5 pb-5 relative">
         <SectionLabel>Mapa do Confronto</SectionLabel>
-        <div className="grid grid-cols-[1fr_auto_1fr] gap-5 sm:gap-7 items-start">
+        <div className="grid grid-cols-[1fr_auto_1fr] gap-4 sm:gap-6 items-start">
           <TeamColumn name={homeName} accent={homeAccent} form={data.homeForm} venue={data.homeAtHome} venueLabel="Em casa" align="left" />
-          <VsCenter score={score} balanceLabel={balanceLabel} h2hTotal={h2h?.total} />
+          <VsCenter score={score} balanceLabel={balanceLabel} h2hTotal={h2h?.total} h2h={h2h} homeName={homeName} awayName={awayName} hasRecentForm={!!(data.homeForm || data.awayForm)} />
           <TeamColumn name={awayName} accent={awayAccent} form={data.awayForm} venue={data.awayAway} venueLabel="Fora" align="right" />
         </div>
 
-        {/* Mini comparator rails */}
+        {/* Mini comparator rails with context labels */}
         {score && (
-          <div className="mt-6 space-y-2">
-            <ComparatorRail label="Forca" left={score.homeStrength.score} right={score.awayStrength.score} leftAccent={homeAccent} rightAccent={awayAccent} />
-            <ComparatorRail label="Gols" left={Math.round(score.goalsTrend.score * 0.6)} right={Math.round(score.goalsTrend.score * 0.4)} leftAccent={homeAccent} rightAccent={awayAccent} muted />
-            <ComparatorRail label="Disciplina" left={Math.round(score.disciplineRisk.score / 2)} right={Math.round(score.disciplineRisk.score / 2)} leftAccent={homeAccent} rightAccent={awayAccent} muted />
+          <div className="mt-5 space-y-1.5">
+            <ContextualRail label="Forca" left={score.homeStrength.score} right={score.awayStrength.score} leftAccent={homeAccent} rightAccent={awayAccent} contextLabel={getRailContext('forca', score, data)} limited={!data.homeForm || !data.awayForm} />
+            <ContextualRail label="Gols" left={Math.round(score.goalsTrend.score * 0.6)} right={Math.round(score.goalsTrend.score * 0.4)} leftAccent={homeAccent} rightAccent={awayAccent} contextLabel={getRailContext('gols', score, data)} limited={!data.goalsProfile} muted />
+            <ContextualRail label="Disciplina" left={Math.round(score.disciplineRisk.score / 2)} right={Math.round(score.disciplineRisk.score / 2)} leftAccent={homeAccent} rightAccent={awayAccent} contextLabel={getRailContext('disciplina', score, data)} limited={!data.disciplineProfile} muted />
           </div>
         )}
       </div>
 
       <Divider />
 
-      {/* C. H2H Rail */}
-      <div className="px-7 py-6">
+      {/* C. H2H Rail with historical reading */}
+      <div className="px-7 pt-5 pb-5">
         <SectionLabel>Confronto Direto</SectionLabel>
         {h2h && total > 0 ? (
-          <H2HRail h2h={h2h} homeName={homeName} awayName={awayName} homeAccent={homeAccent} awayAccent={awayAccent} recent={isAdvanced ? data.recentMeetings : undefined} />
+          <>
+            <H2HRail h2h={h2h} homeName={homeName} awayName={awayName} homeAccent={homeAccent} awayAccent={awayAccent} recent={isAdvanced ? data.recentMeetings : undefined} />
+            <H2HReading h2h={h2h} homeName={homeName} awayName={awayName} />
+          </>
         ) : (
-          <p className="text-[12px] text-white/40">Confronto direto indisponivel no provider.</p>
+          <p className="text-[12px] text-white/55">Confronto direto indisponivel no provider.</p>
         )}
       </div>
 
       <Divider />
 
-      {/* D. Watch Points — always show honest universal points if engine empty */}
-      <div className="px-7 py-6">
-        <SectionLabel>Pontos de Atencao</SectionLabel>
-        <WatchPointsList score={score} hasGoalsProfile={!!data.goalsProfile} hasH2h={!!data.h2h} />
+      {/* D. Operational checklist */}
+      <div className="px-7 pt-5 pb-6">
+        <SectionLabel>Checklist Operacional</SectionLabel>
+        <OperationalTimeline score={score} hasGoalsProfile={!!data.goalsProfile} hasH2h={!!data.h2h} />
       </div>
     </div>
   )
 }
 
-function WatchPointsList({ score, hasGoalsProfile, hasH2h }: { score: PreMatchScore | null; hasGoalsProfile: boolean; hasH2h: boolean }) {
-  const enginePoints = score?.watchPoints ?? []
-  // Universal fallback watch points — observable phases of any match.
-  // Used when the engine cannot produce data-driven points.
-  const universal: { label: string; detail: string; timing: string; severity: 'info' | 'attention' }[] = [
-    { label: 'Inicio do jogo', detail: 'Observar ritmo, posse e primeiras finalizacoes nos minutos iniciais.', timing: '0\'-20\'', severity: 'info' },
-    { label: 'Ajuste pos-intervalo', detail: 'Reacao imediata apos o intervalo costuma definir o tom do jogo.', timing: '45\'-60\'', severity: 'info' },
-    { label: 'Reta final', detail: 'Volume ofensivo e desgaste fisico aumentam o risco de gol e cartao.', timing: '70\'-90\'', severity: 'attention' },
-  ]
-  const points = enginePoints.length >= 2 ? enginePoints : universal
-  return (
-    <>
-      <ul className="space-y-2.5">
-        {points.map((wp, i) => (
-          <li key={i} className="flex items-start gap-3">
-            <span className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${wp.severity === 'attention' ? 'bg-amber-400' : wp.severity === 'critical' ? 'bg-rose-400' : 'bg-cyan-400/70'}`} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-baseline gap-2 flex-wrap">
-                <span className="text-[13px] text-white/85 font-semibold">{wp.label}</span>
-                {wp.timing && <span className="text-[10px] text-white/45 font-medium uppercase tracking-wider tabular-nums">{wp.timing}</span>}
-              </div>
-              <p className="text-[12px] text-white/60 leading-snug mt-0.5">{wp.detail}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
-      {enginePoints.length < 2 && (
-        <p className="text-[10px] text-white/35 mt-3 leading-snug">
-          Pontos universais aplicados — {hasGoalsProfile ? 'perfil de gols disponivel reforca a leitura' : hasH2h ? 'apenas H2H disponivel para reforco' : 'sem amostra recente para personalizar'}.
-        </p>
-      )}
-    </>
-  )
+// ─── Executive reading helpers ──────────────────────────────────────────────
+
+interface Evidence { text: string; tone: 'positive' | 'neutral' | 'warn' }
+
+function buildExecutiveEvidences(data: PreMatchIntelligenceResult, score: PreMatchScore | null): Evidence[] {
+  const out: Evidence[] = []
+  if (data.h2h && data.h2h.total > 0) {
+    const total = data.h2h.total
+    if (data.h2h.homeWins > data.h2h.awayWins + 1) out.push({ text: `${total} confrontos · vantagem historica do mandante`, tone: 'positive' })
+    else if (data.h2h.awayWins > data.h2h.homeWins + 1) out.push({ text: `${total} confrontos · vantagem historica do visitante`, tone: 'positive' })
+    else out.push({ text: `${total} confrontos analisados · historico equilibrado`, tone: 'neutral' })
+  }
+  if (data.goalsProfile && data.goalsProfile.sampleSize >= 4) {
+    out.push({ text: `Media ${data.goalsProfile.avgGoalsPerMatch} gols/jogo · over 2.5 em ${data.goalsProfile.over25Pct}%`, tone: data.goalsProfile.over25Pct >= 55 ? 'positive' : 'neutral' })
+  }
+  if (!data.homeForm || !data.awayForm) {
+    out.push({ text: 'Forma recente indisponivel no provider', tone: 'warn' })
+  } else if (score && score.confidence === 'baixa') {
+    out.push({ text: 'Confianca baixa por dados limitados', tone: 'warn' })
+  } else if (data.homeForm && data.awayForm) {
+    const hw = data.homeForm.summary.wins
+    const aw = data.awayForm.summary.wins
+    if (hw > aw + 1) out.push({ text: `Mandante chega em melhor forma · ${hw}V recentes`, tone: 'positive' })
+    else if (aw > hw + 1) out.push({ text: `Visitante chega em melhor forma · ${aw}V recentes`, tone: 'positive' })
+    else out.push({ text: `Forma recente muito proxima · ${hw}V x ${aw}V`, tone: 'neutral' })
+  }
+  if (data.disciplineProfile && data.disciplineProfile.trend === 'high') {
+    out.push({ text: 'Tendencia alta de cartoes nos jogos recentes', tone: 'warn' })
+  }
+  return out
+}
+
+function buildRecommendation(data: PreMatchIntelligenceResult, score: PreMatchScore | null, _homeName: string, _awayName: string): string | null {
+  if (!data.homeForm && !data.awayForm && !data.h2h && !data.goalsProfile) {
+    return 'Monitorar ritmo, posse e finalizacoes nos primeiros 20 minutos para construir leitura ao vivo.'
+  }
+  if (score && score.goalsTrend.score >= 65) {
+    return 'Acompanhar volume ofensivo desde o inicio · perfil sugere jogo aberto.'
+  }
+  if (score && score.balance.score >= 70) {
+    return 'Confronto equilibrado · monitorar ajuste pos-intervalo e reta final.'
+  }
+  if (score && score.homeStrength.score > score.awayStrength.score + 15) {
+    return 'Verificar se o mandante confirma pressao inicial em casa nos primeiros 15 minutos.'
+  }
+  if (score && score.awayStrength.score > score.homeStrength.score + 15) {
+    return 'Atencao as primeiras finalizacoes do visitante · chega em momento melhor.'
+  }
+  return 'Monitorar ritmo inicial, posse e finalizacoes nos primeiros 20 minutos.'
+}
+
+function getRailContext(kind: 'forca' | 'gols' | 'disciplina', score: PreMatchScore, _data: PreMatchIntelligenceResult): string {
+  if (kind === 'forca') {
+    const diff = Math.abs(score.homeStrength.score - score.awayStrength.score)
+    if (diff <= 8) return 'equilibrada'
+    if (score.homeStrength.score > score.awayStrength.score) return 'mandante +'
+    return 'visitante +'
+  }
+  if (kind === 'gols') {
+    if (score.goalsTrend.score >= 70) return 'forte'
+    if (score.goalsTrend.score >= 50) return 'moderada'
+    return 'baixa'
+  }
+  if (score.disciplineRisk.score >= 65) return 'alto'
+  if (score.disciplineRisk.score >= 45) return 'moderado'
+  return 'baixo'
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1173,41 +1217,122 @@ function TeamColumn({ name, accent, form, venue, venueLabel, align }: { name: st
   )
 }
 
-function VsCenter({ score, balanceLabel, h2hTotal }: { score: PreMatchScore | null; balanceLabel: string; h2hTotal?: number }) {
+function VsCenter({ score, balanceLabel, h2hTotal, h2h, homeName, awayName, hasRecentForm }: { score: PreMatchScore | null; balanceLabel: string; h2hTotal?: number; h2h?: PreMatchIntelligenceResult['h2h']; homeName: string; awayName: string; hasRecentForm: boolean }) {
   const balanceTone = !score
-    ? 'text-white/40'
+    ? 'text-white/45'
     : score.balance.score >= 65
-    ? 'text-white/70'
+    ? 'text-white/80'
     : score.homeStrength.score > score.awayStrength.score + 10
     ? 'text-blue-300'
     : score.awayStrength.score > score.homeStrength.score + 10
     ? 'text-emerald-300'
-    : 'text-white/55'
+    : 'text-white/65'
+
+  // Microcopy: history-based reading
+  let historyNote: string | null = null
+  if (h2h && h2h.total >= 3) {
+    if (h2h.homeWins > h2h.awayWins + 1) historyNote = `Historico favorece ${homeName.split(' ')[0]}`
+    else if (h2h.awayWins > h2h.homeWins + 1) historyNote = `Historico favorece ${awayName.split(' ')[0]}`
+    else historyNote = 'Historico equilibrado'
+  } else if (!hasRecentForm) {
+    historyNote = 'Dados recentes limitados'
+  }
+
   return (
-    <div className="flex flex-col items-center justify-start pt-1 gap-2.5">
-      <div className="relative h-16 w-16 rounded-full bg-gradient-to-br from-white/[0.07] via-white/[0.04] to-white/[0.02] border border-white/[0.10] flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-        <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.08),transparent_55%)] pointer-events-none" />
-        <span className="relative text-[11px] text-white/55 font-bold tracking-[0.18em]">VS</span>
+    <div className="flex flex-col items-center justify-start pt-1 gap-2">
+      <div className="relative h-[68px] w-[68px] rounded-full bg-gradient-to-br from-white/[0.08] via-white/[0.04] to-white/[0.02] border border-white/[0.12] flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_8px_24px_-12px_rgba(0,0,0,0.6)]">
+        <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.10),transparent_55%)] pointer-events-none" />
+        <div className="absolute inset-1 rounded-full border border-white/[0.04]" />
+        <span className="relative text-[11px] text-white/65 font-bold tracking-[0.2em]">VS</span>
       </div>
-      <span className={`text-[11px] font-bold uppercase tracking-wider ${balanceTone}`}>{balanceLabel}</span>
-      {h2hTotal !== undefined && <span className="text-[10px] text-white/35 font-medium">{h2hTotal} confrontos</span>}
+      <span className={`text-[11px] font-bold uppercase tracking-wider whitespace-nowrap ${balanceTone}`}>{balanceLabel}</span>
+      {h2hTotal !== undefined && <span className="text-[10px] text-white/45 font-medium tabular-nums">{h2hTotal} confrontos</span>}
+      {historyNote && <span className="text-[10px] text-white/55 font-medium text-center leading-tight max-w-[120px]">{historyNote}</span>}
     </div>
   )
 }
 
-function ComparatorRail({ label, left, right, leftAccent, rightAccent, muted }: { label: string; left: number; right: number; leftAccent: TeamAccent; rightAccent: TeamAccent; muted?: boolean }) {
+// ─── Contextual Rail ─────────────────────────────────────────────────────
+function ContextualRail({ label, left, right, leftAccent, rightAccent, contextLabel, limited, muted }: { label: string; left: number; right: number; leftAccent: TeamAccent; rightAccent: TeamAccent; contextLabel: string; limited?: boolean; muted?: boolean }) {
   const total = Math.max(left + right, 1)
   const lp = (left / total) * 100
   const rp = (right / total) * 100
   return (
-    <div className="flex items-center gap-3">
-      <span className="text-[10px] text-white/40 w-20 shrink-0 font-semibold uppercase tracking-wider">{label}</span>
-      <div className="flex-1 flex h-1.5 rounded-full overflow-hidden bg-white/[0.04]">
-        <div className="h-full" style={{ width: `${lp}%`, background: muted ? `linear-gradient(90deg, ${leftAccent.from}80, ${leftAccent.to}80)` : `linear-gradient(90deg, ${leftAccent.from}, ${leftAccent.to})` }} />
-        <div className="h-full" style={{ width: `${rp}%`, background: muted ? `linear-gradient(90deg, ${rightAccent.from}80, ${rightAccent.to}80)` : `linear-gradient(90deg, ${rightAccent.from}, ${rightAccent.to})` }} />
+    <div className="flex items-center gap-3" title={limited ? 'base limitada' : undefined}>
+      <span className="text-[10px] text-white/55 w-[78px] shrink-0 font-semibold uppercase tracking-wider">{label}</span>
+      <div className="flex-1 flex h-1.5 rounded-full overflow-hidden bg-white/[0.05]">
+        <div className="h-full transition-all" style={{ width: `${lp}%`, background: muted ? `linear-gradient(90deg, ${leftAccent.from}90, ${leftAccent.to}90)` : `linear-gradient(90deg, ${leftAccent.from}, ${leftAccent.to})` }} />
+        <div className="h-full transition-all" style={{ width: `${rp}%`, background: muted ? `linear-gradient(90deg, ${rightAccent.from}90, ${rightAccent.to}90)` : `linear-gradient(90deg, ${rightAccent.from}, ${rightAccent.to})` }} />
       </div>
-      <span className="text-[10px] text-white/55 tabular-nums font-bold w-14 text-right">{left}–{right}</span>
+      <div className="flex items-center gap-2 w-[110px] justify-end shrink-0">
+        <span className="text-[10px] text-white/55 tabular-nums font-bold">{left}–{right}</span>
+        <span className={`text-[10px] font-semibold ${limited ? 'text-white/40' : 'text-white/65'}`}>{contextLabel}{limited ? ' · limitado' : ''}</span>
+      </div>
     </div>
+  )
+}
+
+// ─── H2H Reading ─────────────────────────────────────────────────────────
+function H2HReading({ h2h, homeName, awayName }: { h2h: NonNullable<PreMatchIntelligenceResult['h2h']>; homeName: string; awayName: string }) {
+  const total = h2h.total
+  const exhibitedTotal = h2h.homeWins + h2h.draws + h2h.awayWins
+  const isPartial = exhibitedTotal < total
+  const avg = ((h2h.homeGoals + h2h.awayGoals) / total).toFixed(1)
+  let reading: string
+  if (h2h.homeWins > h2h.awayWins + 1) reading = `${homeName} tem vantagem no historico recente.`
+  else if (h2h.awayWins > h2h.homeWins + 1) reading = `${awayName} tem vantagem no historico recente.`
+  else reading = 'Historico equilibrado entre as equipes.'
+  return (
+    <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-white/[0.05] bg-white/[0.02] px-3.5 py-2.5">
+      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-cyan-400/70 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-[12px] text-white/85 leading-snug font-medium">
+          {reading} <span className="text-white/55">Media historica de {avg} gols/jogo.</span>
+        </p>
+        {isPartial && <p className="text-[10px] text-amber-400/65 mt-0.5">Resumo H2H parcial retornado pelo provider.</p>}
+      </div>
+    </div>
+  )
+}
+
+// ─── Operational Timeline ────────────────────────────────────────────────
+function OperationalTimeline({ score, hasGoalsProfile, hasH2h }: { score: PreMatchScore | null; hasGoalsProfile: boolean; hasH2h: boolean }) {
+  // Always present 3 operational checkpoints. Reinforce with engine watch points when available.
+  const baseline: { timing: string; label: string; detail: string; severity: 'info' | 'attention' }[] = [
+    { timing: '0\'-20\'', label: 'Ritmo inicial', detail: 'Observar posse, pressao e primeiras finalizacoes.', severity: 'info' },
+    { timing: '45\'-60\'', label: 'Ajuste pos-intervalo', detail: 'Reacao imediata costuma definir o tom do segundo tempo.', severity: 'info' },
+    { timing: '70\'-90\'', label: 'Reta final', detail: 'Volume ofensivo e desgaste fisico aumentam risco de gol e cartao.', severity: 'attention' },
+  ]
+  const enginePoints = score?.watchPoints ?? []
+  // Reinforce baseline detail when engine has matching insight
+  const enriched = baseline.map(b => {
+    const match = enginePoints.find(p => (p.timing || '').includes(b.timing.slice(0, 3)) || b.label.toLowerCase().includes((p.label || '').toLowerCase().slice(0, 6)))
+    return match ? { ...b, detail: match.detail, severity: match.severity === 'critical' ? 'attention' as const : match.severity } : b
+  })
+
+  return (
+    <>
+      <ol className="relative space-y-3">
+        <span className="absolute left-[5px] top-2 bottom-2 w-px bg-gradient-to-b from-cyan-400/30 via-white/10 to-amber-400/25" aria-hidden />
+        {enriched.map((wp, i) => (
+          <li key={i} className="relative flex items-start gap-3 pl-1">
+            <span className={`relative z-10 mt-1.5 h-2.5 w-2.5 rounded-full shrink-0 ring-2 ring-[#0b1018] ${wp.severity === 'attention' ? 'bg-amber-400' : 'bg-cyan-400'}`} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-[10px] text-white/55 font-bold uppercase tracking-wider tabular-nums">{wp.timing}</span>
+                <span className="text-[13px] text-white font-semibold">{wp.label}</span>
+              </div>
+              <p className="text-[12px] text-white/65 leading-snug mt-0.5">{wp.detail}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      {enginePoints.length < 2 && (
+        <p className="text-[10px] text-white/45 mt-3 leading-snug">
+          Pontos universais aplicados — {hasGoalsProfile ? 'perfil de gols reforca a leitura.' : hasH2h ? 'apenas H2H disponivel para reforco.' : 'dados recentes ainda limitados.'}
+        </p>
+      )}
+    </>
   )
 }
 
@@ -1217,11 +1342,8 @@ function H2HRail({ h2h, homeName, awayName, homeAccent, awayAccent, recent }: { 
   const hp = (h2h.homeWins / total) * 100
   const dp = (h2h.draws / total) * 100
   const ap = (h2h.awayWins / total) * 100
-  const avgGoals = ((h2h.homeGoals + h2h.awayGoals) / total).toFixed(1)
   const homeShort = homeName.split(' ')[0]
   const awayShort = awayName.split(' ')[0]
-  const exhibitedTotal = h2h.homeWins + h2h.draws + h2h.awayWins
-  const isPartial = exhibitedTotal < total
   return (
     <div>
       <div className="h-3.5 w-full rounded-full overflow-hidden bg-white/[0.04] flex shadow-[inset_0_1px_0_rgba(0,0,0,0.4)]">
@@ -1229,31 +1351,27 @@ function H2HRail({ h2h, homeName, awayName, homeAccent, awayAccent, recent }: { 
         <div className="h-full bg-white/[0.18]" style={{ width: `${dp}%` }} />
         <div className="h-full transition-all" style={{ width: `${ap}%`, background: `linear-gradient(90deg, ${awayAccent.from}, ${awayAccent.to})` }} />
       </div>
-      <div className="flex justify-between items-center mt-3 text-[12px]">
+      <div className="flex justify-between items-center mt-2.5 text-[12px]">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-sm" style={{ background: `linear-gradient(135deg, ${homeAccent.from}, ${homeAccent.to})` }} />
-          <span className="text-white/85 font-bold tabular-nums">{h2h.homeWins}V</span>
-          <span className="text-white/45">{homeShort}</span>
+          <span className="text-white/90 font-bold tabular-nums">{h2h.homeWins}V</span>
+          <span className="text-white/55">{homeShort}</span>
         </div>
-        <div className="text-white/55 font-medium">{h2h.draws} empates</div>
+        <div className="text-white/65 font-medium">{h2h.draws} empates</div>
         <div className="flex items-center gap-2">
-          <span className="text-white/45">{awayShort}</span>
-          <span className="text-white/85 font-bold tabular-nums">{h2h.awayWins}V</span>
+          <span className="text-white/55">{awayShort}</span>
+          <span className="text-white/90 font-bold tabular-nums">{h2h.awayWins}V</span>
           <span className="h-2 w-2 rounded-sm" style={{ background: `linear-gradient(135deg, ${awayAccent.from}, ${awayAccent.to})` }} />
         </div>
       </div>
-      <p className="text-[11px] text-white/50 mt-3.5 leading-snug">
-        Media historica: <span className="text-white/85 font-bold">{avgGoals} gols/jogo</span> · {total} confrontos analisados
-      </p>
-      {isPartial && <p className="text-[10px] text-amber-400/65 mt-1">Resumo H2H parcial retornado pelo provider.</p>}
       {recent && recent.length > 0 && (
         <div className="mt-3 pt-3 border-t border-white/[0.04] space-y-1">
           {recent.slice(0, 3).map((m, i) => (
             <div key={i} className="flex items-center gap-3 text-[11px]">
-              <span className="text-white/30 tabular-nums w-16 shrink-0">{new Date(m.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
-              <span className="text-white/55 flex-1 truncate text-right">{m.homeTeam}</span>
-              <span className="text-white/90 font-bold tabular-nums">{m.homeScore}-{m.awayScore}</span>
-              <span className="text-white/55 flex-1 truncate">{m.awayTeam}</span>
+              <span className="text-white/40 tabular-nums w-16 shrink-0">{new Date(m.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
+              <span className="text-white/65 flex-1 truncate text-right">{m.homeTeam}</span>
+              <span className="text-white/95 font-bold tabular-nums">{m.homeScore}-{m.awayScore}</span>
+              <span className="text-white/65 flex-1 truncate">{m.awayTeam}</span>
             </div>
           ))}
         </div>
