@@ -78,10 +78,10 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       // Only use ESPN by ID if provider is ESPN. Always validate by name.
       // ===========================================================
 
-      // If no expected names, we cannot validate anything � use fallback only
+      // If no expected names, we cannot validate anything — use fallback only
       if (!expectedHome || !expectedAway) {
         if (fixtureState) { setData(buildFallbackData(fixtureState)); setError(null); return }
-        setError('Detalhes indispon�veis para esta partida.')
+        setError('Detalhes indisponíveis para esta partida.')
         return
       }
 
@@ -120,14 +120,14 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       const fptData = await tryFutPythonTrader(expectedHome, expectedAway)
       if (fptData) { setData(fptData); setError(null); return }
 
-      // Attempt 4: Safe fallback � always shows the correct match
+      // Attempt 4: Safe fallback — always shows the correct match
       if (fixtureState) {
         setData(buildFallbackData(fixtureState))
         setError(null)
         return
       }
 
-      setError('Detalhes indispon�veis para esta partida.')
+      setError('Detalhes indisponíveis para esta partida.')
     } catch (err) { setError((err as Error).message) }
     finally { setLoading(false) }
   }, [effectiveFixtureId, fixtureState])
@@ -149,7 +149,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
     if (!expectedHome || !expectedAway) return null
 
     try {
-      // Only try the /all endpoint � league-specific endpoints can return different events for the same ID
+      // Only try the /all endpoint — league-specific endpoints can return different events for the same ID
       const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${eventId}`
       const res = await fetch(url)
       if (!res.ok) return null
@@ -249,12 +249,12 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
         const stats: { label: string; home: string; away: string }[] = []
         const statFields = [
           ['Posse de Bola', 'home_possession', 'away_possession'],
-          ['Finaliza��es', 'home_shots', 'away_shots'],
+          ['Finalizações', 'home_shots', 'away_shots'],
           ['No Alvo', 'home_shots_on_target', 'away_shots_on_target'],
           ['Escanteios', 'home_corners', 'away_corners'],
           ['Faltas', 'home_fouls', 'away_fouls'],
-          ['Cart�es Amarelos', 'home_yellow_cards', 'away_yellow_cards'],
-          ['Cart�es Vermelhos', 'home_red_cards', 'away_red_cards'],
+          ['Cartões Amarelos', 'home_yellow_cards', 'away_yellow_cards'],
+          ['Cartões Vermelhos', 'home_red_cards', 'away_red_cards'],
           ['Impedimentos', 'home_offsides', 'away_offsides'],
         ]
         for (const [label, hKey, aKey] of statFields) {
@@ -525,9 +525,9 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><LoadingState message="" /></div>
   if (error || !data) return (
     <div className="space-y-6 animate-fadeIn">
-      {onBack ? <button onClick={onBack} className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> Voltar</button> : <Link to="/app/matches" className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> Voltar �s Partidas</Link>}
+      {onBack ? <button onClick={onBack} className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> Voltar</button> : <Link to="/app/matches" className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> Voltar às Partidas</Link>}
       <div className="rounded-3xl border border-white/[0.04] bg-white/[0.015] p-10 text-center">
-        <p className="text-[14px] text-white/40">{error || 'Partida n�o encontrada'}</p>
+        <p className="text-[14px] text-white/40">{error || 'Partida não encontrada'}</p>
       </div>
     </div>
   )
@@ -595,7 +595,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
     if (elapsed && elapsed >= 80) return 'Reta final'
     if (poss && Math.abs(poss.home - poss.away) > 15) return poss.home > poss.away ? `${home.name} controla o jogo` : `${away.name} controla o jogo`
     if (sh && (sh.home + sh.away) >= 20) return 'Jogo aberto'
-    if (home.score + away.score >= 4) return 'Alta efici�ncia ofensiva'
+    if (home.score + away.score >= 4) return 'Alta eficiência ofensiva'
     if (home.score === away.score && home.score > 0) return 'Jogo equilibrado'
     return ''
   })()
@@ -613,7 +613,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       if (t.includes(homeFirst)) hCount++; else if (t.includes(awayFirst)) aCount++; else { hCount += 0.5; aCount += 0.5 }
     }
     const dominant = hCount > aCount * 1.5 ? home.name : aCount > hCount * 1.5 ? away.name : null
-    const phrase = dominant ? `${dominant} cresce nos �ltimos minutos.` : 'Poucas a��es relevantes nos �ltimos minutos.'
+    const phrase = dominant ? `${dominant} cresce nos últimos minutos.` : 'Poucas ações relevantes nos últimos minutos.'
     return { hCount: Math.round(hCount), aCount: Math.round(aCount), total: recentEvents.length, phrase }
   })()
 
@@ -621,7 +621,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
     <div className="max-w-5xl mx-auto space-y-5 animate-fadeIn">
       {/* NAV */}
       <div className="flex items-center justify-between">
-        {onBack ? <button onClick={onBack} className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> Voltar</button> : <Link to="/app/matches" className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> Voltar �s Partidas</Link>}
+        {onBack ? <button onClick={onBack} className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> Voltar</button> : <Link to="/app/matches" className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> Voltar às Partidas</Link>}
         <div className="flex items-center gap-2">
           <MatchDetailFavorites home={home} away={away} league={league} leagueLogo={leagueLogo} date={data?.events?.[0] ? '' : ''} utcDate={fixtureState?.date || ''} />
           <button onClick={() => fetchData(true)} className="p-2 rounded-full text-white/20 hover:text-white/50 hover:bg-white/[0.03]"><RefreshCw size={13} /></button>
@@ -670,7 +670,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       {/* STICKY NAV */}
       <nav className="sticky top-0 z-20 -mx-4 px-4 py-2 bg-[#0a0d14]/90 backdrop-blur-md border-b border-white/[0.03]">
         <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-          {(isMatchScheduled ? [['sec-resumo','Resumo'],['sec-pressao','Pr�-jogo']] : [['sec-resumo','Resumo'],['sec-pressao','Press�o'],['sec-stats','Estat�sticas'],['sec-timeline','Linha do tempo'],['sec-narracao','Narra��o'],['sec-elenco','Elenco']]).map(([id, label]) => (
+          {(isMatchScheduled ? [['sec-resumo','Resumo'],['sec-pressao','Pré-jogo']] : [['sec-resumo','Resumo'],['sec-pressao','Pressão'],['sec-stats','Estatísticas'],['sec-timeline','Linha do tempo'],['sec-narracao','Narração'],['sec-elenco','Elenco']]).map(([id, label]) => (
             <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
               className="shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-medium text-white/30 hover:text-white/60 hover:bg-white/[0.04] transition-colors">
               {label}
@@ -690,9 +690,9 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
         )}
         {last10 && (
           <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center gap-3">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-white/20">{'�ltimos'} 10'</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-white/20">{'Últimos'} 10'</span>
             <span className="text-[10px] text-white/40">{last10.phrase}</span>
-            <span className="ml-auto text-[9px] tabular-nums text-white/20">{last10.total} {last10.total === 1 ? 'a��o' : 'a��es'}</span>
+            <span className="ml-auto text-[9px] tabular-nums text-white/20">{last10.total} {last10.total === 1 ? 'ação' : 'ações'}</span>
           </div>
         )}
       </section>
@@ -747,9 +747,9 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       {commentary.length > 0 && (
         <section id="sec-narracao" className="rounded-[24px] border border-white/[0.04] bg-white/[0.015] p-5">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/25">Narra��o ao vivo</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/25">Narração ao vivo</h3>
             <div className="flex flex-wrap gap-1">
-              {([['important', 'Importantes'], ['all', 'Todos'], ['goals', 'Gols'], ['cards', 'Cart�es'], ['subs', 'Subst.'], ['shots', 'Finaliz.']] as [NarrationFilter, string][]).map(([key, label]) => (
+              {([['important', 'Importantes'], ['all', 'Todos'], ['goals', 'Gols'], ['cards', 'Cartões'], ['subs', 'Substituições'], ['shots', 'Finalizações']] as [NarrationFilter, string][]).map(([key, label]) => (
                 <button key={key} onClick={() => setNarFilter(key)}
                   className={`px-2 py-0.5 rounded text-[9px] font-medium ${narFilter === key ? 'bg-white/[0.08] text-white/60' : 'text-white/20 hover:text-white/40'}`}>
                   {label}
@@ -827,9 +827,9 @@ function DiagnosticPanel({ stats, homeName, awayName, homeScore, awayScore, elap
 
   const items: { label: string; team: string | null; detail: string }[] = []
   if (controlTeam) items.push({ label: 'Controle', team: controlTeam, detail: possession ? `${Math.max(possession.home, possession.away).toFixed(0)}% de posse` : '' })
-  if (dangerTeam) items.push({ label: 'Perigo', team: dangerTeam, detail: shots ? `${Math.max(shots.home, shots.away)} finaliza��es` : '' })
-  if (efficiencyTeam) items.push({ label: 'Efici�ncia', team: efficiencyTeam, detail: onTarget ? `${homeScore + awayScore} gols em ${(onTarget.home + onTarget.away)} no alvo` : '' })
-  items.push({ label: 'Momento', team: momentTeam || 'Equilibrado', detail: momentTeam ? 'cresce nos �ltimos 10 minutos' : 'sem dom�nio recente claro' })
+  if (dangerTeam) items.push({ label: 'Perigo', team: dangerTeam, detail: shots ? `${Math.max(shots.home, shots.away)} finalizações` : '' })
+  if (efficiencyTeam) items.push({ label: 'Eficiência', team: efficiencyTeam, detail: onTarget ? `${homeScore + awayScore} gols em ${(onTarget.home + onTarget.away)} no alvo` : '' })
+  items.push({ label: 'Momento', team: momentTeam || 'Equilibrado', detail: momentTeam ? 'cresce nos últimos 10 minutos' : 'sem domínio recente claro' })
 
   return (
     <section className="rounded-[20px] border border-white/[0.04] bg-white/[0.015] p-4">
@@ -910,7 +910,7 @@ function GroupedTimeline({ events, homeName, awayName }: { events: { clock: stri
           {isGoal && (
             <div className="mt-1 space-y-0.5">
               {ev.playerName && <span className="text-[10px] text-white/50 block">{ev.playerName} marcou.</span>}
-              {ev.assistName && <span className="text-[10px] text-white/35 block">Assist�ncia: {ev.assistName}</span>}
+              {ev.assistName && <span className="text-[10px] text-white/35 block">Assistência: {ev.assistName}</span>}
               {scoreMap.get(ev.id) && <span className="text-[9px] text-emerald-400/40 block">Placar: {scoreMap.get(ev.id)}</span>}
             </div>
           )}
@@ -918,11 +918,11 @@ function GroupedTimeline({ events, homeName, awayName }: { events: { clock: stri
             <div className="mt-1 space-y-0.5">
               {ev.playerIn && <span className="text-[10px] text-cyan-400/60 block">{ev.playerIn} entrou</span>}
               {ev.playerOut && <span className="text-[10px] text-white/25 block">{sanitizePlayerText(ev.playerOut)} saiu</span>}
-              {hasInjury && <span className="text-[9px] text-rose-400/40 block">Motivo: les�o</span>}
+              {hasInjury && <span className="text-[9px] text-rose-400/40 block">Motivo: lesão</span>}
             </div>
           )}
           {isCard && ev.playerName && (
-            <span className="text-[10px] text-white/35 block mt-0.5">{sanitizePlayerText(ev.playerName)}{ev.rawText?.toLowerCase().includes('bad foul') || ev.rawText?.toLowerCase().includes('falta dura') ? ' � falta dura' : ''}</span>
+            <span className="text-[10px] text-white/35 block mt-0.5">{sanitizePlayerText(ev.playerName)}{ev.rawText?.toLowerCase().includes('bad foul') || ev.rawText?.toLowerCase().includes('falta dura') ? ' · falta dura' : ''}</span>
           )}
           {isShot && ev.playerName && (
             <span className="text-[10px] text-white/25 block mt-0.5">{sanitizePlayerText(ev.playerName)}</span>
@@ -1106,7 +1106,7 @@ function CircularStatsPanel({ stats, homeName, awayName, homeColor, awayColor }:
     <section className="rounded-[24px] border border-white/[0.04] bg-white/[0.015] p-5 animate-slideUp">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         {possession && (possession.home + possession.away) > 10 && renderDonut('Posse de bola', possession.home, possession.away, '%')}
-        {shots && (shots.home + shots.away) > 0 && renderDonut('Finaliza��es', shots.home, shots.away)}
+        {shots && (shots.home + shots.away) > 0 && renderDonut('Finalizações', shots.home, shots.away)}
         {corners && (corners.home + corners.away) > 0 && renderDonut('Escanteios', corners.home, corners.away)}
       </div>
     </section>
@@ -1115,15 +1115,15 @@ function CircularStatsPanel({ stats, homeName, awayName, homeColor, awayColor }:
 
 // --- HELPERS ---
 function translateStat(l: string): string {
-  const m: Record<string, string> = { 'SHOTS': 'Finaliza��es', 'ON GOAL': 'No alvo', 'On Target %': 'Precis�o', 'Blocked Shots': 'Bloqueadas', 'POSSESSION': 'Posse', 'possessionPct': 'Posse', 'Accurate Passes': 'Passes certos', 'Passes': 'Passes', 'Pass Completion %': 'Precis�o', 'Effective Tackles': 'Desarmes', 'Tackles': 'Tentativas', 'Interceptions': 'Intercepta��es', 'Saves': 'Defesas', 'Clearances': 'Cortes', 'Fouls': 'Faltas', 'foulsCommitted': 'Faltas', 'Yellow Cards': 'Amarelos', 'yellowCards': 'Amarelos', 'Red Cards': 'Vermelhos', 'redCards': 'Vermelhos', 'Offsides': 'Impedimentos', 'offsides': 'Impedimentos', 'Corner Kicks': 'Escanteios', 'wonCorners': 'Escanteios', 'totalShots': 'Finaliza��es', 'shotsOnTarget': 'No alvo' }
+  const m: Record<string, string> = { 'SHOTS': 'Finalizações', 'ON GOAL': 'No alvo', 'On Target %': 'Precisão', 'Blocked Shots': 'Bloqueadas', 'POSSESSION': 'Posse', 'possessionPct': 'Posse', 'Accurate Passes': 'Passes certos', 'Passes': 'Passes', 'Pass Completion %': 'Precisão', 'Effective Tackles': 'Desarmes', 'Tackles': 'Tentativas', 'Interceptions': 'Interceptações', 'Saves': 'Defesas', 'Clearances': 'Cortes', 'Fouls': 'Faltas', 'foulsCommitted': 'Faltas', 'Yellow Cards': 'Amarelos', 'yellowCards': 'Amarelos', 'Red Cards': 'Vermelhos', 'redCards': 'Vermelhos', 'Offsides': 'Impedimentos', 'offsides': 'Impedimentos', 'Corner Kicks': 'Escanteios', 'wonCorners': 'Escanteios', 'totalShots': 'Finalizações', 'shotsOnTarget': 'No alvo' }
   return m[l] || l
 }
 
 function sanitizePlayerText(text: string): string {
   // Remove English remnants from player/event text
   return text
-    .replace(/\s*because of an? (?:injury|les�o|injur\w*)\.?/gi, '')
-    .replace(/\s*due to (?:an? )?(?:injury|les�o)\.?/gi, '')
+    .replace(/\s*because of an? (?:injury|lesão|injur\w*)\.?/gi, '')
+    .replace(/\s*due to (?:an? )?(?:injury|lesão)\.?/gi, '')
     .replace(/\s*because\b.*/gi, '')
     .trim()
 }
@@ -1272,10 +1272,10 @@ function MatchCoverageSection({ stats, events, commentary, homeRoster, home, awa
       <DataCoverageBadge coverage={coverage} />
       {isAdvanced && (
         <div className="flex items-center gap-2 text-[9px] text-white/20">
-          <span>{stats.length > 0 ? '? Estat�sticas' : '? Estat�sticas'}</span>
-          <span>{events.length > 0 ? '? Eventos' : '? Eventos'}</span>
-          <span>{commentary.length > 0 ? '? Narra��o' : '? Narra��o'}</span>
-          <span>{homeRoster.length > 0 ? '? Escala��es' : '? Escala��es'}</span>
+          <span>{stats.length > 0 ? '✓ Estatísticas' : '✕ Estatísticas'}</span>
+          <span>{events.length > 0 ? '✓ Eventos' : '✕ Eventos'}</span>
+          <span>{commentary.length > 0 ? '✓ Narração' : '✕ Narração'}</span>
+          <span>{homeRoster.length > 0 ? '✓ Escalações' : '✕ Escalações'}</span>
         </div>
       )}
     </div>
