@@ -625,18 +625,33 @@ function ConditionsEditor({ conditions, onChange }: { conditions: PatternConditi
   )
 }
 
-// ═══ SEVERITY PICKER
+// ═══ SEVERITY PICKER — premium cards with microcopy and example use
 function SeverityPicker({ value, onChange }: { value: 'critical' | 'attention' | 'info'; onChange: (v: 'critical' | 'attention' | 'info') => void }) {
-  const opts: { v: 'critical' | 'attention' | 'info'; label: string; cls: string }[] = [
-    { v: 'critical', label: 'Crítico', cls: 'border-rose-400/30 text-rose-300 bg-rose-500/12' },
-    { v: 'attention', label: 'Atenção', cls: 'border-amber-400/30 text-amber-300 bg-amber-500/12' },
-    { v: 'info', label: 'Informação', cls: 'border-cyan-400/25 text-cyan-300 bg-cyan-500/10' },
+  const opts: { v: 'critical' | 'attention' | 'info'; label: string; hint: string; example: string; activeCls: string; dot: string }[] = [
+    { v: 'critical', label: 'Crítico', hint: 'Sinal forte que merece atenção imediata.', example: 'Ex.: pressão extrema na reta final.', activeCls: 'border-rose-400/40 bg-rose-500/[0.08] shadow-[0_0_24px_-12px_rgba(251,113,133,0.5)]', dot: 'bg-rose-400' },
+    { v: 'attention', label: 'Atenção', hint: 'Sinal relevante, mas não urgente.', example: 'Ex.: jogo aberto com gols possíveis.', activeCls: 'border-amber-400/40 bg-amber-500/[0.08] shadow-[0_0_24px_-12px_rgba(251,191,36,0.5)]', dot: 'bg-amber-400' },
+    { v: 'info', label: 'Informação', hint: 'Apenas observação contextual.', example: 'Ex.: estatística interessante para análise.', activeCls: 'border-cyan-400/40 bg-cyan-500/[0.08] shadow-[0_0_24px_-12px_rgba(34,211,238,0.5)]', dot: 'bg-cyan-400' },
   ]
   return (
-    <div className="flex gap-2">
-      {opts.map(o => (
-        <button key={o.v} onClick={() => onChange(o.v)} type="button" className={`px-3.5 py-2 rounded-xl text-[12px] font-semibold border transition-all ${value === o.v ? o.cls : 'border-white/[0.06] text-white/45 hover:text-white/75 hover:border-white/[0.1]'}`}>{o.label}</button>
-      ))}
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      {opts.map(o => {
+        const isActive = value === o.v
+        return (
+          <button
+            key={o.v}
+            onClick={() => onChange(o.v)}
+            type="button"
+            className={`text-left rounded-2xl border px-4 py-3.5 transition-all ${isActive ? o.activeCls : 'border-white/[0.06] bg-white/[0.015] hover:border-white/[0.12] hover:bg-white/[0.025]'}`}
+          >
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className={`h-2.5 w-2.5 rounded-full ${o.dot} ${isActive ? 'shadow-[0_0_10px_currentColor]' : 'opacity-60'}`} />
+              <span className={`text-[13px] font-bold ${isActive ? 'text-white/95' : 'text-white/85'}`}>{o.label}</span>
+            </div>
+            <p className="text-[11px] text-white/65 leading-snug">{o.hint}</p>
+            <p className="text-[10px] text-white/35 leading-snug mt-1.5 italic">{o.example}</p>
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -657,78 +672,164 @@ function ToggleSettingRow({ title, description, checked, onChange }: { title: st
   )
 }
 
-// ═══ WIZARD STEP NAV — shared between Template and Custom modals
+// ═══ WIZARD PROGRESS RAIL — Apple/Linear-like horizontal step rail.
+// Replaces the old vertical sidebar. Steps connect via a thin track with a
+// cyan progress fill that grows as the user advances. Each step shows a
+// circular indicator (number, ✓ for complete, glow for active) and a label.
 type WizardStep<K extends string> = { key: K; label: string; valid: boolean; required: boolean }
 
-function WizardStepNav<K extends string>({ steps, current, onSelect }: { steps: WizardStep<K>[]; current: K; onSelect: (k: K) => void }) {
-  const currentIndex = steps.findIndex(s => s.key === current)
+function WizardProgressRail<K extends string>({ steps, current, onSelect }: { steps: WizardStep<K>[]; current: K; onSelect: (k: K) => void }) {
+  const currentIndex = Math.max(0, steps.findIndex(s => s.key === current))
+  const total = steps.length
+  const progressPct = total > 1 ? Math.min(100, (currentIndex / (total - 1)) * 100) : 0
   return (
-    <nav aria-label="Etapas">
-      {/* Desktop vertical */}
-      <ul className="hidden lg:block space-y-1">
+    <nav aria-label="Etapas" className="relative">
+      {/* Track + fill (desktop only — clean horizontal rail) */}
+      <div className="hidden sm:block absolute left-3 right-3 top-[15px] h-[2px] rounded-full bg-white/[0.06]" aria-hidden />
+      <div
+        className="hidden sm:block absolute left-3 top-[15px] h-[2px] rounded-full bg-gradient-to-r from-cyan-400/70 via-cyan-400/45 to-cyan-300/15 transition-all duration-500 ease-out shadow-[0_0_14px_-4px_rgba(34,211,238,0.55)]"
+        style={{ width: `calc((100% - 24px) * ${progressPct / 100})` }}
+        aria-hidden
+      />
+      <ol className="relative z-10 flex items-start gap-2 sm:gap-3 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1" style={{ overflowY: 'hidden' }}>
         {steps.map((s, i) => {
           const isActive = current === s.key
           const isComplete = s.valid && i < currentIndex
           return (
-            <li key={s.key}>
-              <button onClick={() => onSelect(s.key)} type="button" aria-current={isActive ? 'step' : undefined} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${isActive ? 'bg-white/[0.06] border border-white/[0.12]' : 'border border-transparent hover:bg-white/[0.025]'}`}>
-                <span className={`h-7 w-7 rounded-lg flex items-center justify-center text-[11px] font-bold tabular-nums shrink-0 ${isActive ? 'bg-gradient-to-br from-cyan-500/30 to-blue-500/30 text-cyan-100 border border-cyan-400/30 shadow-[0_0_18px_-6px_rgba(34,211,238,0.5)]' : isComplete ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-400/20' : 'bg-white/[0.04] text-white/55 border border-white/[0.07]'}`}>{isComplete ? '✓' : i + 1}</span>
-                <div className="flex-1 min-w-0">
-                  <span className={`text-[12px] font-semibold block ${isActive ? 'text-white/95' : 'text-white/75'}`}>{s.label}</span>
-                  {s.required && !s.valid && !isActive && <span className="text-[10px] text-amber-300/85 block leading-tight">obrigatório</span>}
-                  {isComplete && <span className="text-[10px] text-emerald-300/65 block leading-tight">concluído</span>}
+            <li key={s.key} className="shrink-0 sm:flex-1 sm:min-w-0">
+              <button
+                onClick={() => onSelect(s.key)}
+                type="button"
+                aria-current={isActive ? 'step' : undefined}
+                className="group flex sm:flex-col items-center sm:items-start gap-2 sm:gap-1.5 w-full text-left"
+              >
+                <span className={`h-8 w-8 rounded-full flex items-center justify-center text-[12px] font-bold tabular-nums shrink-0 transition-all ${isActive
+                  ? 'bg-gradient-to-br from-cyan-400/35 to-blue-500/35 text-cyan-50 border border-cyan-300/55 shadow-[0_0_24px_-4px_rgba(34,211,238,0.7),inset_0_1px_0_rgba(255,255,255,0.1)]'
+                  : isComplete
+                    ? 'bg-emerald-500/22 text-emerald-200 border border-emerald-400/35 shadow-[0_0_18px_-8px_rgba(52,211,153,0.55)]'
+                    : 'bg-[#0a0d14] text-white/55 border border-white/[0.1] group-hover:border-white/[0.18] group-hover:text-white/85'}`}>
+                  {isComplete ? '✓' : i + 1}
+                </span>
+                <div className="min-w-0">
+                  <span className={`text-[11px] font-semibold whitespace-nowrap block leading-tight transition-colors ${isActive ? 'text-white/95' : isComplete ? 'text-white/75' : 'text-white/55 group-hover:text-white/85'}`}>{s.label}</span>
+                  {s.required && !s.valid && !isActive && <span className="hidden sm:block text-[10px] text-amber-300/85 leading-tight font-medium">obrigatório</span>}
+                  {isComplete && <span className="hidden sm:block text-[10px] text-emerald-300/70 leading-tight font-medium">concluído</span>}
                 </div>
               </button>
             </li>
           )
         })}
-      </ul>
-      {/* Mobile horizontal scroll */}
-      <ul className="lg:hidden flex gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1" style={{ overflowY: 'hidden' }}>
-        {steps.map((s, i) => {
-          const isActive = current === s.key
-          const isComplete = s.valid && i < currentIndex
-          return (
-            <li key={s.key} className="shrink-0">
-              <button onClick={() => onSelect(s.key)} type="button" aria-current={isActive ? 'step' : undefined} className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all ${isActive ? 'bg-white/[0.08] border border-white/[0.14]' : 'border border-white/[0.05] hover:bg-white/[0.03]'}`}>
-                <span className={`h-5 w-5 rounded-md flex items-center justify-center text-[10px] font-bold tabular-nums ${isActive ? 'bg-gradient-to-br from-cyan-500/30 to-blue-500/30 text-cyan-100' : isComplete ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/[0.05] text-white/55'}`}>{isComplete ? '✓' : i + 1}</span>
-                <span className={`text-[11px] font-semibold whitespace-nowrap ${isActive ? 'text-white/95' : 'text-white/65'}`}>{s.label}</span>
-              </button>
-            </li>
-          )
-        })}
-      </ul>
+      </ol>
     </nav>
   )
 }
 
-// ═══ WIZARD STEP HEADER
+// ═══ WIZARD STEP HEADER — editorial title block for each step.
 function WizardStepHeader({ index, total, title, description }: { index: number; total: number; title: string; description?: string }) {
   return (
-    <div className="mb-5">
-      <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-300/85">Passo {index} de {total}</span>
-      <h3 className="text-[18px] font-bold text-white/95 tracking-tight mt-1">{title}</h3>
-      {description && <p className="text-[12px] text-white/65 leading-relaxed mt-1.5 max-w-[560px]">{description}</p>}
-    </div>
+    <header className="mb-6">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300/85">Passo {index} de {total}</span>
+        <span className="h-px flex-1 bg-gradient-to-r from-cyan-400/30 to-transparent" />
+      </div>
+      <h3 className="text-[20px] sm:text-[22px] font-bold text-white/95 tracking-tight leading-[1.15]">{title}</h3>
+      {description && <p className="text-[13px] text-white/65 leading-relaxed mt-2 max-w-[600px]">{description}</p>}
+    </header>
   )
 }
 
-// ═══ MINI PREVIEW — compact summary panel for step modals
-function MiniRadarPreview({ name, severity, scope, action, minConf, conditions, currentStep, totalSteps }: { name: string; severity: 'critical' | 'attention' | 'info'; scope: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches'; action: 'register_alert' | 'suggest_only' | 'highlight'; minConf: number; conditions: PatternCondition[]; currentStep?: string; totalSteps?: number }) {
-  const sevLabel = severity === 'critical' ? 'Crítico' : severity === 'attention' ? 'Atenção' : 'Info'
-  const scopeLabel = scope === 'favorites_only' ? 'Favoritos' : scope === 'specific_leagues' ? 'Ligas' : scope === 'specific_teams' ? 'Times' : scope === 'specific_matches' ? 'Partidas' : 'Todos os jogos'
-  const actionLabel = action === 'register_alert' ? 'Registra alerta' : action === 'suggest_only' ? 'Apenas sugere' : 'Destaca no Scanner'
+// ═══ RADAR SUMMARY PANEL — premium contextual side panel.
+// Shows live identity, scope chips, action, conditions, and a small flow
+// diagram explaining how the radar runs. Replaces the old MiniRadarPreview.
+type DraftStatus = 'draft' | 'paused' | 'active'
+function RadarSummaryPanel({ name, status, severity, scope, scopeFilter, matches, action, minConf, conditions, requireRichData, onlyLive, onlyPreMatch, currentStepLabel, totalSteps, currentStepIndex }: {
+  name: string
+  status: DraftStatus
+  severity: 'critical' | 'attention' | 'info'
+  scope: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches'
+  scopeFilter?: string[]
+  matches?: string[]
+  action: 'register_alert' | 'suggest_only' | 'highlight'
+  minConf: number
+  conditions: PatternCondition[]
+  requireRichData?: boolean
+  onlyLive?: boolean
+  onlyPreMatch?: boolean
+  currentStepLabel?: string
+  totalSteps?: number
+  currentStepIndex?: number
+}) {
+  const sevLabel = severity === 'critical' ? 'Crítico' : severity === 'attention' ? 'Atenção' : 'Informação'
+  const sevTone = severity === 'critical' ? 'text-rose-300' : severity === 'attention' ? 'text-amber-300' : 'text-cyan-300'
+  const scopeLabel = scope === 'favorites_only' ? 'Favoritos'
+    : scope === 'specific_leagues' ? `${scopeFilter?.length || 0} liga${(scopeFilter?.length || 0) === 1 ? '' : 's'}`
+    : scope === 'specific_teams' ? `${scopeFilter?.length || 0} time${(scopeFilter?.length || 0) === 1 ? '' : 's'}`
+    : scope === 'specific_matches' ? `${matches?.length || 0} partida${(matches?.length || 0) === 1 ? '' : 's'}`
+    : 'Todos os jogos'
+  const actionLabel = action === 'register_alert' ? 'Registra alerta' : action === 'suggest_only' ? 'Apenas sugere' : 'Destaca'
+  const actionTone = action === 'register_alert' ? 'text-emerald-300' : action === 'suggest_only' ? 'text-white/75' : 'text-cyan-300'
+  const statusLabel = status === 'active' ? 'Ativo' : status === 'paused' ? 'Pausado' : 'Rascunho'
+  const statusTone = status === 'active' ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/25'
+    : status === 'paused' ? 'bg-white/[0.05] text-white/65 border-white/[0.08]'
+    : 'bg-cyan-500/12 text-cyan-200 border-cyan-400/22'
+
+  // Flow diagram steps and which one is the "current" focus, derived from
+  // the wizard step index. The flow is conceptual (what happens in production).
+  const flowSteps = [
+    { label: 'Avalia partidas', hint: 'em paralelo, no escopo definido' },
+    { label: 'Detecta padrão', hint: 'todas as condições verdadeiras' },
+    { label: action === 'register_alert' ? 'Registra alerta' : action === 'suggest_only' ? 'Sugere no Cockpit' : 'Destaca no Scanner', hint: action === 'register_alert' ? 'envia para /app/alerts' : action === 'suggest_only' ? 'visível mas sem alerta' : 'apenas marca no Scanner' },
+    { label: 'Resolve resultado', hint: action === 'register_alert' ? 'motor confirma ou descarta' : 'sem acompanhamento' },
+  ]
+
   return (
-    <section className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.025] via-white/[0.012] to-transparent p-4">
-      {currentStep && totalSteps && <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-300/85 block mb-2">{currentStep} · {totalSteps} passos</span>}
-      <h4 className="text-[13px] font-bold text-white/95 truncate">{name || 'Sem nome'}</h4>
-      <dl className="mt-3 space-y-1.5 text-[11px]">
-        <div className="flex items-center justify-between gap-2"><dt className="text-white/55">Severidade</dt><dd className="text-white/95 font-semibold">{sevLabel}</dd></div>
-        <div className="flex items-center justify-between gap-2"><dt className="text-white/55">Escopo</dt><dd className="text-white/95 font-semibold">{scopeLabel}</dd></div>
-        <div className="flex items-center justify-between gap-2"><dt className="text-white/55">Ação</dt><dd className="text-white/95 font-semibold">{actionLabel}</dd></div>
-        <div className="flex items-center justify-between gap-2"><dt className="text-white/55">Confiança mín</dt><dd className="text-white/95 font-bold tabular-nums">{minConf}%</dd></div>
+    <section className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.03] via-white/[0.012] to-transparent p-4 sticky top-0 backdrop-blur-sm">
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/40">Resumo</span>
+        <span className={`text-[9px] font-bold uppercase tracking-[0.14em] px-2 py-0.5 rounded-md border ${statusTone}`}>{statusLabel}</span>
+        {currentStepLabel && totalSteps && typeof currentStepIndex === 'number' && (
+          <span className="ml-auto text-[10px] text-white/45 tabular-nums">{currentStepIndex + 1}/{totalSteps}</span>
+        )}
+      </div>
+
+      {/* Identity */}
+      <h4 className="text-[14px] font-bold text-white/95 truncate leading-tight">{name || 'Sem nome'}</h4>
+      <p className="text-[11px] text-white/55 truncate mt-0.5">{currentStepLabel || 'Configurando radar'}</p>
+
+      {/* Stats grid */}
+      <dl className="mt-4 space-y-2 text-[11px]">
+        <div className="flex items-center justify-between gap-2"><dt className="text-white/55">Severidade</dt><dd className={`font-bold ${sevTone}`}>{sevLabel}</dd></div>
+        <div className="flex items-center justify-between gap-2"><dt className="text-white/55">Escopo</dt><dd className="text-white/95 font-semibold truncate max-w-[60%] text-right">{scopeLabel}</dd></div>
+        <div className="flex items-center justify-between gap-2"><dt className="text-white/55">Ação</dt><dd className={`font-bold ${actionTone}`}>{actionLabel}</dd></div>
+        <div className="flex items-center justify-between gap-2"><dt className="text-white/55">Confiança</dt><dd className="text-white/95 font-bold tabular-nums">≥ {minConf}%</dd></div>
         <div className="flex items-center justify-between gap-2"><dt className="text-white/55">Condições</dt><dd className="text-white/95 font-bold tabular-nums">{conditions.length}</dd></div>
       </dl>
+
+      {/* Filter badges */}
+      {(onlyLive || onlyPreMatch || requireRichData) && (
+        <div className="mt-3 pt-3 border-t border-white/[0.05] flex flex-wrap gap-1">
+          {onlyLive && <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/12 text-emerald-300 border border-emerald-400/20">Ao vivo</span>}
+          {onlyPreMatch && <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-500/12 text-cyan-300 border border-cyan-400/20">Pré-jogo</span>}
+          {requireRichData && <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-white/[0.05] text-white/75 border border-white/[0.08]">Dados ricos</span>}
+        </div>
+      )}
+
+      {/* Flow diagram */}
+      <div className="mt-4 pt-4 border-t border-white/[0.05]">
+        <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-white/40 block mb-2.5">Fluxo do radar</span>
+        <ol className="space-y-2">
+          {flowSteps.map((s, i) => (
+            <li key={i} className="flex items-start gap-2.5">
+              <span className="mt-[1px] h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-bold tabular-nums text-white/65 bg-white/[0.04] border border-white/[0.08] shrink-0">{i + 1}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] text-white/85 font-semibold leading-tight">{s.label}</p>
+                <p className="text-[10px] text-white/45 leading-tight mt-0.5">{s.hint}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
     </section>
   )
 }
@@ -988,6 +1089,68 @@ function ChipMultiPicker({ label, placeholder, options, selected, onChange, empt
   )
 }
 
+// ═══ CONFIDENCE SLIDER — visual ruler with sensible/balanced/strict zones
+function ConfidenceSlider({ value, onChange, action }: { value: number; onChange: (v: number) => void; action: 'register_alert' | 'suggest_only' | 'highlight' }) {
+  const zone = value < 45 ? 'sensible' : value < 70 ? 'balanced' : 'strict'
+  const zoneLabel = zone === 'sensible' ? 'Sensível' : zone === 'balanced' ? 'Equilibrado' : 'Rigoroso'
+  const zoneTone = zone === 'sensible' ? 'text-amber-300' : zone === 'balanced' ? 'text-cyan-300' : 'text-emerald-300'
+  const zoneHint = zone === 'sensible'
+    ? 'Mais alertas, com menor rigor — bom para descobrir padrões novos.'
+    : zone === 'balanced'
+    ? 'Equilíbrio entre volume e qualidade — recomendado para uso geral.'
+    : 'Menos alertas, só sinais muito fortes — bom para foco em alta convicção.'
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.025] to-transparent p-5">
+        <div className="flex items-baseline justify-between mb-3">
+          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/55">Confiança mínima</span>
+          <span className="flex items-baseline gap-1.5">
+            <span className="text-[36px] font-bold tabular-nums text-white/95 leading-none">{value}</span>
+            <span className="text-[14px] text-white/45 font-semibold">%</span>
+          </span>
+        </div>
+        {/* Slider */}
+        <div className="relative pt-1">
+          <input
+            type="range"
+            min={20}
+            max={95}
+            value={value}
+            onChange={e => onChange(Math.min(100, Math.max(0, Number(e.target.value))))}
+            className="w-full accent-cyan-400 cursor-pointer"
+          />
+          {/* Zones ruler */}
+          <div className="grid grid-cols-3 mt-2 gap-1 text-[10px] font-semibold uppercase tracking-wider">
+            <span className={`${zone === 'sensible' ? 'text-amber-300' : 'text-white/35'}`}>Sensível</span>
+            <span className={`text-center ${zone === 'balanced' ? 'text-cyan-300' : 'text-white/35'}`}>Equilibrado</span>
+            <span className={`text-right ${zone === 'strict' ? 'text-emerald-300' : 'text-white/35'}`}>Rigoroso</span>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <span className={`text-[11px] font-bold uppercase tracking-wider ${zoneTone}`}>{zoneLabel}</span>
+          <span className="text-[11px] text-white/65 leading-snug">{zoneHint}</span>
+          <input
+            type="number"
+            value={value}
+            onChange={e => onChange(Math.min(100, Math.max(0, Number(e.target.value))))}
+            className="ml-auto w-16 h-9 rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 text-[12px] text-white/95 tabular-nums text-center outline-none focus:border-cyan-400/40"
+            min={0}
+            max={100}
+          />
+        </div>
+      </div>
+      <div className="rounded-2xl border border-cyan-400/15 bg-cyan-500/[0.04] px-4 py-3.5">
+        <p className="text-[12px] text-white/85 leading-relaxed">
+          O radar só dispara com confiança ≥ <span className="text-white/95 font-bold tabular-nums">{value}%</span>.
+          {action === 'register_alert' && <> Alertas serão registrados em <span className="text-cyan-300 font-semibold">/app/alerts</span> e acompanhados pelo motor de resolução.</>}
+          {action === 'suggest_only' && <> Aparecerá apenas como sugestão no Cockpit, sem registrar alerta.</>}
+          {action === 'highlight' && <> Apenas destaca a partida no Scanner sem registrar nada.</>}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 // ═══ TEMPLATE CONFIG MODAL
 // ═══ TEMPLATE CONFIG MODAL — stepper wizard
 type TemplateStep = 'overview' | 'conditions' | 'scope_action' | 'confidence' | 'review'
@@ -1074,12 +1237,11 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
   const goNext = () => { if (stepIndex < steps.length - 1) setStep(steps[stepIndex + 1].key) }
   const isLast = step === 'review'
 
-  const confHint = minConf >= 75 ? 'Mais rigoroso, menos alertas — só os sinais mais fortes passam.' : minConf >= 60 ? 'Equilíbrio entre volume e qualidade.' : 'Mais sensível, mais sinais detectados, com menor rigor.'
-
   return (
-    <ModalShell open={open} onClose={onClose} title={template.name} subtitle={template.description} maxWidth="max-w-[1140px]"
+    <ModalShell open={open} onClose={onClose} title={template.name} subtitle={template.description} maxWidth="max-w-[1180px]"
       headerExtra={
         <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-400/20">{existingPattern ? 'Editando radar' : 'Rascunho'}</span>
           <span className="text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md bg-white/[0.05] text-white/65 border border-white/[0.08]">Template GoalSense</span>
           <span className="text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md bg-white/[0.04] text-white/65 border border-white/[0.07]">{CATEGORY_LABELS[cat]}</span>
           <span className={`text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md border ${severity === 'critical' ? 'bg-rose-500/12 text-rose-300 border-rose-400/20' : severity === 'attention' ? 'bg-amber-500/12 text-amber-300 border-amber-400/20' : 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15'}`}>{severity === 'critical' ? 'Crítico' : severity === 'attention' ? 'Atenção' : 'Info'}</span>
@@ -1092,25 +1254,30 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
           {stepIndex > 0 && <button onClick={goPrev} type="button" className="px-3.5 py-2.5 rounded-xl text-[12px] font-medium text-white/75 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-all">Voltar</button>}
           {!isLast && <button onClick={goNext} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-all">Próximo</button>}
           <button onClick={() => { onSave(buildPatternData('paused')); onClose() }} disabled={!canSave} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar pausado</button>
-          <button onClick={() => { onSave(buildPatternData('active')); onClose() }} disabled={!canSave} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-bold bg-gradient-to-r from-cyan-500/22 to-blue-500/22 text-cyan-200 border border-cyan-400/30 hover:from-cyan-500/32 hover:to-blue-500/32 disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar e ativar</button>
+          <button onClick={() => { onSave(buildPatternData('active')); onClose() }} disabled={!canSave} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-bold bg-gradient-to-r from-cyan-500/22 to-blue-500/22 text-cyan-200 border border-cyan-400/30 hover:from-cyan-500/32 hover:to-blue-500/32 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-[0_0_28px_-8px_rgba(34,211,238,0.6)]">Salvar e ativar</button>
         </>
       }
     >
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Sidebar steps */}
-        <div className="lg:col-span-3">
-          <WizardStepNav steps={steps} current={step} onSelect={setStep} />
-        </div>
+      {/* Progress rail at top */}
+      <div className="mb-7 px-1">
+        <WizardProgressRail steps={steps} current={step} onSelect={setStep} />
+      </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Step content */}
-        <div className="lg:col-span-6 min-w-0">
+        <div className="lg:col-span-8 min-w-0">
           <div className="animate-fadeIn" key={step}>
             {step === 'overview' && (
               <>
-                <WizardStepHeader index={1} total={steps.length} title="Entenda o radar" description="Antes de configurar, veja o que ele faz, quando aparece e quais dados ele usa." />
-                <div className="rounded-2xl border border-white/[0.06] bg-gradient-to-br from-white/[0.02] to-transparent p-5 mb-4">
-                  <h5 className="text-[14px] font-bold text-white/95 mb-1">{template.name}</h5>
-                  <p className="text-[12px] text-white/75 leading-relaxed">{template.description}</p>
+                <WizardStepHeader index={1} total={steps.length} title="Entenda este template" description="Antes de configurar, veja o que ele faz, quando aparece e quais dados ele usa." />
+                <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-cyan-500/[0.05] via-white/[0.02] to-transparent p-5 mb-5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-cyan-300/85">{CATEGORY_LABELS[cat]}</span>
+                    <span className="h-px flex-1 bg-cyan-400/15" />
+                    <span className={`text-[9px] font-bold uppercase tracking-[0.14em] px-2 py-0.5 rounded-md border ${severity === 'critical' ? 'bg-rose-500/12 text-rose-300 border-rose-400/20' : severity === 'attention' ? 'bg-amber-500/12 text-amber-300 border-amber-400/20' : 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15'}`}>{severity === 'critical' ? 'Crítico' : severity === 'attention' ? 'Atenção' : 'Info'}</span>
+                  </div>
+                  <h5 className="text-[18px] font-bold text-white/95 mb-1.5 tracking-tight">{template.name}</h5>
+                  <p className="text-[13px] text-white/75 leading-relaxed">{template.description}</p>
                 </div>
                 <Section title="Condições padrão deste template">
                   <ul className="space-y-1.5">
@@ -1169,23 +1336,8 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
             )}
             {step === 'confidence' && (
               <>
-                <WizardStepHeader index={4} total={steps.length} title="Confiança mínima" description="Quanto maior, menos alertas falsos. O radar só dispara quando a confiança calculada for igual ou superior." />
-                <Section title="Limite de confiança">
-                  <div className="flex items-center gap-3">
-                    <input type="range" min={20} max={95} value={minConf} onChange={e => setMinConf(Math.min(100, Math.max(0, Number(e.target.value))))} className="flex-1 accent-cyan-400" />
-                    <input type="number" value={minConf} onChange={e => setMinConf(Math.min(100, Math.max(0, Number(e.target.value))))} className="w-20 h-10 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-[14px] text-white/95 tabular-nums text-center outline-none focus:border-cyan-400/40" min={0} max={100} />
-                    <span className="text-[13px] text-white/65 font-semibold">%</span>
-                  </div>
-                  <p className="text-[12px] text-white/65 leading-snug mt-3">{confHint}</p>
-                </Section>
-                <div className="rounded-2xl border border-cyan-400/15 bg-cyan-500/[0.04] px-4 py-3.5">
-                  <p className="text-[12px] text-white/85 leading-relaxed">
-                    Este radar só dispara com confiança ≥ <span className="text-white/95 font-bold tabular-nums">{minConf}%</span>.
-                    {action === 'register_alert' && <> Alertas serão registrados em <span className="text-cyan-300 font-semibold">/app/alerts</span> e acompanhados pelo motor de resolução.</>}
-                    {action === 'suggest_only' && <> Este radar aparecerá como sugestão, sem registrar alerta.</>}
-                    {action === 'highlight' && <> Este radar apenas destaca a partida no Scanner.</>}
-                  </p>
-                </div>
+                <WizardStepHeader index={4} total={steps.length} title="Qual rigor o radar deve ter?" description="Quanto maior, menos alertas falsos. O radar só dispara quando a confiança calculada for igual ou superior." />
+                <ConfidenceSlider value={minConf} onChange={setMinConf} action={action} />
               </>
             )}
             {step === 'review' && (
@@ -1198,9 +1350,25 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
           </div>
         </div>
 
-        {/* Mini preview right */}
-        <aside className="lg:col-span-3 hidden lg:block">
-          <MiniRadarPreview name={template.name} severity={severity} scope={scope} action={action} minConf={minConf} conditions={conditions} currentStep={steps[stepIndex]?.label} totalSteps={steps.length} />
+        {/* Radar summary right */}
+        <aside className="lg:col-span-4 hidden lg:block">
+          <RadarSummaryPanel
+            name={template.name}
+            status={existingPattern ? (existingPattern.status === 'active' ? 'active' : 'paused') : 'draft'}
+            severity={severity}
+            scope={scope}
+            scopeFilter={scopeFilter}
+            matches={matchesFilter}
+            action={action}
+            minConf={minConf}
+            conditions={conditions}
+            requireRichData={requireRichData}
+            onlyLive={onlyLive}
+            onlyPreMatch={onlyPreMatch}
+            currentStepLabel={steps[stepIndex]?.label}
+            totalSteps={steps.length}
+            currentStepIndex={stepIndex}
+          />
         </aside>
       </div>
     </ModalShell>
@@ -1376,44 +1544,67 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
   const goNext = () => { if (stepIndex < steps.length - 1) setStep(steps[stepIndex + 1].key) }
 
   return (
-    <ModalShell open={open} onClose={onClose} title={initial ? 'Editar radar' : 'Criar radar personalizado'} subtitle="Monte suas próprias regras para o GoalSense monitorar partidas em tempo real." maxWidth="max-w-[1180px]"
+    <ModalShell open={open} onClose={onClose} title={initial ? 'Editar radar' : 'Criar radar personalizado'} subtitle="Configure uma regra inteligente para o GoalSense monitorar partidas em tempo real." maxWidth="max-w-[1200px]"
+      headerExtra={
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-400/20">{initial ? 'Editando radar' : 'Rascunho'}</span>
+          {initial && <span className={`text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-md border ${initial.status === 'active' ? 'bg-emerald-500/12 text-emerald-300 border-emerald-400/20' : 'bg-white/[0.05] text-white/65 border-white/[0.07]'}`}>{initial.status === 'active' ? 'Ativo' : 'Pausado'}</span>}
+        </div>
+      }
       footer={
         <>
           <button onClick={onClose} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/65 border border-white/[0.07] hover:text-white/95 hover:border-white/[0.12] transition-colors mr-auto">Cancelar</button>
           {stepIndex > 0 && <button onClick={goPrev} type="button" className="px-3.5 py-2.5 rounded-xl text-[12px] font-medium text-white/75 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-all">Voltar</button>}
           {stepIndex < steps.length - 1 && <button onClick={goNext} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-all">Próximo</button>}
           <button onClick={() => { onSave(buildData('paused')); onClose() }} disabled={!canSave} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar pausado</button>
-          <button onClick={() => { onSave(buildData('active')); onClose() }} disabled={!canSave} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-bold bg-gradient-to-r from-cyan-500/22 to-blue-500/22 text-cyan-200 border border-cyan-400/30 hover:from-cyan-500/32 hover:to-blue-500/32 disabled:opacity-30 disabled:cursor-not-allowed transition-all">{initial ? 'Salvar e ativar' : 'Criar e ativar'}</button>
+          <button onClick={() => { onSave(buildData('active')); onClose() }} disabled={!canSave} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-bold bg-gradient-to-r from-cyan-500/22 to-blue-500/22 text-cyan-200 border border-cyan-400/30 hover:from-cyan-500/32 hover:to-blue-500/32 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-[0_0_28px_-8px_rgba(34,211,238,0.6)]">{initial ? 'Salvar e ativar' : 'Criar e ativar'}</button>
         </>
       }
     >
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Sidebar steps */}
-        <div className="lg:col-span-3">
-          <WizardStepNav steps={steps} current={step} onSelect={setStep} />
-        </div>
+      {/* Progress rail at top */}
+      <div className="mb-7 px-1">
+        <WizardProgressRail steps={steps} current={step} onSelect={setStep} />
+      </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Step content */}
-        <div className="lg:col-span-6 min-w-0 space-y-5">
+        <div className="lg:col-span-8 min-w-0 space-y-5">
           <div className="animate-fadeIn" key={step}>
             {step === 'identity' && (
               <>
-                <WizardStepHeader index={1} total={steps.length} title="Identidade do radar" description="Dê um nome curto que descreva o sinal que este radar procura." />
-                <Section title="Nome e descrição">
-                  <div className="space-y-2.5">
-                    <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome do radar" className={`w-full h-11 rounded-xl border bg-white/[0.04] px-4 text-[13px] text-white/95 placeholder:text-white/35 outline-none focus:border-cyan-400/40 ${name.trim() ? 'border-white/[0.08]' : 'border-amber-400/20'}`} />
-                    {!hasName && <p className="text-[11px] text-amber-300/85">O nome é obrigatório.</p>}
-                    <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descrição — quando este radar é útil?" className="w-full h-11 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 text-[13px] text-white/95 placeholder:text-white/35 outline-none focus:border-cyan-400/40" />
+                <WizardStepHeader index={1} total={steps.length} title="Dê identidade ao radar" description="Escolha um nome claro e uma severidade para organizar seus sinais." />
+                <div className="space-y-5">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/55 block mb-2">Nome do radar</label>
+                    <input
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      placeholder="Ex.: Pressão visitante na reta final"
+                      autoFocus
+                      className={`w-full h-14 rounded-2xl border bg-white/[0.025] px-5 text-[16px] font-semibold text-white/95 placeholder:text-white/30 placeholder:font-normal outline-none transition-all focus:bg-white/[0.04] focus:shadow-[0_0_28px_-12px_rgba(34,211,238,0.5)] ${name.trim() ? 'border-white/[0.1] focus:border-cyan-400/45' : 'border-amber-400/25 focus:border-amber-400/45'}`}
+                    />
+                    {!hasName && <p className="text-[11px] text-amber-300/85 mt-2 font-medium">O nome é obrigatório.</p>}
                   </div>
-                </Section>
-                <Section title="Severidade visual" hint="Reflete a urgência do sinal no Scanner e nos alertas.">
-                  <SeverityPicker value={severity} onChange={setSeverity} />
-                </Section>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/55 block mb-2">Descrição (opcional)</label>
+                    <input
+                      value={desc}
+                      onChange={e => setDesc(e.target.value)}
+                      placeholder="Quando este radar é útil?"
+                      className="w-full h-12 rounded-xl border border-white/[0.08] bg-white/[0.025] px-4 text-[13px] text-white/95 placeholder:text-white/35 outline-none transition-all focus:border-cyan-400/40 focus:bg-white/[0.04]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/55 block mb-2">Severidade</label>
+                    <p className="text-[11px] text-white/45 mb-3 leading-snug">Reflete a urgência do sinal no Scanner e nos alertas.</p>
+                    <SeverityPicker value={severity} onChange={setSeverity} />
+                  </div>
+                </div>
               </>
             )}
             {step === 'scope' && (
               <>
-                <WizardStepHeader index={2} total={steps.length} title="Escopo de análise" description="Defina em quais partidas este radar pode disparar." />
+                <WizardStepHeader index={2} total={steps.length} title="Onde este radar deve atuar?" description="Escolha o escopo de partidas em que este radar pode disparar." />
                 <ScopePicker
                   scope={scope}
                   scopeFilter={scopeFilter}
@@ -1439,50 +1630,52 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
             )}
             {step === 'conditions' && (
               <>
-                <WizardStepHeader index={3} total={steps.length} title={`Condições (${conditions.length})`} description="Cada condição precisa ser verdadeira para o radar disparar. Adicione pela categoria." />
+                <WizardStepHeader index={3} total={steps.length} title={`Quais sinais precisam acontecer?`} description="Cada condição precisa ser verdadeira para o radar disparar. Use as categorias abaixo para adicionar." />
                 <ConditionsEditor conditions={conditions} onChange={setConditions} />
-                {!hasConditions && <div className="rounded-xl border border-amber-400/20 bg-amber-500/[0.06] px-4 py-3 mt-4"><p className="text-[11px] text-amber-200">É necessário pelo menos uma condição para salvar este radar.</p></div>}
+                {!hasConditions && <div className="rounded-xl border border-amber-400/25 bg-amber-500/[0.06] px-4 py-3 mt-4"><p className="text-[11px] text-amber-200 font-medium">É necessário pelo menos uma condição para salvar este radar.</p></div>}
               </>
             )}
             {step === 'action' && (
               <>
-                <WizardStepHeader index={4} total={steps.length} title="Ação ao detectar" description="Escolha o que acontece quando este radar detectar um sinal." />
+                <WizardStepHeader index={4} total={steps.length} title="O que fazer quando bater?" description="Escolha o destino do sinal quando este radar detectar todas as condições." />
                 <ActionCardPicker value={action} onChange={setAction} />
               </>
             )}
             {step === 'confidence' && (
               <>
-                <WizardStepHeader index={5} total={steps.length} title="Confiança mínima" description="Quanto maior, menos alertas falsos. Recomendado: 50% para começar." />
-                <Section title="Limite de confiança">
-                  <div className="flex items-center gap-3">
-                    <input type="range" min={20} max={95} value={minConf} onChange={e => setMinConf(Math.min(100, Math.max(0, Number(e.target.value))))} className="flex-1 accent-cyan-400" />
-                    <input type="number" value={minConf} onChange={e => setMinConf(Math.min(100, Math.max(0, Number(e.target.value))))} className="w-20 h-10 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-[14px] text-white/95 tabular-nums text-center outline-none focus:border-cyan-400/40" min={0} max={100} />
-                    <span className="text-[13px] text-white/65 font-semibold">%</span>
-                  </div>
-                </Section>
-                <div className="rounded-2xl border border-cyan-400/15 bg-cyan-500/[0.04] px-4 py-3.5">
-                  <p className="text-[12px] text-white/85 leading-relaxed">
-                    Este radar só dispara com confiança ≥ <span className="text-white/95 font-bold tabular-nums">{minConf}%</span>.
-                    {action === 'register_alert' && <> Alertas serão registrados em <span className="text-cyan-300 font-semibold">/app/alerts</span>.</>}
-                    {action === 'suggest_only' && <> Aparecerá apenas como sugestão.</>}
-                    {action === 'highlight' && <> Destaca a partida no Scanner sem registrar alerta.</>}
-                  </p>
-                </div>
+                <WizardStepHeader index={5} total={steps.length} title="Qual rigor o radar deve ter?" description="Quanto maior, menos alertas falsos. Recomendado: 50% para começar." />
+                <ConfidenceSlider value={minConf} onChange={setMinConf} action={action} />
               </>
             )}
             {step === 'review' && (
               <>
-                <WizardStepHeader index={6} total={steps.length} title="Revisão" description="Confira a configuração final antes de salvar." />
+                <WizardStepHeader index={6} total={steps.length} title="Revise antes de ativar" description="Confira a configuração final. Você pode voltar e ajustar antes de salvar." />
                 <RadarPreview name={name.trim()} severity={severity} scope={scope} scopeFilter={scopeFilter} matches={matchesFilter} excludeLeagues={excludeLeagues} excludeTeams={excludeTeams} excludeMatches={excludeMatches} requireRichData={requireRichData} onlyLive={onlyLive} onlyPreMatch={onlyPreMatch} action={action} minConf={minConf} conditions={conditions} />
-                <p className="text-[11px] text-white/45 leading-snug mt-4">Após salvar, este radar aparecerá em "Radares configurados" no Pattern Studio.</p>
+                <p className="text-[11px] text-white/45 leading-snug mt-4">Após salvar, este radar aparecerá em &ldquo;Radares configurados&rdquo; no Pattern Studio.</p>
               </>
             )}
           </div>
         </div>
 
-        {/* Right panel — mini preview */}
-        <aside className="lg:col-span-3 hidden lg:block">
-          <MiniRadarPreview name={name.trim() || 'Sem nome'} severity={severity} scope={scope} action={action} minConf={minConf} conditions={conditions} currentStep={steps[stepIndex]?.label} totalSteps={steps.length} />
+        {/* Right panel — radar summary */}
+        <aside className="lg:col-span-4 hidden lg:block">
+          <RadarSummaryPanel
+            name={name.trim()}
+            status={initial ? (initial.status === 'active' ? 'active' : 'paused') : 'draft'}
+            severity={severity}
+            scope={scope}
+            scopeFilter={scopeFilter}
+            matches={matchesFilter}
+            action={action}
+            minConf={minConf}
+            conditions={conditions}
+            requireRichData={requireRichData}
+            onlyLive={onlyLive}
+            onlyPreMatch={onlyPreMatch}
+            currentStepLabel={steps[stepIndex]?.label}
+            totalSteps={steps.length}
+            currentStepIndex={stepIndex}
+          />
         </aside>
       </div>
     </ModalShell>
@@ -1513,6 +1706,33 @@ function AutoDiscoveryConfigModal({ open, config, onClose, onChange, onActivate,
       }
     >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* HERO STATUS — full width banner at top of grid */}
+        <div className="lg:col-span-2">
+          <div className={`rounded-2xl border bg-gradient-to-br p-5 ${isActive
+            ? 'border-emerald-400/25 from-emerald-500/[0.07] via-emerald-500/[0.03] to-transparent shadow-[0_0_40px_-16px_rgba(52,211,153,0.4)]'
+            : config.userConfigured
+              ? 'border-cyan-400/22 from-cyan-500/[0.06] via-blue-500/[0.025] to-transparent'
+              : 'border-white/[0.08] from-white/[0.03] via-white/[0.012] to-transparent'}`}>
+            <div className="flex items-start gap-4">
+              <div className={`h-12 w-12 rounded-xl flex items-center justify-center shrink-0 ${isActive ? 'bg-emerald-500/20 border border-emerald-400/35' : config.userConfigured ? 'bg-cyan-500/15 border border-cyan-400/25' : 'bg-white/[0.05] border border-white/[0.08]'}`}>
+                <span className={`h-2.5 w-2.5 rounded-full ${isActive ? 'bg-emerald-400 animate-pulse shadow-[0_0_12px_rgba(52,211,153,0.6)]' : config.userConfigured ? 'bg-cyan-400' : 'bg-white/30'}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-[15px] font-bold text-white/95 mb-1">
+                  {isActive ? 'Motor automático monitorando' : config.userConfigured ? 'Motor configurado, mas pausado' : 'Motor automático desligado'}
+                </h4>
+                <p className="text-[12px] text-white/65 leading-relaxed">
+                  {isActive
+                    ? <>Descobrindo padrões em partidas reais com confiança ≥ <span className="text-white/95 font-semibold tabular-nums">{config.minConfidence}%</span>. {config.registerAlertAuto ? 'Registrando alertas automaticamente.' : 'Apenas sugerindo, sem registrar alerta.'}</>
+                    : config.userConfigured
+                      ? 'Configuração salva. Ative o motor para começar a monitorar partidas.'
+                      : 'Configure as preferências abaixo e ative para que o GoalSense procure padrões automaticamente.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* LEFT COLUMN */}
         <div className="space-y-5">
           <Section title="Cobertura" hint="Quais partidas o motor pode analisar.">
