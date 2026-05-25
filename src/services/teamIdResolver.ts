@@ -60,6 +60,49 @@ function setCached(normalizedName: string, entry: Omit<CacheEntry, 'savedAt'>): 
   saveCache(cache)
 }
 
+// ─── Known Team IDs (avoids API calls for common teams) ──────────────────────
+
+const KNOWN_TEAM_IDS: Record<string, number> = {
+  // MLS
+  'los angeles fc': 1599, 'lafc': 1599,
+  'seattle sounders': 1595, 'seattle sounders fc': 1595,
+  'inter miami': 9568, 'inter miami cf': 9568,
+  'la galaxy': 1600, 'los angeles galaxy': 1600,
+  // Mexico
+  'pumas unam': 2283, 'unam pumas': 2283, 'pumas': 2283,
+  'cruz azul': 2287,
+  'club america': 2279, 'américa': 2279,
+  'guadalajara': 2282, 'chivas': 2282,
+  'monterrey': 2284,
+  'tigres': 2286, 'tigres uanl': 2286,
+  // Brazil Serie A
+  'flamengo': 127, 'palmeiras': 121, 'corinthians': 131,
+  'são paulo': 126, 'sao paulo': 126, 'santos': 128,
+  'grêmio': 130, 'gremio': 130, 'internacional': 119,
+  'fluminense': 124, 'botafogo': 120, 'vasco': 133, 'vasco da gama': 133,
+  'cruzeiro': 129, 'atlético mineiro': 1062, 'atletico mineiro': 1062, 'atletico-mg': 1062,
+  'athletico paranaense': 134, 'ath paranaense': 134,
+  'bahia': 118, 'fortaleza': 132, 'bragantino': 1193, 'rb bragantino': 1193,
+  'cuiabá': 2317, 'cuiaba': 2317, 'juventude': 1200,
+  // Brazil Serie B/C
+  'volta redonda': 7770, 'volta redonda fc': 7770,
+  'ypiranga-rs': 7847, 'ypiranga': 7847, 'ypiranga fc': 7847, 'ypiranga erechim': 7847,
+  // Europe
+  'barcelona': 529, 'real madrid': 541, 'atletico madrid': 530,
+  'manchester city': 50, 'man city': 50, 'liverpool': 40, 'arsenal': 42,
+  'chelsea': 49, 'manchester united': 33, 'man united': 33, 'tottenham': 47,
+  'bayern munich': 157, 'bayern': 157, 'borussia dortmund': 165, 'dortmund': 165,
+  'psg': 85, 'paris saint-germain': 85, 'paris saint germain': 85,
+  'juventus': 496, 'inter': 505, 'inter milan': 505, 'ac milan': 489, 'milan': 489,
+  'napoli': 492, 'roma': 497, 'lazio': 487,
+  'benfica': 211, 'porto': 212, 'sporting': 228,
+}
+
+function getKnownTeamId(name: string): number | null {
+  const lower = name.toLowerCase().trim()
+  return KNOWN_TEAM_IDS[lower] || null
+}
+
 // ─── Aliases for common name mismatches ───────────────────────────────────────
 
 const TEAM_ALIASES: Record<string, string> = {
@@ -99,7 +142,14 @@ export async function resolveApiFootballTeamId(input: ResolveInput): Promise<Res
     return { found: false, confidence: 'low', reason: 'Nome muito curto', provider: 'api-football' }
   }
 
-  // Check cache first
+  // Check known team IDs first (no API call needed)
+  const knownId = getKnownTeamId(teamName) || getKnownTeamId(aliasResolved)
+  if (knownId) {
+    setCached(normalized, { teamId: knownId, canonicalName: aliasResolved, confidence: 'high' })
+    return { found: true, teamId: knownId, canonicalName: aliasResolved, confidence: 'high', provider: 'api-football' }
+  }
+
+  // Check cache
   const cached = getCached(normalized)
   if (cached) {
     if (import.meta.env.DEV) console.debug('[prematch-team-resolver] cache hit:', normalized, cached.teamId)
@@ -109,16 +159,25 @@ export async function resolveApiFootballTeamId(input: ResolveInput): Promise<Res
   // Search API-Football
   try {
     const searchTerm = aliasResolved.length > 3 ? aliasResolved : normalized
-    const resp = await fetch(`/api/api-football-fixtures?search_team=${encodeURIComponent(searchTerm)}`)
-    if (!resp.ok) {
-      return { found: false, confidence: 'low', reason: 'API indisponível', provider: 'api-football' }
+    
+    // Strategy 1: Try /teams?search= endpoint
+    let resp = await fetch(`/api/api-football-fixtures?search_team=${encodeURIComponent(searchTerm)}`)
+    let json = resp.ok ? await resp.json() : { response: [] }
+    let teams: any[] = json.response || []
+
+    // Strategy 2: If /teams failed, try /teams?name= with shorter name
+    if (teams.length === 0 && searchTerm.split(' ').length > 1) {
+      const shortName = searchTerm.split(' ')[0]
+      if (shortName.length >= 4) {
+        resp = await fetch(`/api/api-football-fixtures?search_team=${encodeURIComponent(shortName)}`)
+        json = resp.ok ? await resp.json() : { response: [] }
+        teams = json.response || []
+      }
     }
 
-    const json = await resp.json()
-    const teams: any[] = json.response || []
-
     if (teams.length === 0) {
-      return { found: false, confidence: 'low', reason: 'Nenhum time encontrado', provider: 'api-football' }
+      if (import.meta.env.DEV) console.debug('[prematch-team-resolver] no results for:', searchTerm)
+      return { found: false, confidence: 'low', reason: `Nenhum time encontrado para "${searchTerm}"`, provider: 'api-football' }
     }
 
     // Score candidates
