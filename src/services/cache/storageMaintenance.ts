@@ -2,6 +2,7 @@
  * Storage Maintenance — prevents localStorage from growing indefinitely.
  * Runs cleanup on app startup and provides manual controls for Settings.
  */
+import { getScopeKnowledgeStats, clearScopeKnowledge } from '@/services/intelligence/scopeKnowledgeBase'
 
 const GS_PREFIX = 'gs_'
 const GOALSENSE_KEYS = ['goalsense_', 'gs_cache_', 'gs_kb_', 'gs_prematch_']
@@ -16,6 +17,10 @@ export interface StorageStats {
   commandAlerts: number
   outcomes: number
   cacheEntries: number
+  scopeLeagues: number
+  scopeTeams: number
+  scopeMatches: number
+  scopeKbBytes: number
 }
 
 export function getGoalSenseStorageStats(): StorageStats {
@@ -42,7 +47,9 @@ export function getGoalSenseStorageStats(): StorageStats {
     }
   } catch { /* */ }
 
-  return { totalKeys, goalsenseKeys, estimatedSizeKB: Math.round(estimatedSize / 1024), favorites, patterns, alerts, commandAlerts, outcomes, cacheEntries }
+  const scopeStats = (() => { try { return getScopeKnowledgeStats() } catch { return { leagues: 0, teams: 0, matches: 0, bytes: 0 } } })()
+
+  return { totalKeys, goalsenseKeys, estimatedSizeKB: Math.round(estimatedSize / 1024), favorites, patterns, alerts, commandAlerts, outcomes, cacheEntries, scopeLeagues: scopeStats.leagues, scopeTeams: scopeStats.teams, scopeMatches: scopeStats.matches, scopeKbBytes: scopeStats.bytes }
 }
 
 export function cleanupExpiredCache(): number {
@@ -103,6 +110,11 @@ export function clearOutcomes(): void {
 
 export function clearTriggeredAlerts(): void {
   try { localStorage.removeItem('goalsense_command_alerts') } catch { /* */ }
+}
+
+/** Clear the scope KB (real leagues/teams/matches the user has seen). Patterns and alerts are preserved. */
+export function clearScopeKb(): void {
+  try { clearScopeKnowledge() } catch { /* */ }
 }
 
 export function clearAllGoalSense(): void {

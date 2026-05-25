@@ -6,7 +6,7 @@ import { Zap, Heart, Trash2, Globe2, Database, Shield, Bell, HardDrive } from 'l
 import { useFavorites } from '@/context/FavoritesContext'
 import { useViewMode } from '@/context/ViewModeContext'
 import { useAlerts } from '@/context/AlertsContext'
-import { getGoalSenseStorageStats, cleanupExpiredCache, clearPreMatchCache, clearKnowledgeBase, clearOutcomes, clearTriggeredAlerts, clearAllGoalSense } from '@/services/cache/storageMaintenance'
+import { getGoalSenseStorageStats, cleanupExpiredCache, clearPreMatchCache, clearKnowledgeBase, clearOutcomes, clearTriggeredAlerts, clearAllGoalSense, clearScopeKb } from '@/services/cache/storageMaintenance'
 
 export function SettingsPage() {
   const { teams, leagues, matches, clearAll, hasAnyFavorite } = useFavorites()
@@ -121,6 +121,7 @@ export function SettingsPage() {
 
       {/* Storage Management */}
       <StorageSection />
+      <ScopeLibrarySection />
 
       {/* System info */}
       <div className="rounded-[18px] border border-white/[0.05] bg-white/[0.015] p-5 space-y-4">
@@ -213,4 +214,50 @@ function StorageSection() {
 
 function StatBox({ label, value }: { label: string; value: number }) {
   return (<div className="rounded-lg bg-white/[0.02] border border-white/[0.04] px-3 py-2 text-center"><span className="text-[14px] font-bold text-white/60 block">{value}</span><span className="text-[9px] text-white/30">{label}</span></div>)
+}
+
+function ScopeLibrarySection() {
+  const [stats, setStats] = useState(() => getGoalSenseStorageStats())
+  const [confirm, setConfirm] = useState(false)
+  const [feedback, setFeedback] = useState('')
+  const refresh = () => setStats(getGoalSenseStorageStats())
+  const showFeedback = (msg: string) => { setFeedback(msg); setTimeout(() => setFeedback(''), 3000) }
+
+  const total = stats.scopeLeagues + stats.scopeTeams + stats.scopeMatches
+  const sizeKb = stats.scopeKbBytes > 0 ? Math.max(1, Math.round(stats.scopeKbBytes / 1024)) : 0
+
+  return (
+    <div className="gs-card space-y-4">
+      <div className="flex items-center gap-3 mb-1">
+        <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-cyan-500/10 border border-cyan-400/20"><HardDrive size={16} className="text-cyan-300" /></div>
+        <div>
+          <h3 className="text-[13px] font-semibold text-white/70">Biblioteca de ligas, times e partidas</h3>
+          <p className="text-[10px] text-white/40 mt-0.5">{total > 0 ? `${total} entradas · ~${sizeKb} KB` : 'biblioteca vazia'}</p>
+        </div>
+      </div>
+
+      <p className="text-[11px] text-white/55 leading-relaxed">
+        O GoalSense guarda ligas, times e partidas vistos para melhorar sugestões de escopo no Command Center. Não apaga padrões, alertas ou histórico — apenas remove sugestões locais.
+      </p>
+
+      <div className="grid grid-cols-3 gap-2">
+        <StatBox label="Ligas" value={stats.scopeLeagues} />
+        <StatBox label="Times" value={stats.scopeTeams} />
+        <StatBox label="Partidas" value={stats.scopeMatches} />
+      </div>
+
+      <div className="pt-3 border-t border-white/[0.04] flex items-center gap-3 flex-wrap">
+        <button onClick={refresh} className="flex items-center gap-2 text-[11px] text-white/55 hover:text-white/85 transition-colors" type="button">Atualizar stats</button>
+        {!confirm ? (
+          <button onClick={() => setConfirm(true)} disabled={total === 0} className="flex items-center gap-2 text-[11px] text-rose-400/65 hover:text-rose-300 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" type="button"><Trash2 size={11} />Limpar biblioteca de escopo</button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button onClick={() => { clearScopeKb(); refresh(); setConfirm(false); showFeedback('Biblioteca de escopo limpa') }} className="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-rose-500/15 text-rose-300 border border-rose-400/25" type="button">Confirmar</button>
+            <button onClick={() => setConfirm(false)} className="px-3 py-1.5 rounded-lg text-[10px] text-white/55 border border-white/[0.07]" type="button">Cancelar</button>
+          </div>
+        )}
+        {feedback && <span className="text-[11px] text-emerald-300 animate-fadeIn">{feedback}</span>}
+      </div>
+    </div>
+  )
 }

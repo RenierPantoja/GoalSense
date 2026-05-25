@@ -342,7 +342,7 @@ export function CommandCenterPage() {
       {/* ═══ CONTENT ═══ */}
       {activeTab === 'cockpit' && <CockpitView hasIntelligence={hasIntelligence} decisionMatch={decisionMatch} decisionHit={decisionHit} decisionDiscovery={decisionDiscovery} patternHits={patternHits} discoveries={discoveries} changes={changes} fixtures={fixtures} openMatch={openMatch} isAdvanced={isAdvanced} activePatternCount={activePatternCount} enabledCount={enabledCount} triggeredAlerts={getRecentTriggered(5)} onGoToPatterns={() => setActiveTab('patterns')} navigate={navigate} templates={templates} createFromTemplate={createFromTemplate} />}
       {activeTab === 'patterns' && <PatternsView patterns={patterns} templates={templates} createFromTemplate={createFromTemplate} createPattern={createPattern} updatePattern={updatePattern} togglePattern={togglePattern} deletePattern={deletePattern} isAdvanced={isAdvanced} showBuilder={showBuilder} setShowBuilder={setShowBuilder} discoveryConfig={discoveryConfig} updateDiscoveryConfig={updateDiscoveryConfig} triggeredAlerts={triggeredAlerts} fixtures={fixtures} prefilledDraft={prefilledDraft} clearPrefilledDraft={() => setPrefilledDraft(null)} />}
-      {activeTab === 'scanner' && <ScannerView hasIntelligence={hasIntelligence} entries={scannerEntries} openMatch={openMatch} isAdvanced={isAdvanced} onGoToPatterns={() => setActiveTab('patterns')} />}
+      {activeTab === 'scanner' && <ScannerView hasIntelligence={hasIntelligence} entries={scannerEntries} openMatch={openMatch} isAdvanced={isAdvanced} onGoToPatterns={() => setActiveTab('patterns')} patterns={patterns} />}
       {activeTab === 'alerts' && <AlertsView triggeredAlerts={getRecentTriggered(30)} isAdvanced={isAdvanced} openMatch={openMatch} fixtures={fixtures} navigate={navigate} />}
       {activeTab === 'performance' && <PerformanceView patterns={patterns} triggeredAlerts={triggeredAlerts} isAdvanced={isAdvanced} />}
     </div>
@@ -1708,6 +1708,9 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
         </div>
       </header>
 
+      {/* Scope intelligence — compact panel showing the Knowledge Base footprint */}
+      <ScopeHealthPanel availableLeagues={availableLeagues} availableTeams={availableTeams} availableMatches={availableMatches} fixturesCount={fixtures.length} patternsCount={patterns.length} />
+
       {/* Motor automático — compact card */}
       <section className={`rounded-2xl border ${isAutoActive ? 'border-emerald-400/20 bg-gradient-to-r from-emerald-500/[0.04] via-cyan-500/[0.02] to-transparent' : 'border-white/[0.07] bg-gradient-to-r from-white/[0.02] to-transparent'} p-5`}>
         <div className="flex items-center gap-4 flex-wrap">
@@ -1810,6 +1813,39 @@ function TemplateCard({ template, existing, isActive, onToggle, onConfigure }: {
   )
 }
 
+// ═══ SCOPE HEALTH PANEL — small premium panel showing Scope KB footprint
+function ScopeHealthPanel({ availableLeagues, availableTeams, availableMatches, fixturesCount, patternsCount }: { availableLeagues: string[]; availableTeams: string[]; availableMatches: ScopeKbMatch[]; fixturesCount: number; patternsCount: number }) {
+  const navigate = useNavigate()
+  return (
+    <section className="rounded-2xl border border-white/[0.06] bg-gradient-to-r from-cyan-500/[0.03] via-white/[0.012] to-transparent p-4 flex items-center gap-4 flex-wrap">
+      <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 bg-cyan-500/12 border border-cyan-400/20"><Eye size={16} className="text-cyan-300" /></div>
+      <div className="flex-1 min-w-0">
+        <h3 className="text-[12px] font-bold text-white/90 tracking-tight">Inteligência de escopo</h3>
+        <p className="text-[11px] text-white/55 mt-0.5 leading-snug">A biblioteca local cresce com o uso real e melhora as sugestões do ScopePicker.</p>
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
+        <ScopeStat label="Ligas" value={availableLeagues.length} />
+        <ScopeStat label="Times" value={availableTeams.length} />
+        <ScopeStat label="Partidas" value={availableMatches.length} />
+      </div>
+      <div className="flex items-center gap-1.5 text-[10px] text-white/45">
+        <span className="px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06]">{fixturesCount} fixtures atuais</span>
+        <span className="px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06]">{patternsCount} padrões</span>
+      </div>
+      <button onClick={() => navigate('/app/settings')} type="button" className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white/65 hover:text-white/95 border border-white/[0.07] hover:border-white/[0.12] transition-all">Gerenciar em Settings</button>
+    </section>
+  )
+}
+
+function ScopeStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="text-center">
+      <span className="text-[16px] font-bold text-white/95 block leading-none tabular-nums">{value}</span>
+      <span className="text-[9px] text-white/55 uppercase tracking-wider font-semibold mt-0.5 block">{label}</span>
+    </div>
+  )
+}
+
 // ═══ CONFIGURED RADAR ROW
 function scopeShortLabel(p: Pattern): string {
   if (p.scope === 'favorites_only') return 'Favoritos'
@@ -1818,6 +1854,24 @@ function scopeShortLabel(p: Pattern): string {
   if (p.scope === 'specific_matches' && p.matches && p.matches.length > 0) return `${p.matches.length} partida${p.matches.length === 1 ? '' : 's'}`
   if (p.matches && p.matches.length > 0) return `${p.matches.length} partida${p.matches.length === 1 ? '' : 's'}`
   return 'Todos'
+}
+
+// ═══ Audit helper: describe scope & filters of a pattern in human language
+function describePatternScope(p: Pattern): string[] {
+  const parts: string[] = []
+  if (p.scope === 'favorites_only') parts.push('Apenas favoritos')
+  else if (p.scope === 'specific_leagues' && p.scopeFilter && p.scopeFilter.length > 0) parts.push(`${p.scopeFilter.length} liga${p.scopeFilter.length === 1 ? '' : 's'} selecionada${p.scopeFilter.length === 1 ? '' : 's'}`)
+  else if (p.scope === 'specific_teams' && p.scopeFilter && p.scopeFilter.length > 0) parts.push(`${p.scopeFilter.length} time${p.scopeFilter.length === 1 ? '' : 's'} selecionado${p.scopeFilter.length === 1 ? '' : 's'}`)
+  else if (p.scope === 'specific_matches' && p.matches && p.matches.length > 0) parts.push(`${p.matches.length} partida${p.matches.length === 1 ? '' : 's'} específica${p.matches.length === 1 ? '' : 's'}`)
+  else parts.push('Todos os jogos')
+  if (p.matches && p.matches.length > 0 && p.scope !== 'specific_matches') parts.push(`+${p.matches.length} partida${p.matches.length === 1 ? '' : 's'}`)
+  if (p.requireRichData) parts.push('dados ricos')
+  if (p.onlyLive) parts.push('apenas ao vivo')
+  if (p.onlyPreMatch) parts.push('apenas pré-jogo')
+  if (p.excludeLeagues && p.excludeLeagues.length > 0) parts.push(`exceto ${p.excludeLeagues.length} liga${p.excludeLeagues.length === 1 ? '' : 's'}`)
+  if (p.excludeTeams && p.excludeTeams.length > 0) parts.push(`exceto ${p.excludeTeams.length} time${p.excludeTeams.length === 1 ? '' : 's'}`)
+  if (p.excludeMatches && p.excludeMatches.length > 0) parts.push(`exceto ${p.excludeMatches.length} partida${p.excludeMatches.length === 1 ? '' : 's'}`)
+  return parts
 }
 
 function ConfiguredRadarRow({ pattern, triggeredAlerts, onToggle, onEdit, onDuplicate, onDelete, isAdvanced }: { pattern: Pattern; triggeredAlerts: TriggeredAlert[]; onToggle: () => void; onEdit: () => void; onDuplicate: () => void; onDelete: () => void; isAdvanced: boolean }) {
@@ -1856,8 +1910,49 @@ function ConfiguredRadarRow({ pattern, triggeredAlerts, onToggle, onEdit, onDupl
         </div>
       </div>
       {isAdvanced && (
-        <div className="mt-2 pt-2 border-t border-white/[0.04] text-[10px] text-white/45 font-mono">
-          id:{pattern.id.slice(0, 12)} · template:{pattern.templateId || 'custom'} · max/jogo:{pattern.maxTriggersPerMatch} · anti-dup:{pattern.antiDuplicateWindow}min
+        <div className="mt-2 pt-2 border-t border-white/[0.04] space-y-2">
+          {(() => {
+            const detail = describePatternScope(pattern)
+            if (detail.length === 0) return null
+            return (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[9px] uppercase tracking-wider text-white/45 font-semibold">Escopo:</span>
+                {detail.map((s, i) => <span key={i} className="text-[10px] text-white/65 bg-white/[0.03] border border-white/[0.06] px-2 py-0.5 rounded">{s}</span>)}
+              </div>
+            )
+          })()}
+          {(pattern.scope === 'specific_leagues' && pattern.scopeFilter && pattern.scopeFilter.length > 0) && (
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-[9px] uppercase tracking-wider text-white/45 font-semibold">Ligas:</span>
+              {pattern.scopeFilter.slice(0, 3).map(s => <span key={s} className="text-[10px] text-cyan-300 bg-cyan-500/10 border border-cyan-400/20 px-2 py-0.5 rounded">{s}</span>)}
+              {pattern.scopeFilter.length > 3 && <span className="text-[10px] text-white/45">+{pattern.scopeFilter.length - 3}</span>}
+            </div>
+          )}
+          {(pattern.scope === 'specific_teams' && pattern.scopeFilter && pattern.scopeFilter.length > 0) && (
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-[9px] uppercase tracking-wider text-white/45 font-semibold">Times:</span>
+              {pattern.scopeFilter.slice(0, 3).map(s => <span key={s} className="text-[10px] text-cyan-300 bg-cyan-500/10 border border-cyan-400/20 px-2 py-0.5 rounded">{s}</span>)}
+              {pattern.scopeFilter.length > 3 && <span className="text-[10px] text-white/45">+{pattern.scopeFilter.length - 3}</span>}
+            </div>
+          )}
+          {pattern.matches && pattern.matches.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-[9px] uppercase tracking-wider text-white/45 font-semibold">Partidas:</span>
+              {pattern.matches.slice(0, 3).map(s => <span key={s} className="text-[10px] text-cyan-300 bg-cyan-500/10 border border-cyan-400/20 px-2 py-0.5 rounded truncate max-w-[200px]">{s}</span>)}
+              {pattern.matches.length > 3 && <span className="text-[10px] text-white/45">+{pattern.matches.length - 3}</span>}
+            </div>
+          )}
+          {((pattern.excludeLeagues?.length || 0) + (pattern.excludeTeams?.length || 0) + (pattern.excludeMatches?.length || 0) > 0) && (
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-[9px] uppercase tracking-wider text-rose-300 font-semibold">Exclusões:</span>
+              {pattern.excludeLeagues?.slice(0, 2).map(s => <span key={`el-${s}`} className="text-[10px] text-rose-300 bg-rose-500/10 border border-rose-400/20 px-2 py-0.5 rounded">− {s}</span>)}
+              {pattern.excludeTeams?.slice(0, 2).map(s => <span key={`et-${s}`} className="text-[10px] text-rose-300 bg-rose-500/10 border border-rose-400/20 px-2 py-0.5 rounded">− {s}</span>)}
+              {pattern.excludeMatches?.slice(0, 2).map(s => <span key={`em-${s}`} className="text-[10px] text-rose-300 bg-rose-500/10 border border-rose-400/20 px-2 py-0.5 rounded truncate max-w-[160px]">− {s}</span>)}
+            </div>
+          )}
+          <div className="text-[10px] text-white/45 font-mono">
+            id:{pattern.id.slice(0, 12)} · template:{pattern.templateId || 'custom'} · max/jogo:{pattern.maxTriggersPerMatch} · anti-dup:{pattern.antiDuplicateWindow}min
+          </div>
         </div>
       )}
     </div>
@@ -1868,7 +1963,7 @@ function ConfiguredRadarRow({ pattern, triggeredAlerts, onToggle, onEdit, onDupl
 // ═══ SCANNER ═══
 type ScannerFilter = 'all' | 'critical' | 'attention' | 'favorites' | 'live' | 'soon' | 'rich'
 
-function ScannerView({ hasIntelligence, entries, openMatch, isAdvanced, onGoToPatterns }: { hasIntelligence: boolean; entries: ScannerEntry[]; openMatch: (fx: LiveFixture) => void; isAdvanced: boolean; onGoToPatterns: () => void }) {
+function ScannerView({ hasIntelligence, entries, openMatch, isAdvanced, onGoToPatterns, patterns }: { hasIntelligence: boolean; entries: ScannerEntry[]; openMatch: (fx: LiveFixture) => void; isAdvanced: boolean; onGoToPatterns: () => void; patterns: Pattern[] }) {
   const { isFavoriteTeam } = useFavorites()
   const [filter, setFilter] = useState<ScannerFilter>('all')
 
@@ -1961,7 +2056,7 @@ function ScannerView({ hasIntelligence, entries, openMatch, isAdvanced, onGoToPa
           </div>
         ) : (
           <div className="space-y-2">
-            {filteredEntries.map(entry => <ScannerRow key={entry.fixture.id} entry={entry} openMatch={openMatch} isAdvanced={isAdvanced} isFavoriteTeam={isFavoriteTeam} />)}
+            {filteredEntries.map(entry => <ScannerRow key={entry.fixture.id} entry={entry} openMatch={openMatch} isAdvanced={isAdvanced} isFavoriteTeam={isFavoriteTeam} patterns={patterns} />)}
           </div>
         )}
       </div>
@@ -1984,13 +2079,15 @@ function CounterCell({ label, value, tone }: { label: string; value: number | st
   )
 }
 
-function ScannerRow({ entry, openMatch, isAdvanced, isFavoriteTeam }: { entry: ScannerEntry; openMatch: (fx: LiveFixture) => void; isAdvanced: boolean; isFavoriteTeam: (name: string) => boolean }) {
+function ScannerRow({ entry, openMatch, isAdvanced, isFavoriteTeam, patterns }: { entry: ScannerEntry; openMatch: (fx: LiveFixture) => void; isAdvanced: boolean; isFavoriteTeam: (name: string) => boolean; patterns: Pattern[] }) {
   const fx = entry.fixture
   const live = isLiveFx(fx)
   const isFav = isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name)
   const accentBorder = entry.priority === 'critical' ? 'border-l-rose-400/55' : entry.priority === 'attention' ? 'border-l-amber-400/55' : 'border-l-cyan-400/45'
   const statusLabel = live ? 'Batendo' : entry.topPattern ? 'Pronto' : 'Sugerido'
   const statusColor = live ? 'bg-emerald-500/12 text-emerald-300 border-emerald-400/20' : entry.topPattern ? 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15' : 'bg-white/[0.04] text-white/55 border-white/[0.07]'
+  const fullPattern = entry.topPattern ? patterns.find(p => p.id === entry.topPattern!.patternId) : null
+  const scopeAudit = fullPattern ? describePatternScope(fullPattern) : null
 
   return (
     <div onClick={() => openMatch(fx)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') openMatch(fx) }} className={`group relative rounded-2xl border border-l-2 ${accentBorder} border-white/[0.05] bg-gradient-to-r from-white/[0.012] to-white/[0.005] hover:border-white/[0.1] hover:bg-white/[0.018] cursor-pointer transition-all`}>
@@ -2033,6 +2130,14 @@ function ScannerRow({ entry, openMatch, isAdvanced, isFavoriteTeam }: { entry: S
             <ChevronRight size={14} className="text-white/25 group-hover:text-white/65 transition-colors" />
           </div>
         </div>
+        {scopeAudit && scopeAudit.length > 0 && (
+          <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+            <span className="text-[9px] uppercase tracking-wider text-white/45 font-semibold">Escopo:</span>
+            {scopeAudit.map((s, i) => (
+              <span key={i} className="text-[10px] text-white/65 bg-white/[0.03] border border-white/[0.06] px-2 py-0.5 rounded">{s}</span>
+            ))}
+          </div>
+        )}
         {isAdvanced && entry.topPattern && (
           <div className="mt-2 pt-2 border-t border-white/[0.04] text-[10px] text-white/35 font-mono">
             cond:{entry.topPattern.matchedConditions}/{entry.topPattern.totalConditions} · sev:{entry.topPattern.severity} · provider:{fx.provider}
