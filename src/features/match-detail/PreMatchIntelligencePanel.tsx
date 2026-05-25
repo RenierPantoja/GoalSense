@@ -1,5 +1,6 @@
 /**
- * War Room Pre-Match — dense, comparative, premium pre-match intelligence.
+ * War Room Pre-Match — Ultra Premium Edition.
+ * Dense, colorful, hierarchical, editorial-grade pre-match intelligence.
  */
 import { useEffect, useState, useMemo } from 'react'
 import { getPreMatchIntelligence, type PreMatchIntelligenceResult, type TeamFormSummary } from '@/services/preMatchIntelligence'
@@ -28,15 +29,12 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
 
   const loadAdv = async () => { setAdvLoading(true); try { setAdv(await getPreMatchAdvanced({ homeName, awayName, homeId: homeId ? Number(homeId) : undefined, awayId: awayId ? Number(awayId) : undefined, goalsProfile: data?.goalsProfile, homeForm: data?.homeForm, awayForm: data?.awayForm, disciplineTrend: data?.disciplineProfile?.trend })) } catch {} finally { setAdvLoading(false) } }
 
-  if (loading) return <div className="rounded-2xl border border-white/[0.06] bg-[#0b111c] p-6 animate-pulse space-y-3"><div className="h-5 w-52 bg-white/[0.05] rounded" /><div className="h-4 w-full bg-white/[0.04] rounded" /><div className="h-32 bg-white/[0.03] rounded-xl" /></div>
+  if (loading) return <div className="rounded-3xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-700/30 p-8 animate-pulse"><div className="h-6 w-56 bg-slate-800 rounded-lg mb-4" /><div className="h-4 w-full bg-slate-800/60 rounded mb-2" /><div className="h-40 bg-slate-800/40 rounded-2xl" /></div>
 
-  // Fallback when no data at all
   if (!data || !data.available) return (
-    <section className="rounded-2xl border border-white/[0.07] bg-[#0b111c] p-6">
-      <h3 className="text-[17px] font-bold text-white/85 mb-2">War Room Pre-Jogo</h3>
-      <p className="text-[13px] text-white/50 leading-relaxed">Dados pre-jogo limitados para esta partida. O GoalSense tentou buscar historico nos providers, mas nao encontrou amostra suficiente.</p>
-      {data?.limitations && data.limitations.length > 0 && <div className="mt-3 space-y-1">{data.limitations.map((l, i) => <p key={i} className="text-[11px] text-white/30">- {l}</p>)}</div>}
-      <p className="text-[12px] text-white/35 mt-4">Configure padroes no Command Center para monitorar esta partida ao vivo.</p>
+    <section className="rounded-3xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-700/30 p-8">
+      <div className="flex items-center gap-3 mb-4"><div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center"><span className="text-[16px]">&#9878;</span></div><div><h3 className="text-[18px] font-bold text-white">Analise Pre-Jogo</h3><p className="text-[12px] text-slate-400">Dados limitados para esta partida</p></div></div>
+      <div className="rounded-2xl bg-slate-800/40 border border-slate-700/20 p-5"><p className="text-[14px] text-slate-300 leading-relaxed">Nao encontramos historico suficiente nos providers para montar uma leitura completa deste confronto.</p>{data?.limitations && <div className="mt-3 space-y-1">{data.limitations.map((l, i) => <p key={i} className="text-[12px] text-slate-500 flex items-center gap-2"><span className="text-amber-400">!</span> {l}</p>)}</div>}</div>
     </section>
   )
 
@@ -45,141 +43,125 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
 
   return (
     <section className="space-y-4">
-      {/* ═══ A. HERO TATICO ═══ */}
-      <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-[#0a0f18] via-[#0c1220] to-[#0e1424] p-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-[200px] h-[100px] bg-cyan-500/[0.02] rounded-full blur-[60px]" />
-        <div className="relative flex items-start justify-between gap-4">
+      {/* ═══ HERO ═══ */}
+      <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/40 border border-slate-700/30 p-7 relative overflow-hidden">
+        <div className="absolute -top-10 -right-10 w-[200px] h-[200px] bg-blue-500/[0.04] rounded-full blur-[80px]" />
+        <div className="absolute bottom-0 left-0 w-[150px] h-[150px] bg-cyan-500/[0.03] rounded-full blur-[60px]" />
+        <div className="relative flex items-start justify-between gap-6">
           <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <h3 className="text-[18px] font-bold text-white/90">War Room</h3>
-              <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${data.status === 'rich' ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/15' : data.status === 'partial' ? 'text-amber-300 bg-amber-500/10 border-amber-500/15' : 'text-white/40 bg-white/[0.04] border-white/[0.08]'}`}>{data.status === 'rich' ? 'Rico' : data.status === 'partial' ? 'Parcial' : 'Limitado'}</span>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-blue-500/30 to-cyan-500/20 flex items-center justify-center border border-blue-400/20"><span className="text-[14px] text-blue-300">&#9878;</span></div>
+              <div><h3 className="text-[17px] font-bold text-white">War Room</h3></div>
+              <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full ${data.status === 'rich' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-400/20' : data.status === 'partial' ? 'bg-amber-500/15 text-amber-300 border border-amber-400/20' : 'bg-slate-700/50 text-slate-400 border border-slate-600/30'}`}>{data.status === 'rich' ? 'Dados ricos' : data.status === 'partial' ? 'Parcial' : 'Limitado'}</span>
             </div>
-            <p className="text-[13px] text-white/55 leading-relaxed mb-3">{data.preview?.summary || 'Leitura em construcao.'}</p>
-            <div className="flex flex-wrap gap-2">
-              {score && <><Chip label="Equilibrio" val={score.balance.label} s={score.balance.score} /><Chip label="Gols" val={score.goalsTrend.label} s={score.goalsTrend.score} /><Chip label="Disciplina" val={score.disciplineRisk.label} s={score.disciplineRisk.score} /></>}
-              {!score && <span className="text-[11px] text-white/30">Score indisponivel por dados insuficientes</span>}
-            </div>
+            <p className="text-[14px] text-slate-300 leading-relaxed mb-4">{data.preview?.summary || 'Leitura em construcao com dados disponiveis.'}</p>
+            <div className="flex flex-wrap gap-2">{score && <><ScoreChip label="Equilibrio" value={score.balance.label} score={score.balance.score} /><ScoreChip label="Gols" value={score.goalsTrend.label} score={score.goalsTrend.score} /><ScoreChip label="Disciplina" value={score.disciplineRisk.label} score={score.disciplineRisk.score} /></>}</div>
           </div>
-          {score && <div className="text-right shrink-0"><span className="text-[38px] font-bold tabular-nums text-white/85 leading-none">{score.overallScore}</span><span className="text-[11px] text-white/30 block mt-1">/100 · {score.confidence}</span></div>}
+          {score && <div className="text-right shrink-0"><div className="inline-flex flex-col items-center justify-center h-20 w-20 rounded-2xl bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-400/15"><span className="text-[32px] font-bold text-white leading-none">{score.overallScore}</span><span className="text-[10px] text-blue-300/70 mt-0.5">/100</span></div><p className="text-[10px] text-slate-500 mt-1.5">{score.confidence}</p></div>}
         </div>
       </div>
 
-      {/* ═══ C. MAPA DO CONFRONTO ═══ */}
-      <div className="rounded-2xl border border-white/[0.07] bg-[#0b111c] p-5">
-        <h4 className="text-[11px] font-bold uppercase tracking-[0.08em] text-white/40 mb-4">Mapa do confronto</h4>
-        <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-start">
-          {/* Mandante */}
-          <div>
-            <p className="text-[14px] font-bold text-white/80 mb-1">{homeName}</p>
-            {hf ? (<><div className="flex gap-1 mb-2">{hf.formString.split(' ').map((r, i) => <span key={i} className={`h-6 w-6 rounded flex items-center justify-center text-[9px] font-bold ${r === 'W' ? 'bg-emerald-500/20 text-emerald-400' : r === 'D' ? 'bg-amber-500/15 text-amber-300' : 'bg-rose-500/15 text-rose-400'}`}>{r === 'W' ? 'V' : r === 'D' ? 'E' : 'D'}</span>)}</div><div className="space-y-1 text-[12px]"><Row l="Gols pro" v={String(hf.summary.goalsFor)} /><Row l="Gols contra" v={String(hf.summary.goalsAgainst)} />{hh && hh.matches.length >= 2 && <Row l="Em casa" v={`${hh.summary.wins}V ${hh.summary.draws}E ${hh.summary.losses}D`} />}</div></>) : <p className="text-[11px] text-white/30">Forma indisponivel</p>}
+      {/* ═══ CONFRONTO ═══ */}
+      <div className="rounded-2xl bg-slate-900/80 border border-slate-700/25 p-5">
+        <div className="grid grid-cols-[1fr_80px_1fr] gap-3 items-start">
+          <TeamCol name={homeName} form={hf} venue={hh} venueLabel="Em casa" align="left" />
+          <div className="flex flex-col items-center justify-center pt-4 gap-2">
+            <div className="h-8 w-8 rounded-full bg-slate-800 border border-slate-700/40 flex items-center justify-center"><span className="text-[10px] text-slate-400 font-bold">VS</span></div>
+            {h2h && <span className="text-[9px] text-slate-500">{h2h.total} jogos</span>}
+            {score && <span className={`text-[9px] px-2 py-0.5 rounded-full ${score.balance.score >= 65 ? 'bg-slate-800 text-slate-400' : score.homeStrength.score > score.awayStrength.score + 10 ? 'bg-blue-500/10 text-blue-300' : 'bg-emerald-500/10 text-emerald-300'}`}>{score.balance.score >= 65 ? 'Equilibrado' : score.homeStrength.score > score.awayStrength.score + 10 ? 'Casa +' : 'Fora +'}</span>}
           </div>
-          {/* Centro */}
-          <div className="flex flex-col items-center gap-2 pt-2">
-            <span className="text-[10px] text-white/25 uppercase tracking-wider">vs</span>
-            {score && <span className={`text-[11px] font-medium px-2 py-1 rounded-lg ${score.balance.score >= 65 ? 'text-white/50 bg-white/[0.04]' : score.homeStrength.score > score.awayStrength.score + 10 ? 'text-cyan-400/60 bg-cyan-500/8' : 'text-emerald-400/60 bg-emerald-500/8'}`}>{score.balance.score >= 65 ? 'Equilibrado' : score.homeStrength.score > score.awayStrength.score + 10 ? 'Mandante +' : 'Visitante +'}</span>}
-            {h2h && <span className="text-[10px] text-white/25">{h2h.total} confrontos</span>}
-          </div>
-          {/* Visitante */}
-          <div className="text-right">
-            <p className="text-[14px] font-bold text-white/80 mb-1">{awayName}</p>
-            {af ? (<><div className="flex gap-1 justify-end mb-2">{af.formString.split(' ').map((r, i) => <span key={i} className={`h-6 w-6 rounded flex items-center justify-center text-[9px] font-bold ${r === 'W' ? 'bg-emerald-500/20 text-emerald-400' : r === 'D' ? 'bg-amber-500/15 text-amber-300' : 'bg-rose-500/15 text-rose-400'}`}>{r === 'W' ? 'V' : r === 'D' ? 'E' : 'D'}</span>)}</div><div className="space-y-1 text-[12px] text-right"><Row l="Gols pro" v={String(af.summary.goalsFor)} right /><Row l="Gols contra" v={String(af.summary.goalsAgainst)} right />{aa && aa.matches.length >= 2 && <Row l="Fora" v={`${aa.summary.wins}V ${aa.summary.draws}E ${aa.summary.losses}D`} right />}</div></>) : <p className="text-[11px] text-white/30">Forma indisponivel</p>}
-          </div>
+          <TeamCol name={awayName} form={af} venue={aa} venueLabel="Fora" align="right" />
         </div>
       </div>
 
-      {/* ═══ E. PERFIL DE GOLS + DISCIPLINA ═══ */}
+      {/* ═══ METRICAS ═══ */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="rounded-xl border border-white/[0.07] bg-[#0b111c] p-4">
-          <h4 className="text-[10px] font-bold uppercase tracking-[0.08em] text-white/40 mb-3">Perfil de gols</h4>
-          {gp ? (<div className="grid grid-cols-2 gap-3"><Stat label="Media" value={String(gp.avgGoalsPerMatch)} tag={gp.avgGoalsPerMatch >= 2.5 ? 'Forte' : 'Mod.'} /><Stat label="Over 2.5" value={`${gp.over25Pct}%`} /><Stat label="Over 1.5" value={`${gp.over15Pct}%`} /><Stat label="Ambos" value={`${gp.bothScoredPct}%`} tag={gp.bothScoredPct >= 60 ? 'Freq.' : ''} /></div>) : <p className="text-[11px] text-white/30">Indisponivel — sem jogos recentes suficientes.</p>}
+        {/* Gols */}
+        <div className="rounded-2xl bg-slate-900/80 border border-slate-700/25 p-5">
+          <div className="flex items-center gap-2 mb-3"><div className="h-6 w-6 rounded-lg bg-gradient-to-br from-emerald-500/20 to-green-500/10 flex items-center justify-center"><span className="text-[11px] text-emerald-400">&#9917;</span></div><h4 className="text-[12px] font-bold text-slate-300 uppercase tracking-wide">Perfil de Gols</h4></div>
+          {gp ? (<div className="grid grid-cols-2 gap-4"><MetricBox label="Media/jogo" value={String(gp.avgGoalsPerMatch)} color="emerald" /><MetricBox label="Over 2.5" value={`${gp.over25Pct}%`} color={gp.over25Pct >= 55 ? 'emerald' : 'slate'} /><MetricBox label="Over 1.5" value={`${gp.over15Pct}%`} color="slate" /><MetricBox label="Ambos marcam" value={`${gp.bothScoredPct}%`} color={gp.bothScoredPct >= 55 ? 'amber' : 'slate'} /></div>) : <p className="text-[12px] text-slate-500">Sem jogos recentes suficientes no provider.</p>}
         </div>
-        <div className="rounded-xl border border-white/[0.07] bg-[#0b111c] p-4">
-          <h4 className="text-[10px] font-bold uppercase tracking-[0.08em] text-white/40 mb-3">Disciplina</h4>
-          {dp && dp.trend !== 'unknown' ? (<div className="grid grid-cols-2 gap-3"><Stat label={homeName.split(' ')[0]} value={String(dp.homeYellowAvg)} tag="amarelos/j" /><Stat label={awayName.split(' ')[0]} value={String(dp.awayYellowAvg)} tag="amarelos/j" /><Stat label="Vermelhos" value={String(dp.homeRedTotal + dp.awayRedTotal)} /><Stat label="Tendencia" value={dp.trend === 'high' ? 'Alta' : dp.trend === 'moderate' ? 'Moderada' : 'Baixa'} /></div>) : <p className="text-[11px] text-white/30">Indisponivel — provider sem eventos disciplinares recentes.</p>}
+        {/* Disciplina */}
+        <div className="rounded-2xl bg-slate-900/80 border border-slate-700/25 p-5">
+          <div className="flex items-center gap-2 mb-3"><div className="h-6 w-6 rounded-lg bg-gradient-to-br from-amber-500/20 to-orange-500/10 flex items-center justify-center"><span className="text-[11px] text-amber-400">&#9888;</span></div><h4 className="text-[12px] font-bold text-slate-300 uppercase tracking-wide">Disciplina</h4></div>
+          {dp && dp.trend !== 'unknown' ? (<div className="grid grid-cols-2 gap-4"><MetricBox label={`${homeName.split(' ')[0]}`} value={String(dp.homeYellowAvg)} color="amber" sub="amarelos/j" /><MetricBox label={`${awayName.split(' ')[0]}`} value={String(dp.awayYellowAvg)} color="amber" sub="amarelos/j" /><MetricBox label="Vermelhos" value={String(dp.homeRedTotal + dp.awayRedTotal)} color="rose" /><MetricBox label="Tendencia" value={dp.trend === 'high' ? 'Alta' : dp.trend === 'moderate' ? 'Media' : 'Baixa'} color={dp.trend === 'high' ? 'rose' : 'slate'} /></div>) : <p className="text-[12px] text-slate-500">Provider sem eventos disciplinares recentes.</p>}
         </div>
       </div>
 
-      {/* ═══ F. H2H ═══ */}
-      {h2h ? (
-        <div className="rounded-xl border border-white/[0.07] bg-[#0b111c] p-4">
-          <h4 className="text-[10px] font-bold uppercase tracking-[0.08em] text-white/40 mb-3">Confronto direto · {h2h.total} jogos</h4>
-          <div className="flex items-center gap-2 mb-2">
-            <div className="flex-1 h-3 rounded-full overflow-hidden flex"><div className="bg-cyan-400/60" style={{ width: `${(h2h.homeWins / h2h.total) * 100}%` }} /><div className="bg-white/10" style={{ width: `${(h2h.draws / h2h.total) * 100}%` }} /><div className="bg-emerald-400/60" style={{ width: `${(h2h.awayWins / h2h.total) * 100}%` }} /></div>
-          </div>
-          <div className="flex justify-between text-[12px]"><span className="text-cyan-400/70 font-bold">{h2h.homeWins} {homeName.split(' ')[0]}</span><span className="text-white/35">{h2h.draws} empates</span><span className="text-emerald-400/70 font-bold">{h2h.awayWins} {awayName.split(' ')[0]}</span></div>
-          <p className="text-[11px] text-white/30 mt-2">Media: {((h2h.homeGoals + h2h.awayGoals) / h2h.total).toFixed(1)} gols/jogo no historico</p>
-          {isAdvanced && data.recentMeetings && data.recentMeetings.length > 0 && <div className="mt-2 pt-2 border-t border-white/[0.04] space-y-1">{data.recentMeetings.slice(0, 3).map((m, i) => <p key={i} className="text-[10px] text-white/30">{new Date(m.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })} — {m.homeTeam} {m.homeScore}-{m.awayScore} {m.awayTeam}</p>)}</div>}
-        </div>
-      ) : <div className="rounded-xl border border-white/[0.06] bg-[#0b111c] p-4"><h4 className="text-[10px] font-bold uppercase tracking-[0.08em] text-white/40 mb-2">H2H</h4><p className="text-[11px] text-white/30">Confronto direto indisponivel no provider.</p></div>}
-
-      {/* ═══ G. PADROES ═══ */}
-      {patterns.length > 0 ? (
-        <div className="rounded-xl border border-white/[0.07] bg-[#0b111c] p-4">
-          <h4 className="text-[10px] font-bold uppercase tracking-[0.08em] text-white/40 mb-2">Padroes monitoraveis</h4>
-          <p className="text-[10px] text-white/25 mb-3">Pre-sinal nao e alerta. O alerta so e registrado ao vivo.</p>
-          <div className="space-y-1.5">{(isAdvanced ? patterns : patterns.filter(r => r.readiness !== 'not_applicable').slice(0, 4)).map(r => (
-            <div key={r.patternId} className="flex items-center gap-2 rounded-lg bg-white/[0.025] border border-white/[0.05] px-3 py-2">
-              <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded ${r.readiness === 'ready' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/[0.05] text-white/30'}`}>{r.readiness === 'ready' ? 'Pronto' : 'Ao vivo'}</span>
-              <span className="text-[12px] text-white/60 flex-1">{r.patternName}</span>
-              {r.triggerWindow && <span className="text-[10px] text-white/25">{r.triggerWindow}</span>}
-            </div>
-          ))}</div>
-        </div>
-      ) : getActivePatterns().length === 0 ? (
-        <div className="rounded-xl border border-dashed border-white/[0.06] bg-[#0b111c] p-5 text-center"><p className="text-[12px] text-white/45">Nenhum radar ativo</p><p className="text-[11px] text-white/25 mt-1">Configure padroes no Command Center para monitorar ao vivo.</p></div>
-      ) : null}
-
-      {/* ═══ H. WATCH POINTS ═══ */}
-      {score && score.watchPoints.length > 0 && (
-        <div className="rounded-xl border border-white/[0.07] bg-[#0b111c] p-4">
-          <h4 className="text-[10px] font-bold uppercase tracking-[0.08em] text-white/40 mb-3">O que observar ao vivo</h4>
-          <div className="space-y-2">{score.watchPoints.map((wp, i) => (
-            <div key={i} className="flex items-start gap-2"><span className="text-cyan-400/50 mt-0.5">▸</span><div><span className="text-[12px] text-white/60 block">{wp.label}</span><span className="text-[11px] text-white/30">{wp.detail}{wp.timing ? ` · ${wp.timing}` : ''}</span></div></div>
-          ))}</div>
+      {/* ═══ H2H ═══ */}
+      {h2h && (
+        <div className="rounded-2xl bg-slate-900/80 border border-slate-700/25 p-5">
+          <div className="flex items-center gap-2 mb-4"><div className="h-6 w-6 rounded-lg bg-gradient-to-br from-violet-500/20 to-purple-500/10 flex items-center justify-center"><span className="text-[11px] text-violet-400">&#8644;</span></div><h4 className="text-[12px] font-bold text-slate-300 uppercase tracking-wide">Confronto Direto</h4><span className="text-[11px] text-slate-500 ml-auto">{h2h.total} jogos</span></div>
+          <div className="flex items-center gap-1 mb-3 h-4 rounded-full overflow-hidden"><div className="h-full rounded-l-full bg-gradient-to-r from-blue-400 to-blue-500" style={{ width: `${Math.max(5, (h2h.homeWins / h2h.total) * 100)}%` }} /><div className="h-full bg-slate-600" style={{ width: `${Math.max(5, (h2h.draws / h2h.total) * 100)}%` }} /><div className="h-full rounded-r-full bg-gradient-to-r from-emerald-500 to-emerald-400" style={{ width: `${Math.max(5, (h2h.awayWins / h2h.total) * 100)}%` }} /></div>
+          <div className="flex justify-between items-center"><span className="text-[13px] font-bold text-blue-400">{h2h.homeWins} {homeName.split(' ')[0]}</span><span className="text-[12px] text-slate-500">{h2h.draws} empates</span><span className="text-[13px] font-bold text-emerald-400">{h2h.awayWins} {awayName.split(' ')[0]}</span></div>
+          <p className="text-[11px] text-slate-500 mt-2">Media historica: {((h2h.homeGoals + h2h.awayGoals) / h2h.total).toFixed(1)} gols/jogo</p>
+          {isAdvanced && data.recentMeetings && data.recentMeetings.length > 0 && <div className="mt-3 pt-3 border-t border-slate-700/30 space-y-1.5">{data.recentMeetings.slice(0, 3).map((m, i) => <p key={i} className="text-[11px] text-slate-400">{new Date(m.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })} — {m.homeTeam} <span className="text-white font-bold">{m.homeScore}-{m.awayScore}</span> {m.awayTeam}</p>)}</div>}
         </div>
       )}
 
-      {/* ═══ I. AVANCADO SOB DEMANDA ═══ */}
+      {/* ═══ WATCH POINTS ═══ */}
+      {score && score.watchPoints.length > 0 && (
+        <div className="rounded-2xl bg-slate-900/80 border border-slate-700/25 p-5">
+          <div className="flex items-center gap-2 mb-3"><div className="h-6 w-6 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/10 flex items-center justify-center"><span className="text-[11px] text-cyan-400">&#9673;</span></div><h4 className="text-[12px] font-bold text-slate-300 uppercase tracking-wide">Observar ao Vivo</h4></div>
+          <div className="space-y-2.5">{score.watchPoints.map((wp, i) => (<div key={i} className="flex items-start gap-3"><div className={`h-2 w-2 rounded-full mt-1.5 shrink-0 ${wp.severity === 'attention' ? 'bg-amber-400' : 'bg-cyan-400/60'}`} /><div><p className="text-[13px] text-slate-200 font-medium">{wp.label}</p><p className="text-[11px] text-slate-500">{wp.detail}{wp.timing ? ` · ${wp.timing}` : ''}</p></div></div>))}</div>
+        </div>
+      )}
+
+      {/* ═══ PADROES ═══ */}
+      {patterns.length > 0 ? (
+        <div className="rounded-2xl bg-slate-900/80 border border-slate-700/25 p-5">
+          <div className="flex items-center gap-2 mb-3"><div className="h-6 w-6 rounded-lg bg-gradient-to-br from-rose-500/20 to-pink-500/10 flex items-center justify-center"><span className="text-[11px] text-rose-400">&#9733;</span></div><h4 className="text-[12px] font-bold text-slate-300 uppercase tracking-wide">Padroes Monitoraveis</h4></div>
+          <div className="space-y-2">{(isAdvanced ? patterns : patterns.filter(r => r.readiness !== 'not_applicable').slice(0, 4)).map(r => (<div key={r.patternId} className="flex items-center gap-3 rounded-xl bg-slate-800/50 border border-slate-700/20 px-4 py-2.5"><span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${r.readiness === 'ready' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-400/20' : 'bg-slate-700/50 text-slate-400 border border-slate-600/30'}`}>{r.readiness === 'ready' ? 'Pronto' : 'Ao vivo'}</span><span className="text-[12px] text-slate-300 flex-1">{r.patternName}</span>{r.triggerWindow && <span className="text-[10px] text-slate-500">{r.triggerWindow}</span>}</div>))}</div>
+        </div>
+      ) : getActivePatterns().length === 0 ? (
+        <div className="rounded-2xl bg-slate-900/60 border border-dashed border-slate-700/30 p-6 text-center"><p className="text-[13px] text-slate-400 font-medium">Nenhum radar ativo</p><p className="text-[11px] text-slate-500 mt-1">Configure padroes no Command Center para monitorar ao vivo.</p></div>
+      ) : null}
+
+      {/* ═══ AVANCADO ═══ */}
       {!adv ? (
-        <div className="rounded-xl border border-white/[0.06] bg-[#0b111c] p-5">
-          <h4 className="text-[12px] font-semibold text-white/55 mb-1">Elenco e disponibilidade</h4>
-          <p className="text-[11px] text-white/30 mb-3">Consulte ausencias, suspensoes, goleadores e sinais adicionais. Dados carregados sob demanda para preservar limite da API.</p>
-          <button onClick={loadAdv} disabled={advLoading} className="px-4 py-2 rounded-xl text-[11px] font-semibold bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 hover:bg-cyan-500/15 disabled:opacity-40 transition-colors" type="button">{advLoading ? 'Carregando...' : 'Carregar analise avancada'}</button>
+        <div className="rounded-2xl bg-slate-900/60 border border-slate-700/25 p-5">
+          <div className="flex items-center gap-2 mb-2"><div className="h-6 w-6 rounded-lg bg-gradient-to-br from-slate-600/30 to-slate-700/20 flex items-center justify-center"><span className="text-[11px] text-slate-400">+</span></div><h4 className="text-[13px] font-semibold text-slate-300">Elenco e disponibilidade</h4></div>
+          <p className="text-[11px] text-slate-500 mb-3">Ausencias, goleadores e sinais adicionais. Sob demanda para preservar limite da API.</p>
+          <button onClick={loadAdv} disabled={advLoading} className="px-4 py-2.5 rounded-xl text-[12px] font-semibold bg-gradient-to-r from-blue-500/15 to-cyan-500/15 text-cyan-300 border border-cyan-400/20 hover:from-blue-500/25 hover:to-cyan-500/25 disabled:opacity-40 transition-all" type="button">{advLoading ? 'Carregando...' : 'Carregar analise avancada'}</button>
         </div>
       ) : <AdvPanel data={adv} homeName={homeName} awayName={awayName} isAdvanced={isAdvanced} />}
 
-      {/* ═══ J. AUDITORIA ═══ */}
-      {isAdvanced && (
-        <details className="rounded-lg border border-white/[0.04] bg-white/[0.01] px-4 py-3">
-          <summary className="text-[10px] text-white/30 cursor-pointer hover:text-white/50">Auditoria dos dados</summary>
-          <div className="mt-2 space-y-1 text-[10px] text-white/25">
-            <p>Status: {data.status} · Confianca: {data.confidence}</p>
-            <p>Forma geral: {hf ? `${hf.matches.length} jogos` : 'indisponivel'} / {af ? `${af.matches.length} jogos` : 'indisponivel'}</p>
-            <p>Casa/fora: {hh ? `${hh.matches.length} casa` : 'n/a'} / {aa ? `${aa.matches.length} fora` : 'n/a'}</p>
-            <p>Goals profile: {gp ? 'disponivel' : 'indisponivel'} · Disciplina: {dp ? dp.trend : 'indisponivel'}</p>
-            <p>H2H: {h2h ? `${h2h.total} confrontos` : 'indisponivel'}</p>
-            <p>Fontes: {data.dataSources.join(', ') || 'nenhuma'}</p>
-            {data.limitations && data.limitations.length > 0 && <>{data.limitations.map((l, i) => <p key={i} className="text-white/20">⚠ {l}</p>)}</>}
-          </div>
-        </details>
-      )}
+      {/* ═══ AUDITORIA ═══ */}
+      {isAdvanced && <details className="rounded-xl bg-slate-900/40 border border-slate-800/30 px-4 py-3"><summary className="text-[11px] text-slate-500 cursor-pointer hover:text-slate-400">Auditoria dos dados</summary><div className="mt-2 space-y-1 text-[10px] text-slate-600"><p>Status: {data.status} · Confianca: {data.confidence}</p><p>Forma: {hf ? `${hf.matches.length}j` : 'n/a'} / {af ? `${af.matches.length}j` : 'n/a'} · Casa/fora: {hh ? `${hh.matches.length}` : 'n/a'} / {aa ? `${aa.matches.length}` : 'n/a'}</p><p>Gols: {gp ? 'sim' : 'nao'} · Disciplina: {dp ? dp.trend : 'n/a'} · H2H: {h2h ? `${h2h.total}` : 'n/a'}</p><p>Fontes: {data.dataSources.join(', ') || 'nenhuma'}</p>{data.limitations?.map((l, i) => <p key={i} className="text-slate-700">! {l}</p>)}</div></details>}
     </section>
   )
 }
 
-// ═══ Micro-components ═══
 
-function Chip({ label, val, s }: { label: string; val: string; s: number }) {
-  const c = s >= 70 ? 'border-emerald-500/20 text-emerald-300/70' : s >= 50 ? 'border-white/[0.1] text-white/55' : 'border-white/[0.06] text-white/35'
-  return <span className={`px-2.5 py-1 rounded-lg border text-[10px] font-medium ${c}`}>{label}: {val}</span>
+// ═══ Components ═══
+
+function ScoreChip({ label, value, score }: { label: string; value: string; score: number }) {
+  const bg = score >= 70 ? 'bg-emerald-500/12 text-emerald-300 border-emerald-400/20' : score >= 50 ? 'bg-blue-500/10 text-blue-300 border-blue-400/15' : 'bg-slate-700/40 text-slate-400 border-slate-600/20'
+  return <span className={`px-3 py-1.5 rounded-full text-[10px] font-semibold border ${bg}`}>{label}: {value}</span>
 }
 
-function Stat({ label, value, tag }: { label: string; value: string; tag?: string }) {
-  return <div><span className="text-[18px] font-bold text-white/80 block leading-tight">{value}</span><span className="text-[10px] text-white/35">{label}</span>{tag && <span className="text-[9px] text-white/25 ml-1">{tag}</span>}</div>
+function MetricBox({ label, value, color, sub }: { label: string; value: string; color: string; sub?: string }) {
+  const c = color === 'emerald' ? 'text-emerald-400' : color === 'amber' ? 'text-amber-400' : color === 'rose' ? 'text-rose-400' : 'text-white'
+  return <div className="rounded-xl bg-slate-800/40 border border-slate-700/20 p-3 text-center"><span className={`text-[20px] font-bold ${c} block leading-tight`}>{value}</span><span className="text-[10px] text-slate-500 block mt-0.5">{label}</span>{sub && <span className="text-[9px] text-slate-600">{sub}</span>}</div>
 }
 
-function Row({ l, v, right }: { l: string; v: string; right?: boolean }) {
-  return <div className={`flex items-center justify-between ${right ? 'flex-row-reverse' : ''}`}><span className="text-white/35">{l}</span><span className="text-white/70 font-semibold">{v}</span></div>
+function TeamCol({ name, form, venue, venueLabel, align }: { name: string; form?: TeamFormSummary; venue?: TeamFormSummary; venueLabel: string; align: 'left' | 'right' }) {
+  const ta = align === 'right' ? 'text-right' : 'text-left'
+  const fj = align === 'right' ? 'justify-end' : 'justify-start'
+  return (
+    <div className={ta}>
+      <p className="text-[15px] font-bold text-white mb-2">{name}</p>
+      {form ? (<>
+        <div className={`flex gap-1 mb-2 ${fj}`}>{form.formString.split(' ').map((r, i) => <span key={i} className={`h-7 w-7 rounded-lg flex items-center justify-center text-[10px] font-bold ${r === 'W' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/15' : r === 'D' ? 'bg-amber-500/15 text-amber-300 border border-amber-400/10' : 'bg-rose-500/15 text-rose-300 border border-rose-400/10'}`}>{r === 'W' ? 'V' : r === 'D' ? 'E' : 'D'}</span>)}</div>
+        <div className="space-y-1 text-[12px]">
+          <div className={`flex items-center gap-2 ${fj}`}><span className="text-slate-500">Gols pro</span><span className="text-emerald-400 font-bold">{form.summary.goalsFor}</span></div>
+          <div className={`flex items-center gap-2 ${fj}`}><span className="text-slate-500">Gols contra</span><span className="text-rose-400 font-bold">{form.summary.goalsAgainst}</span></div>
+          <div className={`flex items-center gap-2 ${fj}`}><span className="text-slate-500">Saldo</span><span className={`font-bold ${form.summary.goalsFor - form.summary.goalsAgainst > 0 ? 'text-emerald-400' : form.summary.goalsFor - form.summary.goalsAgainst < 0 ? 'text-rose-400' : 'text-slate-400'}`}>{form.summary.goalsFor - form.summary.goalsAgainst > 0 ? '+' : ''}{form.summary.goalsFor - form.summary.goalsAgainst}</span></div>
+        </div>
+        {venue && venue.matches.length >= 2 && <div className="mt-2 pt-2 border-t border-slate-700/20"><p className="text-[10px] text-slate-500 mb-0.5">{venueLabel}</p><p className="text-[11px] text-slate-400">{venue.summary.wins}V {venue.summary.draws}E {venue.summary.losses}D · {venue.summary.goalsFor} gols</p></div>}
+      </>) : <p className="text-[12px] text-slate-600">Forma indisponivel</p>}
+    </div>
+  )
 }
 
 function AdvPanel({ data, homeName, awayName, isAdvanced }: { data: PreMatchAdvancedResult; homeName: string; awayName: string; isAdvanced: boolean }) {
@@ -187,11 +169,11 @@ function AdvPanel({ data, homeName, awayName, isAdvanced }: { data: PreMatchAdva
   const hasScorers = data.scorers.home.players.length + data.scorers.away.players.length > 0
   return (
     <div className="space-y-3">
-      {hasAbs && <div className="rounded-xl border border-white/[0.07] bg-[#0b111c] p-4"><h4 className="text-[10px] font-bold uppercase tracking-[0.08em] text-white/40 mb-2">Ausencias</h4><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{(data.absences.home.injuries.length + data.absences.home.suspensions.length > 0) && <div><p className="text-[11px] font-medium text-white/50 mb-1">{homeName}</p>{data.absences.home.injuries.map((p, i) => <p key={i} className="text-[11px] text-rose-400/60">● {p.name} — {p.reason || 'Lesao'}</p>)}{data.absences.home.suspensions.map((p, i) => <p key={i} className="text-[11px] text-amber-400/60">● {p.name} — Suspenso</p>)}</div>}{(data.absences.away.injuries.length + data.absences.away.suspensions.length > 0) && <div><p className="text-[11px] font-medium text-white/50 mb-1">{awayName}</p>{data.absences.away.injuries.map((p, i) => <p key={i} className="text-[11px] text-rose-400/60">● {p.name} — {p.reason || 'Lesao'}</p>)}{data.absences.away.suspensions.map((p, i) => <p key={i} className="text-[11px] text-amber-400/60">● {p.name} — Suspenso</p>)}</div>}</div></div>}
-      {hasScorers && <div className="rounded-xl border border-white/[0.07] bg-[#0b111c] p-4"><h4 className="text-[10px] font-bold uppercase tracking-[0.08em] text-white/40 mb-2">Goleadores</h4><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{data.scorers.home.players.length > 0 && <div><p className="text-[11px] font-medium text-white/50 mb-1">{homeName}</p>{data.scorers.home.players.map((p, i) => <p key={i} className="text-[11px] text-white/45">{p.name} — {p.goals}g{p.assists ? ` ${p.assists}a` : ''}</p>)}</div>}{data.scorers.away.players.length > 0 && <div><p className="text-[11px] font-medium text-white/50 mb-1">{awayName}</p>{data.scorers.away.players.map((p, i) => <p key={i} className="text-[11px] text-white/45">{p.name} — {p.goals}g{p.assists ? ` ${p.assists}a` : ''}</p>)}</div>}</div></div>}
-      {!hasAbs && !hasScorers && <div className="rounded-xl border border-white/[0.06] bg-[#0b111c] p-4 text-center"><p className="text-[11px] text-white/30">Provider nao retornou ausencias ou goleadores para esta liga.</p></div>}
-      {data.riskFlags.length > 0 && <div className="rounded-xl border border-white/[0.07] bg-[#0b111c] p-4"><h4 className="text-[10px] font-bold uppercase tracking-[0.08em] text-white/40 mb-2">Sinais</h4>{data.riskFlags.map((f, i) => <p key={i} className="text-[11px] text-white/45">▸ {f.label} — <span className="text-white/30">{f.detail}</span></p>)}</div>}
-      {isAdvanced && data.limitations.length > 0 && <p className="text-[10px] text-white/20">{data.limitations.join(' · ')}</p>}
+      {hasAbs && <div className="rounded-2xl bg-slate-900/80 border border-slate-700/25 p-5"><div className="flex items-center gap-2 mb-3"><div className="h-6 w-6 rounded-lg bg-rose-500/15 flex items-center justify-center"><span className="text-[11px] text-rose-400">&#10006;</span></div><h4 className="text-[12px] font-bold text-slate-300 uppercase tracking-wide">Ausencias</h4></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{(data.absences.home.injuries.length + data.absences.home.suspensions.length > 0) && <div><p className="text-[12px] font-semibold text-slate-400 mb-1.5">{homeName}</p>{data.absences.home.injuries.map((p, i) => <p key={i} className="text-[12px] text-rose-400/80 flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{p.name}</p>)}{data.absences.home.suspensions.map((p, i) => <p key={i} className="text-[12px] text-amber-400/80 flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" />{p.name} (suspenso)</p>)}</div>}{(data.absences.away.injuries.length + data.absences.away.suspensions.length > 0) && <div><p className="text-[12px] font-semibold text-slate-400 mb-1.5">{awayName}</p>{data.absences.away.injuries.map((p, i) => <p key={i} className="text-[12px] text-rose-400/80 flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{p.name}</p>)}{data.absences.away.suspensions.map((p, i) => <p key={i} className="text-[12px] text-amber-400/80 flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" />{p.name} (suspenso)</p>)}</div>}</div></div>}
+      {hasScorers && <div className="rounded-2xl bg-slate-900/80 border border-slate-700/25 p-5"><div className="flex items-center gap-2 mb-3"><div className="h-6 w-6 rounded-lg bg-emerald-500/15 flex items-center justify-center"><span className="text-[11px] text-emerald-400">&#9917;</span></div><h4 className="text-[12px] font-bold text-slate-300 uppercase tracking-wide">Goleadores</h4></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{data.scorers.home.players.length > 0 && <div><p className="text-[12px] font-semibold text-slate-400 mb-1.5">{homeName}</p>{data.scorers.home.players.map((p, i) => <p key={i} className="text-[12px] text-slate-300">{p.name} — <span className="text-emerald-400 font-bold">{p.goals}g</span>{p.assists ? <span className="text-blue-400"> {p.assists}a</span> : null}</p>)}</div>}{data.scorers.away.players.length > 0 && <div><p className="text-[12px] font-semibold text-slate-400 mb-1.5">{awayName}</p>{data.scorers.away.players.map((p, i) => <p key={i} className="text-[12px] text-slate-300">{p.name} — <span className="text-emerald-400 font-bold">{p.goals}g</span>{p.assists ? <span className="text-blue-400"> {p.assists}a</span> : null}</p>)}</div>}</div></div>}
+      {!hasAbs && !hasScorers && <div className="rounded-2xl bg-slate-900/60 border border-slate-700/20 p-5 text-center"><p className="text-[12px] text-slate-500">Provider nao retornou ausencias ou goleadores para esta liga.</p></div>}
+      {data.riskFlags.length > 0 && <div className="rounded-2xl bg-slate-900/80 border border-slate-700/25 p-4">{data.riskFlags.map((f, i) => <p key={i} className="text-[12px] text-slate-300 flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${f.severity === 'critical' ? 'bg-rose-400' : f.severity === 'attention' ? 'bg-amber-400' : 'bg-slate-500'}`} />{f.label} — <span className="text-slate-500">{f.detail}</span></p>)}</div>}
+      {isAdvanced && data.limitations.length > 0 && <p className="text-[10px] text-slate-600 px-1">{data.limitations.join(' · ')}</p>}
     </div>
   )
 }
