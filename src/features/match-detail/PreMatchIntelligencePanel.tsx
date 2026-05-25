@@ -59,19 +59,31 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
   }
 
   return (
-    <section className="rounded-[24px] border border-white/[0.04] bg-white/[0.015] p-6 space-y-5 animate-slideUp">
-      {/* Preview */}
-      {data.preview && (
+    <section className="gs-panel space-y-6 animate-slideUp">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-[13px] font-bold text-white/70 mb-2 flex items-center gap-2">
-            <TrendingUp size={14} className="text-cyan-400/50" />
-            {data.preview.title}
-          </h3>
-          <p className="text-[11px] text-white/45 leading-relaxed">{data.preview.summary}</p>
+          <h3 className="text-[16px] font-bold text-white/85">Análise pré-jogo</h3>
+          <p className="text-[12px] text-white/40 mt-0.5">{data.status === 'rich' ? 'Leitura baseada em forma, H2H, gols e disciplina' : data.status === 'partial' ? 'Leitura parcial com dados disponíveis' : 'Dados limitados — monitoramento ao vivo recomendado'}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`gs-badge ${data.status === 'rich' ? 'gs-badge-emerald' : data.status === 'partial' ? 'gs-badge-amber' : 'gs-badge-rose'}`}>{data.status === 'rich' ? 'Dados ricos' : data.status === 'partial' ? 'Parcial' : 'Limitado'}</span>
+          {data.dataSources.includes('Base GoalSense') && <span className="gs-badge gs-badge-cyan">Base GoalSense</span>}
+        </div>
+      </div>
+
+      {/* Preview / Main Read */}
+      {data.preview && (
+        <div className="rounded-xl bg-white/[0.025] border border-white/[0.06] p-5">
+          <h4 className="text-[13px] font-semibold text-white/70 mb-2 flex items-center gap-2">
+            <TrendingUp size={14} className="text-cyan-400/60" />
+            Leitura GoalSense
+          </h4>
+          <p className="text-[13px] text-white/55 leading-relaxed">{data.preview.summary}</p>
           {data.preview.keyPoints.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-3">
+            <div className="flex flex-wrap gap-2 mt-3">
               {data.preview.keyPoints.map((p, i) => (
-                <span key={i} className="rounded-lg border border-white/[0.05] bg-white/[0.02] px-2.5 py-1 text-[10px] text-white/40">{p}</span>
+                <span key={i} className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 text-[11px] text-white/50">{p}</span>
               ))}
             </div>
           )}
@@ -81,8 +93,8 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
       {/* Form */}
       {(data.homeForm || data.awayForm) && (
         <div>
-          <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/25 mb-3 flex items-center gap-2">
-            <BarChart3 size={12} className="text-white/20" />Forma recente
+          <h4 className="gs-section-title mb-3 flex items-center gap-2">
+            <BarChart3 size={13} className="text-white/30" />Forma recente
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {data.homeForm && <FormCard form={data.homeForm} />}
@@ -133,16 +145,16 @@ export function PreMatchIntelligencePanel({ homeName, awayName, homeId, awayId, 
       {/* H2H */}
       {data.h2h && (
         <div>
-          <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/25 mb-3 flex items-center gap-2">
-            <Users size={12} className="text-white/20" />Confronto direto
+          <h4 className="gs-section-title mb-3 flex items-center gap-2">
+            <Users size={13} className="text-white/30" />Confronto direto
           </h4>
-          <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-4">
-            <div className="grid grid-cols-5 gap-2 text-center">
-              <div><span className="text-[16px] font-bold text-white/60 block">{data.h2h.total}</span><span className="text-[8px] text-white/20">Jogos</span></div>
-              <div><span className="text-[16px] font-bold text-cyan-400/70 block">{data.h2h.homeWins}</span><span className="text-[8px] text-white/20">{homeName.split(' ')[0]}</span></div>
-              <div><span className="text-[16px] font-bold text-white/40 block">{data.h2h.draws}</span><span className="text-[8px] text-white/20">Empates</span></div>
-              <div><span className="text-[16px] font-bold text-emerald-400/70 block">{data.h2h.awayWins}</span><span className="text-[8px] text-white/20">{awayName.split(' ')[0]}</span></div>
-              <div><span className="text-[16px] font-bold text-white/40 block">{data.h2h.homeGoals}-{data.h2h.awayGoals}</span><span className="text-[8px] text-white/20">Gols</span></div>
+          <div className="gs-card">
+            <div className="grid grid-cols-5 gap-3 text-center">
+              <div><span className="text-[18px] font-bold text-white/70 block">{data.h2h.total}</span><span className="text-[10px] text-white/30">Jogos</span></div>
+              <div><span className="text-[18px] font-bold text-cyan-400/80 block">{data.h2h.homeWins}</span><span className="text-[10px] text-white/30">{homeName.split(' ')[0]}</span></div>
+              <div><span className="text-[18px] font-bold text-white/45 block">{data.h2h.draws}</span><span className="text-[10px] text-white/30">Empates</span></div>
+              <div><span className="text-[18px] font-bold text-emerald-400/80 block">{data.h2h.awayWins}</span><span className="text-[10px] text-white/30">{awayName.split(' ')[0]}</span></div>
+              <div><span className="text-[18px] font-bold text-white/50 block">{data.h2h.homeGoals}-{data.h2h.awayGoals}</span><span className="text-[10px] text-white/30">Gols</span></div>
             </div>
           </div>
           {/* Recent meetings */}
