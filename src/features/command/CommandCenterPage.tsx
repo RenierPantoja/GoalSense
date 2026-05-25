@@ -4,7 +4,7 @@
  */
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { RefreshCw, Zap, ChevronRight, AlertCircle, Plus, Activity, Target, Eye, BarChart3, Sparkles, X } from 'lucide-react'
 import { getLiveFixtures, type LiveFixture } from '@/lib/apiClient'
 import { storeFixtureForNavigation } from '@/lib/matchNavigation'
@@ -20,6 +20,7 @@ import { evaluateAllPatterns } from './intelligence/patternEvaluator'
 import { runAutoDiscovery, type AutoDiscovery } from './intelligence/autoDiscoveryEngine'
 import { resolveAlert } from './intelligence/patternResolutionEngine'
 import { buildPreMatchOutcomeSummary } from '@/services/intelligence/preMatchOutcomePerformance'
+import { recordScopeEntities, getKnownLeagues, getKnownTeams, getKnownMatches, formatMatchLabel, type ScopeKbMatch } from '@/services/intelligence/scopeKnowledgeBase'
 import { isLiveFx, detectChanges, type ChangeEvent } from './commandHelpers'
 import type { Pattern, PatternTemplate, PatternHit, PatternCondition, PatternConditionType, FixtureStatsForPattern, ScannerEntry, TriggeredAlert, AutoDiscoveryConfig } from './types/commandTypes'
 
@@ -31,6 +32,7 @@ type Tab = 'cockpit' | 'patterns' | 'scanner' | 'alerts' | 'performance'
 
 export function CommandCenterPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [fixtures, setFixtures] = useState<LiveFixture[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -41,6 +43,7 @@ export function CommandCenterPage() {
   const [statsMap, setStatsMap] = useState<Map<number, FixtureStatsForPattern>>(new Map())
   const [activeTab, setActiveTab] = useState<Tab>('cockpit')
   const [showBuilder, setShowBuilder] = useState(false)
+  const [prefilledDraft, setPrefilledDraft] = useState<Pattern | null>(null)
   const prevRef = useRef<LiveFixture[] | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -63,6 +66,8 @@ export function CommandCenterPage() {
       const det = detectChanges(fx, prevRef.current)
       if (det.length > 0) setChanges(prev => [...det, ...prev].slice(0, 12))
       prevRef.current = fx; setFixtures(fx); setLastUpdate(new Date()); setError(null)
+      // Feed scope knowledge base — non-blocking
+      try { recordScopeEntities(fx) } catch { /* */ }
     } catch (e) { if (!silent) setError((e as Error).message) }
     finally { setLoading(false); setRefreshing(false) }
   }, [])
@@ -87,6 +92,53 @@ export function CommandCenterPage() {
   useEffect(() => { fetchData() }, [fetchData])
   useEffect(() => { if (fixtures.length > 0) fetchStats(fixtures) }, [fixtures, fetchStats])
   const liveMatches = useMemo(() => fixtures.filter(isLiveFx), [fixtures])
+
+  // ─── Prefill from Match Detail / Live Radar ──────────────────────────────
+  // Honors:
+  //   navigate('/app/command', { state: { openPatternStudio: true, prefillScope: { matches: [cmid], matchLabel: 'A x B' } } })
+  // Also reads localStorage 'goalsense_pattern_prefill' as a fallback.
+  useEffect(() => {
+    const state = (location.state || {}) as { openPatternStudio?: boolean; prefillScope?: { matches?: string[]; matchLabel?: string } }
+    let payload: { matches?: string[]; matchLabel?: string } | null = null
+    if (state.openPatternStudio && state.prefillScope) {
+      payload = state.prefillScope
+    } else {
+      try {
+        const raw = localStorage.getItem('goalsense_pattern_prefill')
+        if (raw) {
+          const parsed = JSON.parse(raw) as { matches?: string[]; matchLabel?: string }
+          if (parsed.matches && parsed.matches.length > 0) payload = parsed
+          localStorage.removeItem('goalsense_pattern_prefill')
+        }
+      } catch { /* */ }
+    }
+    if (payload?.matches && payload.matches.length > 0) {
+      const draft: Pattern = {
+        id: 'draft', // ignored by builder; just to satisfy type
+        name: payload.matchLabel ? `Radar — ${payload.matchLabel}` : 'Radar personalizado',
+        description: '',
+        conditions: [{ type: 'is_live', params: {} }],
+        severity: 'attention',
+        status: 'paused',
+        isTemplate: false,
+        scope: 'specific_matches',
+        scopeFilter: undefined,
+        matches: payload.matches,
+        minConfidence: 50,
+        action: 'register_alert',
+        maxTriggersPerMatch: 2,
+        antiDuplicateWindow: 5,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      setPrefilledDraft(draft)
+      setActiveTab('patterns')
+      setShowBuilder(true)
+      // Clear route state to avoid reopening on rerender
+      if (state.openPatternStudio) navigate('.', { replace: true, state: {} })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!autoRefresh) { if (intervalRef.current) clearInterval(intervalRef.current); return }
@@ -289,7 +341,7 @@ export function CommandCenterPage() {
 
       {/* ═══ CONTENT ═══ */}
       {activeTab === 'cockpit' && <CockpitView hasIntelligence={hasIntelligence} decisionMatch={decisionMatch} decisionHit={decisionHit} decisionDiscovery={decisionDiscovery} patternHits={patternHits} discoveries={discoveries} changes={changes} fixtures={fixtures} openMatch={openMatch} isAdvanced={isAdvanced} activePatternCount={activePatternCount} enabledCount={enabledCount} triggeredAlerts={getRecentTriggered(5)} onGoToPatterns={() => setActiveTab('patterns')} navigate={navigate} templates={templates} createFromTemplate={createFromTemplate} />}
-      {activeTab === 'patterns' && <PatternsView patterns={patterns} templates={templates} createFromTemplate={createFromTemplate} createPattern={createPattern} updatePattern={updatePattern} togglePattern={togglePattern} deletePattern={deletePattern} isAdvanced={isAdvanced} showBuilder={showBuilder} setShowBuilder={setShowBuilder} discoveryConfig={discoveryConfig} updateDiscoveryConfig={updateDiscoveryConfig} triggeredAlerts={triggeredAlerts} fixtures={fixtures} />}
+      {activeTab === 'patterns' && <PatternsView patterns={patterns} templates={templates} createFromTemplate={createFromTemplate} createPattern={createPattern} updatePattern={updatePattern} togglePattern={togglePattern} deletePattern={deletePattern} isAdvanced={isAdvanced} showBuilder={showBuilder} setShowBuilder={setShowBuilder} discoveryConfig={discoveryConfig} updateDiscoveryConfig={updateDiscoveryConfig} triggeredAlerts={triggeredAlerts} fixtures={fixtures} prefilledDraft={prefilledDraft} clearPrefilledDraft={() => setPrefilledDraft(null)} />}
       {activeTab === 'scanner' && <ScannerView hasIntelligence={hasIntelligence} entries={scannerEntries} openMatch={openMatch} isAdvanced={isAdvanced} onGoToPatterns={() => setActiveTab('patterns')} />}
       {activeTab === 'alerts' && <AlertsView triggeredAlerts={getRecentTriggered(30)} isAdvanced={isAdvanced} openMatch={openMatch} fixtures={fixtures} navigate={navigate} />}
       {activeTab === 'performance' && <PerformanceView patterns={patterns} triggeredAlerts={triggeredAlerts} isAdvanced={isAdvanced} />}
@@ -662,9 +714,9 @@ function WizardStepHeader({ index, total, title, description }: { index: number;
 }
 
 // ═══ MINI PREVIEW — compact summary panel for step modals
-function MiniRadarPreview({ name, severity, scope, action, minConf, conditions, currentStep, totalSteps }: { name: string; severity: 'critical' | 'attention' | 'info'; scope: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams'; action: 'register_alert' | 'suggest_only' | 'highlight'; minConf: number; conditions: PatternCondition[]; currentStep?: string; totalSteps?: number }) {
+function MiniRadarPreview({ name, severity, scope, action, minConf, conditions, currentStep, totalSteps }: { name: string; severity: 'critical' | 'attention' | 'info'; scope: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches'; action: 'register_alert' | 'suggest_only' | 'highlight'; minConf: number; conditions: PatternCondition[]; currentStep?: string; totalSteps?: number }) {
   const sevLabel = severity === 'critical' ? 'Crítico' : severity === 'attention' ? 'Atenção' : 'Info'
-  const scopeLabel = scope === 'favorites_only' ? 'Favoritos' : 'Todos os jogos'
+  const scopeLabel = scope === 'favorites_only' ? 'Favoritos' : scope === 'specific_leagues' ? 'Ligas' : scope === 'specific_teams' ? 'Times' : scope === 'specific_matches' ? 'Partidas' : 'Todos os jogos'
   const actionLabel = action === 'register_alert' ? 'Registra alerta' : action === 'suggest_only' ? 'Apenas sugere' : 'Destaca no Scanner'
   return (
     <section className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-white/[0.025] via-white/[0.012] to-transparent p-4">
@@ -709,30 +761,36 @@ function ActionCardPicker({ value, onChange }: { value: 'register_alert' | 'sugg
   )
 }
 
-// ═══ SCOPE PICKER — supports all/favorites/specific_leagues/specific_teams
-// Real lists come from `availableLeagues` / `availableTeams` (current fixtures in scope).
-function ScopePicker({ scope, scopeFilter, excludeLeagues, excludeTeams, requireRichData, onlyLive, onlyPreMatch, availableLeagues, availableTeams, onScopeChange, onScopeFilterChange, onExcludeLeaguesChange, onExcludeTeamsChange, onAdvancedToggle }: {
-  scope: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams'
+// ═══ SCOPE PICKER — supports all/favorites/specific_leagues/specific_teams/specific_matches
+// Real lists come from `availableLeagues` / `availableTeams` (current fixtures + scope KB).
+function ScopePicker({ scope, scopeFilter, matches, excludeLeagues, excludeTeams, excludeMatches, requireRichData, onlyLive, onlyPreMatch, availableLeagues, availableTeams, availableMatches, onScopeChange, onScopeFilterChange, onMatchesChange, onExcludeLeaguesChange, onExcludeTeamsChange, onExcludeMatchesChange, onAdvancedToggle }: {
+  scope: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches'
   scopeFilter: string[]
+  matches: string[]
   excludeLeagues: string[]
   excludeTeams: string[]
+  excludeMatches: string[]
   requireRichData: boolean
   onlyLive: boolean
   onlyPreMatch: boolean
   availableLeagues: string[]
   availableTeams: string[]
-  onScopeChange: (s: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams') => void
+  availableMatches: ScopeKbMatch[]
+  onScopeChange: (s: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches') => void
   onScopeFilterChange: (s: string[]) => void
+  onMatchesChange: (s: string[]) => void
   onExcludeLeaguesChange: (s: string[]) => void
   onExcludeTeamsChange: (s: string[]) => void
+  onExcludeMatchesChange: (s: string[]) => void
   onAdvancedToggle: (key: 'requireRichData' | 'onlyLive' | 'onlyPreMatch', v: boolean) => void
 }) {
-  const [showAdvanced, setShowAdvanced] = useState<boolean>(excludeLeagues.length > 0 || excludeTeams.length > 0 || requireRichData || onlyLive || onlyPreMatch)
-  const modes: { v: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams'; label: string; hint: string }[] = [
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(excludeLeagues.length > 0 || excludeTeams.length > 0 || excludeMatches.length > 0 || requireRichData || onlyLive || onlyPreMatch)
+  const modes: { v: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches'; label: string; hint: string }[] = [
     { v: 'all', label: 'Todos os jogos', hint: 'Avalia em qualquer partida disponível.' },
     { v: 'favorites_only', label: 'Apenas favoritos', hint: 'Avalia apenas quando um time favorito está envolvido.' },
     { v: 'specific_leagues', label: 'Ligas específicas', hint: 'Selecione uma ou mais ligas para limitar o radar.' },
     { v: 'specific_teams', label: 'Times específicos', hint: 'Selecione um ou mais times para limitar o radar.' },
+    { v: 'specific_matches', label: 'Partidas específicas', hint: 'Restrinja a uma ou mais partidas individuais.' },
   ]
   return (
     <div className="space-y-3">
@@ -759,12 +817,15 @@ function ScopePicker({ scope, scopeFilter, excludeLeagues, excludeTeams, require
       {scope === 'specific_teams' && (
         <ChipMultiPicker label="Selecionar times" placeholder="Buscar time ou digitar para filtrar" options={availableTeams} selected={scopeFilter} onChange={onScopeFilterChange} emptyHint="Digite o nome de um time para adicionar mesmo se não estiver na lista." />
       )}
+      {scope === 'specific_matches' && (
+        <MatchChipPicker label="Selecionar partidas" placeholder="Buscar por time, liga ou digitar 'Home x Away'" options={availableMatches} selected={matches} onChange={onMatchesChange} />
+      )}
 
       {/* Advanced filters disclosure */}
       <div>
         <button type="button" onClick={() => setShowAdvanced(v => !v)} className="text-[11px] font-semibold text-white/65 hover:text-white/95 flex items-center gap-1.5 transition-colors">
           <span>{showAdvanced ? '▾' : '▸'}</span>
-          Filtros avançados {(excludeLeagues.length + excludeTeams.length > 0 || requireRichData || onlyLive || onlyPreMatch) && <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-cyan-500/15 text-cyan-300">ativos</span>}
+          Filtros avançados {(excludeLeagues.length + excludeTeams.length + excludeMatches.length > 0 || requireRichData || onlyLive || onlyPreMatch) && <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-cyan-500/15 text-cyan-300">ativos</span>}
         </button>
         {showAdvanced && (
           <div className="mt-3 space-y-3">
@@ -775,9 +836,92 @@ function ScopePicker({ scope, scopeFilter, excludeLeagues, excludeTeams, require
             </div>
             <ChipMultiPicker label="Excluir ligas" placeholder="Buscar liga para excluir" options={availableLeagues} selected={excludeLeagues} onChange={onExcludeLeaguesChange} emptyHint="Ligas adicionadas aqui serão ignoradas pelo radar." compact />
             <ChipMultiPicker label="Excluir times" placeholder="Buscar time para excluir" options={availableTeams} selected={excludeTeams} onChange={onExcludeTeamsChange} emptyHint="Times adicionados aqui serão ignorados pelo radar." compact />
+            <MatchChipPicker label="Excluir partidas" placeholder="Buscar partida para excluir" options={availableMatches} selected={excludeMatches} onChange={onExcludeMatchesChange} compact />
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// ═══ MATCH CHIP PICKER — selector for known matches with rich label
+function MatchChipPicker({ label, placeholder, options, selected, onChange, compact }: { label: string; placeholder: string; options: ScopeKbMatch[]; selected: string[]; onChange: (v: string[]) => void; compact?: boolean }) {
+  const [query, setQuery] = useState('')
+  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+
+  // Build a quick lookup so we can render selected chips with rich labels even
+  // when the source list is huge.
+  const labelByCmid = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const o of options) m.set(o.canonicalMatchId, formatMatchLabel(o))
+    return m
+  }, [options])
+
+  const filtered = useMemo(() => {
+    const q = norm(query)
+    const remaining = options.filter(o => !selected.includes(o.canonicalMatchId))
+    if (!q) return remaining.slice(0, 12)
+    return remaining.filter(o => norm(`${o.homeTeam} ${o.awayTeam} ${o.league || ''}`).includes(q)).slice(0, 12)
+  }, [options, selected, query])
+
+  const addCmid = (cmid: string) => {
+    if (selected.includes(cmid)) return
+    onChange([...selected, cmid])
+    setQuery('')
+  }
+  const addFreeText = (val: string) => {
+    const trimmed = val.trim()
+    if (!trimmed) return
+    if (selected.includes(trimmed)) return
+    onChange([...selected, trimmed])
+    setQuery('')
+  }
+  const remove = (val: string) => onChange(selected.filter(s => s !== val))
+
+  return (
+    <div className={`rounded-2xl border border-white/[0.06] bg-white/[0.012] px-4 ${compact ? 'py-3' : 'py-4'}`}>
+      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/55 mb-2">{label} {selected.length > 0 && <span className="text-white/85 ml-1">({selected.length})</span>}</p>
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2.5">
+          {selected.map(s => (
+            <span key={s} className="inline-flex items-center gap-1.5 text-[11px] text-white/95 bg-white/[0.06] border border-white/[0.1] px-2.5 py-1 rounded-lg font-medium max-w-full">
+              <span className="truncate">{labelByCmid.get(s) || s}</span>
+              <button onClick={() => remove(s)} type="button" className="text-white/45 hover:text-rose-300 transition-colors -mr-0.5 shrink-0" aria-label={`Remover ${s}`}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addFreeText(query) } }}
+          placeholder={placeholder}
+          className="flex-1 h-9 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-[12px] text-white/95 placeholder:text-white/35 outline-none focus:border-cyan-400/40"
+        />
+        {query.trim() && (
+          <button onClick={() => addFreeText(query)} type="button" className="px-3 h-9 rounded-xl text-[11px] font-semibold text-cyan-300 bg-cyan-500/15 border border-cyan-400/25 hover:bg-cyan-500/25 transition-colors whitespace-nowrap">Adicionar texto</button>
+        )}
+      </div>
+      {filtered.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {filtered.map(o => (
+            <li key={o.canonicalMatchId}>
+              <button onClick={() => addCmid(o.canonicalMatchId)} type="button" className="w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/[0.025] hover:bg-white/[0.05] border border-white/[0.05] hover:border-white/[0.1] transition-all">
+                <span className="text-[12px] text-white/95 font-medium truncate flex-1">{o.homeTeam} <span className="text-white/45">x</span> {o.awayTeam}</span>
+                {o.league && <span className="text-[10px] text-white/55 truncate max-w-[120px]">{o.league}</span>}
+                {o.status && (o.status === 'LIVE' || o.status === '1H' || o.status === '2H' || o.status === 'HT') && <span className="text-[10px] text-emerald-300 font-bold">ao vivo</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {options.length === 0 && (
+        <p className="text-[10px] text-white/55 mt-2 leading-snug">Abra partidas no Live Radar ou em Partidas para preencher esta biblioteca. Você também pode digitar manualmente.</p>
+      )}
+      {filtered.length === 0 && options.length > 0 && query.trim() && (
+        <p className="text-[10px] text-white/45 mt-2 leading-snug">Nenhuma sugestão. Pressione Enter para adicionar "{query.trim()}".</p>
+      )}
     </div>
   )
 }
@@ -848,7 +992,7 @@ function ChipMultiPicker({ label, placeholder, options, selected, onChange, empt
 // ═══ TEMPLATE CONFIG MODAL — stepper wizard
 type TemplateStep = 'overview' | 'conditions' | 'scope_action' | 'confidence' | 'review'
 
-function TemplateConfigModal({ open, template, existingPattern, onClose, onSave, availableLeagues, availableTeams }: { open: boolean; template: PatternTemplate | null; existingPattern: Pattern | null; onClose: () => void; onSave: (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void; availableLeagues: string[]; availableTeams: string[] }) {
+function TemplateConfigModal({ open, template, existingPattern, onClose, onSave, availableLeagues, availableTeams, availableMatches }: { open: boolean; template: PatternTemplate | null; existingPattern: Pattern | null; onClose: () => void; onSave: (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void; availableLeagues: string[]; availableTeams: string[]; availableMatches: ScopeKbMatch[] }) {
   const initial = existingPattern || (template ? {
     name: template.name, description: template.description,
     conditions: [...template.conditions], severity: template.severity,
@@ -861,10 +1005,12 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
   const [conditions, setConditions] = useState<PatternCondition[]>(initial?.conditions || [])
   const [severity, setSeverity] = useState<'critical' | 'attention' | 'info'>(initial?.severity || 'attention')
   const [action, setAction] = useState<'register_alert' | 'suggest_only' | 'highlight'>(initial?.action || 'register_alert')
-  const [scope, setScope] = useState<'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams'>(initial?.scope || 'all')
+  const [scope, setScope] = useState<'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches'>(initial?.scope || 'all')
   const [scopeFilter, setScopeFilter] = useState<string[]>(initial?.scopeFilter || [])
+  const [matchesFilter, setMatchesFilter] = useState<string[]>(existingPattern?.matches || [])
   const [excludeLeagues, setExcludeLeagues] = useState<string[]>(existingPattern?.excludeLeagues || [])
   const [excludeTeams, setExcludeTeams] = useState<string[]>(existingPattern?.excludeTeams || [])
+  const [excludeMatches, setExcludeMatches] = useState<string[]>(existingPattern?.excludeMatches || [])
   const [requireRichData, setRequireRichData] = useState<boolean>(existingPattern?.requireRichData || false)
   const [onlyLive, setOnlyLive] = useState<boolean>(existingPattern?.onlyLive || false)
   const [onlyPreMatch, setOnlyPreMatch] = useState<boolean>(existingPattern?.onlyPreMatch || false)
@@ -878,8 +1024,10 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
     setAction(initial?.action || 'register_alert')
     setScope(initial?.scope || 'all')
     setScopeFilter(initial?.scopeFilter || [])
+    setMatchesFilter(existingPattern?.matches || [])
     setExcludeLeagues(existingPattern?.excludeLeagues || [])
     setExcludeTeams(existingPattern?.excludeTeams || [])
+    setExcludeMatches(existingPattern?.excludeMatches || [])
     setRequireRichData(existingPattern?.requireRichData || false)
     setOnlyLive(existingPattern?.onlyLive || false)
     setOnlyPreMatch(existingPattern?.onlyPreMatch || false)
@@ -897,8 +1045,10 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
     conditions, severity, status, isTemplate: true, templateId: template.id,
     scope,
     scopeFilter: (scope === 'specific_leagues' || scope === 'specific_teams') && scopeFilter.length > 0 ? scopeFilter : undefined,
+    matches: matchesFilter.length > 0 ? matchesFilter : undefined,
     excludeLeagues: excludeLeagues.length > 0 ? excludeLeagues : undefined,
     excludeTeams: excludeTeams.length > 0 ? excludeTeams : undefined,
+    excludeMatches: excludeMatches.length > 0 ? excludeMatches : undefined,
     requireRichData: requireRichData || undefined,
     onlyLive: onlyLive || undefined,
     onlyPreMatch: onlyPreMatch || undefined,
@@ -990,17 +1140,22 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
                   <ScopePicker
                     scope={scope}
                     scopeFilter={scopeFilter}
+                    matches={matchesFilter}
                     excludeLeagues={excludeLeagues}
                     excludeTeams={excludeTeams}
+                    excludeMatches={excludeMatches}
                     requireRichData={requireRichData}
                     onlyLive={onlyLive}
                     onlyPreMatch={onlyPreMatch}
                     availableLeagues={availableLeagues}
                     availableTeams={availableTeams}
+                    availableMatches={availableMatches}
                     onScopeChange={setScope}
                     onScopeFilterChange={setScopeFilter}
+                    onMatchesChange={setMatchesFilter}
                     onExcludeLeaguesChange={setExcludeLeagues}
                     onExcludeTeamsChange={setExcludeTeams}
+                    onExcludeMatchesChange={setExcludeMatches}
                     onAdvancedToggle={handleAdvancedToggle}
                   />
                 </Section>
@@ -1036,7 +1191,7 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
             {step === 'review' && (
               <>
                 <WizardStepHeader index={5} total={steps.length} title="Revisão" description="Confira a configuração final antes de salvar. Você pode voltar e ajustar." />
-                <RadarPreview name={template.name} severity={severity} scope={scope} scopeFilter={scopeFilter} excludeLeagues={excludeLeagues} excludeTeams={excludeTeams} requireRichData={requireRichData} onlyLive={onlyLive} onlyPreMatch={onlyPreMatch} action={action} minConf={minConf} conditions={conditions} />
+                <RadarPreview name={template.name} severity={severity} scope={scope} scopeFilter={scopeFilter} matches={matchesFilter} excludeLeagues={excludeLeagues} excludeTeams={excludeTeams} excludeMatches={excludeMatches} requireRichData={requireRichData} onlyLive={onlyLive} onlyPreMatch={onlyPreMatch} action={action} minConf={minConf} conditions={conditions} />
                 <p className="text-[11px] text-white/45 leading-snug mt-4">Após salvar, este radar aparecerá em "Radares configurados" no Pattern Studio.</p>
               </>
             )}
@@ -1063,7 +1218,7 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
 }
 
 // ═══ RADAR PREVIEW — auditable summary of how the radar will be evaluated
-function RadarPreview({ name, severity, scope, scopeFilter, excludeLeagues, excludeTeams, requireRichData, onlyLive, onlyPreMatch, action, minConf, conditions }: { name: string; severity: 'critical' | 'attention' | 'info'; scope: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams'; scopeFilter?: string[]; excludeLeagues?: string[]; excludeTeams?: string[]; requireRichData?: boolean; onlyLive?: boolean; onlyPreMatch?: boolean; action: 'register_alert' | 'suggest_only' | 'highlight'; minConf: number; conditions: PatternCondition[] }) {
+function RadarPreview({ name, severity, scope, scopeFilter, matches, excludeLeagues, excludeTeams, excludeMatches, requireRichData, onlyLive, onlyPreMatch, action, minConf, conditions }: { name: string; severity: 'critical' | 'attention' | 'info'; scope: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches'; scopeFilter?: string[]; matches?: string[]; excludeLeagues?: string[]; excludeTeams?: string[]; excludeMatches?: string[]; requireRichData?: boolean; onlyLive?: boolean; onlyPreMatch?: boolean; action: 'register_alert' | 'suggest_only' | 'highlight'; minConf: number; conditions: PatternCondition[] }) {
   const sevLabel = severity === 'critical' ? 'Crítico' : severity === 'attention' ? 'Atenção' : 'Info'
   const scopeLabel = scope === 'favorites_only'
     ? 'apenas favoritos'
@@ -1071,11 +1226,13 @@ function RadarPreview({ name, severity, scope, scopeFilter, excludeLeagues, excl
     ? `${scopeFilter.length} liga${scopeFilter.length === 1 ? '' : 's'} selecionada${scopeFilter.length === 1 ? '' : 's'}`
     : scope === 'specific_teams' && scopeFilter && scopeFilter.length > 0
     ? `${scopeFilter.length} time${scopeFilter.length === 1 ? '' : 's'} selecionado${scopeFilter.length === 1 ? '' : 's'}`
+    : scope === 'specific_matches' && matches && matches.length > 0
+    ? `${matches.length} partida${matches.length === 1 ? '' : 's'} específica${matches.length === 1 ? '' : 's'}`
     : 'todos os jogos'
   const actionLabel = action === 'register_alert' ? 'registra alerta em /app/alerts' : action === 'suggest_only' ? 'apenas sugere no Cockpit/Scanner' : 'destaca no Scanner'
   const willResolve = action === 'register_alert'
   const stateFlag = onlyLive ? 'apenas ao vivo' : onlyPreMatch ? 'apenas pré-jogo' : null
-  const hasExclusions = (excludeLeagues && excludeLeagues.length > 0) || (excludeTeams && excludeTeams.length > 0)
+  const hasExclusions = (excludeLeagues && excludeLeagues.length > 0) || (excludeTeams && excludeTeams.length > 0) || (excludeMatches && excludeMatches.length > 0)
   return (
     <section className="rounded-2xl border border-cyan-400/15 bg-gradient-to-br from-cyan-500/[0.05] via-blue-500/[0.025] to-transparent px-4 py-3.5">
       <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-300/85 mb-2">Resumo do radar</h4>
@@ -1098,10 +1255,17 @@ function RadarPreview({ name, severity, scope, scopeFilter, excludeLeagues, excl
           {scopeFilter.length > 5 && <span className="text-[10px] text-white/55">+{scopeFilter.length - 5}</span>}
         </div>
       )}
+      {scope === 'specific_matches' && matches && matches.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {matches.slice(0, 3).map(s => <span key={s} className="text-[10px] text-cyan-300 bg-cyan-500/10 border border-cyan-400/20 px-2 py-0.5 rounded truncate max-w-[180px]">{s}</span>)}
+          {matches.length > 3 && <span className="text-[10px] text-white/55">+{matches.length - 3}</span>}
+        </div>
+      )}
       {hasExclusions && (
         <div className="mt-2 flex flex-wrap gap-1">
           {excludeLeagues && excludeLeagues.map(s => <span key={s} className="text-[10px] text-rose-300 bg-rose-500/10 border border-rose-400/20 px-2 py-0.5 rounded">− {s}</span>)}
           {excludeTeams && excludeTeams.map(s => <span key={s} className="text-[10px] text-rose-300 bg-rose-500/10 border border-rose-400/20 px-2 py-0.5 rounded">− {s}</span>)}
+          {excludeMatches && excludeMatches.map(s => <span key={s} className="text-[10px] text-rose-300 bg-rose-500/10 border border-rose-400/20 px-2 py-0.5 rounded truncate max-w-[180px]">− {s}</span>)}
         </div>
       )}
       {conditions.length > 0 && (
@@ -1126,14 +1290,16 @@ function RadarPreview({ name, severity, scope, scopeFilter, excludeLeagues, excl
 // ═══ CUSTOM PATTERN MODAL — wizard with sidebar steps
 type CustomStep = 'identity' | 'scope' | 'conditions' | 'action' | 'confidence' | 'review'
 
-function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, availableTeams }: { open: boolean; initial: Pattern | null; onClose: () => void; onSave: (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void; availableLeagues: string[]; availableTeams: string[] }) {
+function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, availableTeams, availableMatches }: { open: boolean; initial: Pattern | null; onClose: () => void; onSave: (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void; availableLeagues: string[]; availableTeams: string[]; availableMatches: ScopeKbMatch[] }) {
   const [name, setName] = useState(initial?.name || '')
   const [desc, setDesc] = useState(initial?.description || '')
   const [severity, setSeverity] = useState<'critical' | 'attention' | 'info'>(initial?.severity || 'attention')
-  const [scope, setScope] = useState<'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams'>(initial?.scope || 'all')
+  const [scope, setScope] = useState<'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches'>(initial?.scope || 'all')
   const [scopeFilter, setScopeFilter] = useState<string[]>(initial?.scopeFilter || [])
+  const [matchesFilter, setMatchesFilter] = useState<string[]>(initial?.matches || [])
   const [excludeLeagues, setExcludeLeagues] = useState<string[]>(initial?.excludeLeagues || [])
   const [excludeTeams, setExcludeTeams] = useState<string[]>(initial?.excludeTeams || [])
+  const [excludeMatches, setExcludeMatches] = useState<string[]>(initial?.excludeMatches || [])
   const [requireRichData, setRequireRichData] = useState<boolean>(initial?.requireRichData || false)
   const [onlyLive, setOnlyLive] = useState<boolean>(initial?.onlyLive || false)
   const [onlyPreMatch, setOnlyPreMatch] = useState<boolean>(initial?.onlyPreMatch || false)
@@ -1149,8 +1315,10 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
     setSeverity(initial?.severity || 'attention')
     setScope(initial?.scope || 'all')
     setScopeFilter(initial?.scopeFilter || [])
+    setMatchesFilter(initial?.matches || [])
     setExcludeLeagues(initial?.excludeLeagues || [])
     setExcludeTeams(initial?.excludeTeams || [])
+    setExcludeMatches(initial?.excludeMatches || [])
     setRequireRichData(initial?.requireRichData || false)
     setOnlyLive(initial?.onlyLive || false)
     setOnlyPreMatch(initial?.onlyPreMatch || false)
@@ -1175,8 +1343,10 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
     templateId: initial?.templateId,
     scope,
     scopeFilter: (scope === 'specific_leagues' || scope === 'specific_teams') && scopeFilter.length > 0 ? scopeFilter : undefined,
+    matches: matchesFilter.length > 0 ? matchesFilter : undefined,
     excludeLeagues: excludeLeagues.length > 0 ? excludeLeagues : undefined,
     excludeTeams: excludeTeams.length > 0 ? excludeTeams : undefined,
+    excludeMatches: excludeMatches.length > 0 ? excludeMatches : undefined,
     requireRichData: requireRichData || undefined,
     onlyLive: onlyLive || undefined,
     onlyPreMatch: onlyPreMatch || undefined,
@@ -1247,17 +1417,22 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
                 <ScopePicker
                   scope={scope}
                   scopeFilter={scopeFilter}
+                  matches={matchesFilter}
                   excludeLeagues={excludeLeagues}
                   excludeTeams={excludeTeams}
+                  excludeMatches={excludeMatches}
                   requireRichData={requireRichData}
                   onlyLive={onlyLive}
                   onlyPreMatch={onlyPreMatch}
                   availableLeagues={availableLeagues}
                   availableTeams={availableTeams}
+                  availableMatches={availableMatches}
                   onScopeChange={setScope}
                   onScopeFilterChange={setScopeFilter}
+                  onMatchesChange={setMatchesFilter}
                   onExcludeLeaguesChange={setExcludeLeagues}
                   onExcludeTeamsChange={setExcludeTeams}
+                  onExcludeMatchesChange={setExcludeMatches}
                   onAdvancedToggle={handleAdvancedToggle}
                 />
               </>
@@ -1298,7 +1473,7 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
             {step === 'review' && (
               <>
                 <WizardStepHeader index={6} total={steps.length} title="Revisão" description="Confira a configuração final antes de salvar." />
-                <RadarPreview name={name.trim()} severity={severity} scope={scope} scopeFilter={scopeFilter} excludeLeagues={excludeLeagues} excludeTeams={excludeTeams} requireRichData={requireRichData} onlyLive={onlyLive} onlyPreMatch={onlyPreMatch} action={action} minConf={minConf} conditions={conditions} />
+                <RadarPreview name={name.trim()} severity={severity} scope={scope} scopeFilter={scopeFilter} matches={matchesFilter} excludeLeagues={excludeLeagues} excludeTeams={excludeTeams} excludeMatches={excludeMatches} requireRichData={requireRichData} onlyLive={onlyLive} onlyPreMatch={onlyPreMatch} action={action} minConf={minConf} conditions={conditions} />
                 <p className="text-[11px] text-white/45 leading-snug mt-4">Após salvar, este radar aparecerá em "Radares configurados" no Pattern Studio.</p>
               </>
             )}
@@ -1405,21 +1580,30 @@ function AutoDiscoveryConfigModal({ open, config, onClose, onChange, onActivate,
 }
 
 // ═══ PATTERN STUDIO (PatternsView)
-function PatternsView({ patterns, templates, createFromTemplate, createPattern, updatePattern, togglePattern, deletePattern, isAdvanced, showBuilder, setShowBuilder, discoveryConfig, updateDiscoveryConfig, triggeredAlerts, fixtures }: { patterns: Pattern[]; templates: PatternTemplate[]; createFromTemplate: (id: string) => Pattern | null; createPattern: (p: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => Pattern; updatePattern: (id: string, patch: Partial<Pattern>) => void; togglePattern: (id: string) => void; deletePattern: (id: string) => void; isAdvanced: boolean; showBuilder: boolean; setShowBuilder: (v: boolean) => void; discoveryConfig: AutoDiscoveryConfig; updateDiscoveryConfig: (p: Partial<AutoDiscoveryConfig>) => void; triggeredAlerts: TriggeredAlert[]; fixtures: LiveFixture[] }) {
+function PatternsView({ patterns, templates, createFromTemplate, createPattern, updatePattern, togglePattern, deletePattern, isAdvanced, showBuilder, setShowBuilder, discoveryConfig, updateDiscoveryConfig, triggeredAlerts, fixtures, prefilledDraft, clearPrefilledDraft }: { patterns: Pattern[]; templates: PatternTemplate[]; createFromTemplate: (id: string) => Pattern | null; createPattern: (p: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => Pattern; updatePattern: (id: string, patch: Partial<Pattern>) => void; togglePattern: (id: string) => void; deletePattern: (id: string) => void; isAdvanced: boolean; showBuilder: boolean; setShowBuilder: (v: boolean) => void; discoveryConfig: AutoDiscoveryConfig; updateDiscoveryConfig: (p: Partial<AutoDiscoveryConfig>) => void; triggeredAlerts: TriggeredAlert[]; fixtures: LiveFixture[]; prefilledDraft: Pattern | null; clearPrefilledDraft: () => void }) {
   const [showAutoConfig, setShowAutoConfig] = useState(false)
   const [editingPattern, setEditingPattern] = useState<Pattern | null>(null)
   const [templateModal, setTemplateModal] = useState<{ template: PatternTemplate; existing: Pattern | null } | null>(null)
   const [categoryFilter, setCategoryFilter] = useState<TemplateCategory | 'all'>('all')
 
-  // Real lists derived from current fixtures + accumulated patterns
+  // When a prefilled draft arrives (e.g. from Match Detail "Criar radar"), use it
+  // as the initial value of the CustomPatternModal. The draft is then cleared.
+  useEffect(() => {
+    if (prefilledDraft) {
+      setEditingPattern(prefilledDraft)
+    }
+  }, [prefilledDraft])
+
+
+  // Real lists derived from current fixtures + accumulated patterns + Scope KB
   const availableLeagues = useMemo(() => {
     const set = new Set<string>()
     for (const fx of fixtures) if (fx.league?.name) set.add(fx.league.name)
-    // Include leagues already referenced by saved patterns so they stay editable
     for (const p of patterns) {
       if (p.scope === 'specific_leagues' && p.scopeFilter) for (const l of p.scopeFilter) set.add(l)
       if (p.excludeLeagues) for (const l of p.excludeLeagues) set.add(l)
     }
+    for (const l of getKnownLeagues()) set.add(l)
     return Array.from(set).sort((a, b) => a.localeCompare(b))
   }, [fixtures, patterns])
 
@@ -1433,14 +1617,39 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
       if (p.scope === 'specific_teams' && p.scopeFilter) for (const t of p.scopeFilter) set.add(t)
       if (p.excludeTeams) for (const t of p.excludeTeams) set.add(t)
     }
+    for (const t of getKnownTeams()) set.add(t)
     return Array.from(set).sort((a, b) => a.localeCompare(b))
   }, [fixtures, patterns])
 
+  const availableMatches = useMemo(() => {
+    // Combine current fixtures + Scope KB. Dedupe by canonicalMatchId.
+    const map = new Map<string, ScopeKbMatch>()
+    for (const fx of fixtures) {
+      if (!fx.homeTeam?.name || !fx.awayTeam?.name) continue
+      const cmid = buildCanonicalMatchId(fx.homeTeam.name, fx.awayTeam.name, fx.date)
+      map.set(cmid, {
+        canonicalMatchId: cmid,
+        homeTeam: fx.homeTeam.name,
+        awayTeam: fx.awayTeam.name,
+        league: fx.league?.name,
+        date: fx.date,
+        status: fx.status?.short,
+        provider: fx.provider,
+        lastSeen: Date.now(),
+      })
+    }
+    for (const m of getKnownMatches()) if (!map.has(m.canonicalMatchId)) map.set(m.canonicalMatchId, m)
+    return Array.from(map.values()).sort((a, b) => b.lastSeen - a.lastSeen)
+  }, [fixtures])
+
 
   const handleCustomSave = (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => {
-    if (editingPattern) updatePattern(editingPattern.id, data)
+    // 'draft' is the synthetic id used by prefilled drafts coming from Match Detail.
+    // It must not trigger an update — it's a brand new pattern.
+    if (editingPattern && editingPattern.id !== 'draft') updatePattern(editingPattern.id, data)
     else createPattern(data)
     setEditingPattern(null)
+    if (prefilledDraft) clearPrefilledDraft()
   }
 
   const handleTemplateSave = (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -1477,8 +1686,8 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
   return (
     <div className="space-y-6">
       {/* Modals */}
-      <CustomPatternModal open={showBuilder} initial={editingPattern} onClose={() => { setShowBuilder(false); setEditingPattern(null) }} onSave={handleCustomSave} availableLeagues={availableLeagues} availableTeams={availableTeams} />
-      <TemplateConfigModal open={!!templateModal} template={templateModal?.template || null} existingPattern={templateModal?.existing || null} onClose={() => setTemplateModal(null)} onSave={handleTemplateSave} availableLeagues={availableLeagues} availableTeams={availableTeams} />
+      <CustomPatternModal open={showBuilder} initial={editingPattern} onClose={() => { setShowBuilder(false); setEditingPattern(null); if (prefilledDraft) clearPrefilledDraft() }} onSave={handleCustomSave} availableLeagues={availableLeagues} availableTeams={availableTeams} availableMatches={availableMatches} />
+      <TemplateConfigModal open={!!templateModal} template={templateModal?.template || null} existingPattern={templateModal?.existing || null} onClose={() => setTemplateModal(null)} onSave={handleTemplateSave} availableLeagues={availableLeagues} availableTeams={availableTeams} availableMatches={availableMatches} />
       <AutoDiscoveryConfigModal open={showAutoConfig} config={discoveryConfig} onClose={() => setShowAutoConfig(false)} onChange={updateDiscoveryConfig} onActivate={handleActivateAuto} onDeactivate={handleDeactivateAuto} />
 
       {/* Header */}
@@ -1606,6 +1815,8 @@ function scopeShortLabel(p: Pattern): string {
   if (p.scope === 'favorites_only') return 'Favoritos'
   if (p.scope === 'specific_leagues' && p.scopeFilter && p.scopeFilter.length > 0) return `${p.scopeFilter.length} liga${p.scopeFilter.length === 1 ? '' : 's'}`
   if (p.scope === 'specific_teams' && p.scopeFilter && p.scopeFilter.length > 0) return `${p.scopeFilter.length} time${p.scopeFilter.length === 1 ? '' : 's'}`
+  if (p.scope === 'specific_matches' && p.matches && p.matches.length > 0) return `${p.matches.length} partida${p.matches.length === 1 ? '' : 's'}`
+  if (p.matches && p.matches.length > 0) return `${p.matches.length} partida${p.matches.length === 1 ? '' : 's'}`
   return 'Todos'
 }
 

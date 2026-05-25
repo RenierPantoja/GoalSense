@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { useParams, Link, useLocation } from 'react-router-dom'
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, RefreshCw, Circle, Square, ArrowRightLeft, Target, Flag } from 'lucide-react'
 import { ClubLogo } from '@/components/ui/ClubLogo'
 import { LoadingState } from '@/components/ui/LoadingState'
@@ -625,6 +625,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
         {onBack ? <button onClick={onBack} className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> Voltar</button> : <Link to="/app/matches" className="inline-flex items-center gap-1.5 text-[12px] text-white/30 hover:text-white/60"><ArrowLeft size={14} /> {LIVE_COPY.backToMatches}</Link>}
         <div className="flex items-center gap-2">
           <MatchDetailFavorites home={home} away={away} league={league} leagueLogo={leagueLogo} date={data?.events?.[0] ? '' : ''} utcDate={fixtureState?.date || ''} />
+          <CreatePatternButton home={home.name} away={away.name} utcDate={fixtureState?.date || ''} />
           <button onClick={() => fetchData(true)} className="p-2 rounded-full text-white/20 hover:text-white/50 hover:bg-white/[0.03]"><RefreshCw size={13} /></button>
         </div>
       </div>
@@ -1248,6 +1249,27 @@ function parseEspn(json: any): MatchData {
 }
 
 // --- Match Detail Favorites --------------------------------------------------
+
+function CreatePatternButton({ home, away, utcDate }: { home: string; away: string; utcDate: string }) {
+  const navigate = useNavigate()
+  const handleClick = () => {
+    if (!home || !away) return
+    const cmid = buildCanonicalMatchId(home, away, utcDate)
+    const label = `${home} x ${away}`
+    // Two delivery channels: route state (preferred) + localStorage fallback (in case
+    // the navigation strategy strips state).
+    try {
+      localStorage.setItem('goalsense_pattern_prefill', JSON.stringify({ matches: [cmid], matchLabel: label }))
+    } catch { /* */ }
+    navigate('/app/command', { state: { openPatternStudio: true, prefillScope: { matches: [cmid], matchLabel: label } } })
+  }
+  return (
+    <button onClick={handleClick} type="button" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-cyan-300 bg-cyan-500/10 border border-cyan-400/20 hover:bg-cyan-500/15 transition-all" title="Criar radar para esta partida">
+      <Target size={12} />
+      Criar radar
+    </button>
+  )
+}
 
 function MatchDetailFavorites({ home, away, league, leagueLogo, utcDate }: { home: { name: string; logo: string | null }; away: { name: string; logo: string | null }; league: string; leagueLogo: string | null; date: string; utcDate: string }) {
   const { isFavoriteTeam, toggleFavoriteTeam, isFavoriteMatch, toggleFavoriteMatch } = useFavorites()

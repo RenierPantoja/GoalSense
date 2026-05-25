@@ -4,11 +4,42 @@
  */
 import type { LiveFixture } from '@/lib/apiClient'
 import type { Pattern, PatternCondition, PatternHit, ConfidenceLevel, FixtureStatsForPattern } from '../types/commandTypes'
+import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
 
 interface EvalContext {
   fixture: LiveFixture
   stats?: FixtureStatsForPattern
   isFavoriteTeam: (name: string) => boolean
+}
+
+/**
+ * Check if a fixture matches any of the given match identifiers.
+ * Accepts canonicalMatchId, free-text "Home x Away", or substring of either team.
+ */
+function matchesFixture(fx: LiveFixture, items: string[]): boolean {
+  const cmid = buildCanonicalMatchId(fx.homeTeam.name, fx.awayTeam.name, fx.date)
+  const homeLower = fx.homeTeam.name.toLowerCase()
+  const awayLower = fx.awayTeam.name.toLowerCase()
+  const fixtureIdStr = String(fx.id)
+  for (const raw of items) {
+    if (!raw) continue
+    if (raw === cmid) return true
+    if (raw === fixtureIdStr) return true
+    const f = raw.toLowerCase().trim()
+    // free-text "Home x Away"
+    if (f.includes(' x ') || f.includes(' vs ')) {
+      const parts = f.split(/\s+(?:x|vs)\s+/i).map(p => p.trim()).filter(Boolean)
+      if (parts.length === 2) {
+        const [a, b] = parts
+        if ((homeLower.includes(a) || a.includes(homeLower)) && (awayLower.includes(b) || b.includes(awayLower))) return true
+        if ((homeLower.includes(b) || b.includes(homeLower)) && (awayLower.includes(a) || a.includes(awayLower))) return true
+        continue
+      }
+    }
+    // substring on either team — last resort
+    if ((homeLower.includes(f) || f.includes(homeLower)) || (awayLower.includes(f) || f.includes(awayLower))) return true
+  }
+  return false
 }
 
 function evaluateCondition(condition: PatternCondition, ctx: EvalContext): boolean | null {
@@ -119,7 +150,7 @@ export function evaluatePattern(
   if (pattern.status !== 'active') return null
   if (pattern.conditions.length === 0) return null
 
-  // ── Scope check (legacy modes: favorites_only / specific_leagues / specific_teams) ──
+  // ── Scope check (legacy modes: favorites_only / specific_leagues / specific_teams / specific_matches) ──
   if (pattern.scope === 'favorites_only') {
     if (!isFavoriteTeam(fixture.homeTeam.name) && !isFavoriteTeam(fixture.awayTeam.name)) return null
   } else if (pattern.scope === 'specific_leagues' && pattern.scopeFilter && pattern.scopeFilter.length > 0) {
@@ -131,6 +162,16 @@ export function evaluatePattern(
     const awayLower = fixture.awayTeam.name.toLowerCase()
     const matches = pattern.scopeFilter.some(f => { const fl = f.toLowerCase(); return homeLower.includes(fl) || fl.includes(homeLower) || awayLower.includes(fl) || fl.includes(awayLower) })
     if (!matches) return null
+  } else if (pattern.scope === 'specific_matches' && pattern.matches && pattern.matches.length > 0) {
+    if (!matchesFixture(fixture, pattern.matches)) return null
+  }
+
+  // ── Match include/exclude (additive — works alongside any scope mode) ──
+  if (pattern.matches && pattern.matches.length > 0 && pattern.scope !== 'specific_matches') {
+    if (!matchesFixture(fixture, pattern.matches)) return null
+  }
+  if (pattern.excludeMatches && pattern.excludeMatches.length > 0) {
+    if (matchesFixture(fixture, pattern.excludeMatches)) return null
   }
 
   // ── Advanced exclusion filters (additive, backward compatible) ──

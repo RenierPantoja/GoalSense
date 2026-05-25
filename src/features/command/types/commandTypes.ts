@@ -33,7 +33,7 @@ export interface PatternCondition {
   params: Record<string, number | string | boolean>
 }
 
-export type PatternScope = 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams'
+export type PatternScope = 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches'
 export type PatternAction = 'register_alert' | 'suggest_only' | 'highlight'
 
 export interface Pattern {
@@ -50,6 +50,8 @@ export interface Pattern {
   // Advanced scope filters (optional, additive — backward compatible)
   excludeLeagues?: string[]
   excludeTeams?: string[]
+  matches?: string[]          // canonical match ids (or free-text labels) the radar is restricted to
+  excludeMatches?: string[]   // canonical match ids excluded from this radar
   requireRichData?: boolean
   onlyLive?: boolean
   onlyPreMatch?: boolean

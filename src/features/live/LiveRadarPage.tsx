@@ -22,6 +22,7 @@ import { LiveEventTicker } from '@/components/live/LiveEventTicker'
 import { RefreshProgressBar } from '@/components/live/RefreshProgressBar'
 import { LiveRadarSummary } from '@/components/live/LiveRadarSummary'
 import { LiveMatchDetailView } from './LiveMatchDetailView'
+import { recordScopeEntities } from '@/services/intelligence/scopeKnowledgeBase'
 
 export function LiveRadarPage() {
   const navigate = useNavigate()
@@ -44,8 +45,13 @@ export function LiveRadarPage() {
   const fetcher = useCallback(async () => (await getLiveFixtures()).fixtures, [])
   const { data: allFixtures, loading, error, lastUpdate, refreshing, refresh } = useAutoRefresh(fetcher, { intervalMs: 15_000 })
 
-  // Keep ref in sync for the navigate helpers
-  useEffect(() => { allFixturesRef.current = allFixtures || null }, [allFixtures])
+  // Keep ref in sync for the navigate helpers + feed scope KB
+  useEffect(() => {
+    allFixturesRef.current = allFixtures || null
+    if (allFixtures && allFixtures.length > 0) {
+      try { recordScopeEntities(allFixtures) } catch { /* */ }
+    }
+  }, [allFixtures])
 
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<number | null>(null)
