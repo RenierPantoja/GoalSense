@@ -534,14 +534,36 @@ function ModalShell({ open, onClose, title, subtitle, headerExtra, children, foo
   )
 }
 
-// ═══ PREMIUM TOGGLE
+// ═══ PREMIUM TOGGLE — bulletproof iOS-style switch.
+// Uses absolute positioning with `left` instead of CSS transforms so it
+// never inherits unexpected `transform` resets and never grows inside flex
+// layouts (shrink-0 + display:inline-block via inline-flex on button).
 function PremiumToggle({ checked, onChange, ariaLabel, size = 'md' }: { checked: boolean; onChange: (v: boolean) => void; ariaLabel?: string; size?: 'sm' | 'md' }) {
-  const w = size === 'sm' ? 'w-9 h-5' : 'w-11 h-6'
-  const knob = size === 'sm' ? 'h-4 w-4' : 'h-5 w-5'
-  const pos = size === 'sm' ? (checked ? 'translate-x-[18px]' : 'translate-x-[2px]') : (checked ? 'translate-x-[22px]' : 'translate-x-[2px]')
+  const dims = size === 'sm'
+    ? { w: 34, h: 20, knob: 14, padding: 3 }
+    : { w: 42, h: 24, knob: 18, padding: 3 }
+  const knobLeft = checked ? dims.w - dims.knob - dims.padding : dims.padding
   return (
-    <button type="button" role="switch" aria-checked={checked} aria-pressed={checked} aria-label={ariaLabel} onClick={() => onChange(!checked)} className={`relative ${w} rounded-full transition-all ${checked ? 'bg-gradient-to-r from-emerald-500/40 to-cyan-500/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_18px_-4px_rgba(52,211,153,0.4)]' : 'bg-white/[0.06] border border-white/[0.05]'}`}>
-      <span className={`absolute top-1/2 -translate-y-1/2 ${knob} rounded-full transition-all shadow-[0_2px_6px_-2px_rgba(0,0,0,0.6)] ${pos} ${checked ? 'bg-emerald-300' : 'bg-white/55'}`} />
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-pressed={checked}
+      aria-label={ariaLabel}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-block shrink-0 rounded-full transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0d12] ${checked ? 'bg-emerald-500/55' : 'bg-white/[0.08] border border-white/[0.06]'}`}
+      style={{ width: dims.w, height: dims.h }}
+    >
+      <span
+        aria-hidden="true"
+        className={`absolute rounded-full transition-[left] duration-200 ease-out shadow-[0_1px_2px_rgba(0,0,0,0.45)] ${checked ? 'bg-white' : 'bg-white/65'}`}
+        style={{
+          width: dims.knob,
+          height: dims.knob,
+          top: (dims.h - dims.knob) / 2,
+          left: knobLeft,
+        }}
+      />
     </button>
   )
 }
@@ -2172,16 +2194,18 @@ function ConfiguredRadarRow({ pattern, triggeredAlerts, onToggle, onEdit, onDupl
   const origin = pattern.isTemplate || pattern.templateId ? 'Template' : 'Personalizado'
 
   return (
-    <div className={`rounded-2xl border ${isActive ? 'border-white/[0.08]' : 'border-white/[0.05] opacity-75'} bg-gradient-to-r from-white/[0.012] to-transparent px-5 py-4`}>
-      <div className="flex items-center gap-4 flex-wrap">
-        <PremiumToggle checked={isActive} onChange={onToggle} ariaLabel={`Ativar ${pattern.name}`} size="sm" />
+    <div className={`rounded-2xl border ${isActive ? 'border-white/[0.08]' : 'border-white/[0.05] opacity-75'} bg-white/[0.012] px-5 py-4`}>
+      <div className="flex items-center gap-4">
+        <div className="shrink-0 flex items-center justify-center" style={{ width: 42 }}>
+          <PremiumToggle checked={isActive} onChange={onToggle} ariaLabel={`${isActive ? 'Pausar' : 'Ativar'} ${pattern.name}`} size="sm" />
+        </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
             <h4 className="text-[13px] font-bold text-white/95 truncate">{pattern.name}</h4>
             <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${sevTone}`}>{pattern.severity === 'critical' ? 'Crítico' : pattern.severity === 'attention' ? 'Atenção' : 'Info'}</span>
             <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-white/[0.04] text-white/65 border border-white/[0.07]">{origin}</span>
           </div>
-          <div className="flex items-center gap-3 text-[11px] text-white/55 flex-wrap">
+          <div className="flex items-center gap-x-3 gap-y-1 text-[11px] text-white/55 flex-wrap">
             <span>{pattern.conditions.length} {pattern.conditions.length === 1 ? 'condição' : 'condições'}</span>
             <span>· Conf ≥ {pattern.minConfidence}%</span>
             <span>· {pattern.action === 'register_alert' ? 'Alerta' : pattern.action === 'suggest_only' ? 'Sugerir' : 'Destacar'}</span>
@@ -2194,9 +2218,9 @@ function ConfiguredRadarRow({ pattern, triggeredAlerts, onToggle, onEdit, onDupl
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={onEdit} type="button" className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/65 hover:text-white/95 hover:bg-white/[0.05] transition-all">Editar</button>
-          <button onClick={onDuplicate} type="button" className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/65 hover:text-white/95 hover:bg-white/[0.05] transition-all">Duplicar</button>
-          <button onClick={onDelete} type="button" className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/45 hover:text-rose-300 hover:bg-rose-500/8 transition-all" aria-label="Excluir">Excluir</button>
+          <button onClick={onEdit} type="button" className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/65 hover:text-white/95 hover:bg-white/[0.05] transition-colors">Editar</button>
+          <button onClick={onDuplicate} type="button" className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/65 hover:text-white/95 hover:bg-white/[0.05] transition-colors">Duplicar</button>
+          <button onClick={onDelete} type="button" className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/45 hover:text-rose-300 hover:bg-rose-500/8 transition-colors" aria-label="Excluir">Excluir</button>
         </div>
       </div>
       {isAdvanced && (
