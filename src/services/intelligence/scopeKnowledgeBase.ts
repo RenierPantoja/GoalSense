@@ -17,6 +17,9 @@ export interface ScopeKbLeague {
   id: string
   name: string
   country?: string
+  // V3.15 — rich metadata captured from fixtures (backward compatible, optional).
+  logo?: string | null
+  season?: string
   provider?: string
   lastSeen: number
   countSeen: number
@@ -28,6 +31,8 @@ export interface ScopeKbTeam {
   aliases?: string[]
   logo?: string | null
   country?: string
+  // V3.15 — last league seen for this team (for grouping).
+  league?: string
   provider?: string
   lastSeen: number
   countSeen: number
@@ -40,6 +45,10 @@ export interface ScopeKbMatch {
   league?: string
   date?: string
   status?: string
+  // V3.15 — logos captured from fixtures so the match picker can render escudos.
+  homeLogo?: string | null
+  awayLogo?: string | null
+  leagueLogo?: string | null
   provider?: string
   lastSeen: number
 }
@@ -101,9 +110,21 @@ export function getKnownLeagues(): string[] {
   return kb.leagues.slice().sort((a, b) => b.lastSeen - a.lastSeen).map(l => l.name)
 }
 
+/** Rich version with full metadata for the V3.15 ScopePicker cards. */
+export function getKnownLeaguesRich(): ScopeKbLeague[] {
+  const kb = loadKb()
+  return kb.leagues.slice().sort((a, b) => b.lastSeen - a.lastSeen)
+}
+
 export function getKnownTeams(): string[] {
   const kb = loadKb()
   return kb.teams.slice().sort((a, b) => b.lastSeen - a.lastSeen).map(t => t.name)
+}
+
+/** Rich version with full metadata for the V3.15 ScopePicker cards. */
+export function getKnownTeamsRich(): ScopeKbTeam[] {
+  const kb = loadKb()
+  return kb.teams.slice().sort((a, b) => b.lastSeen - a.lastSeen)
 }
 
 export function getKnownMatches(): ScopeKbMatch[] {
@@ -130,16 +151,22 @@ export function recordScopeEntities(fixtures: LiveFixture[]): void {
       if (fx.league?.name) {
         const k = leagueKey(fx.league)
         const prev = leagueIndex.get(k)
+        const fxLeagueLogo = fx.league.logo
+        const fxLeagueSeason = fx.league.season ? String(fx.league.season) : undefined
         if (prev) {
           prev.lastSeen = now
           prev.countSeen = (prev.countSeen || 0) + 1
           if (!prev.country && fx.league.country) prev.country = fx.league.country
           if (!prev.provider && fx.provider) prev.provider = fx.provider
+          if (!prev.logo && fxLeagueLogo) prev.logo = fxLeagueLogo
+          if (!prev.season && fxLeagueSeason) prev.season = fxLeagueSeason
         } else {
           leagueIndex.set(k, {
             id: String(fx.league.id ?? fx.league.name),
             name: fx.league.name,
             country: fx.league.country || undefined,
+            logo: fxLeagueLogo || null,
+            season: fxLeagueSeason,
             provider: fx.provider,
             lastSeen: now,
             countSeen: 1,
@@ -157,11 +184,13 @@ export function recordScopeEntities(fixtures: LiveFixture[]): void {
           prev.countSeen = (prev.countSeen || 0) + 1
           if (!prev.logo && team.logo) prev.logo = team.logo
           if (!prev.provider && fx.provider) prev.provider = fx.provider
+          if (!prev.league && fx.league?.name) prev.league = fx.league.name
         } else {
           teamIndex.set(k, {
             id: String(team.id ?? team.name),
             name: team.name,
             logo: team.logo || null,
+            league: fx.league?.name,
             provider: fx.provider,
             lastSeen: now,
             countSeen: 1,
@@ -173,9 +202,13 @@ export function recordScopeEntities(fixtures: LiveFixture[]): void {
       if (fx.homeTeam?.name && fx.awayTeam?.name) {
         const cmid = buildCanonicalMatchId(fx.homeTeam.name, fx.awayTeam.name, fx.date)
         const prev = matchIndex.get(cmid)
+        const fxLeagueLogo = fx.league?.logo
         if (prev) {
           prev.lastSeen = now
           if (fx.status?.short) prev.status = fx.status.short
+          if (!prev.homeLogo && fx.homeTeam.logo) prev.homeLogo = fx.homeTeam.logo
+          if (!prev.awayLogo && fx.awayTeam.logo) prev.awayLogo = fx.awayTeam.logo
+          if (!prev.leagueLogo && fxLeagueLogo) prev.leagueLogo = fxLeagueLogo
         } else {
           matchIndex.set(cmid, {
             canonicalMatchId: cmid,
@@ -184,6 +217,9 @@ export function recordScopeEntities(fixtures: LiveFixture[]): void {
             league: fx.league?.name,
             date: fx.date,
             status: fx.status?.short,
+            homeLogo: fx.homeTeam.logo || null,
+            awayLogo: fx.awayTeam.logo || null,
+            leagueLogo: fxLeagueLogo || null,
             provider: fx.provider,
             lastSeen: now,
           })

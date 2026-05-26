@@ -20,7 +20,7 @@ import { evaluateAllPatterns } from './intelligence/patternEvaluator'
 import { runAutoDiscovery, type AutoDiscovery } from './intelligence/autoDiscoveryEngine'
 import { resolveAlert } from './intelligence/patternResolutionEngine'
 import { buildPreMatchOutcomeSummary } from '@/services/intelligence/preMatchOutcomePerformance'
-import { recordScopeEntities, getKnownLeagues, getKnownTeams, getKnownMatches, formatMatchLabel, type ScopeKbMatch } from '@/services/intelligence/scopeKnowledgeBase'
+import { recordScopeEntities, getKnownLeagues, getKnownTeams, getKnownMatches, getKnownLeaguesRich, getKnownTeamsRich, formatMatchLabel, type ScopeKbMatch, type ScopeKbLeague, type ScopeKbTeam } from '@/services/intelligence/scopeKnowledgeBase'
 import { isLiveFx, detectChanges, type ChangeEvent } from './commandHelpers'
 import type { Pattern, PatternTemplate, PatternHit, PatternCondition, PatternConditionType, FixtureStatsForPattern, ScannerEntry, TriggeredAlert, AutoDiscoveryConfig } from './types/commandTypes'
 
@@ -1339,9 +1339,496 @@ function ActionCardPicker({ value, onChange }: { value: 'register_alert' | 'sugg
   )
 }
 
+// ═══ SCOPE INTELLIGENCE LIBRARY (V3.15) ══════════════════════════════════════
+// Premium pickers for leagues / teams / matches. Each picker shows a search,
+// a selected summary (pills with logo+name+remove), quick filters, and a
+// scrollable result list rendered as cards with logos, fallback monogram,
+// origin/source badges, and metadata. No mocks: every option is sourced from
+// real fixtures or the local Scope Knowledge Base. Free-text input is allowed
+// but clearly flagged as "Manual" so the user knows it relies on textual
+// matching at evaluation time.
+
+// EntityAvatar — logo with monogram fallback. Determines a pseudo-color from
+// the name so the placeholder still has identity.
+function EntityAvatar({ src, name, size = 32, square = false }: { src?: string | null; name: string; size?: number; square?: boolean }) {
+  const [errored, setErrored] = useState(false)
+  const initials = useMemo(() => {
+    const parts = name.trim().split(/\s+/).filter(Boolean)
+    if (parts.length === 0) return '?'
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  }, [name])
+  const tone = useMemo(() => {
+    let h = 0
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360
+    return h
+  }, [name])
+  const radius = square ? size * 0.22 : size / 2
+  const showImage = !!src && !errored
+  return (
+    <span
+      className="inline-flex items-center justify-center shrink-0 overflow-hidden border border-white/[0.06]"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: radius,
+        backgroundColor: showImage ? 'rgba(255,255,255,0.025)' : `hsl(${tone}, 18%, 18%)`,
+      }}
+    >
+      {showImage ? (
+        <img
+          src={src!}
+          alt=""
+          width={size}
+          height={size}
+          onError={() => setErrored(true)}
+          loading="lazy"
+          decoding="async"
+          className="object-contain"
+          style={{ width: size * 0.85, height: size * 0.85 }}
+        />
+      ) : (
+        <span
+          className="font-semibold tracking-tight"
+          style={{ fontSize: Math.round(size * 0.36), color: 'rgba(255,255,255,0.78)' }}
+        >
+          {initials}
+        </span>
+      )}
+    </span>
+  )
+}
+
+// Status helpers shared by MatchPicker.
+function matchStatusBadge(status?: string): { label: string; tone: string } | null {
+  if (!status) return null
+  if (status === 'LIVE' || status === '1H' || status === '2H' || status === 'HT') {
+    return { label: status === 'HT' ? 'Intervalo' : 'Ao vivo', tone: 'bg-emerald-500/10 text-emerald-200/85 border-emerald-400/20' }
+  }
+  if (status === 'NS' || status === 'TBD') return { label: 'Agendada', tone: 'bg-white/[0.04] text-white/55 border-white/[0.07]' }
+  if (status === 'FT' || status === 'AET' || status === 'PEN') return { label: 'Encerrada', tone: 'bg-white/[0.04] text-white/55 border-white/[0.07]' }
+  if (status === 'PST' || status === 'CANC' || status === 'ABD') return { label: status, tone: 'bg-rose-500/10 text-rose-200/85 border-rose-400/15' }
+  return { label: status, tone: 'bg-white/[0.04] text-white/55 border-white/[0.07]' }
+}
+
+function matchDateLabel(date?: string): string | null {
+  if (!date) return null
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return null
+  const now = new Date()
+  const sameDay = d.toDateString() === now.toDateString()
+  const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  if (sameDay) return `Hoje · ${time}`
+  return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} · ${time}`
+}
+
+function normalizeText(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+}
+
+// LeaguePicker — premium league picker with cards + search + selected summary.
+function LeaguePicker({ options, selected, onChange }: { options: ScopeKbLeague[]; selected: string[]; onChange: (v: string[]) => void }) {
+  const [query, setQuery] = useState('')
+  // Index for selected pills so they render with logos even if the list is huge.
+  const lookup = useMemo(() => {
+    const m = new Map<string, ScopeKbLeague>()
+    for (const o of options) m.set(normalizeText(o.name), o)
+    return m
+  }, [options])
+
+  const isSelected = (name: string) => selected.some(s => normalizeText(s) === normalizeText(name))
+  const toggle = (name: string) => {
+    if (isSelected(name)) onChange(selected.filter(s => normalizeText(s) !== normalizeText(name)))
+    else onChange([...selected, name])
+  }
+  const addManual = (raw: string) => {
+    const trimmed = raw.trim()
+    if (!trimmed || isSelected(trimmed)) return
+    onChange([...selected, trimmed])
+    setQuery('')
+  }
+  const clearAll = () => onChange([])
+
+  const filtered = useMemo(() => {
+    const q = normalizeText(query)
+    if (!q) return options.slice(0, 60)
+    return options.filter(o => normalizeText(o.name).includes(q) || normalizeText(o.country || '').includes(q)).slice(0, 60)
+  }, [options, query])
+
+  const noResultsButQuery = filtered.length === 0 && query.trim().length > 0
+
+  return (
+    <div className="rounded-xl border border-white/[0.07] bg-white/[0.008] overflow-hidden">
+      <div className="px-4 pt-4 pb-3 border-b border-white/[0.05]">
+        <div className="flex items-center gap-2 flex-wrap mb-1">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">Selecionar ligas</span>
+          <span className="text-[11px] text-white/55">{selected.length} {selected.length === 1 ? 'selecionada' : 'selecionadas'}</span>
+          <span className="ml-auto text-[10px] text-white/35">{options.length} disponíveis</span>
+        </div>
+        <p className="text-[11.5px] text-white/50 leading-snug">Escolha em quais competições este radar pode atuar. As ligas atuais aparecem primeiro.</p>
+        {selected.length > 0 && (
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            {selected.map(name => {
+              const meta = lookup.get(normalizeText(name))
+              return (
+                <span key={name} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] pl-1.5 pr-2 py-1">
+                  <EntityAvatar src={meta?.logo} name={name} size={16} square />
+                  <span className="text-[11px] font-medium text-white/90 max-w-[160px] truncate">{name}</span>
+                  {!meta && <span className="text-[9px] uppercase tracking-wider text-amber-300/75 font-medium">manual</span>}
+                  <button onClick={() => toggle(name)} type="button" aria-label={`Remover ${name}`} className="text-white/40 hover:text-rose-300 transition-colors -mr-0.5">×</button>
+                </span>
+              )
+            })}
+            <button onClick={clearAll} type="button" className="ml-auto text-[10px] uppercase tracking-wider font-semibold text-white/45 hover:text-white/85 transition-colors">Limpar</button>
+          </div>
+        )}
+      </div>
+      <div className="px-4 py-3">
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addManual(query) } }}
+          placeholder="Buscar liga ou país"
+          className="w-full h-10 rounded-lg border border-white/[0.07] bg-white/[0.025] px-3.5 text-[13px] text-white/90 placeholder:text-white/30 outline-none focus:border-white/30 focus:bg-white/[0.04] transition-colors"
+          aria-label="Buscar liga"
+        />
+      </div>
+      <div className="px-4 pb-4 max-h-[320px] overflow-y-auto sidebar-scroll grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {filtered.map(l => {
+          const sel = isSelected(l.name)
+          const isLive = l.lastSeen > 0
+          return (
+            <button
+              key={l.id + l.name}
+              onClick={() => toggle(l.name)}
+              type="button"
+              aria-pressed={sel}
+              className={`group flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors duration-200 ${sel ? 'border-white/[0.18] bg-white/[0.04]' : 'border-white/[0.06] bg-white/[0.012] hover:border-white/[0.12] hover:bg-white/[0.022]'}`}
+            >
+              <EntityAvatar src={l.logo} name={l.name} size={32} square />
+              <div className="flex-1 min-w-0">
+                <p className="text-[12.5px] font-semibold text-white/90 truncate leading-tight">{l.name}</p>
+                <div className="flex items-center gap-1.5 mt-0.5 text-[10.5px] text-white/45">
+                  {l.country && <span className="truncate">{l.country}</span>}
+                  {l.country && l.season && <span className="text-white/20">·</span>}
+                  {l.season && <span className="tabular-nums">{l.season}</span>}
+                  {!l.country && !l.season && <span className="text-white/30">Liga</span>}
+                </div>
+              </div>
+              {isLive && <span className="text-[9px] font-medium uppercase tracking-wider text-white/45">Atual</span>}
+              <span aria-hidden className={`shrink-0 h-4 w-4 rounded-full border transition-colors ${sel ? 'border-white/65 bg-white/85' : 'border-white/25 bg-transparent group-hover:border-white/45'}`} />
+            </button>
+          )
+        })}
+        {noResultsButQuery && (
+          <div className="col-span-full rounded-xl border border-dashed border-white/[0.08] bg-white/[0.005] px-4 py-4 text-center">
+            <p className="text-[12px] text-white/65">Nenhuma liga encontrada</p>
+            <button onClick={() => addManual(query)} type="button" className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-colors">
+              + Adicionar &ldquo;{query.trim()}&rdquo; manualmente
+            </button>
+            <p className="text-[10.5px] text-white/35 mt-2 leading-snug">Será usado por correspondência de nome.</p>
+          </div>
+        )}
+        {options.length === 0 && !noResultsButQuery && (
+          <div className="col-span-full rounded-xl border border-dashed border-white/[0.08] bg-white/[0.005] px-4 py-5 text-center">
+            <p className="text-[12px] text-white/65">Biblioteca vazia</p>
+            <p className="text-[10.5px] text-white/40 mt-1 leading-snug">Abra partidas no Live Radar para alimentar a biblioteca, ou digite uma liga manualmente acima.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// TeamPicker — premium team picker with logos, league hint and selected summary.
+type TeamFilter = 'all' | 'live' | 'library'
+function TeamPicker({ options, selected, onChange }: { options: ScopeKbTeam[]; selected: string[]; onChange: (v: string[]) => void }) {
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<TeamFilter>('all')
+
+  const lookup = useMemo(() => {
+    const m = new Map<string, ScopeKbTeam>()
+    for (const o of options) m.set(normalizeText(o.name), o)
+    return m
+  }, [options])
+
+  const isSelected = (name: string) => selected.some(s => normalizeText(s) === normalizeText(name))
+  const toggle = (name: string) => {
+    if (isSelected(name)) onChange(selected.filter(s => normalizeText(s) !== normalizeText(name)))
+    else onChange([...selected, name])
+  }
+  const addManual = (raw: string) => {
+    const trimmed = raw.trim()
+    if (!trimmed || isSelected(trimmed)) return
+    onChange([...selected, trimmed])
+    setQuery('')
+  }
+  const clearAll = () => onChange([])
+
+  const filtered = useMemo(() => {
+    const q = normalizeText(query)
+    let list = options
+    if (filter === 'live') list = list.filter(t => t.lastSeen > Date.now() - 24 * 3600_000)
+    else if (filter === 'library') list = list.filter(t => t.lastSeen > 0 && t.lastSeen < Date.now() - 24 * 3600_000)
+    if (q) list = list.filter(t => normalizeText(t.name).includes(q) || normalizeText(t.league || '').includes(q))
+    return list.slice(0, 80)
+  }, [options, query, filter])
+
+  const noResultsButQuery = filtered.length === 0 && query.trim().length > 0
+
+  const filterTabs: { key: TeamFilter; label: string }[] = [
+    { key: 'all', label: 'Todos' },
+    { key: 'live', label: 'Em jogos atuais' },
+    { key: 'library', label: 'Biblioteca' },
+  ]
+
+  return (
+    <div className="rounded-xl border border-white/[0.07] bg-white/[0.008] overflow-hidden">
+      <div className="px-4 pt-4 pb-3 border-b border-white/[0.05]">
+        <div className="flex items-center gap-2 flex-wrap mb-1">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">Selecionar times</span>
+          <span className="text-[11px] text-white/55">{selected.length} {selected.length === 1 ? 'selecionado' : 'selecionados'}</span>
+          <span className="ml-auto text-[10px] text-white/35">{options.length} disponíveis</span>
+        </div>
+        <p className="text-[11.5px] text-white/50 leading-snug">Escolha quais clubes este radar pode acompanhar.</p>
+        {selected.length > 0 && (
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            {selected.map(name => {
+              const meta = lookup.get(normalizeText(name))
+              return (
+                <span key={name} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] pl-1 pr-2 py-1">
+                  <EntityAvatar src={meta?.logo} name={name} size={18} />
+                  <span className="text-[11px] font-medium text-white/90 max-w-[140px] truncate">{name}</span>
+                  {!meta && <span className="text-[9px] uppercase tracking-wider text-amber-300/75 font-medium">manual</span>}
+                  <button onClick={() => toggle(name)} type="button" aria-label={`Remover ${name}`} className="text-white/40 hover:text-rose-300 transition-colors -mr-0.5">×</button>
+                </span>
+              )
+            })}
+            <button onClick={clearAll} type="button" className="ml-auto text-[10px] uppercase tracking-wider font-semibold text-white/45 hover:text-white/85 transition-colors">Limpar</button>
+          </div>
+        )}
+      </div>
+      <div className="px-4 py-3 flex flex-col sm:flex-row gap-2 sm:items-center">
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addManual(query) } }}
+          placeholder="Buscar time ou clube"
+          className="flex-1 h-10 rounded-lg border border-white/[0.07] bg-white/[0.025] px-3.5 text-[13px] text-white/90 placeholder:text-white/30 outline-none focus:border-white/30 focus:bg-white/[0.04] transition-colors"
+          aria-label="Buscar time"
+        />
+        <div className="flex items-center gap-1">
+          {filterTabs.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setFilter(t.key)}
+              type="button"
+              className={`px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-colors ${filter === t.key ? 'bg-white/[0.06] text-white/95 border border-white/[0.12]' : 'text-white/55 hover:text-white/85 border border-transparent hover:bg-white/[0.025]'}`}
+            >{t.label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="px-4 pb-4 max-h-[360px] overflow-y-auto sidebar-scroll grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {filtered.map(t => {
+          const sel = isSelected(t.name)
+          const isCurrent = t.lastSeen > Date.now() - 24 * 3600_000
+          return (
+            <button
+              key={t.id + t.name}
+              onClick={() => toggle(t.name)}
+              type="button"
+              aria-pressed={sel}
+              className={`group flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors duration-200 ${sel ? 'border-white/[0.18] bg-white/[0.04]' : 'border-white/[0.06] bg-white/[0.012] hover:border-white/[0.12] hover:bg-white/[0.022]'}`}
+            >
+              <EntityAvatar src={t.logo} name={t.name} size={30} />
+              <div className="flex-1 min-w-0">
+                <p className="text-[12.5px] font-semibold text-white/90 truncate leading-tight">{t.name}</p>
+                <div className="flex items-center gap-1.5 mt-0.5 text-[10.5px] text-white/45">
+                  {t.league ? <span className="truncate">{t.league}</span> : <span className="text-white/30">Clube</span>}
+                </div>
+              </div>
+              {isCurrent && <span className="text-[9px] font-medium uppercase tracking-wider text-white/45">Atual</span>}
+              <span aria-hidden className={`shrink-0 h-4 w-4 rounded-full border transition-colors ${sel ? 'border-white/65 bg-white/85' : 'border-white/25 bg-transparent group-hover:border-white/45'}`} />
+            </button>
+          )
+        })}
+        {noResultsButQuery && (
+          <div className="col-span-full rounded-xl border border-dashed border-white/[0.08] bg-white/[0.005] px-4 py-4 text-center">
+            <p className="text-[12px] text-white/65">Nenhum time encontrado</p>
+            <button onClick={() => addManual(query)} type="button" className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-colors">
+              + Adicionar &ldquo;{query.trim()}&rdquo; manualmente
+            </button>
+            <p className="text-[10.5px] text-white/35 mt-2 leading-snug">Será usado por correspondência de nome.</p>
+          </div>
+        )}
+        {options.length === 0 && !noResultsButQuery && (
+          <div className="col-span-full rounded-xl border border-dashed border-white/[0.08] bg-white/[0.005] px-4 py-5 text-center">
+            <p className="text-[12px] text-white/65">Biblioteca vazia</p>
+            <p className="text-[10.5px] text-white/40 mt-1 leading-snug">Abra partidas no Live Radar para alimentar a biblioteca, ou digite um clube manualmente acima.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// MatchPicker — premium match cards with home/away crests, status, date.
+type MatchFilter = 'all' | 'live' | 'today' | 'soon' | 'finished'
+function MatchPicker({ options, selected, onChange }: { options: ScopeKbMatch[]; selected: string[]; onChange: (v: string[]) => void }) {
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<MatchFilter>('all')
+
+  const lookup = useMemo(() => {
+    const m = new Map<string, ScopeKbMatch>()
+    for (const o of options) m.set(o.canonicalMatchId, o)
+    return m
+  }, [options])
+
+  const isSelected = (id: string) => selected.includes(id)
+  const toggle = (id: string) => {
+    if (isSelected(id)) onChange(selected.filter(s => s !== id))
+    else onChange([...selected, id])
+  }
+  const addManual = (raw: string) => {
+    const trimmed = raw.trim()
+    if (!trimmed || selected.includes(trimmed)) return
+    onChange([...selected, trimmed])
+    setQuery('')
+  }
+  const clearAll = () => onChange([])
+
+  const filtered = useMemo(() => {
+    const q = normalizeText(query)
+    let list = options
+    if (filter === 'live') list = list.filter(m => m.status === 'LIVE' || m.status === '1H' || m.status === '2H' || m.status === 'HT')
+    else if (filter === 'finished') list = list.filter(m => m.status === 'FT' || m.status === 'AET' || m.status === 'PEN')
+    else if (filter === 'today' || filter === 'soon') {
+      const now = Date.now()
+      list = list.filter(m => {
+        if (!m.date) return false
+        const d = new Date(m.date).getTime()
+        if (isNaN(d)) return false
+        if (filter === 'today') return new Date(d).toDateString() === new Date(now).toDateString()
+        return d > now && d - now < 6 * 3600_000
+      })
+    }
+    if (q) list = list.filter(m => normalizeText(`${m.homeTeam} ${m.awayTeam} ${m.league || ''}`).includes(q))
+    return list.slice(0, 80)
+  }, [options, query, filter])
+
+  const noResultsButQuery = filtered.length === 0 && query.trim().length > 0
+
+  const filterTabs: { key: MatchFilter; label: string }[] = [
+    { key: 'all', label: 'Todas' },
+    { key: 'live', label: 'Ao vivo' },
+    { key: 'soon', label: 'Em breve' },
+    { key: 'today', label: 'Hoje' },
+    { key: 'finished', label: 'Encerradas' },
+  ]
+
+  return (
+    <div className="rounded-xl border border-white/[0.07] bg-white/[0.008] overflow-hidden">
+      <div className="px-4 pt-4 pb-3 border-b border-white/[0.05]">
+        <div className="flex items-center gap-2 flex-wrap mb-1">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">Selecionar partidas</span>
+          <span className="text-[11px] text-white/55">{selected.length} {selected.length === 1 ? 'selecionada' : 'selecionadas'}</span>
+          <span className="ml-auto text-[10px] text-white/35">{options.length} disponíveis</span>
+        </div>
+        <p className="text-[11.5px] text-white/50 leading-snug">Restrinja este radar a uma ou mais partidas individuais.</p>
+        {selected.length > 0 && (
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            {selected.map(id => {
+              const meta = lookup.get(id)
+              const label = meta ? `${meta.homeTeam} × ${meta.awayTeam}` : id
+              return (
+                <span key={id} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] pl-1 pr-2 py-1">
+                  {meta && <span className="flex items-center"><EntityAvatar src={meta.homeLogo} name={meta.homeTeam} size={14} /><EntityAvatar src={meta.awayLogo} name={meta.awayTeam} size={14} /></span>}
+                  <span className="text-[11px] font-medium text-white/90 max-w-[200px] truncate">{label}</span>
+                  {!meta && <span className="text-[9px] uppercase tracking-wider text-amber-300/75 font-medium">manual</span>}
+                  <button onClick={() => toggle(id)} type="button" aria-label={`Remover ${label}`} className="text-white/40 hover:text-rose-300 transition-colors -mr-0.5">×</button>
+                </span>
+              )
+            })}
+            <button onClick={clearAll} type="button" className="ml-auto text-[10px] uppercase tracking-wider font-semibold text-white/45 hover:text-white/85 transition-colors">Limpar</button>
+          </div>
+        )}
+      </div>
+      <div className="px-4 py-3 flex flex-col sm:flex-row gap-2 sm:items-center">
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addManual(query) } }}
+          placeholder="Buscar por time, liga ou Home x Away"
+          className="flex-1 h-10 rounded-lg border border-white/[0.07] bg-white/[0.025] px-3.5 text-[13px] text-white/90 placeholder:text-white/30 outline-none focus:border-white/30 focus:bg-white/[0.04] transition-colors"
+          aria-label="Buscar partida"
+        />
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar -mx-1 px-1">
+          {filterTabs.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setFilter(t.key)}
+              type="button"
+              className={`px-2.5 py-1.5 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors ${filter === t.key ? 'bg-white/[0.06] text-white/95 border border-white/[0.12]' : 'text-white/55 hover:text-white/85 border border-transparent hover:bg-white/[0.025]'}`}
+            >{t.label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="px-4 pb-4 max-h-[420px] overflow-y-auto sidebar-scroll space-y-2">
+        {filtered.map(m => {
+          const sel = isSelected(m.canonicalMatchId)
+          const status = matchStatusBadge(m.status)
+          const date = matchDateLabel(m.date)
+          return (
+            <button
+              key={m.canonicalMatchId}
+              onClick={() => toggle(m.canonicalMatchId)}
+              type="button"
+              aria-pressed={sel}
+              className={`group w-full flex items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors duration-200 ${sel ? 'border-white/[0.18] bg-white/[0.04]' : 'border-white/[0.06] bg-white/[0.012] hover:border-white/[0.12] hover:bg-white/[0.022]'}`}
+            >
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <EntityAvatar src={m.homeLogo} name={m.homeTeam} size={26} />
+                <span className="text-[12.5px] font-semibold text-white/90 truncate min-w-0 flex-1">{m.homeTeam}</span>
+                <span className="text-[10px] text-white/30 font-medium tabular-nums">×</span>
+                <span className="text-[12.5px] font-semibold text-white/90 truncate min-w-0 flex-1">{m.awayTeam}</span>
+                <EntityAvatar src={m.awayLogo} name={m.awayTeam} size={26} />
+              </div>
+              <div className="hidden sm:flex flex-col items-end shrink-0 gap-0.5 ml-2">
+                {m.league && <span className="text-[10.5px] text-white/45 truncate max-w-[140px]">{m.league}</span>}
+                <div className="flex items-center gap-1.5">
+                  {status && <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${status.tone}`}>{status.label}</span>}
+                  {date && <span className="text-[10px] text-white/40 tabular-nums">{date}</span>}
+                </div>
+              </div>
+              <span aria-hidden className={`shrink-0 h-4 w-4 rounded-full border transition-colors ${sel ? 'border-white/65 bg-white/85' : 'border-white/25 bg-transparent group-hover:border-white/45'}`} />
+            </button>
+          )
+        })}
+        {noResultsButQuery && (
+          <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.005] px-4 py-4 text-center">
+            <p className="text-[12px] text-white/65">Nenhuma partida encontrada</p>
+            <button onClick={() => addManual(query)} type="button" className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-colors">
+              + Adicionar partida manual: &ldquo;{query.trim()}&rdquo;
+            </button>
+            <p className="text-[10.5px] text-white/35 mt-2 leading-snug">Será usada por correspondência textual.</p>
+          </div>
+        )}
+        {options.length === 0 && !noResultsButQuery && (
+          <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.005] px-4 py-5 text-center">
+            <p className="text-[12px] text-white/65">Biblioteca vazia</p>
+            <p className="text-[10.5px] text-white/40 mt-1 leading-snug">Abra partidas no Live Radar ou em Partidas para alimentar a biblioteca, ou digite uma partida manualmente acima.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ═══ SCOPE PICKER — supports all/favorites/specific_leagues/specific_teams/specific_matches
-// Real lists come from `availableLeagues` / `availableTeams` (current fixtures + scope KB).
-function ScopePicker({ scope, scopeFilter, matches, excludeLeagues, excludeTeams, excludeMatches, requireRichData, onlyLive, onlyPreMatch, availableLeagues, availableTeams, availableMatches, onScopeChange, onScopeFilterChange, onMatchesChange, onExcludeLeaguesChange, onExcludeTeamsChange, onExcludeMatchesChange, onAdvancedToggle }: {
+// Real lists come from `availableLeaguesRich` / `availableTeamsRich` (current fixtures + scope KB).
+// Plain string arrays (`availableLeagues` / `availableTeams`) are kept for the
+// exclusion pickers which still use the lightweight ChipMultiPicker.
+function ScopePicker({ scope, scopeFilter, matches, excludeLeagues, excludeTeams, excludeMatches, requireRichData, onlyLive, onlyPreMatch, availableLeagues, availableTeams, availableMatches, availableLeaguesRich, availableTeamsRich, onScopeChange, onScopeFilterChange, onMatchesChange, onExcludeLeaguesChange, onExcludeTeamsChange, onExcludeMatchesChange, onAdvancedToggle }: {
   scope: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches'
   scopeFilter: string[]
   matches: string[]
@@ -1354,6 +1841,8 @@ function ScopePicker({ scope, scopeFilter, matches, excludeLeagues, excludeTeams
   availableLeagues: string[]
   availableTeams: string[]
   availableMatches: ScopeKbMatch[]
+  availableLeaguesRich: ScopeKbLeague[]
+  availableTeamsRich: ScopeKbTeam[]
   onScopeChange: (s: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches') => void
   onScopeFilterChange: (s: string[]) => void
   onMatchesChange: (s: string[]) => void
@@ -1390,13 +1879,25 @@ function ScopePicker({ scope, scopeFilter, matches, excludeLeagues, excludeTeams
       </div>
 
       {scope === 'specific_leagues' && (
-        <ChipMultiPicker label="Selecionar ligas" placeholder="Buscar liga ou digitar para filtrar" options={availableLeagues} selected={scopeFilter} onChange={onScopeFilterChange} emptyHint="Digite o nome de uma liga para adicionar mesmo se não estiver na lista." />
+        <LeaguePicker
+          options={availableLeaguesRich}
+          selected={scopeFilter}
+          onChange={onScopeFilterChange}
+        />
       )}
       {scope === 'specific_teams' && (
-        <ChipMultiPicker label="Selecionar times" placeholder="Buscar time ou digitar para filtrar" options={availableTeams} selected={scopeFilter} onChange={onScopeFilterChange} emptyHint="Digite o nome de um time para adicionar mesmo se não estiver na lista." />
+        <TeamPicker
+          options={availableTeamsRich}
+          selected={scopeFilter}
+          onChange={onScopeFilterChange}
+        />
       )}
       {scope === 'specific_matches' && (
-        <MatchChipPicker label="Selecionar partidas" placeholder="Buscar por time, liga ou digitar 'Home x Away'" options={availableMatches} selected={matches} onChange={onMatchesChange} />
+        <MatchPicker
+          options={availableMatches}
+          selected={matches}
+          onChange={onMatchesChange}
+        />
       )}
 
       {/* Advanced filters disclosure */}
@@ -1633,7 +2134,7 @@ function ConfidenceSlider({ value, onChange, action }: { value: number; onChange
 // ═══ TEMPLATE CONFIG MODAL — stepper wizard
 type TemplateStep = 'overview' | 'conditions' | 'scope_action' | 'confidence' | 'review'
 
-function TemplateConfigModal({ open, template, existingPattern, onClose, onSave, availableLeagues, availableTeams, availableMatches }: { open: boolean; template: PatternTemplate | null; existingPattern: Pattern | null; onClose: () => void; onSave: (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void; availableLeagues: string[]; availableTeams: string[]; availableMatches: ScopeKbMatch[] }) {
+function TemplateConfigModal({ open, template, existingPattern, onClose, onSave, availableLeagues, availableTeams, availableMatches, availableLeaguesRich, availableTeamsRich }: { open: boolean; template: PatternTemplate | null; existingPattern: Pattern | null; onClose: () => void; onSave: (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void; availableLeagues: string[]; availableTeams: string[]; availableMatches: ScopeKbMatch[]; availableLeaguesRich: ScopeKbLeague[]; availableTeamsRich: ScopeKbTeam[] }) {
   const initial = existingPattern || (template ? {
     name: template.name, description: template.description,
     conditions: [...template.conditions], severity: template.severity,
@@ -1802,6 +2303,8 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
                     availableLeagues={availableLeagues}
                     availableTeams={availableTeams}
                     availableMatches={availableMatches}
+                    availableLeaguesRich={availableLeaguesRich}
+                    availableTeamsRich={availableTeamsRich}
                     onScopeChange={setScope}
                     onScopeFilterChange={setScopeFilter}
                     onMatchesChange={setMatchesFilter}
@@ -1944,7 +2447,7 @@ function RadarPreview({ name, severity, scope, scopeFilter, matches, excludeLeag
 // ═══ CUSTOM PATTERN MODAL — wizard with sidebar steps
 type CustomStep = 'identity' | 'scope' | 'conditions' | 'action' | 'confidence' | 'review'
 
-function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, availableTeams, availableMatches }: { open: boolean; initial: Pattern | null; onClose: () => void; onSave: (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void; availableLeagues: string[]; availableTeams: string[]; availableMatches: ScopeKbMatch[] }) {
+function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, availableTeams, availableMatches, availableLeaguesRich, availableTeamsRich }: { open: boolean; initial: Pattern | null; onClose: () => void; onSave: (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void; availableLeagues: string[]; availableTeams: string[]; availableMatches: ScopeKbMatch[]; availableLeaguesRich: ScopeKbLeague[]; availableTeamsRich: ScopeKbTeam[] }) {
   const [name, setName] = useState(initial?.name || '')
   const [desc, setDesc] = useState(initial?.description || '')
   const [severity, setSeverity] = useState<'critical' | 'attention' | 'info'>(initial?.severity || 'attention')
@@ -2114,6 +2617,8 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
                   availableLeagues={availableLeagues}
                   availableTeams={availableTeams}
                   availableMatches={availableMatches}
+                  availableLeaguesRich={availableLeaguesRich}
+                  availableTeamsRich={availableTeamsRich}
                   onScopeChange={setScope}
                   onScopeFilterChange={setScopeFilter}
                   onMatchesChange={setMatchesFilter}
@@ -2324,6 +2829,44 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
     return Array.from(set).sort((a, b) => a.localeCompare(b))
   }, [fixtures, patterns])
 
+  // V3.15 — rich lists for the ScopePicker cards (with logos and metadata).
+  // Built from current fixtures (highest priority) + scope KB. Names are
+  // matched case-insensitively so legacy patterns with bare names still find
+  // their richer counterpart.
+  const availableLeaguesRich = useMemo<ScopeKbLeague[]>(() => {
+    const map = new Map<string, ScopeKbLeague>()
+    const norm = (s: string) => s.trim().toLowerCase()
+    for (const fx of fixtures) {
+      if (!fx.league?.name) continue
+      const k = norm(fx.league.name)
+      const existing = map.get(k)
+      const fresh: ScopeKbLeague = {
+        id: String(fx.league.id ?? fx.league.name),
+        name: fx.league.name,
+        country: fx.league.country || undefined,
+        logo: fx.league.logo || existing?.logo || null,
+        season: fx.league.season ? String(fx.league.season) : existing?.season,
+        provider: fx.provider,
+        lastSeen: Date.now(),
+        countSeen: (existing?.countSeen || 0) + 1,
+      }
+      map.set(k, fresh)
+    }
+    for (const l of getKnownLeaguesRich()) {
+      const k = norm(l.name)
+      if (!map.has(k)) map.set(k, l)
+    }
+    // Pattern-only references (no metadata) come last so they don't override richer data
+    for (const p of patterns) {
+      const refs = [...(p.scope === 'specific_leagues' && p.scopeFilter ? p.scopeFilter : []), ...(p.excludeLeagues || [])]
+      for (const name of refs) {
+        const k = norm(name)
+        if (!map.has(k)) map.set(k, { id: name, name, lastSeen: 0, countSeen: 0 })
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => (b.lastSeen + b.countSeen) - (a.lastSeen + a.countSeen) || a.name.localeCompare(b.name))
+  }, [fixtures, patterns])
+
   const availableTeams = useMemo(() => {
     const set = new Set<string>()
     for (const fx of fixtures) {
@@ -2336,6 +2879,39 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
     }
     for (const t of getKnownTeams()) set.add(t)
     return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [fixtures, patterns])
+
+  const availableTeamsRich = useMemo<ScopeKbTeam[]>(() => {
+    const map = new Map<string, ScopeKbTeam>()
+    const norm = (s: string) => s.trim().toLowerCase()
+    for (const fx of fixtures) {
+      for (const team of [fx.homeTeam, fx.awayTeam]) {
+        if (!team?.name) continue
+        const k = norm(team.name)
+        const existing = map.get(k)
+        map.set(k, {
+          id: String(team.id ?? team.name),
+          name: team.name,
+          logo: team.logo || existing?.logo || null,
+          league: fx.league?.name || existing?.league,
+          provider: fx.provider,
+          lastSeen: Date.now(),
+          countSeen: (existing?.countSeen || 0) + 1,
+        })
+      }
+    }
+    for (const t of getKnownTeamsRich()) {
+      const k = norm(t.name)
+      if (!map.has(k)) map.set(k, t)
+    }
+    for (const p of patterns) {
+      const refs = [...(p.scope === 'specific_teams' && p.scopeFilter ? p.scopeFilter : []), ...(p.excludeTeams || [])]
+      for (const name of refs) {
+        const k = norm(name)
+        if (!map.has(k)) map.set(k, { id: name, name, lastSeen: 0, countSeen: 0 })
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => (b.lastSeen + b.countSeen) - (a.lastSeen + a.countSeen) || a.name.localeCompare(b.name))
   }, [fixtures, patterns])
 
   const availableMatches = useMemo(() => {
@@ -2351,6 +2927,9 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
         league: fx.league?.name,
         date: fx.date,
         status: fx.status?.short,
+        homeLogo: fx.homeTeam.logo || null,
+        awayLogo: fx.awayTeam.logo || null,
+        leagueLogo: fx.league?.logo || null,
         provider: fx.provider,
         lastSeen: Date.now(),
       })
@@ -2403,8 +2982,8 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
   return (
     <div className="space-y-6">
       {/* Modals */}
-      <CustomPatternModal open={showBuilder} initial={editingPattern} onClose={() => { setShowBuilder(false); setEditingPattern(null); if (prefilledDraft) clearPrefilledDraft() }} onSave={handleCustomSave} availableLeagues={availableLeagues} availableTeams={availableTeams} availableMatches={availableMatches} />
-      <TemplateConfigModal open={!!templateModal} template={templateModal?.template || null} existingPattern={templateModal?.existing || null} onClose={() => setTemplateModal(null)} onSave={handleTemplateSave} availableLeagues={availableLeagues} availableTeams={availableTeams} availableMatches={availableMatches} />
+      <CustomPatternModal open={showBuilder} initial={editingPattern} onClose={() => { setShowBuilder(false); setEditingPattern(null); if (prefilledDraft) clearPrefilledDraft() }} onSave={handleCustomSave} availableLeagues={availableLeagues} availableTeams={availableTeams} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} />
+      <TemplateConfigModal open={!!templateModal} template={templateModal?.template || null} existingPattern={templateModal?.existing || null} onClose={() => setTemplateModal(null)} onSave={handleTemplateSave} availableLeagues={availableLeagues} availableTeams={availableTeams} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} />
       <AutoDiscoveryConfigModal open={showAutoConfig} config={discoveryConfig} onClose={() => setShowAutoConfig(false)} onChange={updateDiscoveryConfig} onActivate={handleActivateAuto} onDeactivate={handleDeactivateAuto} />
 
       {/* Header */}
