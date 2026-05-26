@@ -2830,6 +2830,7 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
   const [editingPattern, setEditingPattern] = useState<Pattern | null>(null)
   const [templateModal, setTemplateModal] = useState<{ template: PatternTemplate; existing: Pattern | null } | null>(null)
   const [categoryFilter, setCategoryFilter] = useState<TemplateCategory | 'all'>('all')
+  const [templateSearch, setTemplateSearch] = useState('')
 
   // When a prefilled draft arrives (e.g. from Match Detail "Criar radar"), use it
   // as the initial value of the CustomPatternModal. The draft is then cleared.
@@ -3036,7 +3037,15 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
   const pausedCount = patterns.filter(p => p.status === 'paused').length
   const triggeredTodayCount = triggeredAlerts.filter(t => t.timestamp.startsWith(new Date().toISOString().split('T')[0])).length
 
-  const visibleTemplates = templates.filter(t => categoryFilter === 'all' || categorizeTemplate(t) === categoryFilter)
+  const visibleTemplates = useMemo(() => {
+    const q = templateSearch.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    return templates.filter(t => {
+      if (categoryFilter !== 'all' && categorizeTemplate(t) !== categoryFilter) return false
+      if (!q) return true
+      const haystack = `${t.name} ${t.description}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      return haystack.includes(q)
+    })
+  }, [templates, categoryFilter, templateSearch])
 
   return (
     <div className="space-y-6">
@@ -3045,14 +3054,22 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
       <TemplateConfigModal open={!!templateModal} template={templateModal?.template || null} existingPattern={templateModal?.existing || null} onClose={() => setTemplateModal(null)} onSave={handleTemplateSave} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} />
       <AutoDiscoveryConfigModal open={showAutoConfig} config={discoveryConfig} onClose={() => setShowAutoConfig(false)} onChange={updateDiscoveryConfig} onActivate={handleActivateAuto} onDeactivate={handleDeactivateAuto} />
 
-      {/* Header */}
-      <header className="rounded-[20px] border border-white/[0.06] bg-gradient-to-br from-white/[0.02] to-transparent p-6">
-        <div className="flex items-start justify-between gap-4 mb-5 flex-wrap">
-          <div>
-            <h2 className="text-[20px] font-bold text-white/95 tracking-tight">Pattern Studio</h2>
-            <p className="text-[12px] text-white/60 mt-1 max-w-[600px]">Configure radares manuais e o motor automático para detectar sinais reais nas partidas.</p>
+      {/* Header — Pattern Studio premium */}
+      <header className="rounded-[20px] border border-white/[0.06] bg-white/[0.012] p-6 sm:p-7">
+        <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
+          <div className="min-w-0">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40 block mb-1.5">Pattern Studio</span>
+            <h2 className="text-[22px] sm:text-[24px] font-semibold text-white/95 tracking-tight leading-[1.15]">Crie radares inteligentes</h2>
+            <p className="text-[13px] text-white/55 mt-2 max-w-[560px] leading-relaxed">Combine gatilhos reais e configure o motor automático para detectar sinais ao vivo nas partidas.</p>
           </div>
-          <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-bold text-cyan-200 bg-gradient-to-r from-cyan-500/15 to-blue-500/15 border border-cyan-400/25 hover:from-cyan-500/25 hover:to-blue-500/25 transition-all flex items-center gap-1.5"><Plus size={14} />Criar radar personalizado</button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={() => setShowAutoConfig(true)} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/[0.14] transition-colors flex items-center gap-1.5">
+              <Sparkles size={13} />Configurar motor
+            </button>
+            <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold border border-white/30 bg-white/[0.95] hover:bg-white transition-colors duration-200 flex items-center gap-1.5" style={{ color: '#0b0d12' }}>
+              <Plus size={14} />Criar radar
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-px rounded-xl overflow-hidden border border-white/[0.05] bg-white/[0.01]">
           <CounterCell label="Ativos" value={activeCount} tone="emerald" />
@@ -3063,74 +3080,109 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
         </div>
       </header>
 
-      {/* Scope intelligence — compact panel showing the Knowledge Base footprint */}
-      <ScopeHealthPanel availableLeagues={availableLeagues} availableTeams={availableTeams} availableMatches={availableMatches} fixturesCount={fixtures.length} patternsCount={patterns.length} />
-
-      {/* Motor automático — compact card */}
-      <section className={`rounded-2xl border ${isAutoActive ? 'border-emerald-400/20 bg-gradient-to-r from-emerald-500/[0.04] via-cyan-500/[0.02] to-transparent' : 'border-white/[0.07] bg-gradient-to-r from-white/[0.02] to-transparent'} p-5`}>
+      {/* Motor automático — quiet operational module */}
+      <section className="rounded-2xl border border-white/[0.07] bg-white/[0.012] p-5">
         <div className="flex items-center gap-4 flex-wrap">
-          <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${isAutoActive ? 'bg-emerald-500/15 border border-emerald-400/25' : 'bg-white/[0.04] border border-white/[0.08]'}`}><Sparkles size={16} className={isAutoActive ? 'text-emerald-300' : 'text-white/55'} /></div>
+          <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border ${isAutoActive ? 'border-emerald-400/25 bg-emerald-500/[0.06]' : 'border-white/[0.08] bg-white/[0.04]'}`}>
+            <Sparkles size={15} className={isAutoActive ? 'text-emerald-200/85' : 'text-white/55'} />
+          </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-[14px] font-bold text-white/95">Motor automático</h3>
-              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${isAutoActive ? 'bg-emerald-500/12 text-emerald-300 border-emerald-400/20' : 'bg-white/[0.04] text-white/55 border-white/[0.07]'}`}>{isAutoActive ? 'Monitorando' : 'Desligado'}</span>
+              <h3 className="text-[14px] font-semibold text-white/95 tracking-tight">Motor automático</h3>
+              <span className="flex items-center gap-1.5 text-[11px] text-white/55">
+                <span className={`h-1.5 w-1.5 rounded-full ${isAutoActive ? 'bg-emerald-400/85' : discoveryConfig.userConfigured ? 'bg-cyan-300/70' : 'bg-white/30'}`} />
+                {isAutoActive ? 'Monitorando' : discoveryConfig.userConfigured ? 'Configurado, pausado' : 'Desligado'}
+              </span>
             </div>
-            <p className="text-[11px] text-white/55 mt-0.5 leading-snug">
+            <p className="text-[12px] text-white/55 mt-1 leading-snug">
               {isAutoActive
-                ? `Confiança ≥ ${discoveryConfig.minConfidence}% · ${discoveryConfig.registerAlertAuto ? 'Registrando alertas' : 'Apenas sugerindo'} · ${discoveryConfig.monitorAllLeagues ? 'todas as ligas' : discoveryConfig.monitorMainLeagues ? 'ligas principais' : 'favoritos'}`
-                : 'Configure o motor para o GoalSense detectar sinais sem você criar padrões.'}
+                ? <>Confiança ≥ <span className="text-white/85 font-medium tabular-nums">{discoveryConfig.minConfidence}%</span> · {discoveryConfig.registerAlertAuto ? 'Registrando alertas' : 'Apenas sugerindo'} · {discoveryConfig.monitorAllLeagues ? 'todas as ligas' : discoveryConfig.monitorMainLeagues ? 'ligas principais' : 'favoritos'}</>
+                : 'O motor só roda após configuração explícita. Ative para o GoalSense detectar sinais sem você criar padrões.'}
             </p>
           </div>
           <PremiumToggle checked={isAutoActive} onChange={(v) => { if (v && !discoveryConfig.userConfigured) setShowAutoConfig(true); else updateDiscoveryConfig({ enabled: v }) }} ariaLabel="Motor automático" />
-          <button onClick={() => setShowAutoConfig(true)} type="button" className="px-3.5 py-2 rounded-xl text-[11px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-all">Configurar motor</button>
+          <button onClick={() => setShowAutoConfig(true)} type="button" className="px-3.5 py-2 rounded-xl text-[11.5px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/[0.14] transition-colors">Configurar</button>
         </div>
       </section>
+
+      {/* Scope intelligence — compact panel showing the Knowledge Base footprint */}
+      <ScopeHealthPanel availableLeagues={availableLeagues} availableTeams={availableTeams} availableMatches={availableMatches} fixturesCount={fixtures.length} patternsCount={patterns.length} />
 
       {/* Radares configurados */}
       {patterns.length > 0 ? (
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/65">Radares configurados</h3>
-            <span className="text-[10px] text-white/45 font-semibold">{activeCount} ativos · {pausedCount} pausados</span>
+            <div>
+              <h3 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">Radares configurados</h3>
+              <p className="text-[11px] text-white/40 mt-0.5">{activeCount} {activeCount === 1 ? 'ativo' : 'ativos'} · {pausedCount} {pausedCount === 1 ? 'pausado' : 'pausados'}</p>
+            </div>
+            <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} type="button" className="text-[11px] font-medium text-white/65 hover:text-white/95 transition-colors flex items-center gap-1"><Plus size={11} />Novo radar</button>
           </div>
           <div className="space-y-2">
             {patterns.map(p => <ConfiguredRadarRow key={p.id} pattern={p} triggeredAlerts={triggeredAlerts} onToggle={() => togglePattern(p.id)} onEdit={() => { setEditingPattern(p); setShowBuilder(true) }} onDuplicate={() => { createPattern({ ...p, name: `${p.name} (cópia)`, status: 'paused', isTemplate: false, templateId: undefined }) }} onDelete={() => deletePattern(p.id)} isAdvanced={isAdvanced} />)}
           </div>
         </section>
       ) : (
-        <section className="rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.008] p-7 text-center">
-          <p className="text-[14px] text-white/85 font-semibold">Você ainda não configurou nenhum radar</p>
-          <p className="text-[12px] text-white/55 mt-1">Comece por um template ou crie seu próprio padrão.</p>
+        <section className="rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.005] p-8 text-center">
+          <div className="inline-flex items-center justify-center h-11 w-11 rounded-xl bg-white/[0.04] border border-white/[0.07] mb-4">
+            <Sparkles size={18} className="text-white/45" />
+          </div>
+          <p className="text-[15px] text-white/90 font-semibold">Você ainda não configurou nenhum radar</p>
+          <p className="text-[12px] text-white/55 mt-1 max-w-[440px] mx-auto leading-relaxed">Comece por um template recomendado, crie um padrão personalizado do zero ou ative o motor automático para descobertas sem configuração.</p>
+          <div className="mt-5 flex items-center justify-center gap-2 flex-wrap">
+            <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} type="button" className="px-4 py-2 rounded-xl text-[12px] font-semibold border border-white/30 bg-white/[0.95] hover:bg-white transition-colors duration-200" style={{ color: '#0b0d12' }}>+ Criar radar personalizado</button>
+            {templates.length > 0 && (
+              <button onClick={() => { const first = templates[0]; if (first) handleTemplateConfigure(first) }} type="button" className="px-4 py-2 rounded-xl text-[12px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-colors">Ativar template</button>
+            )}
+            <button onClick={() => setShowAutoConfig(true)} type="button" className="px-4 py-2 rounded-xl text-[12px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-colors">Configurar motor</button>
+          </div>
         </section>
       )}
 
       {/* Templates */}
       <section>
         <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-          <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/65">Templates recomendados</h3>
-          <div className="flex flex-wrap gap-1.5">
-            {([
-              ['all', 'Todos'],
-              ...(Object.entries(CATEGORY_LABELS) as [TemplateCategory, string][]),
-            ] as [TemplateCategory | 'all', string][]).map(([k, label]) => {
-              const active = categoryFilter === k
-              const count = k === 'all' ? templates.length : templates.filter(t => categorizeTemplate(t) === k).length
-              return (
-                <button key={k} onClick={() => setCategoryFilter(k)} type="button" className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all flex items-center gap-1.5 ${active ? 'bg-white/[0.09] text-white border border-white/[0.14]' : 'text-white/55 border border-white/[0.06] hover:text-white/85 hover:border-white/[0.1]'}`}>
-                  {label}
-                  {count > 0 && <span className={`text-[10px] tabular-nums px-1.5 py-0.5 rounded-md ${active ? 'bg-cyan-500/22 text-cyan-200' : 'bg-white/[0.06] text-white/55'}`}>{count}</span>}
-                </button>
-              )
-            })}
+          <div>
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">Biblioteca de templates</h3>
+            <p className="text-[11px] text-white/40 mt-0.5">{visibleTemplates.length} {visibleTemplates.length === 1 ? 'disponível' : 'disponíveis'} · curados pelo GoalSense</p>
           </div>
+          <input
+            value={templateSearch}
+            onChange={e => setTemplateSearch(e.target.value)}
+            placeholder="Buscar template"
+            className="h-9 w-full sm:w-[240px] rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 text-[12px] text-white/90 placeholder:text-white/30 outline-none focus:border-white/30 focus:bg-white/[0.04] transition-colors"
+            aria-label="Buscar template"
+          />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {visibleTemplates.map(t => {
-            const existing = patterns.find(p => p.templateId === t.id) || null
-            const isActiveTpl = !!existing && existing.status === 'active'
-            return <TemplateCard key={t.id} template={t} existing={existing} isActive={isActiveTpl} onToggle={() => handleTemplateToggle(t)} onConfigure={() => handleTemplateConfigure(t)} />
+        <div className="flex flex-wrap gap-1.5 mb-3 overflow-x-auto no-scrollbar -mx-1 px-1">
+          {([
+            ['all', 'Todos'],
+            ...(Object.entries(CATEGORY_LABELS) as [TemplateCategory, string][]),
+          ] as [TemplateCategory | 'all', string][]).map(([k, label]) => {
+            const active = categoryFilter === k
+            const count = k === 'all' ? templates.length : templates.filter(t => categorizeTemplate(t) === k).length
+            return (
+              <button key={k} onClick={() => setCategoryFilter(k)} type="button" className={`px-3 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${active ? 'bg-white/[0.06] text-white/95 border border-white/[0.12]' : 'text-white/55 border border-transparent hover:text-white/85 hover:bg-white/[0.025]'}`}>
+                {label}
+                {count > 0 && <span className={`text-[10px] tabular-nums ${active ? 'text-white/70' : 'text-white/35'}`}>{count}</span>}
+              </button>
+            )
           })}
         </div>
+        {visibleTemplates.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.005] p-6 text-center">
+            <p className="text-[12.5px] text-white/75 font-medium">Nenhum template encontrado</p>
+            <p className="text-[11px] text-white/45 mt-1">Tente outra categoria ou ajuste a busca.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {visibleTemplates.map(t => {
+              const existing = patterns.find(p => p.templateId === t.id) || null
+              const isActiveTpl = !!existing && existing.status === 'active'
+              return <TemplateCard key={t.id} template={t} existing={existing} isActive={isActiveTpl} onToggle={() => handleTemplateToggle(t)} onConfigure={() => handleTemplateConfigure(t)} />
+            })}
+          </div>
+        )}
       </section>
     </div>
   )
@@ -3139,30 +3191,36 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
 // ═══ TEMPLATE CARD
 function TemplateCard({ template, existing, isActive, onToggle, onConfigure }: { template: PatternTemplate; existing: Pattern | null; isActive: boolean; onToggle: () => void; onConfigure: () => void }) {
   const cat = categorizeTemplate(template)
-  const sevTone = template.severity === 'critical' ? 'bg-rose-500/12 text-rose-300 border-rose-400/20' : template.severity === 'attention' ? 'bg-amber-500/12 text-amber-300 border-amber-400/20' : 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15'
+  const sevDot = template.severity === 'critical' ? 'bg-rose-300/85' : template.severity === 'attention' ? 'bg-amber-300/85' : 'bg-cyan-300/85'
+  const sevLabel = template.severity === 'critical' ? 'Crítico' : template.severity === 'attention' ? 'Atenção' : 'Info'
   return (
-    <div className={`group rounded-2xl border ${isActive ? 'border-emerald-400/25 bg-gradient-to-br from-emerald-500/[0.04] via-cyan-500/[0.02] to-transparent' : 'border-white/[0.06] bg-white/[0.012]'} p-4 transition-all hover:border-white/[0.12]`}>
+    <div className={`group rounded-2xl border bg-white/[0.012] p-4 transition-colors duration-200 hover:border-white/[0.14] ${isActive ? 'border-emerald-300/25' : 'border-white/[0.07]'}`}>
       <div className="flex items-start justify-between gap-3 mb-2.5">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
-            <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${sevTone}`}>{template.severity === 'critical' ? 'Crítico' : template.severity === 'attention' ? 'Atenção' : 'Info'}</span>
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-white/55">{CATEGORY_LABELS[cat]}</span>
-            {existing && existing.status === 'paused' && <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-white/[0.05] text-white/65 border border-white/[0.07]">Pausado</span>}
+          <div className="flex items-center gap-2 flex-wrap mb-1.5 text-[10px]">
+            <span className="flex items-center gap-1.5 text-white/55">
+              <span className={`h-1.5 w-1.5 rounded-full ${sevDot}`} />
+              <span className="font-medium">{sevLabel}</span>
+            </span>
+            <span className="text-white/20">·</span>
+            <span className="text-white/45 font-medium">{CATEGORY_LABELS[cat]}</span>
+            {isActive && <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider text-emerald-300/80">Ativo</span>}
+            {existing && existing.status === 'paused' && <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider text-white/45">Pausado</span>}
           </div>
-          <h4 className="text-[13px] font-bold text-white/95 truncate">{template.name}</h4>
+          <h4 className="text-[13.5px] font-semibold text-white/95 leading-tight tracking-tight">{template.name}</h4>
         </div>
         <PremiumToggle checked={isActive} onChange={onToggle} ariaLabel={`Ativar template ${template.name}`} size="sm" />
       </div>
-      <p className="text-[11px] text-white/65 leading-snug mb-3 line-clamp-2">{template.description}</p>
+      <p className="text-[11.5px] text-white/55 leading-snug mb-3 line-clamp-2">{template.description}</p>
       <div className="flex flex-wrap gap-1 mb-3">
         {template.conditions.slice(0, 3).map((c, i) => (
-          <span key={i} className="text-[10px] text-white/65 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.05]">{formatConditionHuman(c)}</span>
+          <span key={i} className="text-[10px] text-white/65 bg-white/[0.025] px-2 py-0.5 rounded border border-white/[0.06]">{formatConditionHuman(c)}</span>
         ))}
-        {template.conditions.length > 3 && <span className="text-[10px] text-white/45">+{template.conditions.length - 3}</span>}
+        {template.conditions.length > 3 && <span className="text-[10px] text-white/35">+{template.conditions.length - 3}</span>}
       </div>
       <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.04]">
-        <span className="text-[10px] text-white/45">Confiança sugerida: <span className="text-white/75 font-semibold">{template.defaultConfidence}</span></span>
-        <button onClick={onConfigure} type="button" className="text-[11px] font-semibold text-cyan-300 hover:text-cyan-200 transition-colors">Configurar →</button>
+        <span className="text-[10.5px] text-white/45">Confiança sugerida: <span className="text-white/75 font-semibold">{template.defaultConfidence}</span></span>
+        <button onClick={onConfigure} type="button" className="text-[11px] font-medium text-white/85 hover:text-white transition-colors">Configurar →</button>
       </div>
     </div>
   )
