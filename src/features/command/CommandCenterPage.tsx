@@ -20,7 +20,7 @@ import { evaluateAllPatterns } from './intelligence/patternEvaluator'
 import { runAutoDiscovery, type AutoDiscovery } from './intelligence/autoDiscoveryEngine'
 import { resolveAlert } from './intelligence/patternResolutionEngine'
 import { buildPreMatchOutcomeSummary } from '@/services/intelligence/preMatchOutcomePerformance'
-import { recordScopeEntities, getKnownLeagues, getKnownTeams, getKnownMatches, getKnownLeaguesRich, getKnownTeamsRich, formatMatchLabel, type ScopeKbMatch, type ScopeKbLeague, type ScopeKbTeam } from '@/services/intelligence/scopeKnowledgeBase'
+import { recordScopeEntities, getKnownLeagues, getKnownTeams, getKnownMatches, getKnownLeaguesRich, getKnownTeamsRich, type ScopeKbMatch, type ScopeKbLeague, type ScopeKbTeam } from '@/services/intelligence/scopeKnowledgeBase'
 import { isLiveFx, detectChanges, type ChangeEvent } from './commandHelpers'
 import type { Pattern, PatternTemplate, PatternHit, PatternCondition, PatternConditionType, FixtureStatsForPattern, ScannerEntry, TriggeredAlert, AutoDiscoveryConfig } from './types/commandTypes'
 
@@ -1170,7 +1170,7 @@ function WizardStepHeader({ index, total, title, description, kicker }: { index:
 // numbered operational flow at the bottom. Avoids saturated colors;
 // uses neutral tones with single-color accents only when meaningful.
 type DraftStatus = 'draft' | 'paused' | 'active'
-function RadarInspectorPanel({ name, status, severity, scope, scopeFilter, matches, action, minConf, conditions, requireRichData, onlyLive, onlyPreMatch, excludeLeagues, excludeTeams, excludeMatches, currentStepLabel, totalSteps, currentStepIndex, canSave }: {
+function RadarInspectorPanel({ name, status, severity, scope, scopeFilter, matches, action, minConf, conditions, requireRichData, onlyLive, onlyPreMatch, excludeLeagues, excludeTeams, excludeMatches, leagueLookup, teamLookup, matchLookup, currentStepLabel, totalSteps, currentStepIndex, canSave }: {
   name: string
   status: DraftStatus
   severity: 'critical' | 'attention' | 'info'
@@ -1186,6 +1186,11 @@ function RadarInspectorPanel({ name, status, severity, scope, scopeFilter, match
   excludeLeagues?: string[]
   excludeTeams?: string[]
   excludeMatches?: string[]
+  // Optional rich lookups so we can render mini avatars/logos for the
+  // selected and excluded entities. They map normalized name → full record.
+  leagueLookup?: Map<string, ScopeKbLeague>
+  teamLookup?: Map<string, ScopeKbTeam>
+  matchLookup?: Map<string, ScopeKbMatch>
   currentStepLabel?: string
   totalSteps?: number
   currentStepIndex?: number
@@ -1266,19 +1271,47 @@ function RadarInspectorPanel({ name, status, severity, scope, scopeFilter, match
 
       {/* Exclusions block — exclusões têm prioridade sobre inclusões */}
       {((excludeLeagues?.length || 0) + (excludeTeams?.length || 0) + (excludeMatches?.length || 0)) > 0 && (
-        <div className="px-4 py-3 border-b border-white/[0.05] space-y-2">
+        <div className="px-4 py-3 border-b border-white/[0.05] space-y-2.5">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-rose-300/75">Exclusões</span>
             <span className="text-[10px] text-white/40">têm prioridade</span>
           </div>
           {excludeLeagues && excludeLeagues.length > 0 && (
-            <ExclusionRow label={`Exceto ${excludeLeagues.length} ${excludeLeagues.length === 1 ? 'liga' : 'ligas'}`} items={excludeLeagues} />
+            <ExclusionAvatarRow
+              label={`Exceto ${excludeLeagues.length} ${excludeLeagues.length === 1 ? 'liga' : 'ligas'}`}
+              items={excludeLeagues}
+              renderItem={(name) => {
+                const meta = leagueLookup?.get(normalizeText(name))
+                return { logo: meta?.logo || null, label: name, square: true }
+              }}
+            />
           )}
           {excludeTeams && excludeTeams.length > 0 && (
-            <ExclusionRow label={`Exceto ${excludeTeams.length} ${excludeTeams.length === 1 ? 'time' : 'times'}`} items={excludeTeams} />
+            <ExclusionAvatarRow
+              label={`Exceto ${excludeTeams.length} ${excludeTeams.length === 1 ? 'time' : 'times'}`}
+              items={excludeTeams}
+              renderItem={(name) => {
+                const meta = teamLookup?.get(normalizeText(name))
+                return { logo: meta?.logo || null, label: name, square: false }
+              }}
+            />
           )}
           {excludeMatches && excludeMatches.length > 0 && (
-            <ExclusionRow label={`Exceto ${excludeMatches.length} ${excludeMatches.length === 1 ? 'partida' : 'partidas'}`} items={excludeMatches} truncatePerItem />
+            <ExclusionAvatarRow
+              label={`Exceto ${excludeMatches.length} ${excludeMatches.length === 1 ? 'partida' : 'partidas'}`}
+              items={excludeMatches}
+              renderItem={(id) => {
+                const meta = matchLookup?.get(id)
+                if (meta) {
+                  return {
+                    label: `${meta.homeTeam} × ${meta.awayTeam}`,
+                    matchPair: { home: { name: meta.homeTeam, logo: meta.homeLogo || null }, away: { name: meta.awayTeam, logo: meta.awayLogo || null } },
+                  }
+                }
+                return { label: id, manual: true }
+              }}
+              truncatePerItem
+            />
           )}
         </div>
       )}
@@ -1317,17 +1350,38 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   )
 }
 
-// ExclusionRow — compact list of excluded entities with up-to-2 visible items + "+N" overflow.
-function ExclusionRow({ label, items, truncatePerItem }: { label: string; items: string[]; truncatePerItem?: boolean }) {
+// ExclusionAvatarRow — premium row of excluded entities with mini avatars.
+// `renderItem` resolves each item into a label + (optional) avatar/match pair
+// so the inspector can show real escudos when the metadata is available.
+type ExclusionRenderResult =
+  | { label: string; logo?: string | null; square?: boolean; manual?: boolean }
+  | { label: string; matchPair: { home: { name: string; logo: string | null }; away: { name: string; logo: string | null } }; manual?: boolean }
+
+function ExclusionAvatarRow({ label, items, renderItem, truncatePerItem }: { label: string; items: string[]; renderItem: (raw: string) => ExclusionRenderResult; truncatePerItem?: boolean }) {
   const visible = items.slice(0, 2)
   const extra = items.length - visible.length
   return (
     <div className="space-y-1">
       <p className="text-[11px] text-rose-200/80 font-medium">{label}</p>
       <div className="flex flex-wrap gap-1">
-        {visible.map((it, i) => (
-          <span key={`${it}-${i}`} className={`text-[10px] font-medium px-1.5 py-0.5 rounded border bg-rose-500/[0.06] border-rose-300/20 text-rose-100/85 ${truncatePerItem ? 'truncate max-w-[160px]' : ''}`}>− {it}</span>
-        ))}
+        {visible.map((raw, i) => {
+          const r = renderItem(raw)
+          return (
+            <span key={`${raw}-${i}`} className={`inline-flex items-center gap-1.5 text-[10px] font-medium px-1.5 py-0.5 rounded border bg-rose-500/[0.06] border-rose-300/20 text-rose-100/85 ${truncatePerItem ? 'max-w-[180px]' : ''}`}>
+              <span className="text-rose-300/70 font-semibold">−</span>
+              {'matchPair' in r ? (
+                <span className="flex items-center -space-x-1">
+                  <EntityAvatar src={r.matchPair.home.logo} name={r.matchPair.home.name} size={12} />
+                  <EntityAvatar src={r.matchPair.away.logo} name={r.matchPair.away.name} size={12} />
+                </span>
+              ) : (
+                <EntityAvatar src={r.logo} name={r.label} size={12} square={r.square} />
+              )}
+              <span className={truncatePerItem ? 'truncate' : ''}>{r.label}</span>
+              {r.manual && <span className="text-[9px] uppercase tracking-wider text-amber-300/75 font-medium">manual</span>}
+            </span>
+          )
+        })}
         {extra > 0 && <span className="text-[10px] text-white/45">+{extra}</span>}
       </div>
     </div>
@@ -1438,7 +1492,20 @@ function EntityAvatar({ src, name, size = 32, square = false }: { src?: string |
   )
 }
 
-// Status helpers shared by MatchPicker.
+// useScopeLookups — turns rich available lists into normalized name → record
+// maps so the inspector can resolve mini avatars in O(1) per excluded item
+// without re-scanning the arrays on every render.
+function useScopeLookups(leagues: ScopeKbLeague[], teams: ScopeKbTeam[], matches: ScopeKbMatch[]) {
+  return useMemo(() => {
+    const leagueLookup = new Map<string, ScopeKbLeague>()
+    for (const l of leagues) leagueLookup.set(normalizeText(l.name), l)
+    const teamLookup = new Map<string, ScopeKbTeam>()
+    for (const t of teams) teamLookup.set(normalizeText(t.name), t)
+    const matchLookup = new Map<string, ScopeKbMatch>()
+    for (const m of matches) matchLookup.set(m.canonicalMatchId, m)
+    return { leagueLookup, teamLookup, matchLookup }
+  }, [leagues, teams, matches])
+}
 function matchStatusBadge(status?: string): { label: string; tone: string } | null {
   if (!status) return null
   if (status === 'LIVE' || status === '1H' || status === '2H' || status === 'HT') {
@@ -1920,9 +1987,7 @@ function MatchPicker({ options, selected, onChange, mode = 'include' }: { option
 
 // ═══ SCOPE PICKER — supports all/favorites/specific_leagues/specific_teams/specific_matches
 // Real lists come from `availableLeaguesRich` / `availableTeamsRich` (current fixtures + scope KB).
-// Plain string arrays (`availableLeagues` / `availableTeams`) are kept for the
-// exclusion pickers which still use the lightweight ChipMultiPicker.
-function ScopePicker({ scope, scopeFilter, matches, excludeLeagues, excludeTeams, excludeMatches, requireRichData, onlyLive, onlyPreMatch, availableLeagues, availableTeams, availableMatches, availableLeaguesRich, availableTeamsRich, onScopeChange, onScopeFilterChange, onMatchesChange, onExcludeLeaguesChange, onExcludeTeamsChange, onExcludeMatchesChange, onAdvancedToggle }: {
+function ScopePicker({ scope, scopeFilter, matches, excludeLeagues, excludeTeams, excludeMatches, requireRichData, onlyLive, onlyPreMatch, availableMatches, availableLeaguesRich, availableTeamsRich, onScopeChange, onScopeFilterChange, onMatchesChange, onExcludeLeaguesChange, onExcludeTeamsChange, onExcludeMatchesChange, onAdvancedToggle }: {
   scope: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches'
   scopeFilter: string[]
   matches: string[]
@@ -1932,8 +1997,6 @@ function ScopePicker({ scope, scopeFilter, matches, excludeLeagues, excludeTeams
   requireRichData: boolean
   onlyLive: boolean
   onlyPreMatch: boolean
-  availableLeagues: string[]
-  availableTeams: string[]
   availableMatches: ScopeKbMatch[]
   availableLeaguesRich: ScopeKbLeague[]
   availableTeamsRich: ScopeKbTeam[]
@@ -2017,150 +2080,6 @@ function ScopePicker({ scope, scopeFilter, matches, excludeLeagues, excludeTeams
   )
 }
 
-// ═══ MATCH CHIP PICKER — selector for known matches with rich label
-function MatchChipPicker({ label, placeholder, options, selected, onChange, compact }: { label: string; placeholder: string; options: ScopeKbMatch[]; selected: string[]; onChange: (v: string[]) => void; compact?: boolean }) {
-  const [query, setQuery] = useState('')
-  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-
-  // Build a quick lookup so we can render selected chips with rich labels even
-  // when the source list is huge.
-  const labelByCmid = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const o of options) m.set(o.canonicalMatchId, formatMatchLabel(o))
-    return m
-  }, [options])
-
-  const filtered = useMemo(() => {
-    const q = norm(query)
-    const remaining = options.filter(o => !selected.includes(o.canonicalMatchId))
-    if (!q) return remaining.slice(0, 12)
-    return remaining.filter(o => norm(`${o.homeTeam} ${o.awayTeam} ${o.league || ''}`).includes(q)).slice(0, 12)
-  }, [options, selected, query])
-
-  const addCmid = (cmid: string) => {
-    if (selected.includes(cmid)) return
-    onChange([...selected, cmid])
-    setQuery('')
-  }
-  const addFreeText = (val: string) => {
-    const trimmed = val.trim()
-    if (!trimmed) return
-    if (selected.includes(trimmed)) return
-    onChange([...selected, trimmed])
-    setQuery('')
-  }
-  const remove = (val: string) => onChange(selected.filter(s => s !== val))
-
-  return (
-    <div className={`rounded-2xl border border-white/[0.06] bg-white/[0.012] px-4 ${compact ? 'py-3' : 'py-4'}`}>
-      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/55 mb-2">{label} {selected.length > 0 && <span className="text-white/85 ml-1">({selected.length})</span>}</p>
-      {selected.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-2.5">
-          {selected.map(s => (
-            <span key={s} className="inline-flex items-center gap-1.5 text-[11px] text-white/95 bg-white/[0.06] border border-white/[0.1] px-2.5 py-1 rounded-lg font-medium max-w-full">
-              <span className="truncate">{labelByCmid.get(s) || s}</span>
-              <button onClick={() => remove(s)} type="button" className="text-white/45 hover:text-rose-300 transition-colors -mr-0.5 shrink-0" aria-label={`Remover ${s}`}>×</button>
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="flex gap-2">
-        <input
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addFreeText(query) } }}
-          placeholder={placeholder}
-          className="flex-1 h-9 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-[12px] text-white/95 placeholder:text-white/35 outline-none focus:border-cyan-400/40"
-        />
-        {query.trim() && (
-          <button onClick={() => addFreeText(query)} type="button" className="px-3 h-9 rounded-xl text-[11px] font-semibold text-cyan-300 bg-cyan-500/15 border border-cyan-400/25 hover:bg-cyan-500/25 transition-colors whitespace-nowrap">Adicionar texto</button>
-        )}
-      </div>
-      {filtered.length > 0 && (
-        <ul className="mt-2 space-y-1">
-          {filtered.map(o => (
-            <li key={o.canonicalMatchId}>
-              <button onClick={() => addCmid(o.canonicalMatchId)} type="button" className="w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/[0.025] hover:bg-white/[0.05] border border-white/[0.05] hover:border-white/[0.1] transition-all">
-                <span className="text-[12px] text-white/95 font-medium truncate flex-1">{o.homeTeam} <span className="text-white/45">x</span> {o.awayTeam}</span>
-                {o.league && <span className="text-[10px] text-white/55 truncate max-w-[120px]">{o.league}</span>}
-                {o.status && (o.status === 'LIVE' || o.status === '1H' || o.status === '2H' || o.status === 'HT') && <span className="text-[10px] text-emerald-300 font-bold">ao vivo</span>}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {options.length === 0 && (
-        <p className="text-[10px] text-white/55 mt-2 leading-snug">Abra partidas no Live Radar ou em Partidas para preencher esta biblioteca. Você também pode digitar manualmente.</p>
-      )}
-      {filtered.length === 0 && options.length > 0 && query.trim() && (
-        <p className="text-[10px] text-white/45 mt-2 leading-snug">Nenhuma sugestão. Pressione Enter para adicionar "{query.trim()}".</p>
-      )}
-    </div>
-  )
-}
-
-// ═══ CHIP MULTI PICKER — search + select from real list, free-text fallback
-function ChipMultiPicker({ label, placeholder, options, selected, onChange, emptyHint, compact }: { label: string; placeholder: string; options: string[]; selected: string[]; onChange: (v: string[]) => void; emptyHint?: string; compact?: boolean }) {
-  const [query, setQuery] = useState('')
-  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-  const filtered = useMemo(() => {
-    const q = norm(query)
-    const remaining = options.filter(o => !selected.some(s => norm(s) === norm(o)))
-    if (!q) return remaining.slice(0, 18)
-    return remaining.filter(o => norm(o).includes(q)).slice(0, 18)
-  }, [options, selected, query])
-
-  const addItem = (val: string) => {
-    const trimmed = val.trim()
-    if (!trimmed) return
-    if (selected.some(s => norm(s) === norm(trimmed))) return
-    onChange([...selected, trimmed])
-    setQuery('')
-  }
-  const removeItem = (val: string) => onChange(selected.filter(s => s !== val))
-
-  return (
-    <div className={`rounded-2xl border border-white/[0.06] bg-white/[0.012] px-4 ${compact ? 'py-3' : 'py-4'}`}>
-      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/55 mb-2">{label} {selected.length > 0 && <span className="text-white/85 ml-1">({selected.length})</span>}</p>
-      {selected.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-2.5">
-          {selected.map(s => (
-            <span key={s} className="inline-flex items-center gap-1.5 text-[11px] text-white/95 bg-white/[0.06] border border-white/[0.1] px-2.5 py-1 rounded-lg font-medium">
-              {s}
-              <button onClick={() => removeItem(s)} type="button" className="text-white/45 hover:text-rose-300 transition-colors -mr-0.5" aria-label={`Remover ${s}`}>×</button>
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="flex gap-2">
-        <input
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addItem(query) } }}
-          placeholder={placeholder}
-          className="flex-1 h-9 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-[12px] text-white/95 placeholder:text-white/35 outline-none focus:border-cyan-400/40"
-        />
-        {query.trim() && (
-          <button onClick={() => addItem(query)} type="button" className="px-3 h-9 rounded-xl text-[11px] font-semibold text-cyan-300 bg-cyan-500/15 border border-cyan-400/25 hover:bg-cyan-500/25 transition-colors whitespace-nowrap">Adicionar "{query.trim()}"</button>
-        )}
-      </div>
-      {filtered.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {filtered.map(o => (
-            <button key={o} onClick={() => addItem(o)} type="button" className="text-[11px] text-white/65 hover:text-white/95 bg-white/[0.025] hover:bg-white/[0.05] px-2.5 py-1 rounded-lg border border-white/[0.05] hover:border-white/[0.1] transition-all">+ {o}</button>
-          ))}
-        </div>
-      )}
-      {filtered.length === 0 && options.length === 0 && emptyHint && (
-        <p className="text-[10px] text-white/45 mt-2 leading-snug">{emptyHint}</p>
-      )}
-      {filtered.length === 0 && options.length > 0 && query.trim() && (
-        <p className="text-[10px] text-white/45 mt-2 leading-snug">Nenhuma sugestão. Pressione Enter para adicionar "{query.trim()}".</p>
-      )}
-    </div>
-  )
-}
-
 // ═══ CONFIDENCE SLIDER — calibration ruler. Big numeric display, large
 // slider, three-zone label. No glow, neutral surface.
 function ConfidenceSlider({ value, onChange, action }: { value: number; onChange: (v: number) => void; action: 'register_alert' | 'suggest_only' | 'highlight' }) {
@@ -2228,7 +2147,7 @@ function ConfidenceSlider({ value, onChange, action }: { value: number; onChange
 // ═══ TEMPLATE CONFIG MODAL — stepper wizard
 type TemplateStep = 'overview' | 'conditions' | 'scope_action' | 'confidence' | 'review'
 
-function TemplateConfigModal({ open, template, existingPattern, onClose, onSave, availableLeagues, availableTeams, availableMatches, availableLeaguesRich, availableTeamsRich }: { open: boolean; template: PatternTemplate | null; existingPattern: Pattern | null; onClose: () => void; onSave: (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void; availableLeagues: string[]; availableTeams: string[]; availableMatches: ScopeKbMatch[]; availableLeaguesRich: ScopeKbLeague[]; availableTeamsRich: ScopeKbTeam[] }) {
+function TemplateConfigModal({ open, template, existingPattern, onClose, onSave, availableMatches, availableLeaguesRich, availableTeamsRich }: { open: boolean; template: PatternTemplate | null; existingPattern: Pattern | null; onClose: () => void; onSave: (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void; availableMatches: ScopeKbMatch[]; availableLeaguesRich: ScopeKbLeague[]; availableTeamsRich: ScopeKbTeam[] }) {
   const initial = existingPattern || (template ? {
     name: template.name, description: template.description,
     conditions: [...template.conditions], severity: template.severity,
@@ -2276,6 +2195,7 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
 
   const cat = categorizeTemplate(template)
   const canSave = conditions.length > 0
+  const { leagueLookup, teamLookup, matchLookup } = useScopeLookups(availableLeaguesRich, availableTeamsRich, availableMatches)
   const buildPatternData = (status: 'active' | 'paused'): Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'> => ({
     name: template.name, description: template.description,
     conditions, severity, status, isTemplate: true, templateId: template.id,
@@ -2394,8 +2314,6 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
                     requireRichData={requireRichData}
                     onlyLive={onlyLive}
                     onlyPreMatch={onlyPreMatch}
-                    availableLeagues={availableLeagues}
-                    availableTeams={availableTeams}
                     availableMatches={availableMatches}
                     availableLeaguesRich={availableLeaguesRich}
                     availableTeamsRich={availableTeamsRich}
@@ -2450,6 +2368,9 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
             excludeLeagues={excludeLeagues}
             excludeTeams={excludeTeams}
             excludeMatches={excludeMatches}
+            leagueLookup={leagueLookup}
+            teamLookup={teamLookup}
+            matchLookup={matchLookup}
             currentStepLabel={steps[stepIndex]?.label}
             totalSteps={steps.length}
             currentStepIndex={stepIndex}
@@ -2544,7 +2465,7 @@ function RadarPreview({ name, severity, scope, scopeFilter, matches, excludeLeag
 // ═══ CUSTOM PATTERN MODAL — wizard with sidebar steps
 type CustomStep = 'identity' | 'scope' | 'conditions' | 'action' | 'confidence' | 'review'
 
-function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, availableTeams, availableMatches, availableLeaguesRich, availableTeamsRich }: { open: boolean; initial: Pattern | null; onClose: () => void; onSave: (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void; availableLeagues: string[]; availableTeams: string[]; availableMatches: ScopeKbMatch[]; availableLeaguesRich: ScopeKbLeague[]; availableTeamsRich: ScopeKbTeam[] }) {
+function CustomPatternModal({ open, initial, onClose, onSave, availableMatches, availableLeaguesRich, availableTeamsRich }: { open: boolean; initial: Pattern | null; onClose: () => void; onSave: (data: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => void; availableMatches: ScopeKbMatch[]; availableLeaguesRich: ScopeKbLeague[]; availableTeamsRich: ScopeKbTeam[] }) {
   const [name, setName] = useState(initial?.name || '')
   const [desc, setDesc] = useState(initial?.description || '')
   const [severity, setSeverity] = useState<'critical' | 'attention' | 'info'>(initial?.severity || 'attention')
@@ -2587,6 +2508,7 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
   const hasName = name.trim().length > 0
   const hasConditions = conditions.length > 0
   const canSave = hasName && hasConditions
+  const { leagueLookup, teamLookup, matchLookup } = useScopeLookups(availableLeaguesRich, availableTeamsRich, availableMatches)
   const buildData = (status: 'active' | 'paused'): Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'> => ({
     name: name.trim(),
     description: desc.trim(),
@@ -2711,8 +2633,6 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
                   requireRichData={requireRichData}
                   onlyLive={onlyLive}
                   onlyPreMatch={onlyPreMatch}
-                  availableLeagues={availableLeagues}
-                  availableTeams={availableTeams}
                   availableMatches={availableMatches}
                   availableLeaguesRich={availableLeaguesRich}
                   availableTeamsRich={availableTeamsRich}
@@ -2773,6 +2693,9 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
             excludeLeagues={excludeLeagues}
             excludeTeams={excludeTeams}
             excludeMatches={excludeMatches}
+            leagueLookup={leagueLookup}
+            teamLookup={teamLookup}
+            matchLookup={matchLookup}
             currentStepLabel={steps[stepIndex]?.label}
             totalSteps={steps.length}
             currentStepIndex={stepIndex}
@@ -3118,8 +3041,8 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
   return (
     <div className="space-y-6">
       {/* Modals */}
-      <CustomPatternModal open={showBuilder} initial={editingPattern} onClose={() => { setShowBuilder(false); setEditingPattern(null); if (prefilledDraft) clearPrefilledDraft() }} onSave={handleCustomSave} availableLeagues={availableLeagues} availableTeams={availableTeams} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} />
-      <TemplateConfigModal open={!!templateModal} template={templateModal?.template || null} existingPattern={templateModal?.existing || null} onClose={() => setTemplateModal(null)} onSave={handleTemplateSave} availableLeagues={availableLeagues} availableTeams={availableTeams} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} />
+      <CustomPatternModal open={showBuilder} initial={editingPattern} onClose={() => { setShowBuilder(false); setEditingPattern(null); if (prefilledDraft) clearPrefilledDraft() }} onSave={handleCustomSave} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} />
+      <TemplateConfigModal open={!!templateModal} template={templateModal?.template || null} existingPattern={templateModal?.existing || null} onClose={() => setTemplateModal(null)} onSave={handleTemplateSave} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} />
       <AutoDiscoveryConfigModal open={showAutoConfig} config={discoveryConfig} onClose={() => setShowAutoConfig(false)} onChange={updateDiscoveryConfig} onActivate={handleActivateAuto} onDeactivate={handleDeactivateAuto} />
 
       {/* Header */}
