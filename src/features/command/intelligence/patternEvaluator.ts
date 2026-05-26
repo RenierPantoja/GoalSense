@@ -136,6 +136,54 @@ function evaluateCondition(condition: PatternCondition, ctx: EvalContext): boole
       return stats.possession.away >= threshold
     }
 
+    // V3.14 — additional safe condition types ---------------------------------
+    case 'home_shots_on_target_gte': {
+      const threshold = (condition.params.value as number) || 3
+      if (!stats?.shotsOnTarget) return null
+      return stats.shotsOnTarget.home >= threshold
+    }
+
+    case 'home_goals_gte': {
+      const threshold = (condition.params.value as number) || 1
+      return homeScore >= threshold
+    }
+
+    case 'home_possession_gte': {
+      const threshold = (condition.params.value as number) || 55
+      if (!stats?.possession) return null
+      return stats.possession.home >= threshold
+    }
+
+    case 'home_corners_gte': {
+      const threshold = (condition.params.value as number) || 3
+      if (!stats?.corners) return null
+      return stats.corners.home >= threshold
+    }
+
+    case 'away_corners_gte': {
+      const threshold = (condition.params.value as number) || 3
+      if (!stats?.corners) return null
+      return stats.corners.away >= threshold
+    }
+
+    case 'shots_total_gte': {
+      const threshold = (condition.params.value as number) || 12
+      if (!stats?.shots) return null
+      return (stats.shots.home + stats.shots.away) >= threshold
+    }
+
+    case 'yellow_cards_gte': {
+      const threshold = (condition.params.value as number) || 3
+      if (!stats?.yellowCards) return null
+      return (stats.yellowCards.home + stats.yellowCards.away) >= threshold
+    }
+
+    case 'red_cards_gte': {
+      const threshold = (condition.params.value as number) || 1
+      if (!stats?.redCards) return null
+      return (stats.redCards.home + stats.redCards.away) >= threshold
+    }
+
     default:
       return false
   }
@@ -286,6 +334,14 @@ function conditionToReason(condition: PatternCondition, ctx: EvalContext): strin
     case 'away_shots_on_target_gte': return `Visitante: ${stats?.shotsOnTarget?.away ?? '?'} no alvo`
     case 'away_goals_gte': return `Visitante marcou ${fixture.score.away ?? 0}`
     case 'away_possession_gte': return `Visitante: ${stats?.possession?.away?.toFixed(0) ?? '?'}% posse`
+    case 'home_shots_on_target_gte': return `Mandante: ${stats?.shotsOnTarget?.home ?? '?'} no alvo`
+    case 'home_goals_gte': return `Mandante marcou ${fixture.score.home ?? 0}`
+    case 'home_possession_gte': return `Mandante: ${stats?.possession?.home?.toFixed(0) ?? '?'}% posse`
+    case 'home_corners_gte': return `Mandante: ${stats?.corners?.home ?? '?'} escanteios`
+    case 'away_corners_gte': return `Visitante: ${stats?.corners?.away ?? '?'} escanteios`
+    case 'shots_total_gte': return `${stats?.shots ? stats.shots.home + stats.shots.away : '?'} finalizações totais`
+    case 'yellow_cards_gte': return `${stats?.yellowCards ? stats.yellowCards.home + stats.yellowCards.away : '?'} amarelos`
+    case 'red_cards_gte': return `${stats?.redCards ? stats.redCards.home + stats.redCards.away : '?'} vermelhos`
     default: return ''
   }
 }

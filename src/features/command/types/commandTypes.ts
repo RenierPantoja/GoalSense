@@ -27,6 +27,17 @@ export type PatternConditionType =
   | 'away_shots_on_target_gte'
   | 'away_goals_gte'
   | 'away_possession_gte'
+  // V3.14 — additional safe types: every one is backed by data already
+  // present in FixtureStatsForPattern or the fixture itself, so the evaluator
+  // can return a real boolean. No mocked sources.
+  | 'home_shots_on_target_gte'
+  | 'home_goals_gte'
+  | 'home_possession_gte'
+  | 'home_corners_gte'
+  | 'away_corners_gte'
+  | 'shots_total_gte'
+  | 'yellow_cards_gte'
+  | 'red_cards_gte'
 
 export interface PatternCondition {
   type: PatternConditionType

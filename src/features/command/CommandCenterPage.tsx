@@ -457,7 +457,33 @@ function SideAction({ label, onClick }: { label: string; onClick: () => void }) 
 
 // ═══ PATTERN STUDIO ═══════════════════════════════════════════════════════
 // Helpers
-const COND_LABELS: Record<PatternConditionType, string> = { is_live: 'Jogo ao vivo', is_final_phase: 'Reta final (70\'+)', is_pre_live: 'Começa em breve', minute_between: 'Minuto entre', score_tied: 'Placar empatado', score_diff_lte: 'Diferença gols ≤', favorite_involved: 'Favorito envolvido', shots_recent_gte: 'Finalizações ≥', shots_on_target_gte: 'No alvo ≥', corners_gte: 'Escanteios ≥', cards_gte: 'Cartões ≥', possession_gte: 'Posse ≥', goals_total_gte: 'Gols totais ≥', goals_total_lte: 'Gols totais ≤', away_shots_on_target_gte: 'Visitante no alvo ≥', away_goals_gte: 'Gols visitante ≥', away_possession_gte: 'Posse visitante ≥' }
+const COND_LABELS: Record<PatternConditionType, string> = {
+  is_live: 'Jogo ao vivo',
+  is_final_phase: 'Reta final (70\'+)',
+  is_pre_live: 'Começa em breve',
+  minute_between: 'Minuto entre',
+  score_tied: 'Placar empatado',
+  score_diff_lte: 'Diferença gols ≤',
+  favorite_involved: 'Favorito envolvido',
+  shots_recent_gte: 'Finalizações ≥',
+  shots_on_target_gte: 'No alvo ≥',
+  corners_gte: 'Escanteios ≥',
+  cards_gte: 'Cartões ≥',
+  possession_gte: 'Posse ≥',
+  goals_total_gte: 'Gols totais ≥',
+  goals_total_lte: 'Gols totais ≤',
+  away_shots_on_target_gte: 'Visitante no alvo ≥',
+  away_goals_gte: 'Gols visitante ≥',
+  away_possession_gte: 'Posse visitante ≥',
+  home_shots_on_target_gte: 'Mandante no alvo ≥',
+  home_goals_gte: 'Gols mandante ≥',
+  home_possession_gte: 'Posse mandante ≥',
+  home_corners_gte: 'Escanteios mandante ≥',
+  away_corners_gte: 'Escanteios visitante ≥',
+  shots_total_gte: 'Finalizações totais ≥',
+  yellow_cards_gte: 'Amarelos ≥',
+  red_cards_gte: 'Vermelhos ≥',
+}
 
 function formatConditionHuman(c: PatternCondition): string {
   const v = (k: string) => Number(c.params[k] ?? 0)
@@ -479,6 +505,14 @@ function formatConditionHuman(c: PatternCondition): string {
     case 'away_shots_on_target_gte': return `Visitante com ${v('value')}+ chutes no alvo`
     case 'away_goals_gte': return `Visitante com ${v('value')}+ gols`
     case 'away_possession_gte': return `Visitante com posse acima de ${v('value')}%`
+    case 'home_shots_on_target_gte': return `Mandante com ${v('value')}+ chutes no alvo`
+    case 'home_goals_gte': return `Mandante com ${v('value')}+ gols`
+    case 'home_possession_gte': return `Mandante com posse acima de ${v('value')}%`
+    case 'home_corners_gte': return `Mandante com ${v('value')}+ escanteios`
+    case 'away_corners_gte': return `Visitante com ${v('value')}+ escanteios`
+    case 'shots_total_gte': return `${v('value')}+ finalizações totais`
+    case 'yellow_cards_gte': return `${v('value')}+ cartões amarelos`
+    case 'red_cards_gte': return `${v('value')}+ cartões vermelhos`
   }
 }
 
@@ -579,74 +613,409 @@ const COND_CATEGORIES: { label: string; types: PatternConditionType[] }[] = [
   { label: 'Contexto', types: ['favorite_involved', 'possession_gte', 'away_goals_gte', 'away_possession_gte'] },
 ]
 
+// ═══ TRIGGER LIBRARY (V3.14) ═════════════════════════════════════════════════
+// Data-driven catalog of every gatilho the Trigger Lab exposes. Every entry
+// here is backed by a real condition the evaluator can resolve — no fake
+// triggers. Coverage tells the user how reliable provider data is for that
+// signal so they can decide what to combine.
+type TriggerCategory = 'tempo' | 'placar' | 'pressao' | 'controle' | 'escanteios' | 'disciplina' | 'contexto'
+type TriggerCoverage = 'high' | 'medium' | 'variable'
+type TriggerMode = 'pre_match' | 'live' | 'post_match'
+
+interface TriggerSpec {
+  id: string
+  type: PatternConditionType
+  category: TriggerCategory
+  title: string
+  description: string
+  coverage: TriggerCoverage
+  modes: TriggerMode[]
+  defaultParams: Record<string, number | string | boolean>
+  // Bounds for the editable numeric params (used by the param editor below).
+  paramBounds?: Partial<Record<string, { min: number; max: number; step?: number; label?: string }>>
+  requires: string[]
+}
+
+const TRIGGER_LIBRARY: TriggerSpec[] = [
+  // ── TEMPO ───────────────────────────────────────────────────────────────────
+  { id: 't_live', type: 'is_live', category: 'tempo', title: 'Partida ao vivo', description: 'Avalia somente quando a partida está em andamento.', coverage: 'high', modes: ['live'], defaultParams: {}, requires: ['status'] },
+  { id: 't_prelive', type: 'is_pre_live', category: 'tempo', title: 'Começa em breve', description: 'Partida ainda não começou e está dentro do intervalo configurado.', coverage: 'high', modes: ['pre_match'], defaultParams: { minutes: 60 }, paramBounds: { minutes: { min: 5, max: 240, step: 5, label: 'minutos' } }, requires: ['status', 'date'] },
+  { id: 't_minute', type: 'minute_between', category: 'tempo', title: 'Minuto entre', description: 'Avalia somente entre dois minutos da partida.', coverage: 'high', modes: ['live'], defaultParams: { min: 60, max: 90 }, paramBounds: { min: { min: 0, max: 120, label: 'min' }, max: { min: 0, max: 120, label: 'max' } }, requires: ['minute'] },
+  { id: 't_final', type: 'is_final_phase', category: 'tempo', title: 'Reta final (70\'+)', description: 'Após o minuto 70 da partida.', coverage: 'high', modes: ['live'], defaultParams: {}, requires: ['minute'] },
+
+  // ── PLACAR ──────────────────────────────────────────────────────────────────
+  { id: 't_tied', type: 'score_tied', category: 'placar', title: 'Placar empatado', description: 'Mandante e visitante com o mesmo número de gols.', coverage: 'high', modes: ['live'], defaultParams: {}, requires: ['score'] },
+  { id: 't_diff_lte', type: 'score_diff_lte', category: 'placar', title: 'Placar curto', description: 'Diferença no placar de no máximo X gols.', coverage: 'high', modes: ['live'], defaultParams: { maxDiff: 1 }, paramBounds: { maxDiff: { min: 0, max: 10, label: 'até' } }, requires: ['score'] },
+  { id: 't_goals_gte', type: 'goals_total_gte', category: 'placar', title: 'Gols totais ≥', description: 'Soma dos gols de mandante e visitante alcançou o limite.', coverage: 'high', modes: ['live'], defaultParams: { value: 3 }, paramBounds: { value: { min: 0, max: 20, label: 'gols' } }, requires: ['score'] },
+  { id: 't_goals_lte', type: 'goals_total_lte', category: 'placar', title: 'Gols totais ≤', description: 'Soma dos gols ainda abaixo do limite — útil para under/jogo travado.', coverage: 'high', modes: ['live'], defaultParams: { value: 1 }, paramBounds: { value: { min: 0, max: 20, label: 'gols' } }, requires: ['score'] },
+  { id: 't_home_goals', type: 'home_goals_gte', category: 'placar', title: 'Mandante marcou ≥', description: 'Quantidade mínima de gols do mandante.', coverage: 'high', modes: ['live'], defaultParams: { value: 1 }, paramBounds: { value: { min: 0, max: 20, label: 'gols' } }, requires: ['score'] },
+  { id: 't_away_goals', type: 'away_goals_gte', category: 'placar', title: 'Visitante marcou ≥', description: 'Quantidade mínima de gols do visitante.', coverage: 'high', modes: ['live'], defaultParams: { value: 1 }, paramBounds: { value: { min: 0, max: 20, label: 'gols' } }, requires: ['score'] },
+
+  // ── PRESSÃO OFENSIVA ────────────────────────────────────────────────────────
+  { id: 't_shots_recent', type: 'shots_recent_gte', category: 'pressao', title: 'Finalizações totais ≥', description: 'Soma de finalizações dos dois times.', coverage: 'medium', modes: ['live'], defaultParams: { value: 8 }, paramBounds: { value: { min: 0, max: 50, label: 'finalizações' } }, requires: ['stats'] },
+  { id: 't_shots_total', type: 'shots_total_gte', category: 'pressao', title: 'Finalizações totais grandes', description: 'Atinge volume alto de finalizações na partida.', coverage: 'medium', modes: ['live'], defaultParams: { value: 18 }, paramBounds: { value: { min: 0, max: 50, label: 'finalizações' } }, requires: ['stats'] },
+  { id: 't_sot', type: 'shots_on_target_gte', category: 'pressao', title: 'Chutes no alvo ≥', description: 'Soma de chutes no alvo dos dois times.', coverage: 'medium', modes: ['live'], defaultParams: { value: 4 }, paramBounds: { value: { min: 0, max: 30, label: 'no alvo' } }, requires: ['stats'] },
+  { id: 't_home_sot', type: 'home_shots_on_target_gte', category: 'pressao', title: 'Mandante no alvo ≥', description: 'Mandante atingiu volume mínimo de chutes no alvo.', coverage: 'medium', modes: ['live'], defaultParams: { value: 3 }, paramBounds: { value: { min: 0, max: 30, label: 'no alvo' } }, requires: ['stats'] },
+  { id: 't_away_sot', type: 'away_shots_on_target_gte', category: 'pressao', title: 'Visitante no alvo ≥', description: 'Visitante atingiu volume mínimo de chutes no alvo.', coverage: 'medium', modes: ['live'], defaultParams: { value: 3 }, paramBounds: { value: { min: 0, max: 30, label: 'no alvo' } }, requires: ['stats'] },
+
+  // ── CONTROLE / DOMÍNIO ──────────────────────────────────────────────────────
+  { id: 't_poss', type: 'possession_gte', category: 'controle', title: 'Posse acima de X%', description: 'Pelo menos um dos times atingiu posse alta.', coverage: 'medium', modes: ['live'], defaultParams: { value: 60 }, paramBounds: { value: { min: 30, max: 90, label: '% posse' } }, requires: ['stats'] },
+  { id: 't_home_poss', type: 'home_possession_gte', category: 'controle', title: 'Posse mandante acima de X%', description: 'Mandante dominando a posse.', coverage: 'medium', modes: ['live'], defaultParams: { value: 58 }, paramBounds: { value: { min: 30, max: 90, label: '% posse' } }, requires: ['stats'] },
+  { id: 't_away_poss', type: 'away_possession_gte', category: 'controle', title: 'Posse visitante acima de X%', description: 'Visitante controlando o jogo.', coverage: 'medium', modes: ['live'], defaultParams: { value: 50 }, paramBounds: { value: { min: 30, max: 90, label: '% posse' } }, requires: ['stats'] },
+
+  // ── ESCANTEIOS ──────────────────────────────────────────────────────────────
+  { id: 't_corners', type: 'corners_gte', category: 'escanteios', title: 'Escanteios totais ≥', description: 'Total de escanteios na partida.', coverage: 'variable', modes: ['live'], defaultParams: { value: 6 }, paramBounds: { value: { min: 0, max: 30, label: 'escanteios' } }, requires: ['stats'] },
+  { id: 't_home_corners', type: 'home_corners_gte', category: 'escanteios', title: 'Escanteios mandante ≥', description: 'Mandante batendo escanteios em volume.', coverage: 'variable', modes: ['live'], defaultParams: { value: 4 }, paramBounds: { value: { min: 0, max: 30, label: 'escanteios' } }, requires: ['stats'] },
+  { id: 't_away_corners', type: 'away_corners_gte', category: 'escanteios', title: 'Escanteios visitante ≥', description: 'Visitante batendo escanteios em volume.', coverage: 'variable', modes: ['live'], defaultParams: { value: 4 }, paramBounds: { value: { min: 0, max: 30, label: 'escanteios' } }, requires: ['stats'] },
+
+  // ── DISCIPLINA ──────────────────────────────────────────────────────────────
+  { id: 't_cards', type: 'cards_gte', category: 'disciplina', title: 'Cartões totais ≥', description: 'Soma dos cartões na partida (amarelos contam).', coverage: 'variable', modes: ['live'], defaultParams: { value: 4 }, paramBounds: { value: { min: 0, max: 20, label: 'cartões' } }, requires: ['stats'] },
+  { id: 't_yellow', type: 'yellow_cards_gte', category: 'disciplina', title: 'Amarelos ≥', description: 'Total de cartões amarelos.', coverage: 'variable', modes: ['live'], defaultParams: { value: 4 }, paramBounds: { value: { min: 0, max: 20, label: 'amarelos' } }, requires: ['stats'] },
+  { id: 't_red', type: 'red_cards_gte', category: 'disciplina', title: 'Vermelhos ≥', description: 'Pelo menos X expulsões na partida.', coverage: 'variable', modes: ['live'], defaultParams: { value: 1 }, paramBounds: { value: { min: 0, max: 5, label: 'vermelhos' } }, requires: ['stats'] },
+
+  // ── CONTEXTO ────────────────────────────────────────────────────────────────
+  { id: 't_fav', type: 'favorite_involved', category: 'contexto', title: 'Favorito envolvido', description: 'Pelo menos um time favorito está jogando.', coverage: 'high', modes: ['pre_match', 'live'], defaultParams: {}, requires: ['favorites'] },
+]
+
+const TRIGGER_BY_TYPE: Record<PatternConditionType, TriggerSpec | undefined> = TRIGGER_LIBRARY.reduce((acc, t) => {
+  acc[t.type] = t
+  return acc
+}, {} as Record<PatternConditionType, TriggerSpec | undefined>)
+
+const TRIGGER_CATEGORY_LABELS: Record<TriggerCategory, string> = {
+  tempo: 'Tempo',
+  placar: 'Placar',
+  pressao: 'Pressão',
+  controle: 'Controle',
+  escanteios: 'Escanteios',
+  disciplina: 'Disciplina',
+  contexto: 'Contexto',
+}
+
+const TRIGGER_CATEGORY_HINTS: Record<TriggerCategory, string> = {
+  tempo: 'Quando o radar deve estar atento.',
+  placar: 'Estado do placar e total de gols.',
+  pressao: 'Volume ofensivo do jogo.',
+  controle: 'Domínio territorial via posse.',
+  escanteios: 'Cobertura varia por provedor.',
+  disciplina: 'Cartões e expulsões.',
+  contexto: 'Favoritos e contexto do usuário.',
+}
+
+const COVERAGE_LABEL: Record<TriggerCoverage, string> = { high: 'Alta', medium: 'Média', variable: 'Variável' }
+const COVERAGE_TONE: Record<TriggerCoverage, string> = {
+  high: 'text-emerald-200/80 bg-emerald-500/8 border-emerald-400/15',
+  medium: 'text-cyan-200/80 bg-cyan-500/8 border-cyan-400/15',
+  variable: 'text-amber-200/80 bg-amber-500/8 border-amber-400/15',
+}
+
+const MODE_LABEL: Record<TriggerMode, string> = { pre_match: 'Pré', live: 'Ao vivo', post_match: 'Pós' }
+
+// ═══ TRIGGER RECIPES ═════════════════════════════════════════════════════════
+// Curated combinations of triggers. Each recipe applies multiple conditions
+// at once, deduping against existing ones (by type — first occurrence wins).
+interface TriggerRecipe {
+  id: string
+  title: string
+  description: string
+  conditions: PatternCondition[]
+}
+
+const TRIGGER_RECIPES: TriggerRecipe[] = [
+  {
+    id: 'r_pressure_goal',
+    title: 'Pressão por gol',
+    description: 'Reta final, placar curto e volume ofensivo subindo.',
+    conditions: [
+      { type: 'is_live', params: {} },
+      { type: 'minute_between', params: { min: 55, max: 90 } },
+      { type: 'score_diff_lte', params: { maxDiff: 1 } },
+      { type: 'shots_on_target_gte', params: { value: 4 } },
+    ],
+  },
+  {
+    id: 'r_late_danger',
+    title: 'Reta final perigosa',
+    description: 'Últimos 20 minutos com placar curto e finalizações intensas.',
+    conditions: [
+      { type: 'is_live', params: {} },
+      { type: 'minute_between', params: { min: 70, max: 90 } },
+      { type: 'score_diff_lte', params: { maxDiff: 1 } },
+      { type: 'shots_recent_gte', params: { value: 10 } },
+    ],
+  },
+  {
+    id: 'r_over_trend',
+    title: 'Tendência de gols',
+    description: 'Jogo aberto com gols somados e bom volume de chutes.',
+    conditions: [
+      { type: 'is_live', params: {} },
+      { type: 'goals_total_gte', params: { value: 2 } },
+      { type: 'shots_recent_gte', params: { value: 12 } },
+    ],
+  },
+  {
+    id: 'r_fav_at_risk',
+    title: 'Favorito em risco',
+    description: 'Favorito envolvido em jogo equilibrado depois do intervalo.',
+    conditions: [
+      { type: 'favorite_involved', params: {} },
+      { type: 'is_live', params: {} },
+      { type: 'minute_between', params: { min: 45, max: 90 } },
+      { type: 'score_diff_lte', params: { maxDiff: 1 } },
+    ],
+  },
+  {
+    id: 'r_dangerous_away',
+    title: 'Visitante perigoso',
+    description: 'Visitante com posse e finalizações no alvo, placar curto.',
+    conditions: [
+      { type: 'is_live', params: {} },
+      { type: 'away_shots_on_target_gte', params: { value: 3 } },
+      { type: 'away_possession_gte', params: { value: 45 } },
+      { type: 'score_diff_lte', params: { maxDiff: 1 } },
+    ],
+  },
+  {
+    id: 'r_corners_growing',
+    title: 'Escanteios em crescimento',
+    description: 'Volume alto de escanteios em jogo travado.',
+    conditions: [
+      { type: 'is_live', params: {} },
+      { type: 'minute_between', params: { min: 30, max: 90 } },
+      { type: 'corners_gte', params: { value: 7 } },
+      { type: 'score_diff_lte', params: { maxDiff: 1 } },
+    ],
+  },
+  {
+    id: 'r_physical_match',
+    title: 'Jogo físico',
+    description: 'Cartões em alta a partir do meio do primeiro tempo.',
+    conditions: [
+      { type: 'is_live', params: {} },
+      { type: 'minute_between', params: { min: 30, max: 90 } },
+      { type: 'cards_gte', params: { value: 4 } },
+    ],
+  },
+]
+
+// Param clamp bounds for safe numeric input across all params we expose.
+const PARAM_CLAMP: Record<string, { min: number; max: number }> = {
+  value: { min: 0, max: 50 },
+  min: { min: 0, max: 120 },
+  max: { min: 0, max: 120 },
+  maxDiff: { min: 0, max: 10 },
+  minutes: { min: 5, max: 240 },
+}
+function clampParam(key: string, raw: number, bound?: { min: number; max: number }): number {
+  const fallback = PARAM_CLAMP[key] || { min: 0, max: 999 }
+  const b = bound || fallback
+  if (Number.isNaN(raw)) return b.min
+  return Math.max(b.min, Math.min(b.max, Math.round(raw)))
+}
+
 function ConditionsEditor({ conditions, onChange }: { conditions: PatternCondition[]; onChange: (c: PatternCondition[]) => void }) {
-  const addCond = (type: PatternConditionType) => {
-    const params: Record<string, number | string | boolean> = {}
-    if (type === 'minute_between') { params.min = 60; params.max = 90 }
-    else if (type === 'score_diff_lte') { params.maxDiff = 1 }
-    else if (type === 'goals_total_lte') { params.value = 1 }
-    else if (type === 'is_pre_live') { params.minutes = 60 }
-    else if (['shots_recent_gte', 'shots_on_target_gte', 'corners_gte', 'cards_gte', 'goals_total_gte', 'away_shots_on_target_gte', 'away_goals_gte'].includes(type)) { params.value = 3 }
-    else if (['possession_gte', 'away_possession_gte'].includes(type)) { params.value = 58 }
-    onChange([...conditions, { type, params }])
+  const [activeCategory, setActiveCategory] = useState<TriggerCategory>('tempo')
+
+  const usedTypes = useMemo(() => new Set(conditions.map(c => c.type)), [conditions])
+
+  const addTrigger = (spec: TriggerSpec) => {
+    if (usedTypes.has(spec.type)) return
+    onChange([...conditions, { type: spec.type, params: { ...spec.defaultParams } }])
   }
-  const updateParam = (idx: number, key: string, val: number) => {
-    onChange(conditions.map((c, i) => i === idx ? { ...c, params: { ...c.params, [key]: val } } : c))
+
+  const updateParam = (idx: number, key: string, raw: number) => {
+    const c = conditions[idx]
+    const spec = TRIGGER_BY_TYPE[c.type]
+    const bound = spec?.paramBounds?.[key]
+    const next = clampParam(key, raw, bound)
+    onChange(conditions.map((cc, i) => i === idx ? { ...cc, params: { ...cc.params, [key]: next } } : cc))
   }
+
   const removeCond = (idx: number) => onChange(conditions.filter((_, j) => j !== idx))
-  const usedTypes = new Set(conditions.map(c => c.type))
+
+  const applyRecipe = (recipe: TriggerRecipe) => {
+    const next = [...conditions]
+    for (const c of recipe.conditions) {
+      if (!next.some(existing => existing.type === c.type)) {
+        next.push({ type: c.type, params: { ...c.params } })
+      }
+    }
+    onChange(next)
+  }
+
+  const visibleTriggers = TRIGGER_LIBRARY.filter(t => t.category === activeCategory)
 
   return (
-    <div>
-      <div className="space-y-2">
-        {conditions.length === 0 && (
-          <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.005] px-4 py-5 text-center">
-            <p className="text-[12px] text-white/65 font-medium">Nenhuma condição configurada</p>
-            <p className="text-[11px] text-white/45 mt-0.5">Adicione condições abaixo para o radar disparar.</p>
-          </div>
+    <div className="space-y-6">
+      {/* Active conditions header */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">Condições ativas</span>
+        <span className="text-[11px] text-white/65 tabular-nums">
+          {conditions.length === 0 ? 'nenhuma' : `${conditions.length} ${conditions.length === 1 ? 'gatilho' : 'gatilhos'}`}
+        </span>
+        {conditions.length > 0 && (
+          <span className="text-[10px] font-medium px-2 py-0.5 rounded-md border border-white/[0.07] bg-white/[0.025] text-white/60">Todas precisam bater</span>
         )}
-        {conditions.map((c, i) => {
-          const hasValue = c.params.value !== undefined || c.params.maxDiff !== undefined
-          const hasMinMax = c.params.min !== undefined
-          return (
-            <div key={i} className="rounded-xl bg-white/[0.025] border border-white/[0.06] px-4 py-3">
-              <div className="flex items-center gap-3">
-                <span className="text-[12px] text-white/95 flex-1 font-semibold">{COND_LABELS[c.type] || c.type}</span>
-                {hasMinMax && (
-                  <div className="flex items-center gap-1.5">
-                    <input type="number" value={Number(c.params.min) || 0} onChange={e => updateParam(i, 'min', Number(e.target.value))} className="w-14 h-7 rounded-md border border-white/[0.08] bg-white/[0.04] px-2 text-[11px] text-white/95 text-center tabular-nums outline-none focus:border-cyan-400/40" />
-                    <span className="text-[10px] text-white/45 font-medium">até</span>
-                    <input type="number" value={Number(c.params.max) || 90} onChange={e => updateParam(i, 'max', Number(e.target.value))} className="w-14 h-7 rounded-md border border-white/[0.08] bg-white/[0.04] px-2 text-[11px] text-white/95 text-center tabular-nums outline-none focus:border-cyan-400/40" />
+      </div>
+
+      {/* Active conditions list */}
+      {conditions.length === 0 && (
+        <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.005] px-5 py-6 text-center">
+          <p className="text-[12px] text-white/65 font-medium">Nenhuma condição configurada</p>
+          <p className="text-[11px] text-white/45 mt-0.5">Use a biblioteca abaixo ou aplique uma receita rápida.</p>
+        </div>
+      )}
+
+      {conditions.length > 0 && (
+        <div className="space-y-2">
+          {conditions.map((c, i) => {
+            const spec = TRIGGER_BY_TYPE[c.type]
+            const cat = spec?.category || 'contexto'
+            const coverage = spec?.coverage || 'high'
+            const modes = spec?.modes || []
+            const hasValue = c.params.value !== undefined || c.params.maxDiff !== undefined || c.params.minutes !== undefined
+            const hasMinMax = c.params.min !== undefined && c.params.max !== undefined
+            return (
+              <div key={i} className="rounded-xl border border-white/[0.07] bg-white/[0.012] px-4 py-3.5">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-white/40">{TRIGGER_CATEGORY_LABELS[cat]}</span>
+                      <span className="text-white/15">·</span>
+                      <span className={`text-[9.5px] font-medium px-1.5 py-0.5 rounded border ${COVERAGE_TONE[coverage]}`}>{COVERAGE_LABEL[coverage]}</span>
+                      {modes.map(m => (
+                        <span key={m} className="text-[9.5px] font-medium px-1.5 py-0.5 rounded border bg-white/[0.025] text-white/55 border-white/[0.06]">{MODE_LABEL[m]}</span>
+                      ))}
+                    </div>
+                    <p className="text-[13px] font-semibold text-white/95 leading-tight">{spec?.title || COND_LABELS[c.type] || c.type}</p>
+                    <p className="text-[11.5px] text-white/55 mt-1 leading-snug">{formatConditionHuman(c)}</p>
+                  </div>
+                  <button onClick={() => removeCond(i)} type="button" aria-label="Remover gatilho" className="shrink-0 h-7 w-7 rounded-lg flex items-center justify-center text-white/35 hover:text-rose-300 hover:bg-rose-500/8 transition-colors">×</button>
+                </div>
+
+                {/* Params */}
+                {(hasValue || hasMinMax) && (
+                  <div className="mt-3 pt-3 border-t border-white/[0.05] flex items-center gap-2 flex-wrap">
+                    {hasMinMax && (
+                      <>
+                        <ParamField idx={i} cond={c} keyName="min" onChange={updateParam} spec={spec} />
+                        <span className="text-[10px] text-white/35 font-medium">até</span>
+                        <ParamField idx={i} cond={c} keyName="max" onChange={updateParam} spec={spec} />
+                      </>
+                    )}
+                    {c.params.value !== undefined && <ParamField idx={i} cond={c} keyName="value" onChange={updateParam} spec={spec} />}
+                    {c.params.maxDiff !== undefined && <ParamField idx={i} cond={c} keyName="maxDiff" onChange={updateParam} spec={spec} />}
+                    {c.params.minutes !== undefined && <ParamField idx={i} cond={c} keyName="minutes" onChange={updateParam} spec={spec} />}
                   </div>
                 )}
-                {hasValue && (
-                  <input type="number" value={Number(c.params.value ?? c.params.maxDiff) || 0} onChange={e => updateParam(i, c.params.value !== undefined ? 'value' : 'maxDiff', Number(e.target.value))} className="w-16 h-7 rounded-md border border-white/[0.08] bg-white/[0.04] px-2 text-[11px] text-white/95 text-center tabular-nums outline-none focus:border-cyan-400/40" />
-                )}
-                <button onClick={() => removeCond(i)} type="button" className="text-white/45 hover:text-rose-300 transition-colors px-1 text-[14px]" aria-label="Remover condição">×</button>
               </div>
-              <p className="text-[11px] text-white/65 mt-1.5 leading-snug italic">{formatConditionHuman(c)}</p>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
+      )}
+
+      {/* Library — categorized triggers */}
+      <div className="rounded-xl border border-white/[0.07] bg-white/[0.008] overflow-hidden">
+        <div className="px-4 py-3 border-b border-white/[0.05] flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">Biblioteca de gatilhos</span>
+          <span className="ml-auto text-[10px] text-white/35">{TRIGGER_CATEGORY_HINTS[activeCategory]}</span>
+        </div>
+        {/* Category tabs */}
+        <div className="px-4 pt-3 flex items-center gap-1 flex-wrap">
+          {(Object.keys(TRIGGER_CATEGORY_LABELS) as TriggerCategory[]).map(cat => {
+            const isActive = activeCategory === cat
+            const total = TRIGGER_LIBRARY.filter(t => t.category === cat).length
+            const used = TRIGGER_LIBRARY.filter(t => t.category === cat && usedTypes.has(t.type)).length
+            return (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                type="button"
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${isActive ? 'bg-white/[0.06] text-white/95 border border-white/[0.12]' : 'text-white/55 hover:text-white/85 border border-transparent hover:bg-white/[0.025]'}`}
+              >
+                {TRIGGER_CATEGORY_LABELS[cat]} {used > 0 && <span className="text-[10px] text-white/40 ml-1 tabular-nums">{used}/{total}</span>}
+              </button>
+            )
+          })}
+        </div>
+        {/* Trigger cards */}
+        <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {visibleTriggers.map(t => {
+            const isUsed = usedTypes.has(t.type)
+            return (
+              <button
+                key={t.id}
+                onClick={() => addTrigger(t)}
+                type="button"
+                disabled={isUsed}
+                className={`text-left rounded-xl border px-3.5 py-3 transition-colors ${isUsed
+                  ? 'border-white/[0.04] bg-white/[0.01] cursor-not-allowed opacity-55'
+                  : 'border-white/[0.07] bg-white/[0.012] hover:border-white/[0.14] hover:bg-white/[0.025]'}`}
+              >
+                <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                  <span className={`text-[9.5px] font-medium px-1.5 py-0.5 rounded border ${COVERAGE_TONE[t.coverage]}`}>{COVERAGE_LABEL[t.coverage]}</span>
+                  {t.modes.map(m => (
+                    <span key={m} className="text-[9.5px] font-medium px-1.5 py-0.5 rounded border bg-white/[0.025] text-white/55 border-white/[0.06]">{MODE_LABEL[m]}</span>
+                  ))}
+                  {isUsed && <span className="ml-auto text-[10px] text-emerald-300/70 font-medium">adicionado</span>}
+                </div>
+                <p className="text-[12.5px] font-semibold text-white/90 leading-tight">{t.title}</p>
+                <p className="text-[11px] text-white/50 mt-1 leading-snug">{t.description}</p>
+              </button>
+            )
+          })}
+        </div>
       </div>
-      <div className="mt-4 space-y-2.5">
-        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/55">Adicionar condição</p>
-        {COND_CATEGORIES.map(cat => {
-          const available = cat.types.filter(t => !usedTypes.has(t))
-          if (available.length === 0) return null
-          return (
-            <div key={cat.label}>
-              <span className="text-[10px] text-white/45 uppercase tracking-wider font-semibold block mb-1.5">{cat.label}</span>
-              <div className="flex flex-wrap gap-1.5">
-                {available.map(t => (
-                  <button key={t} onClick={() => addCond(t)} type="button" className="text-[11px] text-white/65 hover:text-white/95 bg-white/[0.025] hover:bg-white/[0.05] px-3 py-1.5 rounded-lg border border-white/[0.05] hover:border-white/[0.1] transition-all">+ {COND_LABELS[t]}</button>
+
+      {/* Recipes */}
+      <div className="rounded-xl border border-white/[0.07] bg-white/[0.008] overflow-hidden">
+        <div className="px-4 py-3 border-b border-white/[0.05] flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">Receitas rápidas</span>
+          <span className="ml-auto text-[10px] text-white/35">Aplica vários gatilhos de uma vez. Você pode editar depois.</span>
+        </div>
+        <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {TRIGGER_RECIPES.map(r => (
+            <button
+              key={r.id}
+              onClick={() => applyRecipe(r)}
+              type="button"
+              className="text-left rounded-xl border border-white/[0.07] bg-white/[0.012] hover:border-white/[0.14] hover:bg-white/[0.025] px-3.5 py-3 transition-colors"
+            >
+              <p className="text-[12.5px] font-semibold text-white/90 leading-tight">{r.title}</p>
+              <p className="text-[11px] text-white/50 mt-1 leading-snug">{r.description}</p>
+              <div className="mt-2 flex items-center gap-1 flex-wrap">
+                {r.conditions.slice(0, 4).map((c, i) => (
+                  <span key={i} className="text-[10px] text-white/55 bg-white/[0.025] border border-white/[0.06] px-1.5 py-0.5 rounded">{TRIGGER_BY_TYPE[c.type]?.title || c.type}</span>
                 ))}
+                {r.conditions.length > 4 && <span className="text-[10px] text-white/35">+{r.conditions.length - 4}</span>}
               </div>
-            </div>
-          )
-        })}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
+  )
+}
+
+// ParamField — single numeric input with safe clamp + label.
+function ParamField({ idx, cond, keyName, onChange, spec }: { idx: number; cond: PatternCondition; keyName: string; onChange: (idx: number, key: string, val: number) => void; spec?: TriggerSpec }) {
+  const bound = spec?.paramBounds?.[keyName]
+  const label = bound?.label
+  const value = Number(cond.params[keyName] ?? 0)
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <input
+        type="number"
+        value={value}
+        onChange={e => onChange(idx, keyName, Number(e.target.value))}
+        min={bound?.min ?? PARAM_CLAMP[keyName]?.min ?? 0}
+        max={bound?.max ?? PARAM_CLAMP[keyName]?.max ?? 999}
+        step={bound?.step ?? 1}
+        className="w-16 h-8 rounded-md border border-white/[0.08] bg-white/[0.04] px-2 text-[11.5px] text-white/95 text-center tabular-nums outline-none focus:border-white/30 focus:bg-white/[0.06] transition-colors"
+      />
+      {label && <span className="text-[10px] text-white/40 font-medium">{label}</span>}
+    </span>
   )
 }
 
@@ -1336,7 +1705,7 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
 
   const steps: WizardStep<TemplateStep>[] = [
     { key: 'overview', label: 'Entenda o radar', valid: true, required: false },
-    { key: 'conditions', label: 'Condições', valid: canSave, required: true },
+    { key: 'conditions', label: 'Trigger Lab', valid: canSave, required: true },
     { key: 'scope_action', label: 'Escopo e ação', valid: true, required: false },
     { key: 'confidence', label: 'Confiança', valid: true, required: false },
     { key: 'review', label: 'Revisão', valid: canSave, required: false },
@@ -1411,7 +1780,7 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
             )}
             {step === 'conditions' && (
               <>
-                <WizardStepHeader index={2} total={steps.length} title="Condições" description="Edite os parâmetros, remova ou adicione condições. Todas precisam ser verdadeiras para o radar disparar." />
+                <WizardStepHeader index={2} total={steps.length} kicker="Trigger Lab" title="Combine sinais reais" description="Todas as condições precisam ser verdadeiras para o radar bater. Use poucos gatilhos bem escolhidos para evitar ruído." />
                 <ConditionsEditor conditions={conditions} onChange={setConditions} />
                 {!canSave && <div className="rounded-xl border border-amber-400/20 bg-amber-500/[0.06] px-4 py-3 mt-4"><p className="text-[11px] text-amber-200">É necessário pelo menos uma condição para salvar este radar.</p></div>}
               </>
@@ -1650,7 +2019,7 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
   const steps: { key: CustomStep; label: string; valid: boolean; required: boolean }[] = [
     { key: 'identity', label: 'Identidade', valid: hasName, required: true },
     { key: 'scope', label: 'Escopo', valid: true, required: false },
-    { key: 'conditions', label: 'Condições', valid: hasConditions, required: true },
+    { key: 'conditions', label: 'Trigger Lab', valid: hasConditions, required: true },
     { key: 'action', label: 'Ação', valid: true, required: false },
     { key: 'confidence', label: 'Confiança', valid: true, required: false },
     { key: 'review', label: 'Revisão', valid: canSave, required: false },
@@ -1757,7 +2126,7 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
             )}
             {step === 'conditions' && (
               <>
-                <WizardStepHeader index={3} total={steps.length} title={`Quais sinais precisam acontecer?`} description="Cada condição precisa ser verdadeira para o radar disparar. Use as categorias abaixo para adicionar." />
+                <WizardStepHeader index={3} total={steps.length} kicker="Trigger Lab" title="Quais sinais precisam acontecer?" description="Combine gatilhos da biblioteca ou aplique uma receita rápida. Todas as condições precisam ser verdadeiras para o radar bater." />
                 <ConditionsEditor conditions={conditions} onChange={setConditions} />
                 {!hasConditions && <div className="rounded-xl border border-amber-400/25 bg-amber-500/[0.06] px-4 py-3 mt-4"><p className="text-[11px] text-amber-200 font-medium">É necessário pelo menos uma condição para salvar este radar.</p></div>}
               </>
