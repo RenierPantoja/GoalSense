@@ -705,10 +705,21 @@ function ToggleSettingRow({ title, description, checked, onChange }: { title: st
 // uppercase, and only the active step is highlighted. No glow, no neon —
 // the active segment uses a soft cyan accent and the completed ones a
 // neutral white tint.
+// Forward navigation is gated: the user can click on past steps freely,
+// but cannot jump to a step that has unmet required prerequisites.
 type WizardStep<K extends string> = { key: K; label: string; valid: boolean; required: boolean }
 
 function WizardProgressRail<K extends string>({ steps, current, onSelect }: { steps: WizardStep<K>[]; current: K; onSelect: (k: K) => void }) {
   const currentIndex = Math.max(0, steps.findIndex(s => s.key === current))
+  // A step is reachable if it's at or before the current step OR all required
+  // steps between the current index and the target are valid.
+  const isReachable = (targetIdx: number) => {
+    if (targetIdx <= currentIndex) return true
+    for (let i = 0; i < targetIdx; i++) {
+      if (steps[i].required && !steps[i].valid) return false
+    }
+    return true
+  }
   return (
     <nav aria-label="Etapas" className="select-none">
       {/* Segments */}
@@ -716,18 +727,22 @@ function WizardProgressRail<K extends string>({ steps, current, onSelect }: { st
         {steps.map((s, i) => {
           const isActive = current === s.key
           const isComplete = i < currentIndex
+          const reachable = isReachable(i)
           return (
             <button
               key={s.key}
-              onClick={() => onSelect(s.key)}
+              onClick={() => { if (reachable) onSelect(s.key) }}
               type="button"
+              disabled={!reachable}
               aria-current={isActive ? 'step' : undefined}
-              aria-label={`Passo ${i + 1}: ${s.label}`}
+              aria-label={`Passo ${i + 1}: ${s.label}${reachable ? '' : ' — bloqueado'}`}
               className={`group relative flex-1 h-[3px] rounded-full transition-all duration-300 ease-out ${isActive
                 ? 'bg-cyan-300/80'
                 : isComplete
                   ? 'bg-white/35'
-                  : 'bg-white/[0.06] hover:bg-white/[0.1]'}`}
+                  : reachable
+                    ? 'bg-white/[0.06] hover:bg-white/[0.1]'
+                    : 'bg-white/[0.04] cursor-not-allowed'}`}
             />
           )
         })}
@@ -737,21 +752,26 @@ function WizardProgressRail<K extends string>({ steps, current, onSelect }: { st
         {steps.map((s, i) => {
           const isActive = current === s.key
           const isComplete = i < currentIndex
+          const reachable = isReachable(i)
           return (
             <li key={s.key} className="flex-1 min-w-0">
               <button
-                onClick={() => onSelect(s.key)}
+                onClick={() => { if (reachable) onSelect(s.key) }}
                 type="button"
-                className="group block w-full text-left"
+                disabled={!reachable}
+                aria-disabled={!reachable}
+                title={!reachable ? 'Conclua os passos obrigatórios para avançar' : undefined}
+                className={`group block w-full text-left ${reachable ? '' : 'cursor-not-allowed'}`}
               >
                 <div className="flex items-center gap-1.5">
-                  <span className={`tabular-nums text-[10px] font-semibold transition-colors ${isActive ? 'text-cyan-200/85' : isComplete ? 'text-white/55' : 'text-white/30 group-hover:text-white/55'}`}>
+                  <span className={`tabular-nums text-[10px] font-semibold transition-colors ${isActive ? 'text-cyan-200/85' : isComplete ? 'text-white/55' : reachable ? 'text-white/30 group-hover:text-white/55' : 'text-white/20'}`}>
                     {String(i + 1).padStart(2, '0')}
                   </span>
                   {isComplete && <span className="text-[10px] text-white/45" aria-hidden>✓</span>}
+                  {!reachable && !isActive && <span className="text-[10px] text-white/25" aria-hidden>·</span>}
                 </div>
-                <span className={`block text-[11px] mt-0.5 leading-tight truncate transition-colors ${isActive ? 'text-white/90 font-medium' : isComplete ? 'text-white/55' : 'text-white/35 group-hover:text-white/55'}`}>{s.label}</span>
-                {s.required && !s.valid && !isActive && <span className="hidden sm:block text-[10px] text-amber-300/70 leading-tight font-medium mt-0.5">obrigatório</span>}
+                <span className={`block text-[11px] mt-0.5 leading-tight truncate transition-colors ${isActive ? 'text-white/90 font-medium' : isComplete ? 'text-white/55' : reachable ? 'text-white/35 group-hover:text-white/55' : 'text-white/25'}`}>{s.label}</span>
+                {s.required && !s.valid && !isActive && reachable && <span className="hidden sm:block text-[10px] text-amber-300/70 leading-tight font-medium mt-0.5">obrigatório</span>}
               </button>
             </li>
           )
@@ -1340,9 +1360,17 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
         <>
           <button onClick={onClose} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/65 border border-white/[0.07] hover:text-white/95 hover:border-white/[0.12] transition-colors mr-auto">Cancelar</button>
           {stepIndex > 0 && <button onClick={goPrev} type="button" className="px-3.5 py-2.5 rounded-xl text-[12px] font-medium text-white/75 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-all">Voltar</button>}
-          {!isLast && <button onClick={goNext} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-all">Próximo</button>}
-          <button onClick={() => { onSave(buildPatternData('paused')); onClose() }} disabled={!canSave} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar pausado</button>
-          <button onClick={() => { onSave(buildPatternData('active')); onClose() }} disabled={!canSave} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold text-white bg-white/[0.95] hover:bg-white border border-white/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200" style={{ color: '#0b0d12' }}>Salvar e ativar</button>
+          {!isLast && (
+            <button
+              onClick={goNext}
+              disabled={!steps[stepIndex]?.valid}
+              title={!steps[stepIndex]?.valid ? 'Conclua este passo para avançar' : undefined}
+              type="button"
+              className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            >Próximo</button>
+          )}
+          {isLast && <button onClick={() => { onSave(buildPatternData('paused')); onClose() }} disabled={!canSave} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar pausado</button>}
+          {isLast && <button onClick={() => { onSave(buildPatternData('active')); onClose() }} disabled={!canSave} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold text-white bg-white/[0.95] hover:bg-white border border-white/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200" style={{ color: '#0b0d12' }}>Salvar e ativar</button>}
         </>
       }
     >
@@ -1644,9 +1672,17 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
         <>
           <button onClick={onClose} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/65 border border-white/[0.07] hover:text-white/95 hover:border-white/[0.12] transition-colors mr-auto">Cancelar</button>
           {stepIndex > 0 && <button onClick={goPrev} type="button" className="px-3.5 py-2.5 rounded-xl text-[12px] font-medium text-white/75 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-all">Voltar</button>}
-          {stepIndex < steps.length - 1 && <button onClick={goNext} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-all">Próximo</button>}
-          <button onClick={() => { onSave(buildData('paused')); onClose() }} disabled={!canSave} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar pausado</button>
-          <button onClick={() => { onSave(buildData('active')); onClose() }} disabled={!canSave} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold text-white bg-white/[0.95] hover:bg-white border border-white/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200" style={{ color: '#0b0d12' }}>{initial ? 'Salvar e ativar' : 'Criar e ativar'}</button>
+          {stepIndex < steps.length - 1 && (
+            <button
+              onClick={goNext}
+              disabled={!steps[stepIndex]?.valid}
+              title={!steps[stepIndex]?.valid ? 'Conclua este passo para avançar' : undefined}
+              type="button"
+              className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            >Próximo</button>
+          )}
+          {stepIndex === steps.length - 1 && <button onClick={() => { onSave(buildData('paused')); onClose() }} disabled={!canSave} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar pausado</button>}
+          {stepIndex === steps.length - 1 && <button onClick={() => { onSave(buildData('active')); onClose() }} disabled={!canSave} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold text-white bg-white/[0.95] hover:bg-white border border-white/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200" style={{ color: '#0b0d12' }}>{initial ? 'Salvar e ativar' : 'Criar e ativar'}</button>}
         </>
       }
     >
