@@ -1170,7 +1170,7 @@ function WizardStepHeader({ index, total, title, description, kicker }: { index:
 // numbered operational flow at the bottom. Avoids saturated colors;
 // uses neutral tones with single-color accents only when meaningful.
 type DraftStatus = 'draft' | 'paused' | 'active'
-function RadarInspectorPanel({ name, status, severity, scope, scopeFilter, matches, action, minConf, conditions, requireRichData, onlyLive, onlyPreMatch, currentStepLabel, totalSteps, currentStepIndex, canSave }: {
+function RadarInspectorPanel({ name, status, severity, scope, scopeFilter, matches, action, minConf, conditions, requireRichData, onlyLive, onlyPreMatch, excludeLeagues, excludeTeams, excludeMatches, currentStepLabel, totalSteps, currentStepIndex, canSave }: {
   name: string
   status: DraftStatus
   severity: 'critical' | 'attention' | 'info'
@@ -1183,6 +1183,9 @@ function RadarInspectorPanel({ name, status, severity, scope, scopeFilter, match
   requireRichData?: boolean
   onlyLive?: boolean
   onlyPreMatch?: boolean
+  excludeLeagues?: string[]
+  excludeTeams?: string[]
+  excludeMatches?: string[]
   currentStepLabel?: string
   totalSteps?: number
   currentStepIndex?: number
@@ -1261,6 +1264,25 @@ function RadarInspectorPanel({ name, status, severity, scope, scopeFilter, match
         </div>
       )}
 
+      {/* Exclusions block — exclusões têm prioridade sobre inclusões */}
+      {((excludeLeagues?.length || 0) + (excludeTeams?.length || 0) + (excludeMatches?.length || 0)) > 0 && (
+        <div className="px-4 py-3 border-b border-white/[0.05] space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-rose-300/75">Exclusões</span>
+            <span className="text-[10px] text-white/40">têm prioridade</span>
+          </div>
+          {excludeLeagues && excludeLeagues.length > 0 && (
+            <ExclusionRow label={`Exceto ${excludeLeagues.length} ${excludeLeagues.length === 1 ? 'liga' : 'ligas'}`} items={excludeLeagues} />
+          )}
+          {excludeTeams && excludeTeams.length > 0 && (
+            <ExclusionRow label={`Exceto ${excludeTeams.length} ${excludeTeams.length === 1 ? 'time' : 'times'}`} items={excludeTeams} />
+          )}
+          {excludeMatches && excludeMatches.length > 0 && (
+            <ExclusionRow label={`Exceto ${excludeMatches.length} ${excludeMatches.length === 1 ? 'partida' : 'partidas'}`} items={excludeMatches} truncatePerItem />
+          )}
+        </div>
+      )}
+
       {/* Flow */}
       <div className="px-4 py-4 border-b border-white/[0.05]">
         <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35 block mb-3">Fluxo operacional</span>
@@ -1291,6 +1313,23 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     <div className="flex items-center justify-between gap-2 text-[11.5px]">
       <dt className="text-white/45">{label}</dt>
       <dd className="text-right">{children}</dd>
+    </div>
+  )
+}
+
+// ExclusionRow — compact list of excluded entities with up-to-2 visible items + "+N" overflow.
+function ExclusionRow({ label, items, truncatePerItem }: { label: string; items: string[]; truncatePerItem?: boolean }) {
+  const visible = items.slice(0, 2)
+  const extra = items.length - visible.length
+  return (
+    <div className="space-y-1">
+      <p className="text-[11px] text-rose-200/80 font-medium">{label}</p>
+      <div className="flex flex-wrap gap-1">
+        {visible.map((it, i) => (
+          <span key={`${it}-${i}`} className={`text-[10px] font-medium px-1.5 py-0.5 rounded border bg-rose-500/[0.06] border-rose-300/20 text-rose-100/85 ${truncatePerItem ? 'truncate max-w-[160px]' : ''}`}>− {it}</span>
+        ))}
+        {extra > 0 && <span className="text-[10px] text-white/45">+{extra}</span>}
+      </div>
     </div>
   )
 }
@@ -1427,7 +1466,32 @@ function normalizeText(s: string): string {
 }
 
 // LeaguePicker — premium league picker with cards + search + selected summary.
-function LeaguePicker({ options, selected, onChange }: { options: ScopeKbLeague[]; selected: string[]; onChange: (v: string[]) => void }) {
+type ScopeMode = 'include' | 'exclude'
+
+// Shared visual palette so include/exclude pickers feel like one family with
+// a clear semantic difference.
+const SCOPE_PALETTE = {
+  include: {
+    pill: 'border-white/[0.08] bg-white/[0.04]',
+    cardActive: 'border-white/[0.18] bg-white/[0.04]',
+    radioOn: 'border-white/65 bg-white/85',
+    addLabel: (q: string) => `+ Adicionar "${q}" manualmente`,
+    addLabelMatch: (q: string) => `+ Adicionar partida manual: "${q}"`,
+    primaryActionTone: 'text-white/85',
+    statusActiveLabel: 'Selecionado',
+  },
+  exclude: {
+    pill: 'border-rose-300/25 bg-rose-500/[0.06]',
+    cardActive: 'border-rose-300/35 bg-rose-500/[0.06]',
+    radioOn: 'border-rose-300 bg-rose-300/85',
+    addLabel: (q: string) => `− Excluir "${q}" manualmente`,
+    addLabelMatch: (q: string) => `− Excluir partida manual: "${q}"`,
+    primaryActionTone: 'text-rose-200/90',
+    statusActiveLabel: 'Excluído',
+  },
+} as const
+
+function LeaguePicker({ options, selected, onChange, mode = 'include' }: { options: ScopeKbLeague[]; selected: string[]; onChange: (v: string[]) => void; mode?: ScopeMode }) {
   const [query, setQuery] = useState('')
   // Index for selected pills so they render with logos even if the list is huge.
   const lookup = useMemo(() => {
@@ -1456,30 +1520,39 @@ function LeaguePicker({ options, selected, onChange }: { options: ScopeKbLeague[
   }, [options, query])
 
   const noResultsButQuery = filtered.length === 0 && query.trim().length > 0
+  const palette = SCOPE_PALETTE[mode]
+  const headline = mode === 'exclude' ? 'Excluir ligas' : 'Selecionar ligas'
+  const description = mode === 'exclude'
+    ? 'Estas ligas serão ignoradas mesmo que outras regras batam. Exclusões têm prioridade.'
+    : 'Escolha em quais competições este radar pode atuar. As ligas atuais aparecem primeiro.'
+  const countLabel = mode === 'exclude'
+    ? `${selected.length} ${selected.length === 1 ? 'excluída' : 'excluídas'}`
+    : `${selected.length} ${selected.length === 1 ? 'selecionada' : 'selecionadas'}`
+  const clearLabel = mode === 'exclude' ? 'Limpar exclusões' : 'Limpar'
 
   return (
     <div className="rounded-xl border border-white/[0.07] bg-white/[0.008] overflow-hidden">
       <div className="px-4 pt-4 pb-3 border-b border-white/[0.05]">
         <div className="flex items-center gap-2 flex-wrap mb-1">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">Selecionar ligas</span>
-          <span className="text-[11px] text-white/55">{selected.length} {selected.length === 1 ? 'selecionada' : 'selecionadas'}</span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">{headline}</span>
+          <span className="text-[11px] text-white/55">{countLabel}</span>
           <span className="ml-auto text-[10px] text-white/35">{options.length} disponíveis</span>
         </div>
-        <p className="text-[11.5px] text-white/50 leading-snug">Escolha em quais competições este radar pode atuar. As ligas atuais aparecem primeiro.</p>
+        <p className="text-[11.5px] text-white/50 leading-snug">{description}</p>
         {selected.length > 0 && (
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             {selected.map(name => {
               const meta = lookup.get(normalizeText(name))
               return (
-                <span key={name} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] pl-1.5 pr-2 py-1">
+                <span key={name} className={`inline-flex items-center gap-1.5 rounded-lg border pl-1.5 pr-2 py-1 ${palette.pill}`}>
                   <EntityAvatar src={meta?.logo} name={name} size={16} square />
-                  <span className="text-[11px] font-medium text-white/90 max-w-[160px] truncate">{name}</span>
+                  <span className={`text-[11px] font-medium max-w-[160px] truncate ${mode === 'exclude' ? 'text-rose-100/90' : 'text-white/90'}`}>{name}</span>
                   {!meta && <span className="text-[9px] uppercase tracking-wider text-amber-300/75 font-medium">manual</span>}
                   <button onClick={() => toggle(name)} type="button" aria-label={`Remover ${name}`} className="text-white/40 hover:text-rose-300 transition-colors -mr-0.5">×</button>
                 </span>
               )
             })}
-            <button onClick={clearAll} type="button" className="ml-auto text-[10px] uppercase tracking-wider font-semibold text-white/45 hover:text-white/85 transition-colors">Limpar</button>
+            <button onClick={clearAll} type="button" className="ml-auto text-[10px] uppercase tracking-wider font-semibold text-white/45 hover:text-white/85 transition-colors">{clearLabel}</button>
           </div>
         )}
       </div>
@@ -1488,7 +1561,7 @@ function LeaguePicker({ options, selected, onChange }: { options: ScopeKbLeague[
           value={query}
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addManual(query) } }}
-          placeholder="Buscar liga ou país"
+          placeholder={mode === 'exclude' ? 'Buscar liga para excluir' : 'Buscar liga ou país'}
           className="w-full h-10 rounded-lg border border-white/[0.07] bg-white/[0.025] px-3.5 text-[13px] text-white/90 placeholder:text-white/30 outline-none focus:border-white/30 focus:bg-white/[0.04] transition-colors"
           aria-label="Buscar liga"
         />
@@ -1503,11 +1576,11 @@ function LeaguePicker({ options, selected, onChange }: { options: ScopeKbLeague[
               onClick={() => toggle(l.name)}
               type="button"
               aria-pressed={sel}
-              className={`group flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors duration-200 ${sel ? 'border-white/[0.18] bg-white/[0.04]' : 'border-white/[0.06] bg-white/[0.012] hover:border-white/[0.12] hover:bg-white/[0.022]'}`}
+              className={`group flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors duration-200 ${sel ? palette.cardActive : 'border-white/[0.06] bg-white/[0.012] hover:border-white/[0.12] hover:bg-white/[0.022]'}`}
             >
               <EntityAvatar src={l.logo} name={l.name} size={32} square />
               <div className="flex-1 min-w-0">
-                <p className="text-[12.5px] font-semibold text-white/90 truncate leading-tight">{l.name}</p>
+                <p className={`text-[12.5px] font-semibold truncate leading-tight ${sel && mode === 'exclude' ? 'text-rose-100/95' : 'text-white/90'}`}>{l.name}</p>
                 <div className="flex items-center gap-1.5 mt-0.5 text-[10.5px] text-white/45">
                   {l.country && <span className="truncate">{l.country}</span>}
                   {l.country && l.season && <span className="text-white/20">·</span>}
@@ -1515,16 +1588,17 @@ function LeaguePicker({ options, selected, onChange }: { options: ScopeKbLeague[
                   {!l.country && !l.season && <span className="text-white/30">Liga</span>}
                 </div>
               </div>
-              {isLive && <span className="text-[9px] font-medium uppercase tracking-wider text-white/45">Atual</span>}
-              <span aria-hidden className={`shrink-0 h-4 w-4 rounded-full border transition-colors ${sel ? 'border-white/65 bg-white/85' : 'border-white/25 bg-transparent group-hover:border-white/45'}`} />
+              {sel && <span className={`text-[9px] font-medium uppercase tracking-wider ${mode === 'exclude' ? 'text-rose-200/80' : 'text-white/55'}`}>{palette.statusActiveLabel}</span>}
+              {!sel && isLive && <span className="text-[9px] font-medium uppercase tracking-wider text-white/45">Atual</span>}
+              <span aria-hidden className={`shrink-0 h-4 w-4 rounded-full border transition-colors ${sel ? palette.radioOn : 'border-white/25 bg-transparent group-hover:border-white/45'}`} />
             </button>
           )
         })}
         {noResultsButQuery && (
           <div className="col-span-full rounded-xl border border-dashed border-white/[0.08] bg-white/[0.005] px-4 py-4 text-center">
             <p className="text-[12px] text-white/65">Nenhuma liga encontrada</p>
-            <button onClick={() => addManual(query)} type="button" className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-colors">
-              + Adicionar &ldquo;{query.trim()}&rdquo; manualmente
+            <button onClick={() => addManual(query)} type="button" className={`mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-colors ${palette.primaryActionTone}`}>
+              {palette.addLabel(query.trim())}
             </button>
             <p className="text-[10.5px] text-white/35 mt-2 leading-snug">Será usado por correspondência de nome.</p>
           </div>
@@ -1542,7 +1616,7 @@ function LeaguePicker({ options, selected, onChange }: { options: ScopeKbLeague[
 
 // TeamPicker — premium team picker with logos, league hint and selected summary.
 type TeamFilter = 'all' | 'live' | 'library'
-function TeamPicker({ options, selected, onChange }: { options: ScopeKbTeam[]; selected: string[]; onChange: (v: string[]) => void }) {
+function TeamPicker({ options, selected, onChange, mode = 'include' }: { options: ScopeKbTeam[]; selected: string[]; onChange: (v: string[]) => void; mode?: ScopeMode }) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<TeamFilter>('all')
 
@@ -1575,6 +1649,15 @@ function TeamPicker({ options, selected, onChange }: { options: ScopeKbTeam[]; s
   }, [options, query, filter])
 
   const noResultsButQuery = filtered.length === 0 && query.trim().length > 0
+  const palette = SCOPE_PALETTE[mode]
+  const headline = mode === 'exclude' ? 'Excluir times' : 'Selecionar times'
+  const description = mode === 'exclude'
+    ? 'Estes times serão ignorados mesmo que outras regras batam. Exclusões têm prioridade.'
+    : 'Escolha quais clubes este radar pode acompanhar.'
+  const countLabel = mode === 'exclude'
+    ? `${selected.length} ${selected.length === 1 ? 'excluído' : 'excluídos'}`
+    : `${selected.length} ${selected.length === 1 ? 'selecionado' : 'selecionados'}`
+  const clearLabel = mode === 'exclude' ? 'Limpar exclusões' : 'Limpar'
 
   const filterTabs: { key: TeamFilter; label: string }[] = [
     { key: 'all', label: 'Todos' },
@@ -1586,25 +1669,25 @@ function TeamPicker({ options, selected, onChange }: { options: ScopeKbTeam[]; s
     <div className="rounded-xl border border-white/[0.07] bg-white/[0.008] overflow-hidden">
       <div className="px-4 pt-4 pb-3 border-b border-white/[0.05]">
         <div className="flex items-center gap-2 flex-wrap mb-1">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">Selecionar times</span>
-          <span className="text-[11px] text-white/55">{selected.length} {selected.length === 1 ? 'selecionado' : 'selecionados'}</span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">{headline}</span>
+          <span className="text-[11px] text-white/55">{countLabel}</span>
           <span className="ml-auto text-[10px] text-white/35">{options.length} disponíveis</span>
         </div>
-        <p className="text-[11.5px] text-white/50 leading-snug">Escolha quais clubes este radar pode acompanhar.</p>
+        <p className="text-[11.5px] text-white/50 leading-snug">{description}</p>
         {selected.length > 0 && (
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             {selected.map(name => {
               const meta = lookup.get(normalizeText(name))
               return (
-                <span key={name} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] pl-1 pr-2 py-1">
+                <span key={name} className={`inline-flex items-center gap-1.5 rounded-lg border pl-1 pr-2 py-1 ${palette.pill}`}>
                   <EntityAvatar src={meta?.logo} name={name} size={18} />
-                  <span className="text-[11px] font-medium text-white/90 max-w-[140px] truncate">{name}</span>
+                  <span className={`text-[11px] font-medium max-w-[140px] truncate ${mode === 'exclude' ? 'text-rose-100/90' : 'text-white/90'}`}>{name}</span>
                   {!meta && <span className="text-[9px] uppercase tracking-wider text-amber-300/75 font-medium">manual</span>}
                   <button onClick={() => toggle(name)} type="button" aria-label={`Remover ${name}`} className="text-white/40 hover:text-rose-300 transition-colors -mr-0.5">×</button>
                 </span>
               )
             })}
-            <button onClick={clearAll} type="button" className="ml-auto text-[10px] uppercase tracking-wider font-semibold text-white/45 hover:text-white/85 transition-colors">Limpar</button>
+            <button onClick={clearAll} type="button" className="ml-auto text-[10px] uppercase tracking-wider font-semibold text-white/45 hover:text-white/85 transition-colors">{clearLabel}</button>
           </div>
         )}
       </div>
@@ -1613,7 +1696,7 @@ function TeamPicker({ options, selected, onChange }: { options: ScopeKbTeam[]; s
           value={query}
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addManual(query) } }}
-          placeholder="Buscar time ou clube"
+          placeholder={mode === 'exclude' ? 'Buscar time para excluir' : 'Buscar time ou clube'}
           className="flex-1 h-10 rounded-lg border border-white/[0.07] bg-white/[0.025] px-3.5 text-[13px] text-white/90 placeholder:text-white/30 outline-none focus:border-white/30 focus:bg-white/[0.04] transition-colors"
           aria-label="Buscar time"
         />
@@ -1638,25 +1721,26 @@ function TeamPicker({ options, selected, onChange }: { options: ScopeKbTeam[]; s
               onClick={() => toggle(t.name)}
               type="button"
               aria-pressed={sel}
-              className={`group flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors duration-200 ${sel ? 'border-white/[0.18] bg-white/[0.04]' : 'border-white/[0.06] bg-white/[0.012] hover:border-white/[0.12] hover:bg-white/[0.022]'}`}
+              className={`group flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors duration-200 ${sel ? palette.cardActive : 'border-white/[0.06] bg-white/[0.012] hover:border-white/[0.12] hover:bg-white/[0.022]'}`}
             >
               <EntityAvatar src={t.logo} name={t.name} size={30} />
               <div className="flex-1 min-w-0">
-                <p className="text-[12.5px] font-semibold text-white/90 truncate leading-tight">{t.name}</p>
+                <p className={`text-[12.5px] font-semibold truncate leading-tight ${sel && mode === 'exclude' ? 'text-rose-100/95' : 'text-white/90'}`}>{t.name}</p>
                 <div className="flex items-center gap-1.5 mt-0.5 text-[10.5px] text-white/45">
                   {t.league ? <span className="truncate">{t.league}</span> : <span className="text-white/30">Clube</span>}
                 </div>
               </div>
-              {isCurrent && <span className="text-[9px] font-medium uppercase tracking-wider text-white/45">Atual</span>}
-              <span aria-hidden className={`shrink-0 h-4 w-4 rounded-full border transition-colors ${sel ? 'border-white/65 bg-white/85' : 'border-white/25 bg-transparent group-hover:border-white/45'}`} />
+              {sel && <span className={`text-[9px] font-medium uppercase tracking-wider ${mode === 'exclude' ? 'text-rose-200/80' : 'text-white/55'}`}>{palette.statusActiveLabel}</span>}
+              {!sel && isCurrent && <span className="text-[9px] font-medium uppercase tracking-wider text-white/45">Atual</span>}
+              <span aria-hidden className={`shrink-0 h-4 w-4 rounded-full border transition-colors ${sel ? palette.radioOn : 'border-white/25 bg-transparent group-hover:border-white/45'}`} />
             </button>
           )
         })}
         {noResultsButQuery && (
           <div className="col-span-full rounded-xl border border-dashed border-white/[0.08] bg-white/[0.005] px-4 py-4 text-center">
             <p className="text-[12px] text-white/65">Nenhum time encontrado</p>
-            <button onClick={() => addManual(query)} type="button" className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-colors">
-              + Adicionar &ldquo;{query.trim()}&rdquo; manualmente
+            <button onClick={() => addManual(query)} type="button" className={`mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-colors ${palette.primaryActionTone}`}>
+              {palette.addLabel(query.trim())}
             </button>
             <p className="text-[10.5px] text-white/35 mt-2 leading-snug">Será usado por correspondência de nome.</p>
           </div>
@@ -1674,7 +1758,7 @@ function TeamPicker({ options, selected, onChange }: { options: ScopeKbTeam[]; s
 
 // MatchPicker — premium match cards with home/away crests, status, date.
 type MatchFilter = 'all' | 'live' | 'today' | 'soon' | 'finished'
-function MatchPicker({ options, selected, onChange }: { options: ScopeKbMatch[]; selected: string[]; onChange: (v: string[]) => void }) {
+function MatchPicker({ options, selected, onChange, mode = 'include' }: { options: ScopeKbMatch[]; selected: string[]; onChange: (v: string[]) => void; mode?: ScopeMode }) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<MatchFilter>('all')
 
@@ -1717,6 +1801,15 @@ function MatchPicker({ options, selected, onChange }: { options: ScopeKbMatch[];
   }, [options, query, filter])
 
   const noResultsButQuery = filtered.length === 0 && query.trim().length > 0
+  const palette = SCOPE_PALETTE[mode]
+  const headline = mode === 'exclude' ? 'Excluir partidas' : 'Selecionar partidas'
+  const description = mode === 'exclude'
+    ? 'Estas partidas serão ignoradas mesmo que outras regras batam. Exclusões têm prioridade.'
+    : 'Restrinja este radar a uma ou mais partidas individuais.'
+  const countLabel = mode === 'exclude'
+    ? `${selected.length} ${selected.length === 1 ? 'excluída' : 'excluídas'}`
+    : `${selected.length} ${selected.length === 1 ? 'selecionada' : 'selecionadas'}`
+  const clearLabel = mode === 'exclude' ? 'Limpar exclusões' : 'Limpar'
 
   const filterTabs: { key: MatchFilter; label: string }[] = [
     { key: 'all', label: 'Todas' },
@@ -1730,26 +1823,26 @@ function MatchPicker({ options, selected, onChange }: { options: ScopeKbMatch[];
     <div className="rounded-xl border border-white/[0.07] bg-white/[0.008] overflow-hidden">
       <div className="px-4 pt-4 pb-3 border-b border-white/[0.05]">
         <div className="flex items-center gap-2 flex-wrap mb-1">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">Selecionar partidas</span>
-          <span className="text-[11px] text-white/55">{selected.length} {selected.length === 1 ? 'selecionada' : 'selecionadas'}</span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">{headline}</span>
+          <span className="text-[11px] text-white/55">{countLabel}</span>
           <span className="ml-auto text-[10px] text-white/35">{options.length} disponíveis</span>
         </div>
-        <p className="text-[11.5px] text-white/50 leading-snug">Restrinja este radar a uma ou mais partidas individuais.</p>
+        <p className="text-[11.5px] text-white/50 leading-snug">{description}</p>
         {selected.length > 0 && (
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             {selected.map(id => {
               const meta = lookup.get(id)
               const label = meta ? `${meta.homeTeam} × ${meta.awayTeam}` : id
               return (
-                <span key={id} className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] pl-1 pr-2 py-1">
+                <span key={id} className={`inline-flex items-center gap-1.5 rounded-lg border pl-1 pr-2 py-1 ${palette.pill}`}>
                   {meta && <span className="flex items-center"><EntityAvatar src={meta.homeLogo} name={meta.homeTeam} size={14} /><EntityAvatar src={meta.awayLogo} name={meta.awayTeam} size={14} /></span>}
-                  <span className="text-[11px] font-medium text-white/90 max-w-[200px] truncate">{label}</span>
+                  <span className={`text-[11px] font-medium max-w-[200px] truncate ${mode === 'exclude' ? 'text-rose-100/90' : 'text-white/90'}`}>{label}</span>
                   {!meta && <span className="text-[9px] uppercase tracking-wider text-amber-300/75 font-medium">manual</span>}
                   <button onClick={() => toggle(id)} type="button" aria-label={`Remover ${label}`} className="text-white/40 hover:text-rose-300 transition-colors -mr-0.5">×</button>
                 </span>
               )
             })}
-            <button onClick={clearAll} type="button" className="ml-auto text-[10px] uppercase tracking-wider font-semibold text-white/45 hover:text-white/85 transition-colors">Limpar</button>
+            <button onClick={clearAll} type="button" className="ml-auto text-[10px] uppercase tracking-wider font-semibold text-white/45 hover:text-white/85 transition-colors">{clearLabel}</button>
           </div>
         )}
       </div>
@@ -1758,7 +1851,7 @@ function MatchPicker({ options, selected, onChange }: { options: ScopeKbMatch[];
           value={query}
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addManual(query) } }}
-          placeholder="Buscar por time, liga ou Home x Away"
+          placeholder={mode === 'exclude' ? 'Buscar partida para excluir' : 'Buscar por time, liga ou Home x Away'}
           className="flex-1 h-10 rounded-lg border border-white/[0.07] bg-white/[0.025] px-3.5 text-[13px] text-white/90 placeholder:text-white/30 outline-none focus:border-white/30 focus:bg-white/[0.04] transition-colors"
           aria-label="Buscar partida"
         />
@@ -1784,31 +1877,32 @@ function MatchPicker({ options, selected, onChange }: { options: ScopeKbMatch[];
               onClick={() => toggle(m.canonicalMatchId)}
               type="button"
               aria-pressed={sel}
-              className={`group w-full flex items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors duration-200 ${sel ? 'border-white/[0.18] bg-white/[0.04]' : 'border-white/[0.06] bg-white/[0.012] hover:border-white/[0.12] hover:bg-white/[0.022]'}`}
+              className={`group w-full flex items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors duration-200 ${sel ? palette.cardActive : 'border-white/[0.06] bg-white/[0.012] hover:border-white/[0.12] hover:bg-white/[0.022]'}`}
             >
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <EntityAvatar src={m.homeLogo} name={m.homeTeam} size={26} />
-                <span className="text-[12.5px] font-semibold text-white/90 truncate min-w-0 flex-1">{m.homeTeam}</span>
+                <span className={`text-[12.5px] font-semibold truncate min-w-0 flex-1 ${sel && mode === 'exclude' ? 'text-rose-100/95' : 'text-white/90'}`}>{m.homeTeam}</span>
                 <span className="text-[10px] text-white/30 font-medium tabular-nums">×</span>
-                <span className="text-[12.5px] font-semibold text-white/90 truncate min-w-0 flex-1">{m.awayTeam}</span>
+                <span className={`text-[12.5px] font-semibold truncate min-w-0 flex-1 ${sel && mode === 'exclude' ? 'text-rose-100/95' : 'text-white/90'}`}>{m.awayTeam}</span>
                 <EntityAvatar src={m.awayLogo} name={m.awayTeam} size={26} />
               </div>
               <div className="hidden sm:flex flex-col items-end shrink-0 gap-0.5 ml-2">
                 {m.league && <span className="text-[10.5px] text-white/45 truncate max-w-[140px]">{m.league}</span>}
                 <div className="flex items-center gap-1.5">
-                  {status && <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${status.tone}`}>{status.label}</span>}
+                  {sel && <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${mode === 'exclude' ? 'bg-rose-500/[0.08] text-rose-200/85 border-rose-300/20' : 'bg-white/[0.06] text-white/85 border-white/[0.1]'}`}>{palette.statusActiveLabel}</span>}
+                  {!sel && status && <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${status.tone}`}>{status.label}</span>}
                   {date && <span className="text-[10px] text-white/40 tabular-nums">{date}</span>}
                 </div>
               </div>
-              <span aria-hidden className={`shrink-0 h-4 w-4 rounded-full border transition-colors ${sel ? 'border-white/65 bg-white/85' : 'border-white/25 bg-transparent group-hover:border-white/45'}`} />
+              <span aria-hidden className={`shrink-0 h-4 w-4 rounded-full border transition-colors ${sel ? palette.radioOn : 'border-white/25 bg-transparent group-hover:border-white/45'}`} />
             </button>
           )
         })}
         {noResultsButQuery && (
           <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.005] px-4 py-4 text-center">
             <p className="text-[12px] text-white/65">Nenhuma partida encontrada</p>
-            <button onClick={() => addManual(query)} type="button" className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-colors">
-              + Adicionar partida manual: &ldquo;{query.trim()}&rdquo;
+            <button onClick={() => addManual(query)} type="button" className={`mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-colors ${palette.primaryActionTone}`}>
+              {palette.addLabelMatch(query.trim())}
             </button>
             <p className="text-[10.5px] text-white/35 mt-2 leading-snug">Será usada por correspondência textual.</p>
           </div>
@@ -1913,9 +2007,9 @@ function ScopePicker({ scope, scopeFilter, matches, excludeLeagues, excludeTeams
               <ToggleSettingRow title="Apenas ao vivo" description="Avalia somente partidas em andamento." checked={onlyLive} onChange={v => onAdvancedToggle('onlyLive', v)} />
               <ToggleSettingRow title="Apenas pré-jogo" description="Avalia somente partidas que ainda não começaram." checked={onlyPreMatch} onChange={v => onAdvancedToggle('onlyPreMatch', v)} />
             </div>
-            <ChipMultiPicker label="Excluir ligas" placeholder="Buscar liga para excluir" options={availableLeagues} selected={excludeLeagues} onChange={onExcludeLeaguesChange} emptyHint="Ligas adicionadas aqui serão ignoradas pelo radar." compact />
-            <ChipMultiPicker label="Excluir times" placeholder="Buscar time para excluir" options={availableTeams} selected={excludeTeams} onChange={onExcludeTeamsChange} emptyHint="Times adicionados aqui serão ignorados pelo radar." compact />
-            <MatchChipPicker label="Excluir partidas" placeholder="Buscar partida para excluir" options={availableMatches} selected={excludeMatches} onChange={onExcludeMatchesChange} compact />
+            <LeaguePicker mode="exclude" options={availableLeaguesRich} selected={excludeLeagues} onChange={onExcludeLeaguesChange} />
+            <TeamPicker mode="exclude" options={availableTeamsRich} selected={excludeTeams} onChange={onExcludeTeamsChange} />
+            <MatchPicker mode="exclude" options={availableMatches} selected={excludeMatches} onChange={onExcludeMatchesChange} />
           </div>
         )}
       </div>
@@ -2353,6 +2447,9 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
             requireRichData={requireRichData}
             onlyLive={onlyLive}
             onlyPreMatch={onlyPreMatch}
+            excludeLeagues={excludeLeagues}
+            excludeTeams={excludeTeams}
+            excludeMatches={excludeMatches}
             currentStepLabel={steps[stepIndex]?.label}
             totalSteps={steps.length}
             currentStepIndex={stepIndex}
@@ -2673,6 +2770,9 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableLeagues, 
             requireRichData={requireRichData}
             onlyLive={onlyLive}
             onlyPreMatch={onlyPreMatch}
+            excludeLeagues={excludeLeagues}
+            excludeTeams={excludeTeams}
+            excludeMatches={excludeMatches}
             currentStepLabel={steps[stepIndex]?.label}
             totalSteps={steps.length}
             currentStepIndex={stepIndex}
@@ -2856,6 +2956,22 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
       const k = norm(l.name)
       if (!map.has(k)) map.set(k, l)
     }
+    // Also pick up league names referenced inside KB matches so leagues we
+    // only know through past matches still show up in the picker.
+    for (const m of getKnownMatches()) {
+      if (!m.league) continue
+      const k = norm(m.league)
+      if (!map.has(k)) {
+        map.set(k, {
+          id: m.league,
+          name: m.league,
+          logo: m.leagueLogo || null,
+          provider: m.provider,
+          lastSeen: m.lastSeen,
+          countSeen: 0,
+        })
+      }
+    }
     // Pattern-only references (no metadata) come last so they don't override richer data
     for (const p of patterns) {
       const refs = [...(p.scope === 'specific_leagues' && p.scopeFilter ? p.scopeFilter : []), ...(p.excludeLeagues || [])]
@@ -2903,6 +3019,26 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
     for (const t of getKnownTeamsRich()) {
       const k = norm(t.name)
       if (!map.has(k)) map.set(k, t)
+    }
+    // Pick up teams that only show up inside KB matches (home/away strings),
+    // ensuring the team picker has full coverage even for clubs that we know
+    // only via past matches.
+    for (const m of getKnownMatches()) {
+      for (const teamName of [m.homeTeam, m.awayTeam]) {
+        if (!teamName) continue
+        const k = norm(teamName)
+        if (!map.has(k)) {
+          map.set(k, {
+            id: teamName,
+            name: teamName,
+            logo: teamName === m.homeTeam ? (m.homeLogo || null) : (m.awayLogo || null),
+            league: m.league,
+            provider: m.provider,
+            lastSeen: m.lastSeen,
+            countSeen: 0,
+          })
+        }
+      }
     }
     for (const p of patterns) {
       const refs = [...(p.scope === 'specific_teams' && p.scopeFilter ? p.scopeFilter : []), ...(p.excludeTeams || [])]
@@ -3197,6 +3333,11 @@ function ConfiguredRadarRow({ pattern, triggeredAlerts, onToggle, onEdit, onDupl
             {pattern.onlyLive && <span>· ao vivo</span>}
             {pattern.onlyPreMatch && <span>· pré-jogo</span>}
             {pattern.requireRichData && <span>· dados ricos</span>}
+            {(() => {
+              const exCount = (pattern.excludeLeagues?.length || 0) + (pattern.excludeTeams?.length || 0) + (pattern.excludeMatches?.length || 0)
+              if (exCount === 0) return null
+              return <span className="text-rose-200/80">· exceto {exCount} {exCount === 1 ? 'item' : 'itens'}</span>
+            })()}
             {hits > 0 && <span>· <span className="text-white/85 font-semibold">{hits}</span> {hits === 1 ? 'disparo' : 'disparos'}</span>}
             {lastHit && <span>· Último {new Date(lastHit).toLocaleDateString('pt-BR')}</span>}
           </div>
