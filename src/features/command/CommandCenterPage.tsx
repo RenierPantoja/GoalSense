@@ -11,7 +11,7 @@ import { storeFixtureForNavigation } from '@/lib/matchNavigation'
 import { ClubLogo } from '@/components/ui/ClubLogo'
 import { FavoriteButton } from '@/components/ui/FavoriteButton'
 import { useFavorites } from '@/context/FavoritesContext'
-import { useAlerts } from '@/context/AlertsContext'
+import { useAlerts, type CommandCenterAlert } from '@/context/AlertsContext'
 import { useViewMode } from '@/context/ViewModeContext'
 import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
 import { getMatchImportanceScore } from '@/utils/matchImportance'
@@ -19,6 +19,7 @@ import { usePatterns } from './contexts/PatternContext'
 import { evaluateAllPatterns } from './intelligence/patternEvaluator'
 import { runAutoDiscovery, type AutoDiscovery } from './intelligence/autoDiscoveryEngine'
 import { resolveAlert } from './intelligence/patternResolutionEngine'
+import { buildPatternHealth, isReviewableHealth, HEALTH_TONE, type PatternHealth } from './intelligence/patternHealthEngine'
 import { buildPreMatchOutcomeSummary } from '@/services/intelligence/preMatchOutcomePerformance'
 import { recordScopeEntities, getKnownLeagues, getKnownTeams, getKnownMatches, getKnownLeaguesRich, getKnownTeamsRich, type ScopeKbMatch, type ScopeKbLeague, type ScopeKbTeam } from '@/services/intelligence/scopeKnowledgeBase'
 import { isLiveFx, detectChanges, type ChangeEvent } from './commandHelpers'
@@ -341,10 +342,10 @@ export function CommandCenterPage() {
 
       {/* ═══ CONTENT ═══ */}
       {activeTab === 'cockpit' && <CockpitView hasIntelligence={hasIntelligence} decisionMatch={decisionMatch} decisionHit={decisionHit} decisionDiscovery={decisionDiscovery} patternHits={patternHits} discoveries={discoveries} changes={changes} fixtures={fixtures} openMatch={openMatch} isAdvanced={isAdvanced} activePatternCount={activePatternCount} enabledCount={enabledCount} triggeredAlerts={getRecentTriggered(5)} onGoToPatterns={() => setActiveTab('patterns')} navigate={navigate} templates={templates} createFromTemplate={createFromTemplate} />}
-      {activeTab === 'patterns' && <PatternsView patterns={patterns} templates={templates} createFromTemplate={createFromTemplate} createPattern={createPattern} updatePattern={updatePattern} togglePattern={togglePattern} deletePattern={deletePattern} isAdvanced={isAdvanced} showBuilder={showBuilder} setShowBuilder={setShowBuilder} discoveryConfig={discoveryConfig} updateDiscoveryConfig={updateDiscoveryConfig} triggeredAlerts={triggeredAlerts} fixtures={fixtures} prefilledDraft={prefilledDraft} clearPrefilledDraft={() => setPrefilledDraft(null)} />}
+      {activeTab === 'patterns' && <PatternsView patterns={patterns} templates={templates} createFromTemplate={createFromTemplate} createPattern={createPattern} updatePattern={updatePattern} togglePattern={togglePattern} deletePattern={deletePattern} isAdvanced={isAdvanced} showBuilder={showBuilder} setShowBuilder={setShowBuilder} discoveryConfig={discoveryConfig} updateDiscoveryConfig={updateDiscoveryConfig} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} fixtures={fixtures} prefilledDraft={prefilledDraft} clearPrefilledDraft={() => setPrefilledDraft(null)} />}
       {activeTab === 'scanner' && <ScannerView hasIntelligence={hasIntelligence} entries={scannerEntries} openMatch={openMatch} isAdvanced={isAdvanced} onGoToPatterns={() => setActiveTab('patterns')} patterns={patterns} />}
       {activeTab === 'alerts' && <AlertsView triggeredAlerts={getRecentTriggered(30)} isAdvanced={isAdvanced} openMatch={openMatch} fixtures={fixtures} navigate={navigate} />}
-      {activeTab === 'performance' && <PerformanceView patterns={patterns} triggeredAlerts={triggeredAlerts} isAdvanced={isAdvanced} />}
+      {activeTab === 'performance' && <PerformanceView patterns={patterns} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} isAdvanced={isAdvanced} />}
     </div>
   )
 }
@@ -2825,7 +2826,7 @@ function AutoDiscoveryConfigModal({ open, config, onClose, onChange, onActivate,
 }
 
 // ═══ PATTERN STUDIO (PatternsView)
-function PatternsView({ patterns, templates, createFromTemplate, createPattern, updatePattern, togglePattern, deletePattern, isAdvanced, showBuilder, setShowBuilder, discoveryConfig, updateDiscoveryConfig, triggeredAlerts, fixtures, prefilledDraft, clearPrefilledDraft }: { patterns: Pattern[]; templates: PatternTemplate[]; createFromTemplate: (id: string) => Pattern | null; createPattern: (p: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => Pattern; updatePattern: (id: string, patch: Partial<Pattern>) => void; togglePattern: (id: string) => void; deletePattern: (id: string) => void; isAdvanced: boolean; showBuilder: boolean; setShowBuilder: (v: boolean) => void; discoveryConfig: AutoDiscoveryConfig; updateDiscoveryConfig: (p: Partial<AutoDiscoveryConfig>) => void; triggeredAlerts: TriggeredAlert[]; fixtures: LiveFixture[]; prefilledDraft: Pattern | null; clearPrefilledDraft: () => void }) {
+function PatternsView({ patterns, templates, createFromTemplate, createPattern, updatePattern, togglePattern, deletePattern, isAdvanced, showBuilder, setShowBuilder, discoveryConfig, updateDiscoveryConfig, triggeredAlerts, commandAlerts, fixtures, prefilledDraft, clearPrefilledDraft }: { patterns: Pattern[]; templates: PatternTemplate[]; createFromTemplate: (id: string) => Pattern | null; createPattern: (p: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>) => Pattern; updatePattern: (id: string, patch: Partial<Pattern>) => void; togglePattern: (id: string) => void; deletePattern: (id: string) => void; isAdvanced: boolean; showBuilder: boolean; setShowBuilder: (v: boolean) => void; discoveryConfig: AutoDiscoveryConfig; updateDiscoveryConfig: (p: Partial<AutoDiscoveryConfig>) => void; triggeredAlerts: TriggeredAlert[]; commandAlerts: CommandCenterAlert[]; fixtures: LiveFixture[]; prefilledDraft: Pattern | null; clearPrefilledDraft: () => void }) {
   const [showAutoConfig, setShowAutoConfig] = useState(false)
   const [editingPattern, setEditingPattern] = useState<Pattern | null>(null)
   const [templateModal, setTemplateModal] = useState<{ template: PatternTemplate; existing: Pattern | null } | null>(null)
@@ -3037,6 +3038,25 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
   const pausedCount = patterns.filter(p => p.status === 'paused').length
   const triggeredTodayCount = triggeredAlerts.filter(t => t.timestamp.startsWith(new Date().toISOString().split('T')[0])).length
 
+  // V3.17 — health snapshot per pattern, derived from real triggered alerts
+  // and command-center alerts. Used by ConfiguredRadarRow, the "para revisar"
+  // section, and the templates panel.
+  const cmdAlertsForHealth = useMemo(
+    () => commandAlerts.map(a => ({ patternId: a.patternId, status: a.status, confidence: a.confidence, timestamp: a.createdAt })),
+    [commandAlerts]
+  )
+  const healthByPattern = useMemo(() => {
+    const m = new Map<string, PatternHealth>()
+    for (const p of patterns) m.set(p.id, buildPatternHealth(p, triggeredAlerts, cmdAlertsForHealth))
+    return m
+  }, [patterns, triggeredAlerts, cmdAlertsForHealth])
+
+  const reviewablePatterns = useMemo(() => {
+    return patterns
+      .map(p => ({ pattern: p, health: healthByPattern.get(p.id)! }))
+      .filter(x => x.health && isReviewableHealth(x.health.status))
+  }, [patterns, healthByPattern])
+
   const visibleTemplates = useMemo(() => {
     const q = templateSearch.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     return templates.filter(t => {
@@ -3108,6 +3128,26 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
       {/* Scope intelligence — compact panel showing the Knowledge Base footprint */}
       <ScopeHealthPanel availableLeagues={availableLeagues} availableTeams={availableTeams} availableMatches={availableMatches} fixturesCount={fixtures.length} patternsCount={patterns.length} />
 
+      {/* Radares para revisar — only renders when there are real signals */}
+      {reviewablePatterns.length > 0 && (
+        <section className="rounded-2xl border border-amber-300/15 bg-amber-500/[0.025] p-5">
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200/85">Radares para revisar</span>
+            <span className="text-[11px] text-white/55">{reviewablePatterns.length} {reviewablePatterns.length === 1 ? 'radar' : 'radares'} pedindo atenção</span>
+          </div>
+          <div className="space-y-2">
+            {reviewablePatterns.map(({ pattern: p, health }) => (
+              <ReviewableRow
+                key={p.id}
+                pattern={p}
+                health={health}
+                onEdit={() => { setEditingPattern(p); setShowBuilder(true) }}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Radares configurados */}
       {patterns.length > 0 ? (
         <section>
@@ -3119,7 +3159,7 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
             <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} type="button" className="text-[11px] font-medium text-white/65 hover:text-white/95 transition-colors flex items-center gap-1"><Plus size={11} />Novo radar</button>
           </div>
           <div className="space-y-2">
-            {patterns.map(p => <ConfiguredRadarRow key={p.id} pattern={p} triggeredAlerts={triggeredAlerts} onToggle={() => togglePattern(p.id)} onEdit={() => { setEditingPattern(p); setShowBuilder(true) }} onDuplicate={() => { createPattern({ ...p, name: `${p.name} (cópia)`, status: 'paused', isTemplate: false, templateId: undefined }) }} onDelete={() => deletePattern(p.id)} isAdvanced={isAdvanced} />)}
+            {patterns.map(p => <ConfiguredRadarRow key={p.id} pattern={p} health={healthByPattern.get(p.id)} triggeredAlerts={triggeredAlerts} onToggle={() => togglePattern(p.id)} onEdit={() => { setEditingPattern(p); setShowBuilder(true) }} onDuplicate={() => { createPattern({ ...p, name: `${p.name} (cópia)`, status: 'paused', isTemplate: false, templateId: undefined }) }} onDelete={() => deletePattern(p.id)} isAdvanced={isAdvanced} />)}
           </div>
         </section>
       ) : (
@@ -3179,7 +3219,8 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
             {visibleTemplates.map(t => {
               const existing = patterns.find(p => p.templateId === t.id) || null
               const isActiveTpl = !!existing && existing.status === 'active'
-              return <TemplateCard key={t.id} template={t} existing={existing} isActive={isActiveTpl} onToggle={() => handleTemplateToggle(t)} onConfigure={() => handleTemplateConfigure(t)} />
+              const tplHealth = existing ? healthByPattern.get(existing.id) : undefined
+              return <TemplateCard key={t.id} template={t} existing={existing} isActive={isActiveTpl} health={tplHealth} onToggle={() => handleTemplateToggle(t)} onConfigure={() => handleTemplateConfigure(t)} />
             })}
           </div>
         )}
@@ -3189,12 +3230,19 @@ function PatternsView({ patterns, templates, createFromTemplate, createPattern, 
 }
 
 // ═══ TEMPLATE CARD
-function TemplateCard({ template, existing, isActive, onToggle, onConfigure }: { template: PatternTemplate; existing: Pattern | null; isActive: boolean; onToggle: () => void; onConfigure: () => void }) {
+function TemplateCard({ template, existing, isActive, health, onToggle, onConfigure }: { template: PatternTemplate; existing: Pattern | null; isActive: boolean; health?: PatternHealth; onToggle: () => void; onConfigure: () => void }) {
   const cat = categorizeTemplate(template)
   const sevDot = template.severity === 'critical' ? 'bg-rose-300/85' : template.severity === 'attention' ? 'bg-amber-300/85' : 'bg-cyan-300/85'
   const sevLabel = template.severity === 'critical' ? 'Crítico' : template.severity === 'attention' ? 'Atenção' : 'Info'
+  const healthTone = health ? HEALTH_TONE[health.status] : null
+  // Border tone: rosé/amber for issues, soft emerald for healthy, neutral otherwise
+  const borderTone = health
+    ? (health.status === 'noisy' || health.status === 'underperforming' || health.status === 'needs_review' ? 'border-amber-300/25'
+      : health.status === 'healthy' ? 'border-emerald-300/25'
+      : 'border-white/[0.07]')
+    : 'border-white/[0.07]'
   return (
-    <div className={`group rounded-2xl border bg-white/[0.012] p-4 transition-colors duration-200 hover:border-white/[0.14] ${isActive ? 'border-emerald-300/25' : 'border-white/[0.07]'}`}>
+    <div className={`group rounded-2xl border bg-white/[0.012] p-4 transition-colors duration-200 hover:border-white/[0.14] ${borderTone}`}>
       <div className="flex items-start justify-between gap-3 mb-2.5">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1.5 text-[10px]">
@@ -3204,8 +3252,16 @@ function TemplateCard({ template, existing, isActive, onToggle, onConfigure }: {
             </span>
             <span className="text-white/20">·</span>
             <span className="text-white/45 font-medium">{CATEGORY_LABELS[cat]}</span>
-            {isActive && <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider text-emerald-300/80">Ativo</span>}
-            {existing && existing.status === 'paused' && <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider text-white/45">Pausado</span>}
+            {health && healthTone ? (
+              <span className={`ml-auto inline-flex items-center gap-1 text-[9.5px] font-medium ${healthTone.text}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${healthTone.dot}`} />
+                {health.label}
+              </span>
+            ) : isActive ? (
+              <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider text-emerald-300/80">Ativo</span>
+            ) : existing && existing.status === 'paused' ? (
+              <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider text-white/45">Pausado</span>
+            ) : null}
           </div>
           <h4 className="text-[13.5px] font-semibold text-white/95 leading-tight tracking-tight">{template.name}</h4>
         </div>
@@ -3224,6 +3280,44 @@ function TemplateCard({ template, existing, isActive, onToggle, onConfigure }: {
       </div>
     </div>
   )
+}
+
+// ═══ REVIEWABLE ROW — compact item for the "Radares para revisar" section.
+// Shows the radar name, the health label, the reason in plain Portuguese,
+// up to 3 actionable recommendations and an Edit shortcut. Tone is amber.
+function ReviewableRow({ pattern, health, onEdit }: { pattern: Pattern; health: PatternHealth; onEdit: () => void }) {
+  const tone = HEALTH_TONE[health.status]
+  return (
+    <div className="rounded-xl border border-white/[0.07] bg-white/[0.012] px-4 py-3 flex items-start gap-3">
+      <span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${tone.dot}`} aria-hidden />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap mb-0.5">
+          <h4 className="text-[12.5px] font-semibold text-white/95 truncate">{pattern.name}</h4>
+          <span className={`text-[10px] font-medium ${tone.text}`}>{health.label}</span>
+        </div>
+        <p className={`text-[11.5px] leading-snug ${tone.text}`}>{health.reason}</p>
+        {health.recommendations.length > 0 && (
+          <ul className="mt-1.5 space-y-0.5">
+            {health.recommendations.slice(0, 3).map((r, i) => (
+              <li key={i} className="text-[11px] text-white/65 leading-snug">· {r}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <button onClick={onEdit} type="button" className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-colors">Editar</button>
+    </div>
+  )
+}
+
+// ═══ HEALTH BREAKDOWN CHIP — used inside the advanced-mode of ConfiguredRadarRow.
+function HealthBreakdownChip({ label, value, tone }: { label: string; value: number; tone: 'emerald' | 'cyan' | 'rose' | 'amber' | 'white' }) {
+  if (value === 0) return null
+  const cls = tone === 'emerald' ? 'text-emerald-200/85 bg-emerald-500/[0.05] border-emerald-400/15'
+    : tone === 'cyan' ? 'text-cyan-200/85 bg-cyan-500/[0.05] border-cyan-400/15'
+    : tone === 'rose' ? 'text-rose-200/85 bg-rose-500/[0.05] border-rose-400/15'
+    : tone === 'amber' ? 'text-amber-200/85 bg-amber-500/[0.05] border-amber-400/15'
+    : 'text-white/65 bg-white/[0.04] border-white/[0.07]'
+  return <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border ${cls}`}><span className="font-semibold tabular-nums">{value}</span><span>{label}</span></span>
 }
 
 // ═══ SCOPE HEALTH PANEL — small premium panel showing Scope KB footprint
@@ -3287,12 +3381,13 @@ function describePatternScope(p: Pattern): string[] {
   return parts
 }
 
-function ConfiguredRadarRow({ pattern, triggeredAlerts, onToggle, onEdit, onDuplicate, onDelete, isAdvanced }: { pattern: Pattern; triggeredAlerts: TriggeredAlert[]; onToggle: () => void; onEdit: () => void; onDuplicate: () => void; onDelete: () => void; isAdvanced: boolean }) {
+function ConfiguredRadarRow({ pattern, health, triggeredAlerts, onToggle, onEdit, onDuplicate, onDelete, isAdvanced }: { pattern: Pattern; health?: PatternHealth; triggeredAlerts: TriggeredAlert[]; onToggle: () => void; onEdit: () => void; onDuplicate: () => void; onDelete: () => void; isAdvanced: boolean }) {
   const isActive = pattern.status === 'active'
   const lastHit = triggeredAlerts.find(t => t.patternId === pattern.id)?.timestamp || null
   const hits = triggeredAlerts.filter(t => t.patternId === pattern.id).length
   const sevTone = pattern.severity === 'critical' ? 'bg-rose-500/12 text-rose-300 border-rose-400/20' : pattern.severity === 'attention' ? 'bg-amber-500/12 text-amber-300 border-amber-400/20' : 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15'
   const origin = pattern.isTemplate || pattern.templateId ? 'Template' : 'Personalizado'
+  const healthTone = health ? HEALTH_TONE[health.status] : null
 
   return (
     <div className={`rounded-2xl border ${isActive ? 'border-white/[0.08]' : 'border-white/[0.05] opacity-75'} bg-white/[0.012] px-5 py-4`}>
@@ -3305,6 +3400,12 @@ function ConfiguredRadarRow({ pattern, triggeredAlerts, onToggle, onEdit, onDupl
             <h4 className="text-[13px] font-bold text-white/95 truncate">{pattern.name}</h4>
             <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${sevTone}`}>{pattern.severity === 'critical' ? 'Crítico' : pattern.severity === 'attention' ? 'Atenção' : 'Info'}</span>
             <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-white/[0.04] text-white/65 border border-white/[0.07]">{origin}</span>
+            {health && healthTone && (
+              <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md border ${healthTone.bg} ${healthTone.border} ${healthTone.text}`} title={health.reason}>
+                <span className={`h-1.5 w-1.5 rounded-full ${healthTone.dot}`} />
+                {health.label}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-x-3 gap-y-1 text-[11px] text-white/55 flex-wrap">
             <span>{pattern.conditions.length} {pattern.conditions.length === 1 ? 'condição' : 'condições'}</span>
@@ -3322,6 +3423,9 @@ function ConfiguredRadarRow({ pattern, triggeredAlerts, onToggle, onEdit, onDupl
             {hits > 0 && <span>· <span className="text-white/85 font-semibold">{hits}</span> {hits === 1 ? 'disparo' : 'disparos'}</span>}
             {lastHit && <span>· Último {new Date(lastHit).toLocaleDateString('pt-BR')}</span>}
           </div>
+          {health && health.reason && (
+            <p className={`text-[11px] mt-1 ${healthTone?.text ?? 'text-white/55'} leading-snug`}>{health.reason}</p>
+          )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <button onClick={onEdit} type="button" className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/65 hover:text-white/95 hover:bg-white/[0.05] transition-colors">Editar</button>
@@ -3373,6 +3477,35 @@ function ConfiguredRadarRow({ pattern, triggeredAlerts, onToggle, onEdit, onDupl
           <div className="text-[10px] text-white/45 font-mono">
             id:{pattern.id.slice(0, 12)} · template:{pattern.templateId || 'custom'} · max/jogo:{pattern.maxTriggersPerMatch} · anti-dup:{pattern.antiDuplicateWindow}min
           </div>
+          {health && (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                <span className="text-white/45 uppercase tracking-wider font-semibold">Resoluções:</span>
+                <HealthBreakdownChip label="confirmadas" value={health.confirmedCount} tone="emerald" />
+                <HealthBreakdownChip label="parciais" value={health.partialCount} tone="cyan" />
+                <HealthBreakdownChip label="falhas" value={health.failedCount} tone="rose" />
+                <HealthBreakdownChip label="sem dados" value={health.unknownCount} tone="amber" />
+                <HealthBreakdownChip label="expiradas" value={health.expiredCount} tone="white" />
+                <HealthBreakdownChip label="pendentes" value={health.pendingCount} tone="white" />
+                {health.hitRate !== null && (
+                  <span className="text-[10px] text-white/65">· Confirmação <span className="text-white/95 font-semibold tabular-nums">{Math.round(health.hitRate * 100)}%</span></span>
+                )}
+                {health.avgConfidence !== null && (
+                  <span className="text-[10px] text-white/65">· Confiança média <span className="text-white/95 font-semibold tabular-nums">{health.avgConfidence}%</span></span>
+                )}
+              </div>
+              {health.recommendations.length > 0 && (
+                <div className="flex items-start gap-1.5 flex-wrap text-[10.5px]">
+                  <span className="text-amber-200/80 uppercase tracking-wider font-semibold text-[9.5px] mt-px">Sugestões:</span>
+                  <ul className="flex-1 space-y-0.5 min-w-0">
+                    {health.recommendations.map((r, i) => (
+                      <li key={i} className="text-white/65 leading-snug">· {r}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -3789,8 +3922,21 @@ function AlertRow({ t, fx, openMatch, isAdvanced }: { t: TriggeredAlert; fx?: Li
 }
 
 // ═══ PERFORMANCE ═══
-function PerformanceView({ patterns, triggeredAlerts, isAdvanced }: { patterns: Pattern[]; triggeredAlerts: TriggeredAlert[]; isAdvanced: boolean }) {
-  const stats = useMemo(() => patterns.map(p => { const a = triggeredAlerts.filter(t => t.patternId === p.id); const confirmed = a.filter(t => t.status === 'confirmed').length; const partial = a.filter(t => t.status === 'confirmed_partial').length; const failed = a.filter(t => t.status === 'failed').length; const expired = a.filter(t => t.status === 'expired').length; const unknown = a.filter(t => t.status === 'unknown').length; const resolved = confirmed + failed; const hitRate = resolved >= 5 ? Math.round((confirmed / resolved) * 100) : null; const avgConf = a.length > 0 ? Math.round(a.reduce((s, x) => s + x.confidence, 0) / a.length) : null; const needsReview = (unknown > 3 && unknown > confirmed) || (resolved >= 5 && (hitRate ?? 100) < 30); const reviewReason = unknown > 3 ? 'Muitos alertas sem dados' : (resolved >= 5 && (hitRate ?? 100) < 30) ? 'Taxa baixa' : ''; return { pattern: p, total: a.length, confirmed, partial, failed, expired, unknown, resolved, hitRate, avgConf, lastHit: a[0]?.timestamp || null, needsReview, reviewReason } }), [patterns, triggeredAlerts])
+function PerformanceView({ patterns, triggeredAlerts, commandAlerts, isAdvanced }: { patterns: Pattern[]; triggeredAlerts: TriggeredAlert[]; commandAlerts: CommandCenterAlert[]; isAdvanced: boolean }) {
+  // V3.17 — derive every per-pattern stat from the same Pattern Health engine
+  // used by the Pattern Studio. Single source of truth for status, hit rate,
+  // recommendations and review labels.
+  const cmdAlertsForHealth = useMemo(
+    () => commandAlerts.map(a => ({ patternId: a.patternId, status: a.status, confidence: a.confidence, timestamp: a.createdAt })),
+    [commandAlerts]
+  )
+  const stats = useMemo(() => {
+    return patterns.map(p => ({
+      pattern: p,
+      health: buildPatternHealth(p, triggeredAlerts, cmdAlertsForHealth),
+      lastHit: triggeredAlerts.find(t => t.patternId === p.id)?.timestamp || null,
+    }))
+  }, [patterns, triggeredAlerts, cmdAlertsForHealth])
 
   const totalDispatched = triggeredAlerts.length
   const totalConfirmed = triggeredAlerts.filter(t => t.status === 'confirmed').length
@@ -3802,7 +3948,7 @@ function PerformanceView({ patterns, triggeredAlerts, isAdvanced }: { patterns: 
   const overallHitRate = totalResolved >= 5 ? Math.round((totalConfirmed / totalResolved) * 100) : null
   const avgConfidence = triggeredAlerts.length > 0 ? Math.round(triggeredAlerts.reduce((s, t) => s + t.confidence, 0) / triggeredAlerts.length) : null
   const activePatterns = patterns.filter(p => p.status === 'active').length
-  const patternsNeedingReview = stats.filter(s => s.needsReview)
+  const reviewable = stats.filter(s => isReviewableHealth(s.health.status))
 
   if (patterns.length === 0) {
     return (
@@ -3847,14 +3993,14 @@ function PerformanceView({ patterns, triggeredAlerts, isAdvanced }: { patterns: 
         </header>
 
         {/* Patterns needing review */}
-        {patternsNeedingReview.length > 0 && (
-          <section className="rounded-2xl border border-amber-500/15 bg-gradient-to-br from-amber-500/[0.04] via-transparent to-transparent p-5">
-            <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-300 mb-3">Padrões para revisar</h4>
+        {reviewable.length > 0 && (
+          <section className="rounded-2xl border border-amber-300/15 bg-amber-500/[0.025] p-5">
+            <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-200/85 mb-3">Padrões para revisar</h4>
             <div className="space-y-2">
-              {patternsNeedingReview.map(s => (
+              {reviewable.map(s => (
                 <div key={s.pattern.id} className="flex items-center justify-between gap-3 text-[12px]">
                   <span className="text-white/85 font-semibold truncate">{s.pattern.name}</span>
-                  <span className="text-amber-300/80 text-[11px] font-medium shrink-0">{s.reviewReason}</span>
+                  <span className={`text-[11px] font-medium shrink-0 ${HEALTH_TONE[s.health.status].text}`}>{s.health.label} · {s.health.reason}</span>
                 </div>
               ))}
             </div>
@@ -3865,7 +4011,7 @@ function PerformanceView({ patterns, triggeredAlerts, isAdvanced }: { patterns: 
         <section>
           <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/55 mb-3">Por padrão</h4>
           <div className="space-y-2">
-            {stats.map(s => <PatternStatRow key={s.pattern.id} s={s} isAdvanced={isAdvanced} />)}
+            {stats.map(s => <PatternStatRow key={s.pattern.id} stat={s} isAdvanced={isAdvanced} />)}
           </div>
         </section>
 
@@ -3879,7 +4025,7 @@ function PerformanceView({ patterns, triggeredAlerts, isAdvanced }: { patterns: 
           <div className="space-y-2">
             <SidebarRow label="Resoluções válidas" value={totalResolved} tone={totalResolved >= 5 ? 'emerald' : 'amber'} />
             <SidebarRow label="Padrões ativos" value={activePatterns} tone="cyan" />
-            <SidebarRow label="Padrões para revisar" value={patternsNeedingReview.length} tone={patternsNeedingReview.length > 0 ? 'amber' : 'white'} />
+            <SidebarRow label="Padrões para revisar" value={reviewable.length} tone={reviewable.length > 0 ? 'amber' : 'white'} />
           </div>
         </div>
         <div className="rounded-2xl border border-white/[0.06] bg-gradient-to-br from-cyan-500/[0.03] via-transparent to-transparent p-4">
@@ -3902,22 +4048,29 @@ function PerformanceView({ patterns, triggeredAlerts, isAdvanced }: { patterns: 
   )
 }
 
-function PatternStatRow({ s, isAdvanced }: { s: { pattern: Pattern; total: number; confirmed: number; partial: number; failed: number; expired: number; unknown: number; resolved: number; hitRate: number | null; avgConf: number | null; lastHit: string | null; needsReview: boolean; reviewReason: string }; isAdvanced: boolean }) {
-  const total = Math.max(s.total, 1)
-  const confirmedPct = (s.confirmed / total) * 100
-  const partialPct = (s.partial / total) * 100
-  const failedPct = (s.failed / total) * 100
-  const sampleStatus = s.resolved >= 5 ? 'utilizável' : s.resolved >= 2 ? 'em observação' : 'insuficiente'
-  const sampleTone = s.resolved >= 5 ? 'text-emerald-300' : s.resolved >= 2 ? 'text-cyan-300' : 'text-white/55'
+function PatternStatRow({ stat, isAdvanced }: { stat: { pattern: Pattern; health: PatternHealth; lastHit: string | null }; isAdvanced: boolean }) {
+  const { pattern, health, lastHit } = stat
+  const total = Math.max(health.sampleSize, 1)
+  const confirmedPct = (health.confirmedCount / total) * 100
+  const partialPct = (health.partialCount / total) * 100
+  const failedPct = (health.failedCount / total) * 100
+  const sampleStatus = health.resolvedCount >= 5 ? 'utilizável' : health.resolvedCount >= 2 ? 'em observação' : 'insuficiente'
+  const sampleTone = health.resolvedCount >= 5 ? 'text-emerald-300' : health.resolvedCount >= 2 ? 'text-cyan-300' : 'text-white/55'
+  const healthTone = HEALTH_TONE[health.status]
+  const hitRatePct = health.hitRate !== null ? Math.round(health.hitRate * 100) : null
 
   return (
     <div className="rounded-2xl border border-white/[0.05] bg-gradient-to-r from-white/[0.012] to-white/[0.005] px-5 py-4">
-      <div className="flex items-center justify-between gap-3 mb-2.5">
-        <span className="text-[13px] font-bold text-white/90 truncate flex-1">{s.pattern.name}</span>
-        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${s.pattern.status === 'active' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-400/15' : 'bg-white/[0.04] text-white/45 border border-white/[0.06]'}`}>{s.pattern.status === 'active' ? 'Ativo' : 'Pausado'}</span>
+      <div className="flex items-center justify-between gap-3 mb-2.5 flex-wrap">
+        <span className="text-[13px] font-bold text-white/90 truncate flex-1 min-w-0">{pattern.name}</span>
+        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${pattern.status === 'active' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-400/15' : 'bg-white/[0.04] text-white/45 border border-white/[0.06]'}`}>{pattern.status === 'active' ? 'Ativo' : 'Pausado'}</span>
+        <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md border ${healthTone.bg} ${healthTone.border} ${healthTone.text}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${healthTone.dot}`} />
+          {health.label}
+        </span>
         <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-white/[0.04] ${sampleTone} border border-white/[0.06] whitespace-nowrap`}>{sampleStatus}</span>
       </div>
-      {s.total > 0 && (
+      {health.sampleSize > 0 && (
         <div className="h-1.5 rounded-full bg-white/[0.04] overflow-hidden flex mb-2.5">
           <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all" style={{ width: `${confirmedPct}%` }} />
           <div className="h-full bg-gradient-to-r from-cyan-500 to-cyan-400 transition-all" style={{ width: `${partialPct}%` }} />
@@ -3925,24 +4078,34 @@ function PatternStatRow({ s, isAdvanced }: { s: { pattern: Pattern; total: numbe
         </div>
       )}
       <div className="flex items-center gap-3 text-[11px] text-white/65 flex-wrap">
-        <span><span className="text-white/85 font-bold tabular-nums">{s.total}</span> disparos</span>
-        <span className="text-emerald-300">✓ {s.confirmed}</span>
-        {s.partial > 0 && <span className="text-cyan-300">~ {s.partial}</span>}
-        {s.failed > 0 && <span className="text-rose-300">✗ {s.failed}</span>}
-        {s.expired > 0 && <span className="text-white/45">⏱ {s.expired}</span>}
-        {s.hitRate !== null ? (
-          <span className="ml-auto text-[12px] font-bold tabular-nums text-emerald-300">Taxa {s.hitRate}%</span>
+        <span><span className="text-white/85 font-bold tabular-nums">{health.sampleSize}</span> disparos</span>
+        {health.confirmedCount > 0 && <span className="text-emerald-300">✓ {health.confirmedCount}</span>}
+        {health.partialCount > 0 && <span className="text-cyan-300">~ {health.partialCount}</span>}
+        {health.failedCount > 0 && <span className="text-rose-300">✗ {health.failedCount}</span>}
+        {health.expiredCount > 0 && <span className="text-white/45">⏱ {health.expiredCount}</span>}
+        {health.unknownCount > 0 && <span className="text-amber-200/80">? {health.unknownCount}</span>}
+        {hitRatePct !== null ? (
+          <span className="ml-auto text-[12px] font-bold tabular-nums text-emerald-300">Taxa {hitRatePct}%</span>
         ) : (
-          <span className="ml-auto text-[10px] text-white/45 font-medium">Amostra {s.resolved}/5</span>
+          <span className="ml-auto text-[10px] text-white/45 font-medium">Amostra {health.resolvedCount}/5</span>
         )}
       </div>
       <div className="flex items-center gap-3 text-[11px] text-white/45 mt-1.5 flex-wrap">
-        {s.avgConf !== null && <span>Confiança média: <span className="text-white/75 font-semibold tabular-nums">{s.avgConf}%</span></span>}
-        {s.lastHit && <span>Último: {new Date(s.lastHit).toLocaleDateString('pt-BR')}</span>}
+        {health.avgConfidence !== null && <span>Confiança média: <span className="text-white/75 font-semibold tabular-nums">{health.avgConfidence}%</span></span>}
+        {lastHit && <span>Último: {new Date(lastHit).toLocaleDateString('pt-BR')}</span>}
+        {health.reason && <span className={`${healthTone.text}`}>· {health.reason}</span>}
       </div>
+      {isAdvanced && health.recommendations.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-white/[0.04]">
+          <span className="text-[9.5px] uppercase tracking-wider text-amber-200/80 font-semibold">Sugestões</span>
+          <ul className="mt-1 space-y-0.5">
+            {health.recommendations.map((r, i) => <li key={i} className="text-[11px] text-white/65 leading-snug">· {r}</li>)}
+          </ul>
+        </div>
+      )}
       {isAdvanced && (
-        <div className="mt-2 pt-2 border-t border-white/[0.04] text-[10px] text-white/45 font-mono">
-          ✓{s.confirmed} · ~{s.partial} · ✗{s.failed} · ⏱{s.expired} · ?{s.unknown}
+        <div className="mt-2 text-[10px] text-white/45 font-mono">
+          ✓{health.confirmedCount} · ~{health.partialCount} · ✗{health.failedCount} · ⏱{health.expiredCount} · ?{health.unknownCount} · pendentes:{health.pendingCount}
         </div>
       )}
     </div>
