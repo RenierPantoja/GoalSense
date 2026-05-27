@@ -120,7 +120,7 @@ export interface OperationalDecision {
   confidence: 'alta' | 'média' | 'baixa'
 }
 
-export function getOperationalDecision(fx: LiveFixture, isFavoriteTeam: (n: string) => boolean, hasAlert: boolean): OperationalDecision {
+export function getOperationalDecision(fx: LiveFixture, isFavoriteTeam: (n: string) => boolean, _hasAlert: boolean): OperationalDecision {
   const live = isLiveFx(fx)
   const isFav = isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name)
   const elapsed = fx.status.elapsed || 0

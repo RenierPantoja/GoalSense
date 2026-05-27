@@ -253,7 +253,6 @@ export function evaluatePattern(
 
   const matched = results.filter(r => r.result === true).length
   const unavailable = results.filter(r => r.result === null).length
-  const failed = results.filter(r => r.result === false).length
   const total = results.length
 
   // Need at least 60% of evaluable conditions to match

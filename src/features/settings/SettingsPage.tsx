@@ -1,7 +1,7 @@
 /**
  * Settings page — displays user preferences, mode, favorites summary.
  */
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Zap, Heart, Trash2, Globe2, Database, Shield, Bell, HardDrive } from 'lucide-react'
 import { useFavorites } from '@/context/FavoritesContext'
 import { useViewMode } from '@/context/ViewModeContext'
@@ -10,10 +10,14 @@ import { getGoalSenseStorageStats, cleanupExpiredCache, clearPreMatchCache, clea
 
 export function SettingsPage() {
   const { teams, leagues, matches, clearAll, hasAnyFavorite } = useFavorites()
-  const { mode, toggleMode, isAdvanced } = useViewMode()
+  const { toggleMode, isAdvanced } = useViewMode()
   const { totalCount: alertCount, enabledCount: alertsEnabled, clearAllAlerts } = useAlerts()
   const [confirmClear, setConfirmClear] = useState(false)
   const [confirmClearAlerts, setConfirmClearAlerts] = useState(false)
+  // Single source of truth for storage stats so any cleanup action triggers a
+  // synchronised refresh across the storage and scope-library sections.
+  const [stats, setStats] = useState(() => getGoalSenseStorageStats())
+  const refreshStats = useCallback(() => setStats(getGoalSenseStorageStats()), [])
 
   return (
     <div className="max-w-[600px] mx-auto space-y-6">
@@ -83,7 +87,7 @@ export function SettingsPage() {
             ) : (
               <div className="flex items-center gap-3">
                 <span className="text-[11px] text-rose-400/70">Tem certeza?</span>
-                <button onClick={() => { clearAll(); setConfirmClear(false) }} className="px-3 py-1 rounded-lg text-[10px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">Sim, limpar</button>
+                <button onClick={() => { clearAll(); setConfirmClear(false); refreshStats() }} className="px-3 py-1 rounded-lg text-[10px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">Sim, limpar</button>
                 <button onClick={() => setConfirmClear(false)} className="px-3 py-1 rounded-lg text-[10px] font-medium text-white/30 border border-white/[0.06]">Cancelar</button>
               </div>
             )}
@@ -111,7 +115,7 @@ export function SettingsPage() {
             ) : (
               <div className="flex items-center gap-3">
                 <span className="text-[11px] text-rose-400/70">Tem certeza?</span>
-                <button onClick={() => { clearAllAlerts(); setConfirmClearAlerts(false) }} className="px-3 py-1 rounded-lg text-[10px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">Sim, limpar</button>
+                <button onClick={() => { clearAllAlerts(); setConfirmClearAlerts(false); refreshStats() }} className="px-3 py-1 rounded-lg text-[10px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">Sim, limpar</button>
                 <button onClick={() => setConfirmClearAlerts(false)} className="px-3 py-1 rounded-lg text-[10px] font-medium text-white/30 border border-white/[0.06]">Cancelar</button>
               </div>
             )}
@@ -120,8 +124,8 @@ export function SettingsPage() {
       </div>
 
       {/* Storage Management */}
-      <StorageSection />
-      <ScopeLibrarySection />
+      <StorageSection stats={stats} refreshStats={refreshStats} />
+      <ScopeLibrarySection stats={stats} refreshStats={refreshStats} />
 
       {/* System info */}
       <div className="rounded-[18px] border border-white/[0.05] bg-white/[0.015] p-5 space-y-4">
@@ -161,13 +165,17 @@ export function SettingsPage() {
 }
 
 
-function StorageSection() {
-  const [stats, setStats] = useState(() => getGoalSenseStorageStats())
+interface StorageSectionProps {
+  stats: ReturnType<typeof getGoalSenseStorageStats>
+  refreshStats: () => void
+}
+
+function StorageSection({ stats, refreshStats }: StorageSectionProps) {
   const [confirmAll, setConfirmAll] = useState(false)
   const [feedback, setFeedback] = useState('')
 
-  const refresh = () => setStats(getGoalSenseStorageStats())
   const showFeedback = (msg: string) => { setFeedback(msg); setTimeout(() => setFeedback(''), 3000) }
+  const runWithFeedback = (op: () => void, msg: string) => { op(); refreshStats(); showFeedback(msg) }
 
   return (
     <div className="gs-card space-y-4">
@@ -186,11 +194,11 @@ function StorageSection() {
       </div>
 
       <div className="pt-3 border-t border-white/[0.04] space-y-2">
-        <button onClick={() => { const n = cleanupExpiredCache(); refresh(); showFeedback(`${n} caches expirados removidos`) }} className="flex items-center gap-2 text-[11px] text-white/40 hover:text-white/60 transition-colors" type="button"><Trash2 size={11} />Limpar cache expirado</button>
-        <button onClick={() => { clearPreMatchCache(); refresh(); showFeedback('Cache de pré-jogo limpo') }} className="flex items-center gap-2 text-[11px] text-white/40 hover:text-white/60 transition-colors" type="button"><Trash2 size={11} />Limpar cache de pré-jogo</button>
-        <button onClick={() => { clearKnowledgeBase(); refresh(); showFeedback('Knowledge Base limpa') }} className="flex items-center gap-2 text-[11px] text-white/40 hover:text-white/60 transition-colors" type="button"><Trash2 size={11} />Limpar Knowledge Base</button>
-        <button onClick={() => { clearOutcomes(); refresh(); showFeedback('Outcomes removidos') }} className="flex items-center gap-2 text-[11px] text-white/40 hover:text-white/60 transition-colors" type="button"><Trash2 size={11} />Limpar outcomes</button>
-        <button onClick={() => { clearTriggeredAlerts(); refresh(); showFeedback('Alertas disparados limpos') }} className="flex items-center gap-2 text-[11px] text-white/40 hover:text-white/60 transition-colors" type="button"><Trash2 size={11} />Limpar alertas disparados</button>
+        <button onClick={() => { const n = cleanupExpiredCache(); refreshStats(); showFeedback(`${n} caches expirados removidos`) }} className="flex items-center gap-2 text-[11px] text-white/40 hover:text-white/60 transition-colors" type="button"><Trash2 size={11} />Limpar cache expirado</button>
+        <button onClick={() => runWithFeedback(clearPreMatchCache, 'Cache de pré-jogo limpo')} className="flex items-center gap-2 text-[11px] text-white/40 hover:text-white/60 transition-colors" type="button"><Trash2 size={11} />Limpar cache de pré-jogo</button>
+        <button onClick={() => runWithFeedback(clearKnowledgeBase, 'Knowledge Base limpa')} className="flex items-center gap-2 text-[11px] text-white/40 hover:text-white/60 transition-colors" type="button"><Trash2 size={11} />Limpar Knowledge Base</button>
+        <button onClick={() => runWithFeedback(clearOutcomes, 'Outcomes removidos')} className="flex items-center gap-2 text-[11px] text-white/40 hover:text-white/60 transition-colors" type="button"><Trash2 size={11} />Limpar outcomes</button>
+        <button onClick={() => runWithFeedback(clearTriggeredAlerts, 'Alertas disparados limpos')} className="flex items-center gap-2 text-[11px] text-white/40 hover:text-white/60 transition-colors" type="button"><Trash2 size={11} />Limpar alertas disparados</button>
       </div>
 
       <div className="pt-3 border-t border-white/[0.04]">
@@ -200,7 +208,7 @@ function StorageSection() {
           <div className="rounded-xl bg-rose-500/[0.04] border border-rose-500/15 p-3">
             <p className="text-[11px] text-rose-400/70 mb-2">Isso remove cache, Knowledge Base, outcomes, alertas locais, padrões e favoritos salvos neste navegador.</p>
             <div className="flex gap-2">
-              <button onClick={() => { clearAllGoalSense(); refresh(); setConfirmAll(false); showFeedback('Todos os dados GoalSense removidos') }} className="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/25" type="button">Confirmar limpeza total</button>
+              <button onClick={() => { clearAllGoalSense(); refreshStats(); setConfirmAll(false); showFeedback('Todos os dados GoalSense removidos') }} className="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/25" type="button">Confirmar limpeza total</button>
               <button onClick={() => setConfirmAll(false)} className="px-3 py-1.5 rounded-lg text-[10px] text-white/30 border border-white/[0.06]" type="button">Cancelar</button>
             </div>
           </div>
@@ -216,11 +224,9 @@ function StatBox({ label, value }: { label: string; value: number }) {
   return (<div className="rounded-lg bg-white/[0.02] border border-white/[0.04] px-3 py-2 text-center"><span className="text-[14px] font-bold text-white/60 block">{value}</span><span className="text-[9px] text-white/30">{label}</span></div>)
 }
 
-function ScopeLibrarySection() {
-  const [stats, setStats] = useState(() => getGoalSenseStorageStats())
+function ScopeLibrarySection({ stats, refreshStats }: StorageSectionProps) {
   const [confirm, setConfirm] = useState(false)
   const [feedback, setFeedback] = useState('')
-  const refresh = () => setStats(getGoalSenseStorageStats())
   const showFeedback = (msg: string) => { setFeedback(msg); setTimeout(() => setFeedback(''), 3000) }
 
   const total = stats.scopeLeagues + stats.scopeTeams + stats.scopeMatches
@@ -247,12 +253,12 @@ function ScopeLibrarySection() {
       </div>
 
       <div className="pt-3 border-t border-white/[0.04] flex items-center gap-3 flex-wrap">
-        <button onClick={refresh} className="flex items-center gap-2 text-[11px] text-white/55 hover:text-white/85 transition-colors" type="button">Atualizar stats</button>
+        <button onClick={refreshStats} className="flex items-center gap-2 text-[11px] text-white/55 hover:text-white/85 transition-colors" type="button">Atualizar stats</button>
         {!confirm ? (
           <button onClick={() => setConfirm(true)} disabled={total === 0} className="flex items-center gap-2 text-[11px] text-rose-400/65 hover:text-rose-300 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" type="button"><Trash2 size={11} />Limpar biblioteca de escopo</button>
         ) : (
           <div className="flex items-center gap-2">
-            <button onClick={() => { clearScopeKb(); refresh(); setConfirm(false); showFeedback('Biblioteca de escopo limpa') }} className="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-rose-500/15 text-rose-300 border border-rose-400/25" type="button">Confirmar</button>
+            <button onClick={() => { clearScopeKb(); refreshStats(); setConfirm(false); showFeedback('Biblioteca de escopo limpa') }} className="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-rose-500/15 text-rose-300 border border-rose-400/25" type="button">Confirmar</button>
             <button onClick={() => setConfirm(false)} className="px-3 py-1.5 rounded-lg text-[10px] text-white/55 border border-white/[0.07]" type="button">Cancelar</button>
           </div>
         )}

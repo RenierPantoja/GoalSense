@@ -25,7 +25,7 @@ interface SignalInput {
 }
 
 export function buildCommandSignals(input: SignalInput): CommandSignal[] {
-  const { liveMatches, mainMatches, favoriteMatches, activeAlerts, soonMatches, isFavoriteTeam } = input
+  const { liveMatches, activeAlerts, soonMatches, isFavoriteTeam } = input
   const signals: CommandSignal[] = []
 
   // Favorite live

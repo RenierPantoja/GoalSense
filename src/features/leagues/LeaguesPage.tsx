@@ -43,10 +43,14 @@ export function LeaguesPage() {
   const [selectedLeague, setSelectedLeague] = useState<Competition | null>(null)
   const [standings, setStandings] = useState<StandingTeam[]>([])
   const [standingsLoading, setStandingsLoading] = useState(false)
+  // Bumped by the "Tentar novamente" button so the original effect refetches
+  // through the same code path (no parallel partial fetch).
+  const [reloadKey, setReloadKey] = useState(0)
   const { isFavoriteLeague, toggleFavoriteLeague } = useFavorites()
 
   useEffect(() => {
     setLoading(true)
+    setError(null)
     fetch('/api/football-data-competitions', { cache: 'no-store' })
       .then(async r => {
         const j = await r.json()
@@ -60,7 +64,7 @@ export function LeaguesPage() {
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
-  }, [])
+  }, [reloadKey])
 
   const filtered = useMemo(() => {
     let list = competitions.filter(c => c.type === 'LEAGUE' || c.type === 'CUP')
@@ -147,7 +151,13 @@ export function LeaguesPage() {
 
       {/* Content */}
       {loading && <div className="space-y-3">{[1,2,3,4,5].map(i => <div key={i} className="h-16 rounded-2xl bg-white/[0.02] animate-pulse" />)}</div>}
-      {error && <div className="rounded-2xl border border-rose-500/15 bg-rose-500/5 p-5 text-[12px] text-rose-400">{error}</div>}
+      {error && (
+        <div className="rounded-2xl border border-rose-500/15 bg-rose-500/5 p-5 text-center">
+          <p className="text-[13px] text-rose-400/80 font-medium">Não foi possível carregar as competições</p>
+          <p className="text-[11px] text-white/35 mt-1">{error}</p>
+          <button onClick={() => setReloadKey(k => k + 1)} type="button" className="mt-3 px-4 py-1.5 rounded-xl text-[10px] font-medium text-cyan-400/70 border border-cyan-500/20 hover:bg-cyan-500/5 transition-colors">Tentar novamente</button>
+        </div>
+      )}
 
       {!loading && !error && filtered.length === 0 && (
         <div className="gs-empty">
