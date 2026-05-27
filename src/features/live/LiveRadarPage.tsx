@@ -14,6 +14,7 @@ import { ClubLogo } from '@/components/ui/ClubLogo'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { sortByAttention, calculateAttention } from './attentionQueue'
 import { sortByFeaturedRanking, scoreLiveMatchForFeature } from './liveMatchRanking'
+import { isTrulyLiveFixture, filterTrulyLiveFixtures } from '@/lib/liveFixtureGuard'
 import { LiveScannerTable, type FixtureStats } from './LiveScannerTable'
 import { QUICK_SCANNERS } from './liveQuickScanners'
 import { useLiveWatchlist } from './useLiveWatchlist'
@@ -83,11 +84,7 @@ export function LiveRadarPage() {
 
   // Fetch stats for all live fixtures (used by Summary, Scanner, Inspector, Foco)
   useEffect(() => {
-    const lf = (allFixtures || []).filter((fx: LiveFixture) => {
-      if (isLiveStatus(fx.status.short)) return true
-      const raw = fx.raw || ''
-      return raw.includes('FIRST_HALF') || raw.includes('SECOND_HALF') || raw.includes('IN_PROGRESS') || raw.includes('HALFTIME')
-    })
+    const lf = (allFixtures || []).filter((fx: LiveFixture) => isTrulyLiveFixture(fx))
     if (lf.length === 0) return
     const fetchStats = async () => {
       const batch = lf.slice(0, 20)
@@ -127,15 +124,13 @@ export function LiveRadarPage() {
 
   const fixtures = allFixtures || []
 
-  const liveFixtures = useMemo(() => {
-    return fixtures.filter((fx) => {
-      if (isLiveStatus(fx.status.short)) return true
-      const raw = fx.raw || ''
-      if (raw.includes('FIRST_HALF') || raw.includes('SECOND_HALF') || raw.includes('IN_PROGRESS') || raw.includes('HALFTIME')) return true
-      // ESPN state field (returned by espn-live function)
-      if ((fx as any).status?.state === 'in' || (fx as any)._state === 'in') return true
-      return false
-    })
+  const { liveFixtures, rejectedCount } = useMemo(() => {
+    // V2.6 integrity: use central guard that validates both status AND date
+    const { live, rejected } = filterTrulyLiveFixtures(fixtures)
+    if (rejected.length > 0 && import.meta.env.DEV) {
+      console.debug(`[LiveRadar] Rejected ${rejected.length} fixtures:`, rejected.map(r => ({ name: `${r.fixture.homeTeam.name} vs ${r.fixture.awayTeam.name}`, reasons: r.reasons })))
+    }
+    return { liveFixtures: live, rejectedCount: rejected.length }
   }, [fixtures])
 
   const upcomingFixtures = useMemo(() => {
@@ -228,7 +223,7 @@ export function LiveRadarPage() {
             <div>
               <h1 className="text-[22px] font-bold tracking-tight text-white">Ao vivo</h1>
               <p className="text-[12px] text-white/35 mt-0.5">
-                {liveFixtures.length > 0 ? `${liveFixtures.length} partidas ao vivo` : 'Monitorando partidas em tempo real'}
+                {liveFixtures.length > 0 ? `${liveFixtures.length} partidas ao vivo` : 'Nenhuma partida ao vivo agora.'}
                 {lastUpdate && ` · ${lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
               </p>
             </div>
