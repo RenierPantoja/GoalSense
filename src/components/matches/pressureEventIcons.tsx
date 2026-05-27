@@ -312,27 +312,26 @@ export interface PressureEventIconBoxProps {
 }
 
 // Per-type internal radius hint (in user units within the 32x32 viewBox).
-// Cards and VAR are wider/taller than circular icons, so we tune them
-// individually so the rendered glyph fills the sizePx box pleasantly.
+// V2.6A: increased across the board so glyphs fill the larger sizePx boxes.
 function internalSizeFor(type: PressureGraphEventType): number {
   switch (type) {
     case 'goal':
     case 'own_goal':
     case 'penalty_scored':
     case 'penalty_missed':
-      return 11
+      return 13
     case 'yellow_card':
     case 'red_card':
     case 'second_yellow':
-      return 9.5
+      return 11
     case 'shot_on_target':
     case 'shot_off_target':
     case 'substitution':
-      return 10
+      return 11.5
     case 'var':
-      return 7.5
+      return 9
     default:
-      return 8
+      return 9
   }
 }
 
@@ -394,7 +393,7 @@ function renderIconBox(type: PressureGraphEventType, size: number, teamAccent?: 
     case 'penalty_scored': return <SoccerBallBox size={size} variant="penalty_scored" />
     case 'penalty_missed': return <SoccerBallBox size={size} variant="penalty_missed" />
     case 'shot_on_target': return <BadgedLucideSvg nodes={LUCIDE_TARGET} size={size} accent="#22d3ee" haloOpacity={0.18} />
-    case 'shot_off_target': return <BadgedLucideSvg nodes={LUCIDE_GOAL} size={size} accent="#cbd5e1" haloOpacity={0.10} dimmed />
+    case 'shot_off_target': return <GoalpostIcon size={size} />
     case 'yellow_card': return <CardIcon size={size} variant="yellow" />
     case 'red_card': return <CardIcon size={size} variant="red" />
     case 'second_yellow': return <CardIcon size={size} variant="second_yellow" />
@@ -405,46 +404,96 @@ function renderIconBox(type: PressureGraphEventType, size: number, teamAccent?: 
   }
 }
 
-// Local copy that uses the box SVG's blur filter id.
+// V2.6A: Redesigned soccer ball — simpler, bolder, instantly recognizable.
+// At 30px the old version had too many thin lines. This version uses a single
+// bold pentagon + 5 radiating lines, thick stroke, strong contrast.
 function SoccerBallBox(props: { size: number; variant: 'goal' | 'own_goal' | 'penalty_scored' | 'penalty_missed'; teamAccent?: string }) {
   const { size: r, variant, teamAccent } = props
-  const color = variant === 'own_goal'
-    ? '#fda4af'
-    : variant === 'penalty_scored'
-      ? '#a5f3fc'
-      : '#f8fafc'
-  const stroke = variant === 'own_goal'
-    ? '#9f1239'
-    : variant === 'penalty_scored'
-      ? '#0e7490'
-      : '#0f172a'
+  const ballFill = variant === 'own_goal' ? '#fecdd3' : variant === 'penalty_scored' ? '#cffafe' : '#ffffff'
+  const panelFill = variant === 'own_goal' ? '#881337' : variant === 'penalty_scored' ? '#155e75' : '#1e293b'
+  const strokeColor = variant === 'own_goal' ? '#9f1239' : variant === 'penalty_scored' ? '#0e7490' : '#334155'
   const haloColor = teamAccent
     ? `#${teamAccent}`
-    : variant === 'own_goal'
-      ? '#f43f5e'
-      : '#22d3ee'
+    : variant === 'own_goal' ? '#f43f5e' : '#22d3ee'
+
+  // Pentagon vertices (centered, radius ~45% of ball)
+  const pr = r * 0.42
+  const pentPoints = Array.from({ length: 5 }, (_, i) => {
+    const angle = (i * 72 - 90) * (Math.PI / 180)
+    return { x: Math.cos(angle) * pr, y: Math.sin(angle) * pr }
+  })
+  const pentPath = pentPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ') + ' Z'
 
   return (
     <g>
-      <circle r={r * 1.45} fill={haloColor} opacity="0.18" />
-      <ellipse cx={0} cy={r * 0.18} rx={r * 0.95} ry={r * 0.32} fill="rgba(0,0,0,0.32)" filter="url(#gs-blur-soft-box)" />
-      <circle r={r} fill={color} stroke={stroke} strokeWidth={Math.max(0.5, r * 0.085)} />
-      <g stroke={stroke} strokeWidth={Math.max(0.4, r * 0.07)} fill="none" strokeLinecap="round" opacity="0.9">
-        <path d={`M ${-r * 0.42} ${-r * 0.18} L 0 ${-r * 0.55} L ${r * 0.42} ${-r * 0.18}`} />
-        <path d={`M ${-r * 0.42} ${-r * 0.18} L ${-r * 0.28} ${r * 0.45}`} />
-        <path d={`M ${r * 0.42} ${-r * 0.18} L ${r * 0.28} ${r * 0.45}`} />
-        <path d={`M ${-r * 0.28} ${r * 0.45} L ${r * 0.28} ${r * 0.45}`} />
+      {/* Halo for goals */}
+      {(variant === 'goal' || variant === 'penalty_scored' || variant === 'own_goal') && (
+        <circle r={r * 1.5} fill={haloColor} opacity="0.22" />
+      )}
+      {/* Drop shadow */}
+      <ellipse cx={0} cy={r * 0.2} rx={r * 0.85} ry={r * 0.28} fill="rgba(0,0,0,0.35)" filter="url(#gs-blur-soft-box)" />
+      {/* Ball body */}
+      <circle r={r} fill={ballFill} stroke={strokeColor} strokeWidth={Math.max(0.8, r * 0.09)} />
+      {/* Central pentagon (filled dark) */}
+      <path d={pentPath} fill={panelFill} stroke={strokeColor} strokeWidth={Math.max(0.5, r * 0.06)} strokeLinejoin="round" />
+      {/* 5 lines from pentagon vertices outward */}
+      <g stroke={strokeColor} strokeWidth={Math.max(0.6, r * 0.07)} strokeLinecap="round">
+        {pentPoints.map((p, i) => {
+          const outerAngle = (i * 72 - 90) * (Math.PI / 180)
+          const ox = Math.cos(outerAngle) * r * 0.85
+          const oy = Math.sin(outerAngle) * r * 0.85
+          return <line key={i} x1={p.x} y1={p.y} x2={ox} y2={oy} />
+        })}
       </g>
-      <ellipse cx={-r * 0.4} cy={-r * 0.4} rx={r * 0.3} ry={r * 0.18} fill="rgba(255,255,255,0.55)" />
+      {/* Highlight */}
+      <ellipse cx={-r * 0.35} cy={-r * 0.35} rx={r * 0.28} ry={r * 0.16} fill="rgba(255,255,255,0.5)" />
+      {/* Penalty badge */}
       {variant === 'penalty_scored' && (
-        <g transform={`translate(${r * 0.6} ${-r * 0.6})`}>
-          <circle r={r * 0.42} fill="#22d3ee" stroke="#0b1218" strokeWidth="0.4" />
-          <text textAnchor="middle" dy={r * 0.18} fontSize={r * 0.6} fontWeight="800" fill="#0b1218" fontFamily="-apple-system, system-ui, sans-serif">P</text>
+        <g transform={`translate(${r * 0.65} ${-r * 0.65})`}>
+          <circle r={r * 0.38} fill="#22d3ee" stroke="#0b1218" strokeWidth="0.5" />
+          <text textAnchor="middle" dy={r * 0.16} fontSize={r * 0.52} fontWeight="800" fill="#0b1218" fontFamily="-apple-system, system-ui, sans-serif">P</text>
         </g>
       )}
+      {/* Penalty missed slash */}
       {variant === 'penalty_missed' && (
-        <line x1={-r * 0.95} y1={r * 0.95} x2={r * 0.95} y2={-r * 0.95} stroke="#f43f5e" strokeWidth={Math.max(0.6, r * 0.16)} strokeLinecap="round" />
+        <line x1={-r * 0.7} y1={r * 0.7} x2={r * 0.7} y2={-r * 0.7} stroke="#f43f5e" strokeWidth={Math.max(1, r * 0.14)} strokeLinecap="round" />
       )}
+    </g>
+  )
+}
+
+// V2.6A: Custom goalpost icon for shot_off_target — two posts + crossbar +
+// small ball flying away. Much clearer than the abstract lucide Goal glyph.
+function GoalpostIcon({ size }: { size: number }) {
+  const r = size
+  const badgeR = r * 1.05
+  // Goalpost geometry (centered on origin)
+  const postH = r * 1.1
+  const postW = r * 1.4
+  const barY = -postH * 0.5
+  const postStroke = Math.max(0.8, r * 0.1)
+
+  return (
+    <g>
+      {/* Halo */}
+      <circle r={badgeR * 1.35} fill="#94a3b8" opacity="0.10" />
+      {/* Glass badge */}
+      <circle r={badgeR} fill="rgba(11,16,24,0.88)" stroke="#94a3b8" strokeWidth={Math.max(0.5, badgeR * 0.12)} opacity="0.9" />
+      {/* Highlight */}
+      <ellipse cx={-badgeR * 0.3} cy={-badgeR * 0.4} rx={badgeR * 0.35} ry={badgeR * 0.14} fill="rgba(255,255,255,0.15)" />
+      {/* Goalpost: two vertical posts + crossbar */}
+      <g stroke="#e2e8f0" strokeWidth={postStroke} strokeLinecap="round" fill="none">
+        {/* Left post */}
+        <line x1={-postW * 0.5} y1={barY} x2={-postW * 0.5} y2={postH * 0.35} />
+        {/* Right post */}
+        <line x1={postW * 0.5} y1={barY} x2={postW * 0.5} y2={postH * 0.35} />
+        {/* Crossbar */}
+        <line x1={-postW * 0.5} y1={barY} x2={postW * 0.5} y2={barY} />
+      </g>
+      {/* Small ball flying away (top-right, outside the goal) */}
+      <circle cx={postW * 0.55 + r * 0.25} cy={barY - r * 0.3} r={r * 0.18} fill="#94a3b8" opacity="0.7" />
+      {/* Tiny motion trail */}
+      <line x1={postW * 0.4} y1={barY - r * 0.1} x2={postW * 0.55 + r * 0.1} y2={barY - r * 0.25} stroke="#94a3b8" strokeWidth={Math.max(0.4, r * 0.05)} strokeLinecap="round" opacity="0.5" />
     </g>
   )
 }
@@ -455,7 +504,7 @@ function SoccerBallBox(props: { size: number; variant: 'goal' | 'own_goal' | 'pe
 
 export function GroupBubbleBox({ count, sizePx, accent, hovered }: { count: number; sizePx: number; accent: string; hovered?: boolean }) {
   const scale = hovered ? 1.04 : 1
-  const radius = 11 + (count >= 10 ? 1.6 : 0.8)
+  const radius = 12.5 + (count >= 10 ? 1.6 : 0.8)
   return (
     <span
       aria-hidden="true"
@@ -486,9 +535,9 @@ export function GroupBubbleBox({ count, sizePx, accent, hovered }: { count: numb
 
 export function PressureEventIconInline({ type, sizePx = 14, teamAccent }: { type: PressureGraphEventType; sizePx?: number; teamAccent?: string }) {
   if (type === 'shot_on_target') return <Target size={sizePx} color="#22d3ee" strokeWidth={2.2} aria-hidden />
-  if (type === 'shot_off_target') return <Goal size={sizePx} color="#cbd5e1" strokeWidth={2.2} aria-hidden />
   if (type === 'substitution') return <ArrowRightLeft size={sizePx} color="#94a3b8" strokeWidth={2.2} aria-hidden />
 
+  // shot_off_target and all custom types use inline SVG
   const r = 11
   return (
     <svg width={sizePx} height={sizePx} viewBox="-16 -16 32 32" overflow="visible" aria-hidden="true">
@@ -508,6 +557,7 @@ function renderInlineCustom(type: PressureGraphEventType, r: number, teamAccent?
     case 'own_goal': return <SoccerBall size={r} variant="own_goal" />
     case 'penalty_scored': return <SoccerBall size={r} variant="penalty_scored" />
     case 'penalty_missed': return <SoccerBall size={r} variant="penalty_missed" />
+    case 'shot_off_target': return <GoalpostIcon size={r} />
     case 'yellow_card': return <CardIcon size={r} variant="yellow" />
     case 'red_card': return <CardIcon size={r} variant="red" />
     case 'second_yellow': return <CardIcon size={r} variant="second_yellow" />

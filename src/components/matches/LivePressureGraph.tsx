@@ -57,24 +57,24 @@ interface Props {
 }
 
 // --- Marker sizing per type (CSS pixels) ---
-// V2.5 calibration: goal protagonista, substituição secundária, cartões legíveis.
+// V2.6A calibration: much larger for legibility. Goals are protagonists.
 
 const MARKER_SIZES_PX: Record<PressureGraphEventType, number> = {
-  goal: 24,
-  own_goal: 24,
-  penalty_scored: 23,
-  penalty_missed: 21,
-  shot_on_target: 16,
-  shot_off_target: 16,
-  yellow_card: 18,
-  red_card: 19,
-  second_yellow: 20,
-  substitution: 14,
-  var: 17,
-  unknown: 12,
+  goal: 30,
+  own_goal: 30,
+  penalty_scored: 29,
+  penalty_missed: 27,
+  shot_on_target: 21,
+  shot_off_target: 22,
+  yellow_card: 22,
+  red_card: 23,
+  second_yellow: 24,
+  substitution: 19,
+  var: 21,
+  unknown: 14,
 }
 
-const GROUP_MARKER_SIZE_PX = 20
+const GROUP_MARKER_SIZE_PX = 24
 
 // Density: types that fade when the match is busy. Critical events
 // (goals, red cards, penalties, second yellows) never fade.
@@ -845,7 +845,7 @@ function Legend({ counts }: { counts: Map<PressureGraphEventType, number> }) {
     <ul className="flex items-center gap-x-4 gap-y-2 flex-wrap mt-3 text-[10px] text-white/50">
       {items.map(item => (
         <li key={item.key} className="flex items-center gap-1.5">
-          <PressureEventIconInline type={item.iconType} sizePx={15} />
+          <PressureEventIconInline type={item.iconType} sizePx={18} />
           <span className="text-white/70 font-medium">{item.label}</span>
           <span className="text-white/85 font-bold tabular-nums">{item.count}</span>
           {item.sublabel && <span className="text-white/35">· {item.sublabel}</span>}
