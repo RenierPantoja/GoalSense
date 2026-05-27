@@ -1,37 +1,34 @@
 /**
- * pressureEventIcons - premium icon system for the Live Pressure Graph (V2.3).
+ * pressureEventIcons - premium icon system for the Live Pressure Graph.
  * -----------------------------------------------------------------------------
- * V2.2 - every glyph hand-crafted as SVG. Premium look, but a few non-football
- *         glyphs (target, goalpost, substitution) felt amateur compared to
- *         industry icon libraries.
- * V2.3 - keeps the custom soccer ball / cards / VAR (lucide has no proper
- *         referee cards or stylized soccer ball), but switches the
- *         non-football glyphs to lucide-react primitives wrapped in a
- *         GoalSense "event badge" so they feel professional yet on-brand.
+ * V2.2 - hand-crafted SVGs for every event type.
+ * V2.3 - lucide-react primitives wrapped in GoalSense badges for shot_on_target,
+ *         shot_off_target and substitution.
+ * V2.4 - markers move out of the distorted curve SVG into an HTML overlay.
+ *         This file now exposes `PressureEventIconBox` (square, HTML-friendly,
+ *         no aspect-ratio distortion), `GroupBubbleBox` (HTML version of +N)
+ *         and keeps `PressureEventIconInline` for tooltip / legend usage.
  *
  * Why lucide-react:
  *   - already a project dependency (`lucide-react@^0.511.0`);
- *   - MIT-licensed (ISC for icons);
- *   - tree-shakable named imports - zero new bundle baseline;
- *   - consistent stroke weights that pair well with Apple/Resend tone.
+ *   - MIT/ISC-licensed;
+ *   - tree-shakable named imports - zero new bundle baseline.
  *
- * Important detail about the host SVG:
- *   LivePressureGraph renders its host `<svg>` with `preserveAspectRatio="none"`
- *   so the curve fills the full container. HTML inside `<foreignObject>` would
- *   be stretched non-uniformly. To keep lucide glyphs crisp we render them as
- *   raw SVG primitives (path/circle) using their published lucide source data,
- *   so they share the exact same coordinate system as our custom SVG icons.
- *
- * Public surface: `PressureEventIcon`, `PressureEventIconInline`,
- * `GroupBubble`, `PressureEventIconDefs`. Stable across V2.x.
+ * Public surface (stable):
+ *   - PressureEventIcon          (legacy SVG-world variant; kept for back-compat)
+ *   - PressureEventIconBox       (V2.4 HTML overlay marker)
+ *   - GroupBubble                (legacy SVG-world +N)
+ *   - GroupBubbleBox             (V2.4 HTML overlay +N)
+ *   - PressureEventIconInline    (HTML inline icon for tooltip / legend)
+ *   - PressureEventIconDefs      (SVG defs - filters)
  */
 import { ArrowRightLeft, Goal, Target } from 'lucide-react'
 import type { PressureGraphEventType } from '@/features/matches/pressureGraphEvents'
 
 // ---------------------------------------------------------------------------
-// Lucide icon source data (paths copied verbatim from lucide-react v0.511.0).
-// We render them as native SVG inside our user-unit space, so behavior is
-// identical to our hand-crafted icons (no foreignObject, no HTML).
+// Lucide source data (verbatim copy from lucide-react v0.511.0).
+// We render these as native SVG primitives inside our own viewBox so the
+// glyphs look pixel-perfect across all marker sizes.
 // ---------------------------------------------------------------------------
 
 type LucideNode =
@@ -58,10 +55,8 @@ const LUCIDE_ARROW_RIGHT_LEFT: LucideNode[] = [
 ]
 
 function LucidePrimitive({ nodes, color, strokeWidth }: { nodes: LucideNode[]; color: string; strokeWidth: number }) {
-  // Lucide source uses viewBox 0 0 24 24. The caller wraps this in a
-  // <g transform="scale(s) translate(-12 -12)"> so the icon is centered on
-  // the world origin and sized appropriately. We render the source nodes
-  // verbatim, with no coordinate rewriting needed.
+  // Lucide source uses viewBox 0 0 24 24. Caller wraps this in a
+  // <g transform="scale(s) translate(-12 -12)"> so the icon centers at origin.
   return (
     <g fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       {nodes.map((n, i) =>
@@ -74,22 +69,19 @@ function LucidePrimitive({ nodes, color, strokeWidth }: { nodes: LucideNode[]; c
 }
 
 // ---------------------------------------------------------------------------
-// Public component
+// V2.x legacy SVG-world variant. Still exported for back-compat in case
+// another consumer renders it inside their own SVG. The Live Pressure Graph
+// itself moved away from this in V2.4.
 // ---------------------------------------------------------------------------
 
 export interface PressureEventIconProps {
   type: PressureGraphEventType
   cx: number
   cy: number
-  /** Visual radius hint. Determines the badge / icon footprint. */
   size: number
-  /** Selection ring (cyan) drawn behind the icon. */
   selected?: boolean
-  /** Hover indicator (scale 1.06 + opacity bump). Visual only. */
   hovered?: boolean
-  /** When true, soften low-priority icons in dense matches. */
   muted?: boolean
-  /** Optional team accent color (hex without #). Used as a halo for goals. */
   teamAccent?: string
 }
 
@@ -101,7 +93,7 @@ export function PressureEventIcon({ type, cx, cy, size, selected, hovered, muted
       transform={`translate(${cx} ${cy}) scale(${scale})`}
       style={{ transition: 'transform 120ms ease-out', opacity }}
     >
-      {selected && <SelectionRing radius={size + 2.6} />}
+      {selected && <SelectionRingSvg radius={size + 2.6} />}
       {renderIcon(type, size, teamAccent)}
     </g>
   )
@@ -125,10 +117,6 @@ function renderIcon(type: PressureGraphEventType, size: number, teamAccent?: str
   }
 }
 
-// ---------------------------------------------------------------------------
-// Lucide-backed badge (rendered as native SVG, not HTML/foreignObject)
-// ---------------------------------------------------------------------------
-
 interface BadgedLucideSvgProps {
   nodes: LucideNode[]
   size: number
@@ -139,36 +127,22 @@ interface BadgedLucideSvgProps {
 
 function BadgedLucideSvg({ nodes, size, accent, haloOpacity = 0.12, dimmed = false }: BadgedLucideSvgProps) {
   const badgeR = size * 1.05
-  // Lucide viewBox is 24x24 anchored at (12,12). We want the glyph diameter
-  // ~70% of badge diameter. Compose translate + scale so the glyph is
-  // centered on the world origin.
   const glyphTargetDiameter = badgeR * 1.4
   const glyphScale = glyphTargetDiameter / 24
   const stroke = dimmed ? '#cbd5e1' : accent
-  // Stroke thickness in lucide source units. 2.0 reads cleanly across our
-  // typical badge sizes; bump slightly when the badge is very small so the
-  // glyph stays legible.
   const strokeWidth = size <= 4 ? 2.4 : 2.0
 
   return (
     <g>
-      {/* Halo */}
       <circle r={badgeR * 1.4} fill={accent} opacity={haloOpacity} />
-      {/* Glass body */}
       <circle r={badgeR} fill="rgba(11,16,24,0.9)" stroke={accent} strokeWidth={Math.max(0.45, badgeR * 0.13)} opacity={dimmed ? 0.85 : 1} />
-      {/* Highlight */}
       <ellipse cx={-badgeR * 0.35} cy={-badgeR * 0.45} rx={badgeR * 0.4} ry={badgeR * 0.16} fill="rgba(255,255,255,0.18)" />
-      {/* Lucide glyph as native SVG primitives, centered on origin */}
       <g transform={`scale(${glyphScale}) translate(-12 -12)`}>
         <LucidePrimitive nodes={nodes} color={stroke} strokeWidth={strokeWidth} />
       </g>
     </g>
   )
 }
-
-// ---------------------------------------------------------------------------
-// Custom SVG icons (kept from V2.2)
-// ---------------------------------------------------------------------------
 
 function SoccerBall({ size, variant, teamAccent }: { size: number; variant: 'goal' | 'own_goal' | 'penalty_scored' | 'penalty_missed'; teamAccent?: string }) {
   const r = size
@@ -197,7 +171,6 @@ function SoccerBall({ size, variant, teamAccent }: { size: number; variant: 'goa
       )}
       <ellipse cx={0} cy={r * 0.18} rx={r * 0.95} ry={r * 0.32} fill="rgba(0,0,0,0.32)" filter="url(#gs-blur-soft)" />
       <circle r={r} fill={color} stroke={stroke} strokeWidth={Math.max(0.5, r * 0.085)} />
-      {/* Stylized hexagonal panels */}
       <g stroke={stroke} strokeWidth={Math.max(0.4, r * 0.07)} fill="none" strokeLinecap="round" opacity="0.9">
         <path d={`M ${-r * 0.42} ${-r * 0.18} L 0 ${-r * 0.55} L ${r * 0.42} ${-r * 0.18}`} />
         <path d={`M ${-r * 0.42} ${-r * 0.18} L ${-r * 0.28} ${r * 0.45}`} />
@@ -281,31 +254,7 @@ function UnknownDot({ size }: { size: number }) {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Group bubble (+N)
-// ---------------------------------------------------------------------------
-
-export function GroupBubble({ cx, cy, size, count, accent, hovered }: { cx: number; cy: number; size: number; count: number; accent: string; hovered?: boolean }) {
-  const radius = size + (count >= 10 ? 1.6 : 0.8)
-  const scale = hovered ? 1.06 : 1
-  return (
-    <g
-      transform={`translate(${cx} ${cy}) scale(${scale})`}
-      style={{ transition: 'transform 120ms ease-out' }}
-    >
-      <circle r={radius * 1.45} fill={accent} opacity="0.14" />
-      <circle r={radius} fill="rgba(11,16,24,0.92)" stroke={accent} strokeWidth={Math.max(0.5, radius * 0.16)} />
-      <ellipse cx={-radius * 0.4} cy={-radius * 0.45} rx={radius * 0.42} ry={radius * 0.18} fill="rgba(255,255,255,0.18)" />
-      <text textAnchor="middle" dy={radius * 0.34} fontSize={radius * 0.92} fontWeight="800" fill="#ffffff" fontFamily="-apple-system, system-ui, sans-serif">+{count}</text>
-    </g>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Selection ring + filter defs
-// ---------------------------------------------------------------------------
-
-function SelectionRing({ radius }: { radius: number }) {
+function SelectionRingSvg({ radius }: { radius: number }) {
   return (
     <g>
       <circle r={radius} fill="none" stroke="#22d3ee" strokeWidth="0.7" opacity="0.95" />
@@ -325,35 +274,237 @@ export function PressureEventIconDefs() {
 }
 
 // ---------------------------------------------------------------------------
-// Inline icon (HTML usage: tooltip header / legend)
+// Legacy SVG-world group bubble (+N).
+// ---------------------------------------------------------------------------
+
+export function GroupBubble({ cx, cy, size, count, accent, hovered }: { cx: number; cy: number; size: number; count: number; accent: string; hovered?: boolean }) {
+  const radius = size + (count >= 10 ? 1.6 : 0.8)
+  const scale = hovered ? 1.06 : 1
+  return (
+    <g
+      transform={`translate(${cx} ${cy}) scale(${scale})`}
+      style={{ transition: 'transform 120ms ease-out' }}
+    >
+      <circle r={radius * 1.45} fill={accent} opacity="0.14" />
+      <circle r={radius} fill="rgba(11,16,24,0.92)" stroke={accent} strokeWidth={Math.max(0.5, radius * 0.16)} />
+      <ellipse cx={-radius * 0.4} cy={-radius * 0.45} rx={radius * 0.42} ry={radius * 0.18} fill="rgba(255,255,255,0.18)" />
+      <text textAnchor="middle" dy={radius * 0.34} fontSize={radius * 0.92} fontWeight="800" fill="#ffffff" fontFamily="-apple-system, system-ui, sans-serif">+{count}</text>
+    </g>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// V2.4 - HTML overlay marker (square SVG, no host distortion)
 // ---------------------------------------------------------------------------
 //
-// HTML world has no aspect-ratio distortion, so for HTML usage we render the
-// lucide-react components directly. This gives the legend/tooltip pixel-perfect
-// industry-grade glyphs. Custom SVG types use a small inline SVG that mirrors
-// the in-graph version so the reader recognizes them as the same icons.
+// `PressureEventIconBox` returns a standalone <svg> sized in CSS pixels with
+// a fixed aspect ratio. The caller positions the icon via absolute layout in
+// percentage coordinates, so the curve SVG's `preserveAspectRatio="none"`
+// no longer affects the marker visuals.
 
-export function PressureEventIconInline({ type, sizePx = 14 }: { type: PressureGraphEventType; sizePx?: number }) {
+export interface PressureEventIconBoxProps {
+  type: PressureGraphEventType
+  sizePx: number
+  selected?: boolean
+  hovered?: boolean
+  muted?: boolean
+  teamAccent?: string
+}
+
+// Per-type internal radius hint (in user units within the 32x32 viewBox).
+// Cards and VAR are wider/taller than circular icons, so we tune them
+// individually so the rendered glyph fills the sizePx box pleasantly.
+function internalSizeFor(type: PressureGraphEventType): number {
+  switch (type) {
+    case 'goal':
+    case 'own_goal':
+    case 'penalty_scored':
+    case 'penalty_missed':
+      return 11
+    case 'yellow_card':
+    case 'red_card':
+    case 'second_yellow':
+      return 9.5
+    case 'shot_on_target':
+    case 'shot_off_target':
+    case 'substitution':
+      return 10
+    case 'var':
+      return 7.5
+    default:
+      return 8
+  }
+}
+
+export function PressureEventIconBox({ type, sizePx, selected, hovered, muted, teamAccent }: PressureEventIconBoxProps) {
+  const internalSize = internalSizeFor(type)
+  const opacity = muted ? 0.55 : 1
+  const scale = hovered ? 1.06 : 1
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: sizePx,
+        height: sizePx,
+        transform: `scale(${scale})`,
+        transition: 'transform 120ms ease-out',
+        opacity,
+      }}
+    >
+      {selected && (
+        <span
+          style={{
+            position: 'absolute',
+            inset: -3,
+            borderRadius: '999px',
+            border: '1.5px solid rgba(34,211,238,0.95)',
+            boxShadow: '0 0 0 3px rgba(34,211,238,0.18)',
+            pointerEvents: 'none',
+          }}
+        />
+      )}
+      <svg
+        width={sizePx}
+        height={sizePx}
+        viewBox="-16 -16 32 32"
+        overflow="visible"
+        style={{ display: 'block' }}
+      >
+        <defs>
+          <filter id="gs-blur-soft-box" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="0.55" />
+          </filter>
+        </defs>
+        {renderIconBox(type, internalSize, teamAccent)}
+      </svg>
+    </span>
+  )
+}
+
+// Identical to renderIcon() but uses the inline filter id so the box SVG is
+// fully self-contained (no dependency on PressureEventIconDefs being mounted).
+function renderIconBox(type: PressureGraphEventType, size: number, teamAccent?: string) {
+  switch (type) {
+    case 'goal': return <SoccerBallBox size={size} variant="goal" teamAccent={teamAccent} />
+    case 'own_goal': return <SoccerBallBox size={size} variant="own_goal" />
+    case 'penalty_scored': return <SoccerBallBox size={size} variant="penalty_scored" />
+    case 'penalty_missed': return <SoccerBallBox size={size} variant="penalty_missed" />
+    case 'shot_on_target': return <BadgedLucideSvg nodes={LUCIDE_TARGET} size={size} accent="#22d3ee" haloOpacity={0.18} />
+    case 'shot_off_target': return <BadgedLucideSvg nodes={LUCIDE_GOAL} size={size} accent="#cbd5e1" haloOpacity={0.10} dimmed />
+    case 'yellow_card': return <CardIcon size={size} variant="yellow" />
+    case 'red_card': return <CardIcon size={size} variant="red" />
+    case 'second_yellow': return <CardIcon size={size} variant="second_yellow" />
+    case 'substitution': return <BadgedLucideSvg nodes={LUCIDE_ARROW_RIGHT_LEFT} size={size} accent="#94a3b8" haloOpacity={0.10} dimmed />
+    case 'var': return <VarTag size={size} />
+    case 'unknown':
+    default: return <UnknownDot size={size} />
+  }
+}
+
+// Local copy that uses the box SVG's blur filter id.
+function SoccerBallBox(props: { size: number; variant: 'goal' | 'own_goal' | 'penalty_scored' | 'penalty_missed'; teamAccent?: string }) {
+  const { size: r, variant, teamAccent } = props
+  const color = variant === 'own_goal'
+    ? '#fda4af'
+    : variant === 'penalty_scored'
+      ? '#a5f3fc'
+      : '#f8fafc'
+  const stroke = variant === 'own_goal'
+    ? '#9f1239'
+    : variant === 'penalty_scored'
+      ? '#0e7490'
+      : '#0f172a'
+  const haloColor = teamAccent
+    ? `#${teamAccent}`
+    : variant === 'own_goal'
+      ? '#f43f5e'
+      : '#22d3ee'
+
+  return (
+    <g>
+      <circle r={r * 1.45} fill={haloColor} opacity="0.18" />
+      <ellipse cx={0} cy={r * 0.18} rx={r * 0.95} ry={r * 0.32} fill="rgba(0,0,0,0.32)" filter="url(#gs-blur-soft-box)" />
+      <circle r={r} fill={color} stroke={stroke} strokeWidth={Math.max(0.5, r * 0.085)} />
+      <g stroke={stroke} strokeWidth={Math.max(0.4, r * 0.07)} fill="none" strokeLinecap="round" opacity="0.9">
+        <path d={`M ${-r * 0.42} ${-r * 0.18} L 0 ${-r * 0.55} L ${r * 0.42} ${-r * 0.18}`} />
+        <path d={`M ${-r * 0.42} ${-r * 0.18} L ${-r * 0.28} ${r * 0.45}`} />
+        <path d={`M ${r * 0.42} ${-r * 0.18} L ${r * 0.28} ${r * 0.45}`} />
+        <path d={`M ${-r * 0.28} ${r * 0.45} L ${r * 0.28} ${r * 0.45}`} />
+      </g>
+      <ellipse cx={-r * 0.4} cy={-r * 0.4} rx={r * 0.3} ry={r * 0.18} fill="rgba(255,255,255,0.55)" />
+      {variant === 'penalty_scored' && (
+        <g transform={`translate(${r * 0.6} ${-r * 0.6})`}>
+          <circle r={r * 0.42} fill="#22d3ee" stroke="#0b1218" strokeWidth="0.4" />
+          <text textAnchor="middle" dy={r * 0.18} fontSize={r * 0.6} fontWeight="800" fill="#0b1218" fontFamily="-apple-system, system-ui, sans-serif">P</text>
+        </g>
+      )}
+      {variant === 'penalty_missed' && (
+        <line x1={-r * 0.95} y1={r * 0.95} x2={r * 0.95} y2={-r * 0.95} stroke="#f43f5e" strokeWidth={Math.max(0.6, r * 0.16)} strokeLinecap="round" />
+      )}
+    </g>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// V2.4 - HTML overlay group bubble (+N)
+// ---------------------------------------------------------------------------
+
+export function GroupBubbleBox({ count, sizePx, accent, hovered }: { count: number; sizePx: number; accent: string; hovered?: boolean }) {
+  const scale = hovered ? 1.06 : 1
+  const radius = 11 + (count >= 10 ? 1.6 : 0.8)
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: sizePx,
+        height: sizePx,
+        transform: `scale(${scale})`,
+        transition: 'transform 120ms ease-out',
+      }}
+    >
+      <svg width={sizePx} height={sizePx} viewBox="-16 -16 32 32" overflow="visible" style={{ display: 'block' }}>
+        <circle r={radius * 1.45} fill={accent} opacity="0.14" />
+        <circle r={radius} fill="rgba(11,16,24,0.92)" stroke={accent} strokeWidth={Math.max(0.5, radius * 0.16)} />
+        <ellipse cx={-radius * 0.4} cy={-radius * 0.45} rx={radius * 0.42} ry={radius * 0.18} fill="rgba(255,255,255,0.18)" />
+        <text textAnchor="middle" dy={radius * 0.34} fontSize={radius * 0.92} fontWeight="800" fill="#ffffff" fontFamily="-apple-system, system-ui, sans-serif">+{count}</text>
+      </svg>
+    </span>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Inline icon (HTML usage: tooltip header / legend)
+// ---------------------------------------------------------------------------
+
+export function PressureEventIconInline({ type, sizePx = 14, teamAccent }: { type: PressureGraphEventType; sizePx?: number; teamAccent?: string }) {
   if (type === 'shot_on_target') return <Target size={sizePx} color="#22d3ee" strokeWidth={2.2} aria-hidden />
   if (type === 'shot_off_target') return <Goal size={sizePx} color="#cbd5e1" strokeWidth={2.2} aria-hidden />
   if (type === 'substitution') return <ArrowRightLeft size={sizePx} color="#94a3b8" strokeWidth={2.2} aria-hidden />
 
   const r = 11
   return (
-    <svg width={sizePx} height={sizePx} viewBox="-16 -16 32 32" aria-hidden="true">
+    <svg width={sizePx} height={sizePx} viewBox="-16 -16 32 32" overflow="visible" aria-hidden="true">
       <defs>
-        <filter id="gs-blur-soft" x="-50%" y="-50%" width="200%" height="200%">
+        <filter id="gs-blur-soft-inline" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="0.55" />
         </filter>
       </defs>
-      {renderInlineCustom(type, r)}
+      {renderInlineCustom(type, r, teamAccent)}
     </svg>
   )
 }
 
-function renderInlineCustom(type: PressureGraphEventType, r: number) {
+function renderInlineCustom(type: PressureGraphEventType, r: number, teamAccent?: string) {
   switch (type) {
-    case 'goal': return <SoccerBall size={r} variant="goal" />
+    case 'goal': return <SoccerBall size={r} variant="goal" teamAccent={teamAccent} />
     case 'own_goal': return <SoccerBall size={r} variant="own_goal" />
     case 'penalty_scored': return <SoccerBall size={r} variant="penalty_scored" />
     case 'penalty_missed': return <SoccerBall size={r} variant="penalty_missed" />

@@ -1,15 +1,21 @@
 /**
- * Premium Live Pressure Graph (V2.2) — pressure curve + premium event icons.
- * ─────────────────────────────────────────────────────────────────────────────
+ * Premium Live Pressure Graph (V2.4) - pressure curve + premium event markers.
+ * -----------------------------------------------------------------------------
  * V2   added: typed marker model, rich HTML tooltip, side-aware stacking,
  *             legend with present types, fallback when provider has no events.
  * V2.1 added: smart tooltip placement, "+N" grouping with group tooltip,
  *             optional `onEventSelect` callback, density mode.
- * V2.2 adds : a full premium SVG icon system for every event type. Markers
- *             now share a single design language with the tooltip header and
- *             the legend. The pressure curve / engine / readings are
- *             intentionally untouched — only the visual layer of markers,
- *             group bubbles, tooltip and legend was redesigned.
+ * V2.2 added: full premium custom-SVG icon system for every event type.
+ * V2.3 added: lucide-react primitives wrapped in GoalSense badges for
+ *             non-football glyphs (target / goalpost / substitution).
+ * V2.4 adds : markers move OUT of the distorted curve SVG into a pixel-perfect
+ *             HTML overlay positioned in percentage coordinates. The curve
+ *             still renders inside the same `preserveAspectRatio="none"` SVG
+ *             so the engine and curve geometry remain unchanged. Each marker
+ *             is now a real square HTML button with proper aspect ratio.
+ *
+ * The pressure engine, normalization, readings, confidence and time-axis
+ * logic are intentionally untouched.
  */
 
 import { useCallback, useMemo, useState } from 'react'
@@ -25,9 +31,8 @@ import {
   type PressureGraphEventType,
 } from '@/features/matches/pressureGraphEvents'
 import {
-  GroupBubble,
-  PressureEventIcon,
-  PressureEventIconDefs,
+  GroupBubbleBox,
+  PressureEventIconBox,
   PressureEventIconInline,
 } from './pressureEventIcons'
 
@@ -42,28 +47,29 @@ interface Props {
   onEventSelect?: (event: PressureGraphEvent) => void
 }
 
-// ─── Marker sizing per type (drives icon size + hit area) ──────────────────
+// --- Marker sizing per type (CSS pixels) ----------------------------------
 
-const MARKER_SIZES: Record<PressureGraphEventType, number> = {
-  goal: 6.5,
-  own_goal: 6.5,
-  penalty_scored: 6.5,
-  penalty_missed: 5.8,
-  shot_on_target: 4,
-  shot_off_target: 4,
-  yellow_card: 5,
-  red_card: 5,
-  second_yellow: 5.4,
-  substitution: 4.8,
-  var: 4.6,
-  unknown: 3,
+const MARKER_SIZES_PX: Record<PressureGraphEventType, number> = {
+  goal: 22,
+  own_goal: 22,
+  penalty_scored: 22,
+  penalty_missed: 20,
+  shot_on_target: 16,
+  shot_off_target: 16,
+  yellow_card: 18,
+  red_card: 18,
+  second_yellow: 19,
+  substitution: 15,
+  var: 18,
+  unknown: 12,
 }
 
 // Density: types that fade when the match is busy. Critical events
 // (goals, red cards, penalties, second yellows) never fade.
 const LOW_PRIORITY_TYPES: PressureGraphEventType[] = ['shot_off_target', 'substitution', 'var', 'unknown']
 
-// Accent color used by GroupBubble — picks the most important event in the group.
+// Accent color used by the group bubble - picks the most important event in
+// the group.
 function groupAccent(events: PressureGraphEvent[]): string {
   let best = events[0]
   for (const ev of events) if (eventZIndex(ev.type) > eventZIndex(best.type)) best = ev
@@ -77,16 +83,47 @@ function groupAccent(events: PressureGraphEvent[]): string {
   }
 }
 
-// ─── Hover state ────────────────────────────────────────────────────────────
+// --- Hover state ---------------------------------------------------------
 
 type HoverState =
-  | { kind: 'event'; event: PressureGraphEvent; cx: number; cy: number; markerId: string }
-  | { kind: 'group'; events: PressureGraphEvent[]; minute: number; side: PressureGraphEvent['side']; cx: number; cy: number; markerId: string }
+  | { kind: 'event'; event: PressureGraphEvent; xPercent: number; yPercent: number; markerId: string }
+  | { kind: 'group'; events: PressureGraphEvent[]; minute: number; side: PressureGraphEvent['side']; xPercent: number; yPercent: number; markerId: string }
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// --- Marker layout item (percent-based, V2.4) ----------------------------
+
+type MarkerLayoutItem =
+  | {
+      kind: 'event'
+      id: string
+      xPercent: number
+      yPercent: number
+      sizePx: number
+      zIndex: number
+      side: PressureGraphEvent['side']
+      muted: boolean
+      event: PressureGraphEvent
+    }
+  | {
+      kind: 'group'
+      id: string
+      xPercent: number
+      yPercent: number
+      sizePx: number
+      zIndex: number
+      side: PressureGraphEvent['side']
+      events: PressureGraphEvent[]
+      minute: number
+      accent: string
+    }
+
+// SVG canvas dimensions (kept for the curve only). The HTML overlay uses
+// percentages so it is independent of these numbers.
+const SVG_W = 400
+const SVG_H = 120
+const MID = SVG_H / 2
 
 export function LivePressureGraph({ events, commentary, homeName, awayName, elapsed, homeColors, awayColors, onEventSelect }: Props) {
-  // Merge events + commentary for richer pressure data (unchanged from V2)
+  // Merge events + commentary for richer pressure data (unchanged)
   const allEvents: { clock: string; text: string; type: string; team: string }[] = [...events]
   if (commentary && commentary.length > 0) {
     for (const c of commentary) {
@@ -124,17 +161,12 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
     }
   }, [onEventSelect])
 
-  // Colors
+  // Curve colors
   const hc = `#${homeColors[0] || '22d3ee'}`
   const hcFill = `${hc}80`
   const ac = `#${awayColors[0] || 'f472b6'}`
   const acFill = `${ac}66`
 
-  // SVG dimensions
-  const svgW = 400
-  const svgH = 120
-  const mid = svgH / 2
-  const padX = 0
   const { blocks, maxPressure, currentMinute } = timeline
 
   // Empty state when timeline lacks confidence
@@ -158,18 +190,20 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
     )
   }
 
+  // --- Curve path builders (kept identical to V2.3) ----------------------
+
   function buildPath(side: 'home' | 'away'): string {
     if (blocks.length < 2) return ''
     const points = blocks.map(b => {
-      const xCenter = ((b.startMinute + b.endMinute) / 2 / currentMinute) * (svgW - padX * 2) + padX
+      const xCenter = ((b.startMinute + b.endMinute) / 2 / currentMinute) * SVG_W
       const val = side === 'home' ? b.homePressure : b.awayPressure
       const normalized = val / maxPressure
       const y = side === 'home'
-        ? mid - normalized * (mid - 4)
-        : mid + normalized * (mid - 4)
+        ? MID - normalized * (MID - 4)
+        : MID + normalized * (MID - 4)
       return { x: xCenter, y }
     })
-    let d = `M${padX},${mid}`
+    let d = `M0,${MID}`
     for (let i = 0; i < points.length; i++) {
       if (i === 0) d += ` L${points[i].x},${points[i].y}`
       else {
@@ -178,18 +212,18 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
         d += ` Q${cpX},${prev.y} ${points[i].x},${points[i].y}`
       }
     }
-    d += ` L${points[points.length - 1].x},${mid} Z`
+    d += ` L${points[points.length - 1].x},${MID} Z`
     return d
   }
   function buildStrokePath(side: 'home' | 'away'): string {
     if (blocks.length < 2) return ''
     const points = blocks.map(b => {
-      const xCenter = ((b.startMinute + b.endMinute) / 2 / currentMinute) * (svgW - padX * 2) + padX
+      const xCenter = ((b.startMinute + b.endMinute) / 2 / currentMinute) * SVG_W
       const val = side === 'home' ? b.homePressure : b.awayPressure
       const normalized = val / maxPressure
       const y = side === 'home'
-        ? mid - normalized * (mid - 4)
-        : mid + normalized * (mid - 4)
+        ? MID - normalized * (MID - 4)
+        : MID + normalized * (MID - 4)
       return { x: xCenter, y }
     })
     let d = ''
@@ -204,12 +238,9 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
     return d
   }
 
-  // ─── Marker layout with grouping and density ────────────────────────────
-  type MarkerLayout =
-    | { kind: 'single'; id: string; event: PressureGraphEvent; cx: number; cy: number; side: PressureGraphEvent['side']; muted: boolean }
-    | { kind: 'group'; id: string; events: PressureGraphEvent[]; minute: number; side: PressureGraphEvent['side']; cx: number; cy: number; accent: string }
+  // --- Marker layout in PERCENT coordinates (V2.4) -----------------------
 
-  const layoutMarkers = useMemo<MarkerLayout[]>(() => {
+  const layoutMarkers = useMemo<MarkerLayoutItem[]>(() => {
     if (currentMinute <= 0 || graphEvents.length === 0) return []
 
     const grouped = new Map<string, PressureGraphEvent[]>()
@@ -220,38 +251,72 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
       grouped.set(key, list)
     }
 
-    const baseOffset = 11
-    const stackStep = 11
-    const out: MarkerLayout[] = []
+    // Stack offsets, expressed as a percentage of the graph height. The
+    // graph container is 260px tall; the curve baseline (mid) sits at 50%.
+    // Each stacked marker steps ~9% (~23px) further away from baseline.
+    const baseOffsetPct = 9
+    const stackStepPct = 9
 
+    const out: MarkerLayoutItem[] = []
     for (const [key, list] of grouped) {
-      const side = key.startsWith('home') ? 'home' : key.startsWith('away') ? 'away' : 'neutral'
+      const side: PressureGraphEvent['side'] = key.startsWith('home') ? 'home' : key.startsWith('away') ? 'away' : 'neutral'
       list.sort((a, b) => eventZIndex(b.type) - eventZIndex(a.type))
       const first = list[0]
-      const cx = (first.minute / currentMinute) * (svgW - padX * 2) + padX
+      const xPercent = (first.minute / currentMinute) * 100
       const yDir = side === 'home' ? -1 : side === 'away' ? 1 : -1
 
       if (list.length <= stackCap) {
         list.forEach((ev, idx) => {
-          const cy = mid + yDir * (baseOffset + idx * stackStep)
+          const yPercent = 50 + yDir * (baseOffsetPct + idx * stackStepPct)
           const lowPri = LOW_PRIORITY_TYPES.includes(ev.type)
           const muted = density !== 'normal' && lowPri
-          out.push({ kind: 'single', id: `s-${ev.id}`, event: ev, cx, cy, side, muted })
+          out.push({
+            kind: 'event',
+            id: `s-${ev.id}`,
+            xPercent,
+            yPercent,
+            sizePx: MARKER_SIZES_PX[ev.type] || 14,
+            zIndex: eventZIndex(ev.type),
+            side,
+            muted,
+            event: ev,
+          })
         })
       } else {
         const visibleCount = stackCap - 1
         const visible = list.slice(0, visibleCount)
         const overflow = list.slice(visibleCount)
         visible.forEach((ev, idx) => {
-          const cy = mid + yDir * (baseOffset + idx * stackStep)
-          out.push({ kind: 'single', id: `s-${ev.id}`, event: ev, cx, cy, side, muted: false })
+          const yPercent = 50 + yDir * (baseOffsetPct + idx * stackStepPct)
+          out.push({
+            kind: 'event',
+            id: `s-${ev.id}`,
+            xPercent,
+            yPercent,
+            sizePx: MARKER_SIZES_PX[ev.type] || 14,
+            zIndex: eventZIndex(ev.type),
+            side,
+            muted: false,
+            event: ev,
+          })
         })
-        const groupCy = mid + yDir * (baseOffset + visibleCount * stackStep)
-        out.push({ kind: 'group', id: `g-${first.minute}-${side}`, events: overflow, minute: first.minute, side, cx, cy: groupCy, accent: groupAccent(overflow) })
+        const groupYPercent = 50 + yDir * (baseOffsetPct + visibleCount * stackStepPct)
+        out.push({
+          kind: 'group',
+          id: `g-${first.minute}-${side}`,
+          xPercent,
+          yPercent: groupYPercent,
+          sizePx: 22,
+          zIndex: 70,
+          side,
+          events: overflow,
+          minute: first.minute,
+          accent: groupAccent(overflow),
+        })
       }
     }
     return out
-  }, [graphEvents, currentMinute, mid, density, stackCap])
+  }, [graphEvents, currentMinute, density, stackCap])
 
   // Time axis labels
   const timeLabels: number[] = [0]
@@ -273,6 +338,9 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
   // Resolve team accent (without #) per side, used by goal halos.
   const homeAccentHex = (homeColors[0] || '22d3ee').replace('#', '')
   const awayAccentHex = (awayColors[0] || 'f472b6').replace('#', '')
+
+  // Halftime line as percent
+  const halftimePercent = currentMinute > 45 ? (45 / currentMinute) * 100 : null
 
   return (
     <section className="rounded-[28px] border border-white/[0.05] bg-gradient-to-b from-white/[0.025] to-white/[0.005] p-7 animate-slideUp">
@@ -313,29 +381,28 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
         </div>
       </div>
 
-      {/* Graph + tooltip overlay */}
+      {/* Graph + overlay container */}
       <div className="relative rounded-2xl bg-[#080b12] border border-white/[0.04] overflow-hidden" style={{ height: '260px' }}>
+        {/* Curve SVG (unchanged from V2.3) */}
         <svg
-          viewBox={`0 0 ${svgW} ${svgH}`}
+          viewBox={`0 0 ${SVG_W} ${SVG_H}`}
           preserveAspectRatio="none"
           className="w-full h-full"
           role="img"
-          aria-label="Gráfico de pressão ao vivo com marcadores de eventos"
+          aria-label="Gráfico de pressão ao vivo"
         >
-          <PressureEventIconDefs />
-
           {/* Grid lines */}
-          <line x1={padX} y1={mid} x2={svgW - padX} y2={mid} stroke="rgba(255,255,255,0.06)" strokeWidth="0.3" />
-          <line x1={padX} y1={mid / 2} x2={svgW - padX} y2={mid / 2} stroke="rgba(255,255,255,0.02)" strokeWidth="0.2" strokeDasharray="2,4" />
-          <line x1={padX} y1={mid + mid / 2} x2={svgW - padX} y2={mid + mid / 2} stroke="rgba(255,255,255,0.02)" strokeWidth="0.2" strokeDasharray="2,4" />
+          <line x1={0} y1={MID} x2={SVG_W} y2={MID} stroke="rgba(255,255,255,0.06)" strokeWidth="0.3" />
+          <line x1={0} y1={MID / 2} x2={SVG_W} y2={MID / 2} stroke="rgba(255,255,255,0.02)" strokeWidth="0.2" strokeDasharray="2,4" />
+          <line x1={0} y1={MID + MID / 2} x2={SVG_W} y2={MID + MID / 2} stroke="rgba(255,255,255,0.02)" strokeWidth="0.2" strokeDasharray="2,4" />
 
           {/* Halftime */}
-          {currentMinute > 45 && (
+          {halftimePercent !== null && (
             <line
-              x1={(45 / currentMinute) * (svgW - padX * 2) + padX}
+              x1={(halftimePercent / 100) * SVG_W}
               y1="0"
-              x2={(45 / currentMinute) * (svgW - padX * 2) + padX}
-              y2={svgH}
+              x2={(halftimePercent / 100) * SVG_W}
+              y2={SVG_H}
               stroke="rgba(255,255,255,0.04)"
               strokeWidth="0.4"
               strokeDasharray="2,3"
@@ -348,43 +415,59 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
           <path d={buildPath('away')} fill={acFill} />
           <path d={buildStrokePath('away')} fill="none" stroke={ac} strokeWidth="0.8" strokeLinecap="round" />
 
-          {/* Vertical hint lines per minute */}
-          {layoutMarkers.map((m, i) => (
-            <line
-              key={`hint-${i}`}
-              x1={m.cx}
-              y1={mid - 1.5}
-              x2={m.cx}
-              y2={mid + 1.5}
-              stroke="rgba(255,255,255,0.18)"
-              strokeWidth="0.3"
+          {/* Current minute indicator */}
+          <line
+            x1={SVG_W - 1}
+            y1="0"
+            x2={SVG_W - 1}
+            y2={SVG_H}
+            stroke="rgba(52,211,153,0.3)"
+            strokeWidth="0.5"
+          />
+        </svg>
+
+        {/* Marker overlay - HTML, pixel-perfect, no aspect distortion */}
+        <div className="absolute inset-0 pointer-events-none" aria-label="Marcadores de eventos da partida">
+          {/* Vertical hint lines for each marker minute (subtle) */}
+          {layoutMarkers.map(m => (
+            <span
+              key={`hint-${m.id}`}
+              aria-hidden
+              style={{
+                position: 'absolute',
+                left: `${m.xPercent}%`,
+                top: 'calc(50% - 4px)',
+                width: '1px',
+                height: '8px',
+                background: 'rgba(255,255,255,0.18)',
+                transform: 'translateX(-0.5px)',
+                pointerEvents: 'none',
+              }}
             />
           ))}
 
-          {/* Markers — render in zIndex ascending order */}
+          {/* Markers, rendered in z-index order so important events sit on top */}
           {layoutMarkers
             .slice()
-            .sort((a, b) => {
-              const za = a.kind === 'group' ? 70 : eventZIndex(a.event.type)
-              const zb = b.kind === 'group' ? 70 : eventZIndex(b.event.type)
-              return za - zb
-            })
+            .sort((a, b) => a.zIndex - b.zIndex)
             .map((m) => {
-              if (m.kind === 'single') {
+              if (m.kind === 'event') {
                 const isSelected = selectedId === m.event.id
                 const isHovered = hovered?.markerId === m.id
                 const accent = m.side === 'home' ? homeAccentHex : m.side === 'away' ? awayAccentHex : undefined
                 return (
-                  <SingleMarker
+                  <SingleMarkerButton
                     key={m.id}
                     event={m.event}
-                    cx={m.cx}
-                    cy={m.cy}
+                    xPercent={m.xPercent}
+                    yPercent={m.yPercent}
+                    sizePx={m.sizePx}
+                    zIndex={m.zIndex}
                     muted={m.muted}
                     selected={isSelected}
                     hovered={isHovered}
                     teamAccent={accent}
-                    onHover={() => setHovered({ kind: 'event', event: m.event, cx: m.cx, cy: m.cy, markerId: m.id })}
+                    onHover={() => setHovered({ kind: 'event', event: m.event, xPercent: m.xPercent, yPercent: m.yPercent, markerId: m.id })}
                     onLeave={() => setHovered(null)}
                     onSelect={() => handleSelect(m.event)}
                   />
@@ -396,36 +479,28 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
                   key={m.id}
                   events={m.events}
                   minute={m.minute}
-                  cx={m.cx}
-                  cy={m.cy}
+                  xPercent={m.xPercent}
+                  yPercent={m.yPercent}
+                  sizePx={m.sizePx}
+                  zIndex={m.zIndex}
                   accent={m.accent}
                   hovered={isHovered}
-                  onHover={() => setHovered({ kind: 'group', events: m.events, minute: m.minute, side: m.side, cx: m.cx, cy: m.cy, markerId: m.id })}
+                  onHover={() => setHovered({ kind: 'group', events: m.events, minute: m.minute, side: m.side, xPercent: m.xPercent, yPercent: m.yPercent, markerId: m.id })}
                   onLeave={() => setHovered(null)}
                 />
               )
             })}
 
-          {/* Current minute indicator */}
-          <line
-            x1={svgW - padX - 1}
-            y1="0"
-            x2={svgW - padX - 1}
-            y2={svgH}
-            stroke="rgba(52,211,153,0.3)"
-            strokeWidth="0.5"
-          />
-        </svg>
-
-        {/* Smart-positioned HTML tooltip overlay */}
-        {hovered && (
-          <SmartTooltip xPct={(hovered.cx / svgW) * 100} yPct={(hovered.cy / svgH) * 100}>
-            {hovered.kind === 'event'
-              ? <EventTooltipBody event={hovered.event} />
-              : <GroupTooltipBody events={hovered.events} minute={hovered.minute} />
-            }
-          </SmartTooltip>
-        )}
+          {/* Smart-positioned HTML tooltip (unchanged behavior) */}
+          {hovered && (
+            <SmartTooltip xPct={hovered.xPercent} yPct={hovered.yPercent}>
+              {hovered.kind === 'event'
+                ? <EventTooltipBody event={hovered.event} />
+                : <GroupTooltipBody events={hovered.events} minute={hovered.minute} />
+              }
+            </SmartTooltip>
+          )}
+        </div>
       </div>
 
       {/* Time axis */}
@@ -443,7 +518,7 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
   )
 }
 
-// ─── Smart tooltip wrapper ─────────────────────────────────────────────────
+// --- Smart tooltip wrapper ------------------------------------------------
 
 function SmartTooltip({ xPct, yPct, children }: { xPct: number; yPct: number; children: React.ReactNode }) {
   const horiz: 'left' | 'right' | 'center' = xPct < 18 ? 'left' : xPct > 82 ? 'right' : 'center'
@@ -522,12 +597,14 @@ function GroupTooltipBody({ events, minute }: { events: PressureGraphEvent[]; mi
   )
 }
 
-// ─── Marker buttons ────────────────────────────────────────────────────────
+// --- HTML overlay markers (V2.4) ----------------------------------------
 
-interface SingleMarkerProps {
+interface SingleMarkerButtonProps {
   event: PressureGraphEvent
-  cx: number
-  cy: number
+  xPercent: number
+  yPercent: number
+  sizePx: number
+  zIndex: number
   muted: boolean
   selected: boolean
   hovered: boolean
@@ -537,76 +614,106 @@ interface SingleMarkerProps {
   onSelect: () => void
 }
 
-function SingleMarker({ event, cx, cy, muted, selected, hovered, teamAccent, onHover, onLeave, onSelect }: SingleMarkerProps) {
-  const size = MARKER_SIZES[event.type] || 4
+function SingleMarkerButton({ event, xPercent, yPercent, sizePx, zIndex, muted, selected, hovered, teamAccent, onHover, onLeave, onSelect }: SingleMarkerButtonProps) {
   const ariaLabel = `${eventLabel(event.type)} aos ${formatMinuteLabel(event.minute, event.addedTime)}${event.teamName ? ` · ${event.teamName}` : ''}${event.playerName ? ` · ${event.playerName}` : ''}`
-  const activate = () => { onHover(); onSelect() }
-  const hitR = Math.max(size * 1.5, 8)
-
+  // Hit area is slightly bigger than the visual marker for easier click/tap.
+  const hitSize = Math.max(sizePx + 6, 24)
   return (
-    <g
-      role="img"
-      tabIndex={0}
+    <button
+      type="button"
       aria-label={ariaLabel}
+      title={ariaLabel}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
       onFocus={onHover}
       onBlur={onLeave}
-      onClick={activate}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate() } }}
-      style={{ cursor: 'pointer', outline: 'none' }}
+      onClick={onSelect}
+      style={{
+        position: 'absolute',
+        left: `${xPercent}%`,
+        top: `${yPercent}%`,
+        width: hitSize,
+        height: hitSize,
+        transform: 'translate(-50%, -50%)',
+        background: 'transparent',
+        border: 0,
+        padding: 0,
+        cursor: 'pointer',
+        pointerEvents: 'auto',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex,
+        outline: 'none',
+        borderRadius: '50%',
+      }}
+      className="gs-pressure-marker"
     >
-      {/* Hit area */}
-      <circle cx={cx} cy={cy} r={hitR} fill="transparent" />
-      <PressureEventIcon
+      <PressureEventIconBox
         type={event.type}
-        cx={cx}
-        cy={cy}
-        size={size}
+        sizePx={sizePx}
         selected={selected}
         hovered={hovered}
         muted={muted}
         teamAccent={teamAccent}
       />
-      <title>{ariaLabel}</title>
-    </g>
+    </button>
   )
 }
 
-interface GroupMarkerProps {
+interface GroupMarkerButtonProps {
   events: PressureGraphEvent[]
   minute: number
-  cx: number
-  cy: number
+  xPercent: number
+  yPercent: number
+  sizePx: number
+  zIndex: number
   accent: string
   hovered: boolean
   onHover: () => void
   onLeave: () => void
 }
 
-function GroupMarkerButton({ events, minute, cx, cy, accent, hovered, onHover, onLeave }: GroupMarkerProps) {
+function GroupMarkerButton({ events, minute, xPercent, yPercent, sizePx, zIndex, accent, hovered, onHover, onLeave }: GroupMarkerButtonProps) {
   const labels = events.slice(0, 3).map(e => eventLabel(e.type).toLowerCase())
   const ariaLabel = `${events.length} eventos no minuto ${minute}: ${labels.join(', ')}${events.length > labels.length ? ` e mais ${events.length - labels.length}` : ''}`
+  const hitSize = Math.max(sizePx + 6, 26)
   return (
-    <g
-      role="img"
-      tabIndex={0}
+    <button
+      type="button"
       aria-label={ariaLabel}
+      title={ariaLabel}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
       onFocus={onHover}
       onBlur={onLeave}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onHover() } }}
-      style={{ cursor: 'pointer', outline: 'none' }}
+      style={{
+        position: 'absolute',
+        left: `${xPercent}%`,
+        top: `${yPercent}%`,
+        width: hitSize,
+        height: hitSize,
+        transform: 'translate(-50%, -50%)',
+        background: 'transparent',
+        border: 0,
+        padding: 0,
+        cursor: 'pointer',
+        pointerEvents: 'auto',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex,
+        outline: 'none',
+        borderRadius: '50%',
+      }}
+      className="gs-pressure-marker"
     >
-      <circle cx={cx} cy={cy} r={9} fill="transparent" />
-      <GroupBubble cx={cx} cy={cy} size={5.4} count={events.length} accent={accent} hovered={hovered} />
-      <title>{ariaLabel}</title>
-    </g>
+      <GroupBubbleBox sizePx={sizePx} count={events.length} accent={accent} hovered={hovered} />
+    </button>
   )
 }
 
-// ─── Legend with counts and real icons ─────────────────────────────────────
+// --- Legend with counts and real icons ----------------------------------
 
 function Legend({ counts }: { counts: Map<PressureGraphEventType, number> }) {
   const onTarget = counts.get('shot_on_target') || 0
@@ -661,7 +768,7 @@ function Legend({ counts }: { counts: Map<PressureGraphEventType, number> }) {
     <ul className="flex items-center gap-x-4 gap-y-2 flex-wrap mt-3 text-[10px] text-white/50">
       {items.map(item => (
         <li key={item.key} className="flex items-center gap-1.5">
-          <PressureEventIconInline type={item.iconType} sizePx={14} />
+          <PressureEventIconInline type={item.iconType} sizePx={15} />
           <span className="text-white/70 font-medium">{item.label}</span>
           <span className="text-white/85 font-bold tabular-nums">{item.count}</span>
           {item.sublabel && <span className="text-white/35">· {item.sublabel}</span>}
@@ -671,7 +778,7 @@ function Legend({ counts }: { counts: Map<PressureGraphEventType, number> }) {
   )
 }
 
-// ─── Misc ───────────────────────────────────────────────────────────────────
+// --- Misc ----------------------------------------------------------------
 
 function ReadingCell({ label, value }: { label: string; value: string }) {
   return (
