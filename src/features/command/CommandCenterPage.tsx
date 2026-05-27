@@ -28,6 +28,11 @@ import { COND_LABELS, formatConditionHuman, categorizeTemplate, CATEGORY_LABELS,
 import { TRIGGER_LIBRARY, TRIGGER_BY_TYPE, TRIGGER_CATEGORY_LABELS, TRIGGER_CATEGORY_HINTS, COVERAGE_LABEL, COVERAGE_TONE, MODE_LABEL, type TriggerCategory, type TriggerSpec } from './intelligence/triggerLibrary'
 import { TRIGGER_RECIPES, type TriggerRecipe } from './intelligence/triggerRecipes'
 import { PARAM_CLAMP, clampParam, normalizeText, matchStatusBadge, matchDateLabel, useScopeLookups } from './utils/patternStudioHelpers'
+import { ModalShell } from './components/pattern-studio/shell/ModalShell'
+import { PremiumToggle } from './components/pattern-studio/shell/PremiumToggle'
+import { Section } from './components/pattern-studio/shell/Section'
+import { WizardProgressRail, type WizardStep } from './components/pattern-studio/shell/WizardProgressRail'
+import { WizardStepHeader } from './components/pattern-studio/shell/WizardStepHeader'
 
 function toScoring(fx: LiveFixture) {
   return { competition: { name: fx.league.name }, homeTeam: { name: fx.homeTeam.name, shortName: fx.homeTeam.name }, awayTeam: { name: fx.awayTeam.name, shortName: fx.awayTeam.name }, score: { fullTime: { home: fx.score.home, away: fx.score.away } }, status: fx.status.short === 'LIVE' || fx.status.short === 'HT' ? 'IN_PLAY' : fx.status.short === 'FT' ? 'FINISHED' : 'TIMED', utcDate: fx.date, area: { name: fx.league.country } }
@@ -465,77 +470,8 @@ function SideAction({ label, onClick }: { label: string; onClick: () => void }) 
 // `./utils/commandFormatters` so non-UI code (tests, evaluators) can reuse them.
 
 // ═══ MODAL SHELL — premium overlay rendered via portal so it escapes any
-// ═══ MODAL SHELL — Apple-like dark glass surface. Avoids blue-tinted neon
-// by using a near-neutral slate gradient and a soft, broad shadow instead
-// of a heavy bloom. Header copy is reduced to title + subtitle + a discrete
-// status row; severity/category badges live inside the body, not the header,
-// to avoid the "promo banner" look.
-function ModalShell({ open, onClose, title, subtitle, headerExtra, children, footer, maxWidth = 'max-w-3xl' }: { open: boolean; onClose: () => void; title: string; subtitle?: string; headerExtra?: React.ReactNode; children: React.ReactNode; footer?: React.ReactNode; maxWidth?: string }) {
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', handler)
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { window.removeEventListener('keydown', handler); document.body.style.overflow = prev }
-  }, [open, onClose])
-  if (!open) return null
-  if (typeof document === 'undefined') return null
-
-  const titleId = `modal-title-${title.replace(/\s+/g, '-').toLowerCase()}`
-  return createPortal(
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-6 animate-fadeIn" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-      <div className="absolute inset-0 bg-black/65 backdrop-blur-md" onClick={onClose} aria-hidden="true" />
-      <div className={`relative w-full ${maxWidth} max-h-[calc(100vh-24px)] sm:max-h-[calc(100vh-48px)] flex flex-col rounded-[18px] sm:rounded-[20px] border border-white/[0.07] bg-[#0b0d12] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.02)_inset] overflow-hidden animate-scaleIn`}>
-        <div className="px-6 sm:px-7 pt-5 pb-4 sm:pt-6 sm:pb-5 border-b border-white/[0.05] flex items-start gap-4 shrink-0">
-          <div className="flex-1 min-w-0">
-            <h3 id={titleId} className="text-[17px] sm:text-[19px] font-semibold text-white/95 tracking-tight">{title}</h3>
-            {subtitle && <p className="text-[12px] text-white/50 mt-1 leading-relaxed">{subtitle}</p>}
-            {headerExtra && <div className="mt-3">{headerExtra}</div>}
-          </div>
-          <button onClick={onClose} type="button" className="h-9 w-9 rounded-lg flex items-center justify-center text-white/45 hover:text-white/90 hover:bg-white/[0.04] transition-all shrink-0" aria-label="Fechar"><X size={15} /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-6 sm:px-7 py-6 sidebar-scroll min-h-0">{children}</div>
-        {footer && <div className="px-6 sm:px-7 py-3.5 border-t border-white/[0.05] bg-white/[0.008] flex items-center gap-2 justify-end flex-wrap shrink-0">{footer}</div>}
-      </div>
-    </div>,
-    document.body
-  )
-}
-
-// ═══ PREMIUM TOGGLE — bulletproof iOS-style switch.
-// Uses absolute positioning with `left` instead of CSS transforms so it
-// never inherits unexpected `transform` resets and never grows inside flex
-// layouts (shrink-0 + display:inline-block via inline-flex on button).
-function PremiumToggle({ checked, onChange, ariaLabel, size = 'md' }: { checked: boolean; onChange: (v: boolean) => void; ariaLabel?: string; size?: 'sm' | 'md' }) {
-  const dims = size === 'sm'
-    ? { w: 34, h: 20, knob: 14, padding: 3 }
-    : { w: 42, h: 24, knob: 18, padding: 3 }
-  const knobLeft = checked ? dims.w - dims.knob - dims.padding : dims.padding
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-pressed={checked}
-      aria-label={ariaLabel}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-block shrink-0 rounded-full transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0d12] ${checked ? 'bg-emerald-500/55' : 'bg-white/[0.08] border border-white/[0.06]'}`}
-      style={{ width: dims.w, height: dims.h }}
-    >
-      <span
-        aria-hidden="true"
-        className={`absolute rounded-full transition-[left] duration-200 ease-out shadow-[0_1px_2px_rgba(0,0,0,0.45)] ${checked ? 'bg-white' : 'bg-white/65'}`}
-        style={{
-          width: dims.knob,
-          height: dims.knob,
-          top: (dims.h - dims.knob) / 2,
-          left: knobLeft,
-        }}
-      />
-    </button>
-  )
-}
+// ═══ MODAL SHELL — moved to components/pattern-studio/shell/ModalShell
+// ═══ PREMIUM TOGGLE — moved to components/pattern-studio/shell/PremiumToggle
 
 // ═══ CONDITIONS EDITOR — shared between TemplateConfigModal and CustomPatternModal
 // Pulls catalog and recipes from `./intelligence/triggerLibrary` and
@@ -797,100 +733,9 @@ function ToggleSettingRow({ title, description, checked, onChange }: { title: st
   )
 }
 
-// ═══ WIZARD PROGRESS RAIL — minimalist segmented bar (Apple/Linear style).
-// 6 thin segments fill from left as the user advances. Labels are small,
-// uppercase, and only the active step is highlighted. No glow, no neon —
-// the active segment uses a soft cyan accent and the completed ones a
-// neutral white tint.
-// Forward navigation is gated: the user can click on past steps freely,
-// but cannot jump to a step that has unmet required prerequisites.
-type WizardStep<K extends string> = { key: K; label: string; valid: boolean; required: boolean }
-
-function WizardProgressRail<K extends string>({ steps, current, onSelect }: { steps: WizardStep<K>[]; current: K; onSelect: (k: K) => void }) {
-  const currentIndex = Math.max(0, steps.findIndex(s => s.key === current))
-  // A step is reachable if it's at or before the current step OR all required
-  // steps between the current index and the target are valid.
-  const isReachable = (targetIdx: number) => {
-    if (targetIdx <= currentIndex) return true
-    for (let i = 0; i < targetIdx; i++) {
-      if (steps[i].required && !steps[i].valid) return false
-    }
-    return true
-  }
-  return (
-    <nav aria-label="Etapas" className="select-none">
-      {/* Segments */}
-      <div className="flex items-center gap-1.5">
-        {steps.map((s, i) => {
-          const isActive = current === s.key
-          const isComplete = i < currentIndex
-          const reachable = isReachable(i)
-          return (
-            <button
-              key={s.key}
-              onClick={() => { if (reachable) onSelect(s.key) }}
-              type="button"
-              disabled={!reachable}
-              aria-current={isActive ? 'step' : undefined}
-              aria-label={`Passo ${i + 1}: ${s.label}${reachable ? '' : ' — bloqueado'}`}
-              className={`group relative flex-1 h-[3px] rounded-full transition-all duration-300 ease-out ${isActive
-                ? 'bg-cyan-300/80'
-                : isComplete
-                  ? 'bg-white/35'
-                  : reachable
-                    ? 'bg-white/[0.06] hover:bg-white/[0.1]'
-                    : 'bg-white/[0.04] cursor-not-allowed'}`}
-            />
-          )
-        })}
-      </div>
-      {/* Labels */}
-      <ol className="mt-3 flex items-start gap-1.5">
-        {steps.map((s, i) => {
-          const isActive = current === s.key
-          const isComplete = i < currentIndex
-          const reachable = isReachable(i)
-          return (
-            <li key={s.key} className="flex-1 min-w-0">
-              <button
-                onClick={() => { if (reachable) onSelect(s.key) }}
-                type="button"
-                disabled={!reachable}
-                aria-disabled={!reachable}
-                title={!reachable ? 'Conclua os passos obrigatórios para avançar' : undefined}
-                className={`group block w-full text-left ${reachable ? '' : 'cursor-not-allowed'}`}
-              >
-                <div className="flex items-center gap-1.5">
-                  <span className={`tabular-nums text-[10px] font-semibold transition-colors ${isActive ? 'text-cyan-200/85' : isComplete ? 'text-white/55' : reachable ? 'text-white/30 group-hover:text-white/55' : 'text-white/20'}`}>
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                  {isComplete && <span className="text-[10px] text-white/45" aria-hidden>✓</span>}
-                  {!reachable && !isActive && <span className="text-[10px] text-white/25" aria-hidden>·</span>}
-                </div>
-                <span className={`block text-[11px] mt-0.5 leading-tight truncate transition-colors ${isActive ? 'text-white/90 font-medium' : isComplete ? 'text-white/55' : reachable ? 'text-white/35 group-hover:text-white/55' : 'text-white/25'}`}>{s.label}</span>
-                {s.required && !s.valid && !isActive && reachable && <span className="hidden sm:block text-[10px] text-amber-300/70 leading-tight font-medium mt-0.5">obrigatório</span>}
-              </button>
-            </li>
-          )
-        })}
-      </ol>
-    </nav>
-  )
-}
-
-// ═══ WIZARD STEP HEADER — editorial title block (Apple Settings vibe).
-// Small uppercase kicker, generous title, soft description.
-function WizardStepHeader({ index, total, title, description, kicker }: { index: number; total: number; title: string; description?: string; kicker?: string }) {
-  return (
-    <header className="mb-7">
-      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40 block mb-2">
-        {kicker || `Passo ${index} de ${total}`}
-      </span>
-      <h3 className="text-[22px] sm:text-[24px] font-semibold text-white/95 tracking-tight leading-[1.15]">{title}</h3>
-      {description && <p className="text-[13px] text-white/55 leading-relaxed mt-2 max-w-[600px]">{description}</p>}
-    </header>
-  )
-}
+// ═══ WIZARD PROGRESS RAIL + STEP HEADER — moved to
+// components/pattern-studio/shell/WizardProgressRail and WizardStepHeader.
+// `WizardStep<K>` type is re-exported from WizardProgressRail.
 
 // ═══ RADAR INSPECTOR PANEL — native side panel inspector (Apple vibe).
 // Vertical stack of small grouped blocks separated by hairlines instead
@@ -2073,15 +1918,7 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
   )
 }
 
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <section className="mb-6 last:mb-0">
-      <h4 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40 mb-2.5">{title}</h4>
-      {hint && <p className="text-[11px] text-white/45 mb-3 leading-snug">{hint}</p>}
-      {children}
-    </section>
-  )
-}
+// Section moved to components/pattern-studio/shell/Section.
 
 // ═══ RADAR PREVIEW — auditable summary of how the radar will be evaluated
 function RadarPreview({ name, severity, scope, scopeFilter, matches, excludeLeagues, excludeTeams, excludeMatches, requireRichData, onlyLive, onlyPreMatch, action, minConf, conditions }: { name: string; severity: 'critical' | 'attention' | 'info'; scope: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches'; scopeFilter?: string[]; matches?: string[]; excludeLeagues?: string[]; excludeTeams?: string[]; excludeMatches?: string[]; requireRichData?: boolean; onlyLive?: boolean; onlyPreMatch?: boolean; action: 'register_alert' | 'suggest_only' | 'highlight'; minConf: number; conditions: PatternCondition[] }) {
