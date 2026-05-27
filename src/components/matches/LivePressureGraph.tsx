@@ -57,25 +57,24 @@ interface Props {
 }
 
 // --- Marker sizing per type (CSS pixels) ---
-// V2.6B: editorial sizes. Goals are protagonists (36px). Cards are strong (25px).
-// Shots are visible (24px). Substitution is secondary but legible (22px).
+// V2.7: proportional hierarchy. Goals dominate, substitutions are minimal.
 
 const MARKER_SIZES_PX: Record<PressureGraphEventType, number> = {
-  goal: 36,
-  own_goal: 36,
-  penalty_scored: 34,
-  penalty_missed: 32,
-  shot_on_target: 24,
-  shot_off_target: 24,
-  yellow_card: 25,
-  red_card: 25,
+  goal: 34,
+  own_goal: 34,
+  penalty_scored: 33,
+  penalty_missed: 29,
+  shot_on_target: 23,
+  shot_off_target: 21,
+  yellow_card: 23,
+  red_card: 26,
   second_yellow: 27,
-  substitution: 22,
-  var: 22,
-  unknown: 16,
+  substitution: 17,
+  var: 20,
+  unknown: 14,
 }
 
-const GROUP_MARKER_SIZE_PX = 26
+const GROUP_MARKER_SIZE_PX = 22
 
 // Density: types that fade when the match is busy. Critical events
 // (goals, red cards, penalties, second yellows) never fade.
@@ -609,34 +608,90 @@ function PortalTooltip({ containerRef, xPct, yPct, children }: { containerRef: R
 
 function EventTooltipBody({ event, score, homeName, awayName }: { event: PressureGraphEvent; score?: { home: number; away: number }; homeName?: string; awayName?: string }) {
   const showScore = !!score && (event.type === 'goal' || event.type === 'own_goal' || event.type === 'penalty_scored')
+
+  // V2.7: rich descriptive sentence per event type
+  const description = buildEventDescription(event, score, homeName, awayName)
+
   return (
     <>
-      <div className="flex items-center gap-2 mb-1.5">
+      {/* Header: icon + type + minute */}
+      <div className="flex items-center gap-2.5 mb-2">
         <span className="shrink-0 inline-flex items-center justify-center"><PressureEventIconInline type={event.type} sizePx={20} /></span>
-        <span className="text-[10px] font-bold uppercase tracking-wider text-white/85">{eventLabel(event.type)}</span>
-        <span className="text-[10px] text-white/45 tabular-nums ml-auto">{formatMinuteLabel(event.minute, event.addedTime)}</span>
+        <span className="text-[11px] font-bold uppercase tracking-wider text-white/90">{eventLabel(event.type)}</span>
+        <span className="text-[11px] text-white/50 tabular-nums font-semibold ml-auto">{formatMinuteLabel(event.minute, event.addedTime)}</span>
       </div>
+      {/* Team */}
       {event.teamName && (
-        <p className="text-[11.5px] text-white/85 font-semibold truncate">{event.teamName}</p>
+        <p className="text-[12px] text-white/90 font-semibold truncate mb-0.5">{event.teamName}</p>
       )}
-      {event.playerName ? (
-        <p className="text-[11px] text-white/70 leading-snug">{event.playerName}</p>
-      ) : (
-        <p className="text-[11px] text-white/35 italic leading-snug">Jogador não informado</p>
-      )}
-      {event.assistName && (
-        <p className="text-[10.5px] text-white/55 leading-snug mt-0.5">Assistência: {event.assistName}</p>
-      )}
+      {/* Description block */}
+      <div className="text-[11px] text-white/65 leading-relaxed space-y-0.5 mt-1">
+        {description.map((line, i) => <p key={i}>{line}</p>)}
+      </div>
+      {/* Score */}
       {showScore && score && (
-        <p className="text-[10.5px] text-emerald-400/70 leading-snug mt-1 tabular-nums">
-          Placar: {homeName ? <span className="text-white/65">{homeName} </span> : null}{score.home}–{score.away}{awayName ? <span className="text-white/65"> {awayName}</span> : null}
+        <p className="text-[11px] text-emerald-400/80 font-medium leading-snug mt-2 tabular-nums border-t border-white/[0.06] pt-1.5">
+          Placar: {homeName || ''} {score.home}–{score.away} {awayName || ''}
         </p>
-      )}
-      {event.description && event.description !== event.rawText && (
-        <p className="text-[10.5px] text-white/45 leading-snug mt-1.5 border-t border-white/[0.05] pt-1.5">{event.description}</p>
       )}
     </>
   )
+}
+
+function buildEventDescription(event: PressureGraphEvent, score?: { home: number; away: number }, homeName?: string, awayName?: string): string[] {
+  const player = event.playerName
+  const team = event.teamName
+  const assist = event.assistName
+  const lines: string[] = []
+
+  switch (event.type) {
+    case 'goal':
+      lines.push(player ? `Gol de ${player}${team ? ` para ${team}` : ''}.` : `Gol${team ? ` para ${team}` : ''}.`)
+      if (assist) lines.push(`Assistência de ${assist}.`)
+      break
+    case 'own_goal':
+      lines.push(player ? `Gol contra de ${player}.` : 'Gol contra.')
+      if (team) {
+        const opponent = team === homeName ? awayName : team === awayName ? homeName : null
+        if (opponent) lines.push(`Beneficiou ${opponent}.`)
+      }
+      break
+    case 'penalty_scored':
+      lines.push(player ? `Pênalti convertido por ${player}.` : 'Pênalti convertido.')
+      break
+    case 'penalty_missed':
+      lines.push(player ? `Pênalti perdido por ${player}.` : 'Pênalti perdido.')
+      break
+    case 'shot_on_target':
+      lines.push(player ? `Finalização no gol de ${player}.` : 'Finalização no gol.')
+      break
+    case 'shot_off_target':
+      lines.push(player ? `Finalização para fora de ${player}.` : 'Finalização para fora.')
+      break
+    case 'yellow_card':
+      lines.push(player ? `Cartão amarelo para ${player}.` : 'Cartão amarelo.')
+      break
+    case 'red_card':
+      lines.push(player ? `Cartão vermelho para ${player}.` : 'Cartão vermelho.')
+      break
+    case 'second_yellow':
+      lines.push(player ? `Segundo amarelo e expulsão para ${player}.` : 'Segundo amarelo e expulsão.')
+      break
+    case 'substitution':
+      lines.push(team ? `Substituição no ${team}.` : 'Substituição.')
+      if (player) lines.push(`Detalhes: ${player}.`)
+      else lines.push('Detalhes da troca não informados pelo provider.')
+      break
+    case 'var':
+      lines.push('Revisão do VAR.')
+      if (player) lines.push(player)
+      break
+    default:
+      if (player) lines.push(player)
+      else lines.push('Detalhes não informados.')
+  }
+
+  return lines
 }
 
 function GroupTooltipBody({ events, minute }: { events: PressureGraphEvent[]; minute: number }) {

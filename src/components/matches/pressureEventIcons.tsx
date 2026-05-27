@@ -318,27 +318,28 @@ export interface PressureEventIconBoxProps {
 }
 
 // Per-type internal radius hint (in user units within the 32x32 viewBox).
-// V2.6B: tuned for the larger pixel sizes. Ball fills more of the box.
+// V2.7: tuned per type for proportional fill.
 function internalSizeFor(type: PressureGraphEventType): number {
   switch (type) {
     case 'goal':
     case 'own_goal':
     case 'penalty_scored':
     case 'penalty_missed':
-      return 14
+      return 13.5
     case 'yellow_card':
     case 'red_card':
     case 'second_yellow':
-      return 12
+      return 11.5
     case 'shot_on_target':
-    case 'shot_off_target':
-      return 12
-    case 'substitution':
       return 11
+    case 'shot_off_target':
+      return 11
+    case 'substitution':
+      return 8.5
     case 'var':
-      return 9.5
-    default:
       return 9
+    default:
+      return 8
   }
 }
 
@@ -399,12 +400,12 @@ function renderIconBox(type: PressureGraphEventType, size: number, teamAccent?: 
     case 'own_goal': return <SoccerBallBox size={size} variant="own_goal" />
     case 'penalty_scored': return <SoccerBallBox size={size} variant="penalty_scored" />
     case 'penalty_missed': return <SoccerBallBox size={size} variant="penalty_missed" />
-    case 'shot_on_target': return <BadgedLucideSvg nodes={LUCIDE_TARGET} size={size} accent="#22d3ee" haloOpacity={0.18} />
+    case 'shot_on_target': return <MiniBallIcon size={size} accent="#22d3ee" />
     case 'shot_off_target': return <GoalpostIcon size={size} />
     case 'yellow_card': return <CardIcon size={size} variant="yellow" />
     case 'red_card': return <CardIcon size={size} variant="red" />
     case 'second_yellow': return <CardIcon size={size} variant="second_yellow" />
-    case 'substitution': return <BadgedLucideSvg nodes={LUCIDE_ARROW_RIGHT_LEFT} size={size} accent="#94a3b8" haloOpacity={0.10} dimmed />
+    case 'substitution': return <SubstitutionIcon size={size} />
     case 'var': return <VarTag size={size} />
     case 'unknown':
     default: return <UnknownDot size={size} />
@@ -417,13 +418,12 @@ function renderIconBox(type: PressureGraphEventType, size: number, teamAccent?: 
 function SoccerBallBox(props: { size: number; variant: 'goal' | 'own_goal' | 'penalty_scored' | 'penalty_missed'; teamAccent?: string }) {
   const { size: r, variant, teamAccent } = props
 
-  // Colors: ball stays WHITE for all variants. Differentiation comes from
-  // the badge ring/halo color, not from painting the ball itself.
-  const ballFill = '#ffffff'
-  const panelFill = '#1e293b'
-  const panelStroke = '#334155'
+  // Colors: ball is WHITE for normal goals, RED for own_goal.
+  const ballFill = variant === 'own_goal' ? '#fb7185' : '#ffffff'
+  const panelFill = variant === 'own_goal' ? '#881337' : '#1e293b'
+  const panelStroke = variant === 'own_goal' ? '#9f1239' : '#334155'
   const ringColor = variant === 'own_goal'
-    ? '#f43f5e'
+    ? '#fda4af'
     : variant === 'penalty_scored'
       ? '#22d3ee'
       : teamAccent ? `#${teamAccent}` : '#22d3ee'
@@ -484,6 +484,60 @@ function SoccerBallBox(props: { size: number; variant: 'goal' | 'own_goal' | 'pe
   )
 }
 
+// V2.7: Mini ball for shot_on_target — smaller than goal, with accent ring.
+// Communicates "shot at goal" without being confused with an actual goal.
+function MiniBallIcon({ size, accent }: { size: number; accent: string }) {
+  const r = size
+  const ballR = r * 0.6
+  const badgeR = r * 1.0
+
+  // Simplified ball: circle + small pentagon hint
+  const pr = ballR * 0.35
+  const pentPoints = Array.from({ length: 5 }, (_, i) => {
+    const angle = (i * 72 - 90) * (Math.PI / 180)
+    return { x: Math.cos(angle) * pr, y: Math.sin(angle) * pr }
+  })
+  const pentPath = pentPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') + ' Z'
+
+  return (
+    <g>
+      {/* Halo */}
+      <circle r={badgeR * 1.3} fill={accent} opacity="0.15" />
+      {/* Badge */}
+      <circle r={badgeR} fill="rgba(8,11,18,0.9)" stroke={accent} strokeWidth={Math.max(0.6, badgeR * 0.12)} />
+      {/* Ball */}
+      <circle r={ballR} fill="#ffffff" stroke="#cbd5e1" strokeWidth={Math.max(0.5, ballR * 0.08)} />
+      {/* Pentagon hint */}
+      <path d={pentPath} fill="#475569" stroke="#334155" strokeWidth={Math.max(0.3, ballR * 0.05)} strokeLinejoin="round" />
+      {/* Highlight */}
+      <ellipse cx={-ballR * 0.3} cy={-ballR * 0.3} rx={ballR * 0.2} ry={ballR * 0.12} fill="rgba(255,255,255,0.5)" />
+    </g>
+  )
+}
+
+// V2.7: Compact substitution icon — small badge with simple swap arrows.
+// Deliberately minimal so it doesn't compete with goals/cards.
+function SubstitutionIcon({ size }: { size: number }) {
+  const r = size
+  const badgeR = r * 0.9
+
+  return (
+    <g>
+      {/* Badge */}
+      <circle r={badgeR} fill="rgba(8,11,18,0.85)" stroke="#64748b" strokeWidth={Math.max(0.4, badgeR * 0.1)} opacity="0.8" />
+      {/* Swap arrows: up-right and down-left */}
+      <g stroke="#94a3b8" strokeWidth={Math.max(0.8, r * 0.1)} strokeLinecap="round" strokeLinejoin="round" fill="none">
+        {/* Arrow going up-right (in) */}
+        <path d={`M ${-r * 0.35} ${r * 0.15} L ${r * 0.15} ${-r * 0.35}`} />
+        <path d={`M ${r * 0.15} ${-r * 0.35} L ${r * 0.15} ${-r * 0.1} M ${r * 0.15} ${-r * 0.35} L ${-r * 0.08} ${-r * 0.35}`} />
+        {/* Arrow going down-left (out) */}
+        <path d={`M ${r * 0.35} ${-r * 0.15} L ${-r * 0.15} ${r * 0.35}`} />
+        <path d={`M ${-r * 0.15} ${r * 0.35} L ${-r * 0.15} ${r * 0.1} M ${-r * 0.15} ${r * 0.35} L ${r * 0.08} ${r * 0.35}`} />
+      </g>
+    </g>
+  )
+}
+
 // V2.6B: Custom goalpost icon — bolder posts, thicker crossbar, clearer ball.
 function GoalpostIcon({ size }: { size: number }) {
   const r = size
@@ -525,7 +579,7 @@ function GoalpostIcon({ size }: { size: number }) {
 
 export function GroupBubbleBox({ count, sizePx, accent, hovered }: { count: number; sizePx: number; accent: string; hovered?: boolean }) {
   const scale = hovered ? 1.04 : 1
-  const radius = 13 + (count >= 10 ? 1.8 : 1)
+  const radius = 11.5 + (count >= 10 ? 1.6 : 0.8)
   return (
     <span
       aria-hidden="true"
@@ -555,10 +609,7 @@ export function GroupBubbleBox({ count, sizePx, accent, hovered }: { count: numb
 // ---------------------------------------------------------------------------
 
 export function PressureEventIconInline({ type, sizePx = 14, teamAccent }: { type: PressureGraphEventType; sizePx?: number; teamAccent?: string }) {
-  if (type === 'shot_on_target') return <Target size={sizePx} color="#22d3ee" strokeWidth={2.2} aria-hidden />
-  if (type === 'substitution') return <ArrowRightLeft size={sizePx} color="#94a3b8" strokeWidth={2.2} aria-hidden />
-
-  // shot_off_target and all custom types use inline SVG
+  // All types now use the unified inline SVG renderer for visual consistency
   const r = 11
   return (
     <svg width={sizePx} height={sizePx} viewBox="-16 -16 32 32" overflow="visible" aria-hidden="true">
@@ -578,10 +629,12 @@ function renderInlineCustom(type: PressureGraphEventType, r: number, teamAccent?
     case 'own_goal': return <SoccerBall size={r} variant="own_goal" />
     case 'penalty_scored': return <SoccerBall size={r} variant="penalty_scored" />
     case 'penalty_missed': return <SoccerBall size={r} variant="penalty_missed" />
+    case 'shot_on_target': return <MiniBallIcon size={r} accent="#22d3ee" />
     case 'shot_off_target': return <GoalpostIcon size={r} />
     case 'yellow_card': return <CardIcon size={r} variant="yellow" />
     case 'red_card': return <CardIcon size={r} variant="red" />
     case 'second_yellow': return <CardIcon size={r} variant="second_yellow" />
+    case 'substitution': return <SubstitutionIcon size={r} />
     case 'var': return <VarTag size={r} />
     default: return <UnknownDot size={r} />
   }
