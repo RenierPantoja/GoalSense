@@ -723,7 +723,21 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       {/* 3. LIVE PRESSURE CENTER — hidden for scheduled */}
       {!isMatchScheduled && (
       <div id="sec-pressao">
-        <LivePressureGraph events={events} commentary={commentary} homeName={home.name} awayName={away.name} elapsed={elapsed} homeColors={home.colors} awayColors={away.colors} />
+        <LivePressureGraph
+          events={events}
+          commentary={commentary}
+          homeName={home.name}
+          awayName={away.name}
+          elapsed={elapsed}
+          homeColors={home.colors}
+          awayColors={away.colors}
+          onEventSelect={() => {
+            // V2.1 — when the user activates a marker we scroll to the
+            // timeline section so they can read the event in context.
+            // Best-effort: if the section isn't mounted yet we just no-op.
+            try { document.getElementById('sec-timeline')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) } catch { /* */ }
+          }}
+        />
       </div>
       )}
 

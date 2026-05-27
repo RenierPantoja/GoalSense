@@ -1,16 +1,23 @@
 /**
- * Premium Live Pressure Graph (V2) — attack momentum with rich event markers.
+ * Premium Live Pressure Graph (V2.1) — attack momentum with rich event markers.
  * ─────────────────────────────────────────────────────────────────────────────
- * - Mandante acima da linha central, visitante abaixo.
- * - Marcadores reais por minuto: gol, gol contra, pênalti, finalizações,
- *   cartões, substituições e VAR (quando o provider entrega).
- * - Tooltip rico com tipo, minuto, time, jogador e assistência. Renderizado
- *   como overlay HTML para garantir legibilidade e responsividade.
- * - Stacking inteligente para evitar sobreposição em minutos quentes.
- * - Funciona ao vivo e em jogos encerrados. Sem mocks, sem dado inventado.
+ * V2 added: typed marker model, rich HTML tooltip, side-aware stacking,
+ *           legend with present types, fallback for providers without events.
+ * V2.1 adds:
+ *   - smart tooltip placement (flips horizontally near edges, vertically
+ *     when the marker is on the wrong side of the line);
+ *   - "+N" grouping when more than 3 events share the same minute/side;
+ *   - group tooltip listing the events;
+ *   - optional `onEventSelect` callback so the parent can scroll/highlight
+ *     the corresponding entry in its timeline section;
+ *   - density mode that softens low-priority markers when the match is busy;
+ *   - legend with real per-type counts.
+ *
+ * The pressure curve, reading strip and confidence badge are intentionally
+ * untouched — only the marker / tooltip / legend layer is reworked.
  */
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { buildPressureTimeline } from '@/features/matches/buildPressureTimeline'
 import { buildPressureRead } from '@/features/matches/buildPressureRead'
 import { normalizeEvents } from '@/features/matches/normalizeMatchEvents'
@@ -31,19 +38,21 @@ interface Props {
   elapsed: number | null
   homeColors: string[]
   awayColors: string[]
+  /**
+   * Optional V2.1 hook — fires when the user clicks/activates a marker. The
+   * parent typically scrolls to its timeline section and highlights the
+   * matching event by id. Pure side-effect, no return value expected.
+   */
+  onEventSelect?: (event: PressureGraphEvent) => void
 }
 
 // ─── Marker visual config ────────────────────────────────────────────────────
 
 interface MarkerVisual {
   shape: 'goal-ball' | 'shot-dot' | 'shot-ring' | 'card' | 'sub-arrows' | 'var-tag'
-  /** Width of the marker in SVG units. */
   size: number
-  /** Marker fill / accent color (overridden by team color when applicable). */
   color: string
-  /** Optional border tone for cards / dots. */
   border?: string
-  /** Used by the legend. */
   legendLabel: string
 }
 
@@ -62,14 +71,23 @@ const MARKER_VISUALS: Record<PressureGraphEventType, MarkerVisual> = {
   unknown: { shape: 'shot-dot', size: 3, color: '#94a3b8', legendLabel: 'Evento' },
 }
 
+// Density: types that fade when the match is busy. Critical events
+// (goals, red cards, penalties) never fade.
+const LOW_PRIORITY_TYPES: PressureGraphEventType[] = ['shot_off_target', 'substitution', 'var', 'unknown']
+
+// ─── Hover state ────────────────────────────────────────────────────────────
+
+type HoverState =
+  | { kind: 'event'; event: PressureGraphEvent; cx: number; cy: number }
+  | { kind: 'group'; events: PressureGraphEvent[]; minute: number; side: PressureGraphEvent['side']; cx: number; cy: number }
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function LivePressureGraph({ events, commentary, homeName, awayName, elapsed, homeColors, awayColors }: Props) {
-  // Merge events + commentary for richer pressure data
+export function LivePressureGraph({ events, commentary, homeName, awayName, elapsed, homeColors, awayColors, onEventSelect }: Props) {
+  // Merge events + commentary for richer pressure data (unchanged from V2)
   const allEvents: { clock: string; text: string; type: string; team: string }[] = [...events]
   if (commentary && commentary.length > 0) {
     for (const c of commentary) {
-      // Only add commentary items that look like action events (not just narration filler)
       const t = c.text.toLowerCase()
       if (t.includes('goal') || t.includes('attempt') || t.includes('shot') || t.includes('corner') ||
           t.includes('foul') || t.includes('yellow') || t.includes('red card') || t.includes('substitution') ||
@@ -86,8 +104,28 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
     return normalizePressureGraphEvents(normalized, homeName, awayName)
   }, [events, homeName, awayName])
 
-  // Local state for the rich tooltip overlay.
-  const [hovered, setHovered] = useState<{ event: PressureGraphEvent; x: number; y: number } | null>(null)
+  const [hovered, setHovered] = useState<HoverState | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  // Density tier: drives marker softening + grouping aggressiveness.
+  // - normal:    <= 12 events     → render everything full opacity
+  // - dense:     13..25 events    → soften low-priority markers
+  // - very_dense: > 25 events     → soften + smaller stack cap
+  const density = useMemo<'normal' | 'dense' | 'very_dense'>(() => {
+    if (graphEvents.length > 25) return 'very_dense'
+    if (graphEvents.length > 12) return 'dense'
+    return 'normal'
+  }, [graphEvents.length])
+
+  // Stack cap drives when "+N" appears.
+  const stackCap = density === 'very_dense' ? 2 : 3
+
+  const handleSelect = useCallback((event: PressureGraphEvent) => {
+    setSelectedId(event.id)
+    if (onEventSelect) {
+      try { onEventSelect(event) } catch { /* never let a host callback crash the graph */ }
+    }
+  }, [onEventSelect])
 
   // Colors
   const hc = `#${homeColors[0] || '22d3ee'}`
@@ -123,7 +161,7 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
     )
   }
 
-  // Build smooth area paths
+  // Build smooth area paths (unchanged from V2)
   function buildPath(side: 'home' | 'away'): string {
     if (blocks.length < 2) return ''
     const points = blocks.map(b => {
@@ -135,12 +173,10 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
         : mid + normalized * (mid - 4)
       return { x: xCenter, y }
     })
-
     let d = `M${padX},${mid}`
     for (let i = 0; i < points.length; i++) {
-      if (i === 0) {
-        d += ` L${points[i].x},${points[i].y}`
-      } else {
+      if (i === 0) d += ` L${points[i].x},${points[i].y}`
+      else {
         const prev = points[i - 1]
         const cpX = (prev.x + points[i].x) / 2
         d += ` Q${cpX},${prev.y} ${points[i].x},${points[i].y}`
@@ -149,7 +185,6 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
     d += ` L${points[points.length - 1].x},${mid} Z`
     return d
   }
-
   function buildStrokePath(side: 'home' | 'away'): string {
     if (blocks.length < 2) return ''
     const points = blocks.map(b => {
@@ -161,12 +196,10 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
         : mid + normalized * (mid - 4)
       return { x: xCenter, y }
     })
-
     let d = ''
     for (let i = 0; i < points.length; i++) {
-      if (i === 0) {
-        d = `M${points[i].x},${points[i].y}`
-      } else {
+      if (i === 0) d = `M${points[i].x},${points[i].y}`
+      else {
         const prev = points[i - 1]
         const cpX = (prev.x + points[i].x) / 2
         d += ` Q${cpX},${prev.y} ${points[i].x},${points[i].y}`
@@ -175,14 +208,13 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
     return d
   }
 
-  // ─── Marker layout: stack by side, sort by importance ────────────────────
-  // Markers above the line for `home`, below for `away`. `neutral` (no team)
-  // sits exactly on the line. Within the same minute we stack outward away
-  // from the center using a small offset, and order by descending z-index so
-  // critical events (gols, vermelhos) ficam mais visíveis.
-  const layoutMarkers = useMemo(() => {
-    type Layout = { event: PressureGraphEvent; cx: number; cy: number }
-    if (currentMinute <= 0 || graphEvents.length === 0) return [] as Layout[]
+  // ─── Marker layout with grouping and density ────────────────────────────
+  type MarkerLayout =
+    | { kind: 'single'; event: PressureGraphEvent; cx: number; cy: number; side: PressureGraphEvent['side']; opacity: number }
+    | { kind: 'group'; events: PressureGraphEvent[]; minute: number; side: PressureGraphEvent['side']; cx: number; cy: number }
+
+  const layoutMarkers = useMemo<MarkerLayout[]>(() => {
+    if (currentMinute <= 0 || graphEvents.length === 0) return []
 
     const grouped = new Map<string, PressureGraphEvent[]>()
     for (const ev of graphEvents) {
@@ -192,22 +224,40 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
       grouped.set(key, list)
     }
 
-    const baseOffset = 9 // distance from centerline to the first marker
+    const baseOffset = 9
     const stackStep = 8
-    const out: Layout[] = []
+    const out: MarkerLayout[] = []
+
     for (const [key, list] of grouped) {
       const side = key.startsWith('home') ? 'home' : key.startsWith('away') ? 'away' : 'neutral'
+      // Sort by importance descending so critical events sit closest to the line.
       list.sort((a, b) => eventZIndex(b.type) - eventZIndex(a.type))
       const first = list[0]
       const cx = (first.minute / currentMinute) * (svgW - padX * 2) + padX
-      list.forEach((ev, idx) => {
-        const yDir = side === 'home' ? -1 : side === 'away' ? 1 : (idx % 2 === 0 ? -1 : 1)
-        const cy = mid + yDir * (baseOffset + idx * stackStep)
-        out.push({ event: ev, cx, cy })
-      })
+      const yDir = side === 'home' ? -1 : side === 'away' ? 1 : -1
+
+      if (list.length <= stackCap) {
+        list.forEach((ev, idx) => {
+          const cy = mid + yDir * (baseOffset + idx * stackStep)
+          const lowPri = LOW_PRIORITY_TYPES.includes(ev.type)
+          const opacity = density === 'normal' || !lowPri ? 1 : density === 'dense' ? 0.55 : 0.4
+          out.push({ kind: 'single', event: ev, cx, cy, side, opacity })
+        })
+      } else {
+        // Render the top (stackCap - 1) events, then a +N group bubble.
+        const visibleCount = stackCap - 1
+        const visible = list.slice(0, visibleCount)
+        const overflow = list.slice(visibleCount)
+        visible.forEach((ev, idx) => {
+          const cy = mid + yDir * (baseOffset + idx * stackStep)
+          out.push({ kind: 'single', event: ev, cx, cy, side, opacity: 1 })
+        })
+        const groupCy = mid + yDir * (baseOffset + visibleCount * stackStep)
+        out.push({ kind: 'group', events: overflow, minute: first.minute, side, cx, cy: groupCy })
+      }
     }
     return out
-  }, [graphEvents, currentMinute, mid])
+  }, [graphEvents, currentMinute, mid, density, stackCap])
 
   // Time axis labels
   const timeLabels: number[] = [0]
@@ -219,11 +269,11 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
   if (currentMinute > 80) timeLabels.push(90)
   else timeLabels.push(currentMinute)
 
-  // Active legend: only show entries for event types actually present.
-  const presentTypes = useMemo(() => {
-    const set = new Set<PressureGraphEventType>()
-    for (const ev of graphEvents) set.add(ev.type)
-    return set
+  // Counts per type for the legend
+  const typeCounts = useMemo(() => {
+    const map = new Map<PressureGraphEventType, number>()
+    for (const ev of graphEvents) map.set(ev.type, (map.get(ev.type) || 0) + 1)
+    return map
   }, [graphEvents])
 
   return (
@@ -279,7 +329,7 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
           <line x1={padX} y1={mid / 2} x2={svgW - padX} y2={mid / 2} stroke="rgba(255,255,255,0.02)" strokeWidth="0.2" strokeDasharray="2,4" />
           <line x1={padX} y1={mid + mid / 2} x2={svgW - padX} y2={mid + mid / 2} stroke="rgba(255,255,255,0.02)" strokeWidth="0.2" strokeDasharray="2,4" />
 
-          {/* Halftime line */}
+          {/* Halftime */}
           {currentMinute > 45 && (
             <line
               x1={(45 / currentMinute) * (svgW - padX * 2) + padX}
@@ -298,33 +348,56 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
           <path d={buildPath('away')} fill={acFill} />
           <path d={buildStrokePath('away')} fill="none" stroke={ac} strokeWidth="0.8" strokeLinecap="round" />
 
-          {/* Vertical hint line per marker minute */}
-          {layoutMarkers.map(({ event, cx }, i) => (
+          {/* Vertical hint lines per minute (one per group key, even though we drew several markers) */}
+          {layoutMarkers.map((m, i) => (
             <line
-              key={`hint-${event.id}-${i}`}
-              x1={cx}
+              key={`hint-${i}`}
+              x1={m.cx}
               y1={mid - 1.5}
-              x2={cx}
+              x2={m.cx}
               y2={mid + 1.5}
               stroke="rgba(255,255,255,0.18)"
               strokeWidth="0.3"
             />
           ))}
 
-          {/* Markers */}
+          {/* Markers — group bubbles render on top of singles by sorting by zIndex ascending */}
           {layoutMarkers
             .slice()
-            .sort((a, b) => eventZIndex(a.event.type) - eventZIndex(b.event.type))
-            .map(({ event, cx, cy }) => (
-              <Marker
-                key={event.id}
-                event={event}
-                cx={cx}
-                cy={cy}
-                onHover={(x, y) => setHovered({ event, x, y })}
-                onLeave={() => setHovered(null)}
-              />
-            ))}
+            .sort((a, b) => {
+              const za = a.kind === 'group' ? 70 : eventZIndex(a.event.type)
+              const zb = b.kind === 'group' ? 70 : eventZIndex(b.event.type)
+              return za - zb
+            })
+            .map((m, i) => {
+              if (m.kind === 'single') {
+                const isSelected = selectedId === m.event.id
+                return (
+                  <Marker
+                    key={`s-${m.event.id}-${i}`}
+                    event={m.event}
+                    cx={m.cx}
+                    cy={m.cy}
+                    opacity={m.opacity}
+                    selected={isSelected}
+                    onHover={(x, y) => setHovered({ kind: 'event', event: m.event, cx: x, cy: y })}
+                    onLeave={() => setHovered(null)}
+                    onSelect={() => handleSelect(m.event)}
+                  />
+                )
+              }
+              return (
+                <GroupMarker
+                  key={`g-${m.minute}-${m.side}-${i}`}
+                  events={m.events}
+                  minute={m.minute}
+                  cx={m.cx}
+                  cy={m.cy}
+                  onHover={(x, y) => setHovered({ kind: 'group', events: m.events, minute: m.minute, side: m.side, cx: x, cy: y })}
+                  onLeave={() => setHovered(null)}
+                />
+              )
+            })}
 
           {/* Current minute indicator */}
           <line
@@ -337,8 +410,15 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
           />
         </svg>
 
-        {/* Rich HTML tooltip overlay */}
-        {hovered && <Tooltip event={hovered.event} x={hovered.x} y={hovered.y} />}
+        {/* Smart-positioned HTML tooltip overlay */}
+        {hovered && (hovered.kind === 'event'
+          ? <SmartTooltip xPct={hovered.cx} yPct={hovered.cy}>
+              <EventTooltipBody event={hovered.event} />
+            </SmartTooltip>
+          : <SmartTooltip xPct={hovered.cx} yPct={hovered.cy}>
+              <GroupTooltipBody events={hovered.events} minute={hovered.minute} />
+            </SmartTooltip>
+        )}
       </div>
 
       {/* Time axis */}
@@ -346,9 +426,9 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
         {timeLabels.map(t => <span key={t}>{t}'</span>)}
       </div>
 
-      {/* Legend */}
-      {presentTypes.size > 0 ? (
-        <Legend types={presentTypes} />
+      {/* Legend with counts */}
+      {typeCounts.size > 0 ? (
+        <Legend counts={typeCounts} />
       ) : (
         <p className="text-[10px] text-white/25 mt-3 px-1">Eventos detalhados indisponíveis para este provider.</p>
       )}
@@ -356,20 +436,43 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
   )
 }
 
-// ─── Tooltip overlay ────────────────────────────────────────────────────────
+// ─── Smart tooltip wrapper ─────────────────────────────────────────────────
 
-function Tooltip({ event, x, y }: { event: PressureGraphEvent; x: number; y: number }) {
-  // Clamp inside the graph box. The container is the parent `relative` div
-  // with a fixed height of 240px; SVG fills 100% width via preserveAspectRatio.
-  // We position the tooltip near the cursor, biased above the marker.
-  const left = `calc(${x}% + 6px)`
-  const top = `calc(${y}% - 8px)`
+/**
+ * Anchors a tooltip inside the graph viewport using percent-based rules so we
+ * never have to measure the DOM. Logic:
+ *  - x < 18%  → align left edge of tooltip with marker (tooltip extends to the right)
+ *  - x > 82%  → align right edge of tooltip with marker (extends to the left)
+ *  - else     → center horizontally on the marker
+ *  - y < 35%  → place tooltip BELOW the marker
+ *  - else     → place tooltip ABOVE
+ */
+function SmartTooltip({ xPct, yPct, children }: { xPct: number; yPct: number; children: React.ReactNode }) {
+  const horiz: 'left' | 'right' | 'center' = xPct < 18 ? 'left' : xPct > 82 ? 'right' : 'center'
+  const placeBelow = yPct < 35
+
+  let translateX = '-50%'
+  let leftCss = `${xPct}%`
+  if (horiz === 'left') { translateX = '0'; leftCss = `calc(${xPct}% + 8px)` }
+  if (horiz === 'right') { translateX = '-100%'; leftCss = `calc(${xPct}% - 8px)` }
+
+  const translateY = placeBelow ? '8px' : 'calc(-100% - 8px)'
+  const topCss = `${yPct}%`
+
   return (
     <div
       role="tooltip"
-      className="absolute z-30 max-w-[260px] pointer-events-none rounded-xl border border-white/[0.08] bg-[#0b1018]/95 backdrop-blur-sm shadow-[0_8px_24px_rgba(0,0,0,0.5)] px-3.5 py-2.5 text-left animate-fadeIn"
-      style={{ left, top, transform: 'translate(0, -100%)' }}
+      className="absolute z-30 max-w-[280px] pointer-events-none rounded-xl border border-white/[0.08] bg-[#0b1018]/95 backdrop-blur-sm shadow-[0_8px_24px_rgba(0,0,0,0.5)] px-3.5 py-2.5 text-left animate-fadeIn"
+      style={{ left: leftCss, top: topCss, transform: `translate(${translateX}, ${translateY})` }}
     >
+      {children}
+    </div>
+  )
+}
+
+function EventTooltipBody({ event }: { event: PressureGraphEvent }) {
+  return (
+    <>
       <div className="flex items-center gap-2 mb-1.5">
         <span className="text-[10px] font-bold uppercase tracking-wider text-white/85">{eventLabel(event.type)}</span>
         <span className="text-[10px] text-white/45 tabular-nums">{formatMinuteLabel(event.minute, event.addedTime)}</span>
@@ -388,8 +491,41 @@ function Tooltip({ event, x, y }: { event: PressureGraphEvent; x: number; y: num
       {event.description && event.description !== event.rawText && (
         <p className="text-[10.5px] text-white/45 leading-snug mt-1.5 border-t border-white/[0.05] pt-1.5">{event.description}</p>
       )}
-    </div>
+    </>
   )
+}
+
+function GroupTooltipBody({ events, minute }: { events: PressureGraphEvent[]; minute: number }) {
+  const visible = events.slice(0, 6)
+  const remaining = events.length - visible.length
+  return (
+    <>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-white/85">Eventos no minuto {minute}'</span>
+        <span className="text-[10px] text-white/45 tabular-nums">{events.length}</span>
+      </div>
+      <ul className="space-y-1">
+        {visible.map(ev => (
+          <li key={ev.id} className="flex items-start gap-2 text-[11px] text-white/70 leading-snug">
+            <GroupListSwatch type={ev.type} />
+            <span className="flex-1 min-w-0">
+              <span className="text-white/85 font-medium">{eventLabel(ev.type)}</span>
+              {ev.playerName ? <span className="text-white/65"> · {ev.playerName}</span> : <span className="text-white/35 italic"> · jogador não informado</span>}
+              {ev.teamName && <span className="text-white/45"> · {ev.teamName}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {remaining > 0 && (
+        <p className="text-[10.5px] text-white/40 mt-2 border-t border-white/[0.05] pt-1.5">+{remaining} {remaining === 1 ? 'evento' : 'eventos'}</p>
+      )}
+    </>
+  )
+}
+
+function GroupListSwatch({ type }: { type: PressureGraphEventType }) {
+  const cfg = MARKER_VISUALS[type] || MARKER_VISUALS.unknown
+  return <span className="inline-block h-2 w-2 rounded-full mt-1 shrink-0" style={{ backgroundColor: cfg.color }} aria-hidden />
 }
 
 // ─── Marker variants ────────────────────────────────────────────────────────
@@ -398,21 +534,22 @@ interface MarkerProps {
   event: PressureGraphEvent
   cx: number
   cy: number
+  opacity?: number
+  selected?: boolean
   onHover: (xPct: number, yPct: number) => void
   onLeave: () => void
+  onSelect?: () => void
 }
 
-function Marker({ event, cx, cy, onHover, onLeave }: MarkerProps) {
+function Marker({ event, cx, cy, opacity = 1, selected = false, onHover, onLeave, onSelect }: MarkerProps) {
   const cfg = MARKER_VISUALS[event.type] || MARKER_VISUALS.unknown
   const ariaLabel = `${eventLabel(event.type)} aos ${formatMinuteLabel(event.minute, event.addedTime)}${event.teamName ? ` · ${event.teamName}` : ''}${event.playerName ? ` · ${event.playerName}` : ''}`
   const handleEnter = () => {
-    // Convert SVG coords (0-400 / 0-120) into percentage of the container so
-    // the HTML tooltip can be positioned with `calc(% + offset)`.
     const xPct = (cx / 400) * 100
     const yPct = (cy / 120) * 100
     onHover(xPct, yPct)
   }
-  const handleClick = () => handleEnter()
+  const activate = () => { handleEnter(); if (onSelect) onSelect() }
 
   return (
     <g
@@ -423,14 +560,40 @@ function Marker({ event, cx, cy, onHover, onLeave }: MarkerProps) {
       onMouseLeave={onLeave}
       onFocus={handleEnter}
       onBlur={onLeave}
-      onClick={handleClick}
-      onKeyDown={(e) => { if (e.key === 'Enter') handleClick() }}
+      onClick={activate}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate() } }}
+      style={{ cursor: 'pointer', outline: 'none', opacity }}
+    >
+      <circle cx={cx} cy={cy} r={Math.max(cfg.size * 1.3, 6)} fill="transparent" />
+      {selected && (
+        <circle cx={cx} cy={cy} r={cfg.size + 2.4} fill="none" stroke="#22d3ee" strokeWidth="0.6" opacity="0.9" />
+      )}
+      <MarkerShape event={event} cx={cx} cy={cy} />
+      <title>{ariaLabel}</title>
+    </g>
+  )
+}
+
+function GroupMarker({ events, minute, cx, cy, onHover, onLeave }: { events: PressureGraphEvent[]; minute: number; cx: number; cy: number; onHover: (xPct: number, yPct: number) => void; onLeave: () => void }) {
+  const r = 5.5
+  const labels = events.slice(0, 3).map(e => eventLabel(e.type).toLowerCase())
+  const ariaLabel = `${events.length} eventos no minuto ${minute}: ${labels.join(', ')}${events.length > labels.length ? ` e mais ${events.length - labels.length}` : ''}`
+  const handleEnter = () => onHover((cx / 400) * 100, (cy / 120) * 100)
+  return (
+    <g
+      role="img"
+      tabIndex={0}
+      aria-label={ariaLabel}
+      onMouseEnter={handleEnter}
+      onMouseLeave={onLeave}
+      onFocus={handleEnter}
+      onBlur={onLeave}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleEnter() } }}
       style={{ cursor: 'pointer', outline: 'none' }}
     >
-      {/* Invisible hit-area so small markers stay easy to hover. */}
-      <circle cx={cx} cy={cy} r={Math.max(cfg.size * 1.3, 6)} fill="transparent" />
-
-      <MarkerShape event={event} cx={cx} cy={cy} />
+      <circle cx={cx} cy={cy} r={r * 1.3} fill="transparent" />
+      <circle cx={cx} cy={cy} r={r} fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.45)" strokeWidth="0.5" />
+      <text x={cx} y={cy + 1.6} textAnchor="middle" fontSize="4.5" fontWeight="700" fill="#ffffff">+{events.length}</text>
       <title>{ariaLabel}</title>
     </g>
   )
@@ -485,22 +648,65 @@ function MarkerShape({ event, cx, cy }: { event: PressureGraphEvent; cx: number;
   }
 }
 
-// ─── Legend ─────────────────────────────────────────────────────────────────
+// ─── Legend with counts and shot grouping ───────────────────────────────────
 
-function Legend({ types }: { types: Set<PressureGraphEventType> }) {
-  const order: PressureGraphEventType[] = [
-    'goal', 'own_goal', 'penalty_scored', 'penalty_missed',
-    'shot_on_target', 'shot_off_target',
-    'yellow_card', 'red_card', 'second_yellow',
-    'substitution', 'var',
-  ]
-  const visible = order.filter(t => types.has(t))
+function Legend({ counts }: { counts: Map<PressureGraphEventType, number> }) {
+  // Combined "Finalizações" entry showing on / off split when any shot exists.
+  const onTarget = counts.get('shot_on_target') || 0
+  const offTarget = counts.get('shot_off_target') || 0
+  const totalShots = onTarget + offTarget
+
+  const goal = counts.get('goal') || 0
+  const ownGoal = counts.get('own_goal') || 0
+  const penScored = counts.get('penalty_scored') || 0
+  const penMissed = counts.get('penalty_missed') || 0
+  const totalGoals = goal + ownGoal + penScored
+
+  const yellow = counts.get('yellow_card') || 0
+  const red = counts.get('red_card') || 0
+  const sec = counts.get('second_yellow') || 0
+  const totalCards = yellow + red + sec
+
+  const subs = counts.get('substitution') || 0
+  const vars = counts.get('var') || 0
+
+  const items: { key: string; swatchType: PressureGraphEventType; label: string; count: number; sublabel?: string }[] = []
+  if (totalGoals > 0) {
+    const sub: string[] = []
+    if (goal > 0) sub.push(`${goal} normal${goal === 1 ? '' : 'is'}`)
+    if (ownGoal > 0) sub.push(`${ownGoal} contra`)
+    if (penScored > 0) sub.push(`${penScored} pênalti`)
+    items.push({ key: 'goals', swatchType: 'goal', label: 'Gols', count: totalGoals, sublabel: sub.length > 0 ? sub.join(' · ') : undefined })
+  }
+  if (penMissed > 0) {
+    items.push({ key: 'penalty_missed', swatchType: 'penalty_missed', label: 'Pênaltis perdidos', count: penMissed })
+  }
+  if (totalShots > 0) {
+    const sub: string[] = []
+    if (onTarget > 0) sub.push(`${onTarget} no alvo`)
+    if (offTarget > 0) sub.push(`${offTarget} fora`)
+    items.push({ key: 'shots', swatchType: 'shot_on_target', label: 'Finalizações', count: totalShots, sublabel: sub.join(' · ') })
+  }
+  if (totalCards > 0) {
+    const sub: string[] = []
+    if (yellow > 0) sub.push(`${yellow} amarelo${yellow === 1 ? '' : 's'}`)
+    if (red > 0) sub.push(`${red} vermelho${red === 1 ? '' : 's'}`)
+    if (sec > 0) sub.push(`${sec} 2º amarelo`)
+    items.push({ key: 'cards', swatchType: red > 0 || sec > 0 ? 'red_card' : 'yellow_card', label: 'Cartões', count: totalCards, sublabel: sub.join(' · ') })
+  }
+  if (subs > 0) items.push({ key: 'subs', swatchType: 'substitution', label: 'Substituições', count: subs })
+  if (vars > 0) items.push({ key: 'vars', swatchType: 'var', label: 'VAR', count: vars })
+
+  if (items.length === 0) return null
+
   return (
-    <ul className="flex items-center gap-3 flex-wrap mt-3 text-[10px] text-white/45">
-      {visible.map(t => (
-        <li key={t} className="flex items-center gap-1.5">
-          <LegendSwatch type={t} />
-          <span>{MARKER_VISUALS[t].legendLabel}</span>
+    <ul className="flex items-center gap-3 flex-wrap mt-3 text-[10px] text-white/50">
+      {items.map(item => (
+        <li key={item.key} className="flex items-center gap-1.5">
+          <LegendSwatch type={item.swatchType} />
+          <span className="text-white/70 font-medium">{item.label}</span>
+          <span className="text-white/85 font-bold tabular-nums">{item.count}</span>
+          {item.sublabel && <span className="text-white/35">· {item.sublabel}</span>}
         </li>
       ))}
     </ul>
