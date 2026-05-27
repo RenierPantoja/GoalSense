@@ -553,6 +553,13 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
   const [onlyPreMatch, setOnlyPreMatch] = useState<boolean>(existingPattern?.onlyPreMatch || false)
   const [minConf, setMinConf] = useState<number>(initial?.minConfidence ?? 50)
   const [step, setStep] = useState<TemplateStep>('overview')
+  // Tracks which steps the user actually visited. Editing an existing radar
+  // counts every step as already visited; new configurations must walk through
+  // every step before the "Salvar e ativar" action becomes available.
+  const ALL_TEMPLATE_STEPS: TemplateStep[] = ['overview', 'conditions', 'scope_action', 'confidence', 'review']
+  const [visitedSteps, setVisitedSteps] = useState<Set<TemplateStep>>(
+    () => existingPattern ? new Set(ALL_TEMPLATE_STEPS) : new Set<TemplateStep>(['overview'])
+  )
 
   useEffect(() => {
     if (!open) return
@@ -570,6 +577,7 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
     setOnlyPreMatch(existingPattern?.onlyPreMatch || false)
     setMinConf(initial?.minConfidence ?? 50)
     setStep('overview')
+    setVisitedSteps(existingPattern ? new Set(ALL_TEMPLATE_STEPS) : new Set<TemplateStep>(['overview']))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, template?.id, existingPattern?.id])
 
@@ -608,9 +616,20 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
     { key: 'review', label: 'Revisão', valid: canSave, required: false },
   ]
   const stepIndex = steps.findIndex(s => s.key === step)
-  const goPrev = () => { if (stepIndex > 0) setStep(steps[stepIndex - 1].key) }
-  const goNext = () => { if (stepIndex < steps.length - 1) setStep(steps[stepIndex + 1].key) }
+  const goPrev = () => { if (stepIndex > 0) { const prev = steps[stepIndex - 1].key; setStep(prev); setVisitedSteps(prev2 => { const n = new Set(prev2); n.add(prev); return n }) } }
+  const goNext = () => { if (stepIndex < steps.length - 1) { const next = steps[stepIndex + 1].key; setStep(next); setVisitedSteps(prev => { const n = new Set(prev); n.add(next); return n }) } }
+  const goTo = (k: TemplateStep) => { setStep(k); setVisitedSteps(prev => { const n = new Set(prev); n.add(k); return n }) }
   const isLast = step === 'review'
+  // The "Salvar e ativar" / "Criar e ativar" action only unlocks after the
+  // user has actually walked through every step. Editing existing radars
+  // pre-fills visitedSteps with all steps so it stays unlocked.
+  const allStepsVisited = steps.every(s => visitedSteps.has(s.key))
+  const canActivate = canSave && allStepsVisited
+  const activateLockedHint = !canSave
+    ? 'Adicione ao menos uma condição para salvar este radar'
+    : !allStepsVisited
+      ? 'Visite todos os passos antes de ativar'
+      : undefined
 
   return (
     <ModalShell open={open} onClose={onClose} title={template.name} subtitle={template.description} maxWidth="max-w-[1180px]"
@@ -636,13 +655,13 @@ function TemplateConfigModal({ open, template, existingPattern, onClose, onSave,
             >Próximo</button>
           )}
           {isLast && <button onClick={() => { onSave(buildPatternData('paused')); onClose() }} disabled={!canSave} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar pausado</button>}
-          {isLast && <button onClick={() => { onSave(buildPatternData('active')); onClose() }} disabled={!canSave} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold text-white bg-white/[0.95] hover:bg-white border border-white/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200" style={{ color: '#0b0d12' }}>Salvar e ativar</button>}
+          {isLast && <button onClick={() => { onSave(buildPatternData('active')); onClose() }} disabled={!canActivate} title={activateLockedHint} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold text-white bg-white/[0.95] hover:bg-white border border-white/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200" style={{ color: '#0b0d12' }}>Salvar e ativar</button>}
         </>
       }
     >
       {/* Progress rail at top */}
       <div className="mb-7 px-1">
-        <WizardProgressRail steps={steps} current={step} onSelect={setStep} />
+        <WizardProgressRail steps={steps} current={step} onSelect={goTo} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -788,6 +807,13 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableMatches, 
   const [action, setAction] = useState<'register_alert' | 'suggest_only' | 'highlight'>(initial?.action || 'register_alert')
   const [conditions, setConditions] = useState<PatternCondition[]>(initial?.conditions || [{ type: 'is_live', params: {} }])
   const [step, setStep] = useState<CustomStep>('identity')
+  // Tracks visited steps to gate the "Criar e ativar" / "Salvar e ativar"
+  // action. When editing an existing radar every step is considered visited;
+  // a brand-new radar must walk through every step before activation unlocks.
+  const ALL_CUSTOM_STEPS: CustomStep[] = ['identity', 'scope', 'conditions', 'action', 'confidence', 'review']
+  const [visitedSteps, setVisitedSteps] = useState<Set<CustomStep>>(
+    () => initial ? new Set(ALL_CUSTOM_STEPS) : new Set<CustomStep>(['identity'])
+  )
 
   useEffect(() => {
     if (!open) return
@@ -807,6 +833,8 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableMatches, 
     setAction(initial?.action || 'register_alert')
     setConditions(initial?.conditions || [{ type: 'is_live', params: {} }])
     setStep('identity')
+    setVisitedSteps(initial ? new Set(ALL_CUSTOM_STEPS) : new Set<CustomStep>(['identity']))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial])
 
   if (!open) return null
@@ -854,8 +882,20 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableMatches, 
   ]
 
   const stepIndex = steps.findIndex(s => s.key === step)
-  const goPrev = () => { if (stepIndex > 0) setStep(steps[stepIndex - 1].key) }
-  const goNext = () => { if (stepIndex < steps.length - 1) setStep(steps[stepIndex + 1].key) }
+  const goPrev = () => { if (stepIndex > 0) { const prev = steps[stepIndex - 1].key; setStep(prev); setVisitedSteps(p => { const n = new Set(p); n.add(prev); return n }) } }
+  const goNext = () => { if (stepIndex < steps.length - 1) { const next = steps[stepIndex + 1].key; setStep(next); setVisitedSteps(p => { const n = new Set(p); n.add(next); return n }) } }
+  const goTo = (k: CustomStep) => { setStep(k); setVisitedSteps(p => { const n = new Set(p); n.add(k); return n }) }
+  // The "Criar e ativar" / "Salvar e ativar" action only unlocks after the
+  // user has actually walked through every step. Editing pre-fills visited.
+  const allStepsVisited = steps.every(s => visitedSteps.has(s.key))
+  const canActivate = canSave && allStepsVisited
+  const activateLockedHint = !hasName
+    ? 'Dê um nome ao radar antes de ativar'
+    : !hasConditions
+      ? 'Adicione ao menos uma condição para ativar'
+      : !allStepsVisited
+        ? 'Visite todos os passos antes de ativar'
+        : undefined
 
   return (
     <ModalShell open={open} onClose={onClose} title={initial ? 'Editar radar' : 'Criar radar personalizado'} subtitle="Configure uma regra inteligente para o GoalSense monitorar partidas em tempo real." maxWidth="max-w-[1200px]"
@@ -879,13 +919,13 @@ function CustomPatternModal({ open, initial, onClose, onSave, availableMatches, 
             >Próximo</button>
           )}
           {stepIndex === steps.length - 1 && <button onClick={() => { onSave(buildData('paused')); onClose() }} disabled={!canSave} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar pausado</button>}
-          {stepIndex === steps.length - 1 && <button onClick={() => { onSave(buildData('active')); onClose() }} disabled={!canSave} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold text-white bg-white/[0.95] hover:bg-white border border-white/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200" style={{ color: '#0b0d12' }}>{initial ? 'Salvar e ativar' : 'Criar e ativar'}</button>}
+          {stepIndex === steps.length - 1 && <button onClick={() => { onSave(buildData('active')); onClose() }} disabled={!canActivate} title={activateLockedHint} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold text-white bg-white/[0.95] hover:bg-white border border-white/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200" style={{ color: '#0b0d12' }}>{initial ? 'Salvar e ativar' : 'Criar e ativar'}</button>}
         </>
       }
     >
       {/* Progress rail at top */}
       <div className="mb-7 px-1">
-        <WizardProgressRail steps={steps} current={step} onSelect={setStep} />
+        <WizardProgressRail steps={steps} current={step} onSelect={goTo} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
