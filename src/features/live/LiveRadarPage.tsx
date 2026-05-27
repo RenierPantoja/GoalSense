@@ -64,6 +64,7 @@ export function LiveRadarPage() {
   const { watchlist, toggle: toggleWatch, isWatching } = useLiveWatchlist()
   const [summaryFilter, setSummaryFilter] = useState('')
   const { isFavoriteTeam: isFavTeamLive, isFavoriteMatch: isFavMatchLive, hasAnyFavorite } = useFavorites()
+  const { isAdvanced: isAdvancedMode } = useViewMode()
 
   // Countdown
   useEffect(() => {
@@ -242,6 +243,12 @@ export function LiveRadarPage() {
             </div>
           </div>
           <RefreshProgressBar countdown={countdown} total={15} />
+          {/* V1.1: diagnostic strip in advanced mode */}
+          {isAdvancedMode && fixtures.length > 0 && (
+            <p className="text-[9px] text-white/15 tabular-nums">
+              Live filter: {fixtures.length} recebidas · {rejectedCount} rejeitadas · {liveFixtures.length} ao vivo
+            </p>
+          )}
         </header>
 
         {/* Radar Summary */}
