@@ -130,13 +130,14 @@ function BadgedLucideSvg({ nodes, size, accent, haloOpacity = 0.12, dimmed = fal
   const glyphTargetDiameter = badgeR * 1.4
   const glyphScale = glyphTargetDiameter / 24
   const stroke = dimmed ? '#cbd5e1' : accent
-  const strokeWidth = size <= 4 ? 2.4 : 2.0
+  // V2.6B: thicker strokes for better legibility at larger sizes
+  const strokeWidth = 2.2
 
   return (
     <g>
-      <circle r={badgeR * 1.4} fill={accent} opacity={haloOpacity} />
-      <circle r={badgeR} fill="rgba(11,16,24,0.9)" stroke={accent} strokeWidth={Math.max(0.45, badgeR * 0.13)} opacity={dimmed ? 0.85 : 1} />
-      <ellipse cx={-badgeR * 0.35} cy={-badgeR * 0.45} rx={badgeR * 0.4} ry={badgeR * 0.16} fill="rgba(255,255,255,0.18)" />
+      <circle r={badgeR * 1.35} fill={accent} opacity={haloOpacity} />
+      <circle r={badgeR} fill="rgba(8,11,18,0.92)" stroke={accent} strokeWidth={Math.max(0.7, badgeR * 0.14)} opacity={dimmed ? 0.85 : 1} />
+      <ellipse cx={-badgeR * 0.3} cy={-badgeR * 0.4} rx={badgeR * 0.35} ry={badgeR * 0.14} fill="rgba(255,255,255,0.15)" />
       <g transform={`scale(${glyphScale}) translate(-12 -12)`}>
         <LucidePrimitive nodes={nodes} color={stroke} strokeWidth={strokeWidth} />
       </g>
@@ -195,12 +196,14 @@ function SoccerBall({ size, variant, teamAccent }: { size: number; variant: 'goa
 }
 
 function CardIcon({ size, variant }: { size: number; variant: 'yellow' | 'red' | 'second_yellow' }) {
-  const w = size * 1.05
-  const h = size * 1.5
-  const tilt = -6
+  // V2.6B: cards are their own shape (no circular badge needed). Larger
+  // proportions, less tilt, thicker stroke for instant recognition.
+  const w = size * 1.1
+  const h = size * 1.6
+  const tilt = -4
 
-  const yellowFill = '#facc15'
-  const yellowEdge = '#a16207'
+  const yellowFill = '#fbbf24'
+  const yellowEdge = '#92400e'
   const redFill = '#ef4444'
   const redEdge = '#7f1d1d'
 
@@ -213,7 +216,7 @@ function CardIcon({ size, variant }: { size: number; variant: 'yellow' | 'red' |
   return (
     <g transform={`rotate(${tilt})`}>
       {variant === 'second_yellow' && back && (
-        <g transform={`translate(${-w * 0.18} ${h * 0.12}) rotate(${tilt})`}>
+        <g transform={`translate(${-w * 0.2} ${h * 0.1}) rotate(${tilt})`}>
           <CardShape w={w} h={h} fill={back.fill} edge={back.edge} />
         </g>
       )}
@@ -223,12 +226,15 @@ function CardIcon({ size, variant }: { size: number; variant: 'yellow' | 'red' |
 }
 
 function CardShape({ w, h, fill, edge }: { w: number; h: number; fill: string; edge: string }) {
-  const rx = Math.max(0.6, h * 0.1)
+  const rx = Math.max(0.8, h * 0.08)
   return (
     <g>
-      <rect x={-w / 2 + 0.2} y={-h / 2 + 0.6} width={w} height={h} rx={rx} fill="rgba(0,0,0,0.4)" />
-      <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={rx} fill={fill} stroke={edge} strokeWidth={Math.max(0.4, w * 0.08)} />
-      <rect x={-w / 2 + w * 0.12} y={-h / 2 + h * 0.08} width={w * 0.3} height={h * 0.18} rx={rx * 0.6} fill="rgba(255,255,255,0.35)" />
+      {/* Shadow */}
+      <rect x={-w / 2 + 0.4} y={-h / 2 + 0.8} width={w} height={h} rx={rx} fill="rgba(0,0,0,0.5)" />
+      {/* Card body */}
+      <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={rx} fill={fill} stroke={edge} strokeWidth={Math.max(0.6, w * 0.09)} />
+      {/* Internal highlight */}
+      <rect x={-w / 2 + w * 0.1} y={-h / 2 + h * 0.06} width={w * 0.35} height={h * 0.15} rx={rx * 0.5} fill="rgba(255,255,255,0.4)" />
     </g>
   )
 }
@@ -312,24 +318,25 @@ export interface PressureEventIconBoxProps {
 }
 
 // Per-type internal radius hint (in user units within the 32x32 viewBox).
-// V2.6A: increased across the board so glyphs fill the larger sizePx boxes.
+// V2.6B: tuned for the larger pixel sizes. Ball fills more of the box.
 function internalSizeFor(type: PressureGraphEventType): number {
   switch (type) {
     case 'goal':
     case 'own_goal':
     case 'penalty_scored':
     case 'penalty_missed':
-      return 13
+      return 14
     case 'yellow_card':
     case 'red_card':
     case 'second_yellow':
-      return 11
+      return 12
     case 'shot_on_target':
     case 'shot_off_target':
+      return 12
     case 'substitution':
-      return 11.5
+      return 11
     case 'var':
-      return 9
+      return 9.5
     default:
       return 9
   }
@@ -404,96 +411,110 @@ function renderIconBox(type: PressureGraphEventType, size: number, teamAccent?: 
   }
 }
 
-// V2.6A: Redesigned soccer ball — simpler, bolder, instantly recognizable.
-// At 30px the old version had too many thin lines. This version uses a single
-// bold pentagon + 5 radiating lines, thick stroke, strong contrast.
+// V2.6B: Soccer ball — bold pentagon silhouette. At 36px the pentagon is
+// large and unmistakable. 5 thick black panels radiate from center. No fine
+// lines, no excessive detail. High contrast white ball on dark badge.
 function SoccerBallBox(props: { size: number; variant: 'goal' | 'own_goal' | 'penalty_scored' | 'penalty_missed'; teamAccent?: string }) {
   const { size: r, variant, teamAccent } = props
-  const ballFill = variant === 'own_goal' ? '#fecdd3' : variant === 'penalty_scored' ? '#cffafe' : '#ffffff'
-  const panelFill = variant === 'own_goal' ? '#881337' : variant === 'penalty_scored' ? '#155e75' : '#1e293b'
-  const strokeColor = variant === 'own_goal' ? '#9f1239' : variant === 'penalty_scored' ? '#0e7490' : '#334155'
-  const haloColor = teamAccent
-    ? `#${teamAccent}`
-    : variant === 'own_goal' ? '#f43f5e' : '#22d3ee'
 
-  // Pentagon vertices (centered, radius ~45% of ball)
-  const pr = r * 0.42
+  // Colors: ball stays WHITE for all variants. Differentiation comes from
+  // the badge ring/halo color, not from painting the ball itself.
+  const ballFill = '#ffffff'
+  const panelFill = '#1e293b'
+  const panelStroke = '#334155'
+  const ringColor = variant === 'own_goal'
+    ? '#f43f5e'
+    : variant === 'penalty_scored'
+      ? '#22d3ee'
+      : teamAccent ? `#${teamAccent}` : '#22d3ee'
+
+  // Pentagon vertices
+  const pr = r * 0.38
   const pentPoints = Array.from({ length: 5 }, (_, i) => {
     const angle = (i * 72 - 90) * (Math.PI / 180)
     return { x: Math.cos(angle) * pr, y: Math.sin(angle) * pr }
   })
-  const pentPath = pentPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ') + ' Z'
+  const pentPath = pentPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') + ' Z'
+
+  // Outer panel wedges (simplified: just thick lines from pentagon to edge)
+  const outerR = r * 0.82
 
   return (
     <g>
-      {/* Halo for goals */}
-      {(variant === 'goal' || variant === 'penalty_scored' || variant === 'own_goal') && (
-        <circle r={r * 1.5} fill={haloColor} opacity="0.22" />
-      )}
+      {/* Halo — strong for goals */}
+      <circle r={r * 1.55} fill={ringColor} opacity="0.25" />
+      {/* Badge ring */}
+      <circle r={r * 1.15} fill="none" stroke={ringColor} strokeWidth={Math.max(1.2, r * 0.09)} opacity="0.8" />
+      {/* Dark badge body */}
+      <circle r={r * 1.05} fill="rgba(8,11,18,0.92)" />
       {/* Drop shadow */}
-      <ellipse cx={0} cy={r * 0.2} rx={r * 0.85} ry={r * 0.28} fill="rgba(0,0,0,0.35)" filter="url(#gs-blur-soft-box)" />
+      <ellipse cx={0} cy={r * 0.15} rx={r * 0.7} ry={r * 0.22} fill="rgba(0,0,0,0.4)" filter="url(#gs-blur-soft-box)" />
       {/* Ball body */}
-      <circle r={r} fill={ballFill} stroke={strokeColor} strokeWidth={Math.max(0.8, r * 0.09)} />
-      {/* Central pentagon (filled dark) */}
-      <path d={pentPath} fill={panelFill} stroke={strokeColor} strokeWidth={Math.max(0.5, r * 0.06)} strokeLinejoin="round" />
-      {/* 5 lines from pentagon vertices outward */}
-      <g stroke={strokeColor} strokeWidth={Math.max(0.6, r * 0.07)} strokeLinecap="round">
+      <circle r={r * 0.78} fill={ballFill} stroke="#e2e8f0" strokeWidth={Math.max(0.6, r * 0.05)} />
+      {/* Central pentagon — filled dark */}
+      <path d={pentPath} fill={panelFill} stroke={panelStroke} strokeWidth={Math.max(0.5, r * 0.04)} strokeLinejoin="round" />
+      {/* 5 thick lines from pentagon to ball edge */}
+      <g stroke={panelFill} strokeWidth={Math.max(1.2, r * 0.09)} strokeLinecap="round">
         {pentPoints.map((p, i) => {
-          const outerAngle = (i * 72 - 90) * (Math.PI / 180)
-          const ox = Math.cos(outerAngle) * r * 0.85
-          const oy = Math.sin(outerAngle) * r * 0.85
+          const angle = (i * 72 - 90) * (Math.PI / 180)
+          const ox = Math.cos(angle) * outerR
+          const oy = Math.sin(angle) * outerR
           return <line key={i} x1={p.x} y1={p.y} x2={ox} y2={oy} />
         })}
       </g>
       {/* Highlight */}
-      <ellipse cx={-r * 0.35} cy={-r * 0.35} rx={r * 0.28} ry={r * 0.16} fill="rgba(255,255,255,0.5)" />
-      {/* Penalty badge */}
-      {variant === 'penalty_scored' && (
-        <g transform={`translate(${r * 0.65} ${-r * 0.65})`}>
-          <circle r={r * 0.38} fill="#22d3ee" stroke="#0b1218" strokeWidth="0.5" />
-          <text textAnchor="middle" dy={r * 0.16} fontSize={r * 0.52} fontWeight="800" fill="#0b1218" fontFamily="-apple-system, system-ui, sans-serif">P</text>
+      <ellipse cx={-r * 0.3} cy={-r * 0.3} rx={r * 0.22} ry={r * 0.12} fill="rgba(255,255,255,0.6)" />
+      {/* Variant badges */}
+      {variant === 'own_goal' && (
+        <g transform={`translate(${r * 0.7} ${-r * 0.7})`}>
+          <circle r={r * 0.32} fill="#f43f5e" stroke="#0b1218" strokeWidth="0.6" />
+          <text textAnchor="middle" dy={r * 0.13} fontSize={r * 0.35} fontWeight="800" fill="#ffffff" fontFamily="-apple-system, system-ui, sans-serif">GC</text>
         </g>
       )}
-      {/* Penalty missed slash */}
+      {variant === 'penalty_scored' && (
+        <g transform={`translate(${r * 0.7} ${-r * 0.7})`}>
+          <circle r={r * 0.32} fill="#22d3ee" stroke="#0b1218" strokeWidth="0.6" />
+          <text textAnchor="middle" dy={r * 0.13} fontSize={r * 0.38} fontWeight="800" fill="#0b1218" fontFamily="-apple-system, system-ui, sans-serif">P</text>
+        </g>
+      )}
       {variant === 'penalty_missed' && (
-        <line x1={-r * 0.7} y1={r * 0.7} x2={r * 0.7} y2={-r * 0.7} stroke="#f43f5e" strokeWidth={Math.max(1, r * 0.14)} strokeLinecap="round" />
+        <line x1={-r * 0.55} y1={r * 0.55} x2={r * 0.55} y2={-r * 0.55} stroke="#f43f5e" strokeWidth={Math.max(1.5, r * 0.12)} strokeLinecap="round" />
       )}
     </g>
   )
 }
 
-// V2.6A: Custom goalpost icon for shot_off_target — two posts + crossbar +
-// small ball flying away. Much clearer than the abstract lucide Goal glyph.
+// V2.6B: Custom goalpost icon — bolder posts, thicker crossbar, clearer ball.
 function GoalpostIcon({ size }: { size: number }) {
   const r = size
   const badgeR = r * 1.05
-  // Goalpost geometry (centered on origin)
-  const postH = r * 1.1
-  const postW = r * 1.4
-  const barY = -postH * 0.5
-  const postStroke = Math.max(0.8, r * 0.1)
+  const postH = r * 1.0
+  const postW = r * 1.3
+  const barY = -postH * 0.45
+  const postStroke = Math.max(1.2, r * 0.12)
 
   return (
     <g>
       {/* Halo */}
-      <circle r={badgeR * 1.35} fill="#94a3b8" opacity="0.10" />
+      <circle r={badgeR * 1.35} fill="#94a3b8" opacity="0.12" />
       {/* Glass badge */}
-      <circle r={badgeR} fill="rgba(11,16,24,0.88)" stroke="#94a3b8" strokeWidth={Math.max(0.5, badgeR * 0.12)} opacity="0.9" />
-      {/* Highlight */}
-      <ellipse cx={-badgeR * 0.3} cy={-badgeR * 0.4} rx={badgeR * 0.35} ry={badgeR * 0.14} fill="rgba(255,255,255,0.15)" />
-      {/* Goalpost: two vertical posts + crossbar */}
-      <g stroke="#e2e8f0" strokeWidth={postStroke} strokeLinecap="round" fill="none">
-        {/* Left post */}
-        <line x1={-postW * 0.5} y1={barY} x2={-postW * 0.5} y2={postH * 0.35} />
-        {/* Right post */}
-        <line x1={postW * 0.5} y1={barY} x2={postW * 0.5} y2={postH * 0.35} />
-        {/* Crossbar */}
+      <circle r={badgeR} fill="rgba(8,11,18,0.92)" stroke="#64748b" strokeWidth={Math.max(0.6, badgeR * 0.1)} opacity="0.95" />
+      {/* Goalpost: two vertical posts + crossbar — thick white */}
+      <g stroke="#f1f5f9" strokeWidth={postStroke} strokeLinecap="round" strokeLinejoin="round" fill="none">
+        <line x1={-postW * 0.5} y1={barY} x2={-postW * 0.5} y2={postH * 0.4} />
+        <line x1={postW * 0.5} y1={barY} x2={postW * 0.5} y2={postH * 0.4} />
         <line x1={-postW * 0.5} y1={barY} x2={postW * 0.5} y2={barY} />
       </g>
-      {/* Small ball flying away (top-right, outside the goal) */}
-      <circle cx={postW * 0.55 + r * 0.25} cy={barY - r * 0.3} r={r * 0.18} fill="#94a3b8" opacity="0.7" />
-      {/* Tiny motion trail */}
-      <line x1={postW * 0.4} y1={barY - r * 0.1} x2={postW * 0.55 + r * 0.1} y2={barY - r * 0.25} stroke="#94a3b8" strokeWidth={Math.max(0.4, r * 0.05)} strokeLinecap="round" opacity="0.5" />
+      {/* Net hint (subtle diagonal lines inside goal) */}
+      <g stroke="#475569" strokeWidth={Math.max(0.4, r * 0.035)} opacity="0.4">
+        <line x1={-postW * 0.3} y1={barY + postH * 0.15} x2={-postW * 0.15} y2={postH * 0.35} />
+        <line x1={0} y1={barY + postH * 0.1} x2={0} y2={postH * 0.35} />
+        <line x1={postW * 0.3} y1={barY + postH * 0.15} x2={postW * 0.15} y2={postH * 0.35} />
+      </g>
+      {/* Ball flying away (top-right) */}
+      <circle cx={postW * 0.6 + r * 0.15} cy={barY - r * 0.35} r={r * 0.2} fill="#94a3b8" stroke="#64748b" strokeWidth="0.5" />
+      {/* Motion trail */}
+      <line x1={postW * 0.35} y1={barY - r * 0.05} x2={postW * 0.55 + r * 0.05} y2={barY - r * 0.28} stroke="#94a3b8" strokeWidth={Math.max(0.5, r * 0.05)} strokeLinecap="round" opacity="0.5" strokeDasharray="1.5 1" />
     </g>
   )
 }
@@ -504,7 +525,7 @@ function GoalpostIcon({ size }: { size: number }) {
 
 export function GroupBubbleBox({ count, sizePx, accent, hovered }: { count: number; sizePx: number; accent: string; hovered?: boolean }) {
   const scale = hovered ? 1.04 : 1
-  const radius = 12.5 + (count >= 10 ? 1.6 : 0.8)
+  const radius = 13 + (count >= 10 ? 1.8 : 1)
   return (
     <span
       aria-hidden="true"

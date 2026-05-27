@@ -57,24 +57,25 @@ interface Props {
 }
 
 // --- Marker sizing per type (CSS pixels) ---
-// V2.6A calibration: much larger for legibility. Goals are protagonists.
+// V2.6B: editorial sizes. Goals are protagonists (36px). Cards are strong (25px).
+// Shots are visible (24px). Substitution is secondary but legible (22px).
 
 const MARKER_SIZES_PX: Record<PressureGraphEventType, number> = {
-  goal: 30,
-  own_goal: 30,
-  penalty_scored: 29,
-  penalty_missed: 27,
-  shot_on_target: 21,
-  shot_off_target: 22,
-  yellow_card: 22,
-  red_card: 23,
-  second_yellow: 24,
-  substitution: 19,
-  var: 21,
-  unknown: 14,
+  goal: 36,
+  own_goal: 36,
+  penalty_scored: 34,
+  penalty_missed: 32,
+  shot_on_target: 24,
+  shot_off_target: 24,
+  yellow_card: 25,
+  red_card: 25,
+  second_yellow: 27,
+  substitution: 22,
+  var: 22,
+  unknown: 16,
 }
 
-const GROUP_MARKER_SIZE_PX = 24
+const GROUP_MARKER_SIZE_PX = 26
 
 // Density: types that fade when the match is busy. Critical events
 // (goals, red cards, penalties, second yellows) never fade.
@@ -611,7 +612,7 @@ function EventTooltipBody({ event, score, homeName, awayName }: { event: Pressur
   return (
     <>
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="shrink-0 inline-flex items-center justify-center"><PressureEventIconInline type={event.type} sizePx={16} /></span>
+        <span className="shrink-0 inline-flex items-center justify-center"><PressureEventIconInline type={event.type} sizePx={20} /></span>
         <span className="text-[10px] font-bold uppercase tracking-wider text-white/85">{eventLabel(event.type)}</span>
         <span className="text-[10px] text-white/45 tabular-nums ml-auto">{formatMinuteLabel(event.minute, event.addedTime)}</span>
       </div>
@@ -845,7 +846,7 @@ function Legend({ counts }: { counts: Map<PressureGraphEventType, number> }) {
     <ul className="flex items-center gap-x-4 gap-y-2 flex-wrap mt-3 text-[10px] text-white/50">
       {items.map(item => (
         <li key={item.key} className="flex items-center gap-1.5">
-          <PressureEventIconInline type={item.iconType} sizePx={18} />
+          <PressureEventIconInline type={item.iconType} sizePx={20} />
           <span className="text-white/70 font-medium">{item.label}</span>
           <span className="text-white/85 font-bold tabular-nums">{item.count}</span>
           {item.sublabel && <span className="text-white/35">· {item.sublabel}</span>}
