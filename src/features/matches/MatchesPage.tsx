@@ -152,6 +152,9 @@ export function MatchesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [date, setDate] = useState(() => getTodayLocalDateKey())
+  // Bumped to force a re-fetch from the error retry button without changing
+  // the visible date. Pure version counter, persisted only in memory.
+  const [reloadKey, setReloadKey] = useState(0)
   const [filter, setFilter] = useState<FilterKey>('all')
   const [search, setSearch] = useState('')
   const [view, setView] = useState<ViewMode>('agenda')
@@ -220,7 +223,7 @@ export function MatchesPage() {
         setMatches(dedupeMatches(espnMatches).map(m => ({ ...m, competition: { ...m.competition, name: normalizeCompetitionName(m.competition.name) } })))
       }
     }).catch(e => setError((e as Error).message)).finally(() => setLoading(false))
-  }, [date])
+  }, [date, reloadKey])
 
   const stats = useMemo(() => {
     const l = matches.filter(m => mapStatus(m.status).live).length
@@ -378,7 +381,7 @@ export function MatchesPage() {
           <div className="rounded-[20px] border border-rose-500/10 bg-rose-500/[0.03] p-6 text-center">
             <p className="text-[13px] text-rose-400/70 font-medium">Não foi possível carregar as partidas</p>
             <p className="text-[10px] text-white/20 mt-1">{error}</p>
-            <button onClick={() => { setLoading(true); setError(null); fetch(`/api/football-data-matches?date=${date}`, { cache: 'no-store' }).then(async r => { const j = await r.json(); setMatches(j.matches || []) }).catch(e => setError(e.message)).finally(() => setLoading(false)) }} className="mt-3 px-4 py-1.5 rounded-xl text-[10px] font-medium text-cyan-400/70 border border-cyan-500/20 hover:bg-cyan-500/5 transition-colors">Tentar novamente</button>
+            <button onClick={() => setReloadKey(k => k + 1)} className="mt-3 px-4 py-1.5 rounded-xl text-[10px] font-medium text-cyan-400/70 border border-cyan-500/20 hover:bg-cyan-500/5 transition-colors">Tentar novamente</button>
           </div>
         )}
         {!loading && !error && filtered.length === 0 && (
