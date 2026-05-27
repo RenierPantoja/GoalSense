@@ -1,0 +1,22 @@
+{
+  "name": "GoalSense",
+  "short_name": "GoalSense",
+  "description": "Inteligência ao vivo para futebol — radares, padrões e análise em tempo real.",
+  "start_url": "/app/live",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0e1a",
+  "theme_color": "#0a0e1a",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["sports", "news", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
