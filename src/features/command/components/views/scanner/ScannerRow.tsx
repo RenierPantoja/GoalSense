@@ -1,0 +1,92 @@
+/**
+ * ScannerRow — one signal row in the Scanner view.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Behaviour preserved byte-for-byte from CommandCenterPage.tsx (V3.18E).
+ * Renders match identity, confidence, status badges and the scope audit chip.
+ * Clicking opens the Match Center via the `openMatch` callback passed from
+ * the Command Center page.
+ */
+import { ChevronRight } from 'lucide-react'
+import type { LiveFixture } from '@/lib/apiClient'
+import { ClubLogo } from '@/components/ui/ClubLogo'
+import type { Pattern, ScannerEntry } from '../../../types/commandTypes'
+import { isLiveFx } from '../../../commandHelpers'
+import { describePatternScope } from '../../../utils/patternScopeAudit'
+import { ConfidenceBar } from './ConfidenceBar'
+
+interface ScannerRowProps {
+  entry: ScannerEntry
+  openMatch: (fx: LiveFixture) => void
+  isAdvanced: boolean
+  isFavoriteTeam: (name: string) => boolean
+  patterns: Pattern[]
+}
+
+export function ScannerRow({ entry, openMatch, isAdvanced, isFavoriteTeam, patterns }: ScannerRowProps) {
+  const fx = entry.fixture
+  const live = isLiveFx(fx)
+  const isFav = isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name)
+  const accentBorder = entry.priority === 'critical' ? 'border-l-rose-400/55' : entry.priority === 'attention' ? 'border-l-amber-400/55' : 'border-l-cyan-400/45'
+  const statusLabel = live ? 'Batendo' : entry.topPattern ? 'Pronto' : 'Sugerido'
+  const statusColor = live ? 'bg-emerald-500/12 text-emerald-300 border-emerald-400/20' : entry.topPattern ? 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15' : 'bg-white/[0.04] text-white/55 border-white/[0.07]'
+  const fullPattern = entry.topPattern ? patterns.find(p => p.id === entry.topPattern!.patternId) : null
+  const scopeAudit = fullPattern ? describePatternScope(fullPattern) : null
+
+  return (
+    <div onClick={() => openMatch(fx)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') openMatch(fx) }} className={`group relative rounded-2xl border border-l-2 ${accentBorder} border-white/[0.05] bg-gradient-to-r from-white/[0.012] to-white/[0.005] hover:border-white/[0.1] hover:bg-white/[0.018] cursor-pointer transition-all`}>
+      <div className="px-5 py-4">
+        {/* Top row */}
+        <div className="flex items-center gap-3 mb-2.5">
+          <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${entry.priority === 'critical' ? 'bg-rose-500/12 text-rose-300 border-rose-400/20' : entry.priority === 'attention' ? 'bg-amber-500/12 text-amber-300 border-amber-400/20' : 'bg-cyan-500/10 text-cyan-300 border-cyan-400/15'}`}>
+            {entry.priority === 'critical' ? 'Crítico' : entry.priority === 'attention' ? 'Atenção' : 'Observar'}
+          </span>
+          <span className="text-[12px] text-white/85 font-bold flex-1 truncate">{entry.reason || 'Sinal detectado'}</span>
+          {isFav && <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-400/15">Favorito</span>}
+          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${statusColor}`}>{statusLabel}</span>
+        </div>
+
+        {/* Match line */}
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <ClubLogo src={fx.homeTeam.logo} name={fx.homeTeam.name} size={22} />
+          <span className="text-[13px] text-white/85 font-semibold truncate">{fx.homeTeam.name}</span>
+          <span className="text-[14px] text-white font-bold tabular-nums px-2">{fx.score.home ?? '-'}<span className="text-white/25 mx-1">:</span>{fx.score.away ?? '-'}</span>
+          <span className="text-[13px] text-white/85 font-semibold truncate">{fx.awayTeam.name}</span>
+          <ClubLogo src={fx.awayTeam.logo} name={fx.awayTeam.name} size={22} />
+        </div>
+
+        {/* Meta + evidence */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className={`inline-flex items-center gap-1 text-[11px] font-medium tabular-nums ${live ? 'text-emerald-400' : 'text-white/45'}`}>
+            {live ? <><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> {fx.status.elapsed || 0}'</> : <>⏰ {new Date(fx.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</>}
+          </span>
+          <span className="text-[11px] text-white/45 truncate">{fx.league.name}</span>
+          {entry.topPattern && entry.topPattern.reasons.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap">
+              {entry.topPattern.reasons.slice(0, 2).map((r, i) => (
+                <span key={i} className="text-[10px] text-white/55 bg-white/[0.04] px-2 py-0.5 rounded-md border border-white/[0.05]">{r}</span>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-2 ml-auto">
+            <ConfidenceBar value={entry.confidence} />
+            <span className="text-[12px] text-white/85 font-bold tabular-nums">{entry.confidence}%</span>
+            <ChevronRight size={14} className="text-white/25 group-hover:text-white/65 transition-colors" />
+          </div>
+        </div>
+        {scopeAudit && scopeAudit.length > 0 && (
+          <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+            <span className="text-[9px] uppercase tracking-wider text-white/45 font-semibold">Escopo:</span>
+            {scopeAudit.map((s, i) => (
+              <span key={i} className="text-[10px] text-white/65 bg-white/[0.03] border border-white/[0.06] px-2 py-0.5 rounded">{s}</span>
+            ))}
+          </div>
+        )}
+        {isAdvanced && entry.topPattern && (
+          <div className="mt-2 pt-2 border-t border-white/[0.04] text-[10px] text-white/35 font-mono">
+            cond:{entry.topPattern.matchedConditions}/{entry.topPattern.totalConditions} · sev:{entry.topPattern.severity} · provider:{fx.provider}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
