@@ -13,6 +13,7 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { ClubLogo } from '@/components/ui/ClubLogo'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { sortByAttention, calculateAttention } from './attentionQueue'
+import { sortByFeaturedRanking, scoreLiveMatchForFeature } from './liveMatchRanking'
 import { LiveScannerTable, type FixtureStats } from './LiveScannerTable'
 import { QUICK_SCANNERS } from './liveQuickScanners'
 import { useLiveWatchlist } from './useLiveWatchlist'
@@ -176,8 +177,17 @@ export function LiveRadarPage() {
     return sortByAttention(list, scannerStats)
   }, [liveFixtures, search, scannerStats, summaryFilter])
 
-  const hero = filtered[0] || null
-  const rest = filtered.slice(1)
+  // V2.6: pick the featured match using the richer ranking algorithm that
+  // considers competition tier, club popularity, favorites, visual coverage.
+  // The rest of the list stays sorted by attention (real-time urgency).
+  const featuredRanked = useMemo(() => {
+    if (filtered.length === 0) return null
+    const ranked = sortByFeaturedRanking(filtered, { isFavoriteTeam: isFavTeamLive, statsMap: scannerStats })
+    return ranked[0] || null
+  }, [filtered, scannerStats, isFavTeamLive])
+
+  const hero = featuredRanked || filtered[0] || null
+  const rest = filtered.filter(fx => fx.id !== hero?.id)
   const selectedFixture = fixtures.find(f => f.id === selectedId) || null
 
   // Keyboard shortcuts
@@ -300,7 +310,7 @@ export function LiveRadarPage() {
           <section onClick={() => setSelectedId(hero.id)} onDoubleClick={() => { openMatch(hero) }}
             className="group relative rounded-[28px] border border-white/[0.06] bg-gradient-to-b from-white/[0.025] to-transparent p-8 cursor-pointer transition-all duration-300 hover:border-white/[0.1] hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] animate-slideUp">
             <div className="absolute inset-0 rounded-[28px] bg-gradient-to-b from-cyan-500/[0.03] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <HeroContent fixture={hero} stats={scannerStats.get(hero.id)} />
+            <HeroContent fixture={hero} stats={scannerStats.get(hero.id)} rankingReasons={scoreLiveMatchForFeature(hero, { isFavoriteTeam: isFavTeamLive, stats: scannerStats.get(hero.id) }).reasons} />
           </section>
         )}
 
@@ -348,9 +358,10 @@ export function LiveRadarPage() {
 
 // --- Sub-components ---
 
-function HeroContent({ fixture, stats }: { fixture: LiveFixture; stats?: FixtureStats }) {
+function HeroContent({ fixture, stats, rankingReasons }: { fixture: LiveFixture; stats?: FixtureStats; rankingReasons?: string[] }) {
   const elapsed = fixture.status.elapsed
   const { level, reasons } = calculateAttention(fixture, stats)
+  const { isAdvanced } = useViewMode()
 
   return (
     <div className="relative flex flex-col items-center">
@@ -397,6 +408,10 @@ function HeroContent({ fixture, stats }: { fixture: LiveFixture; stats?: Fixture
             {stats.corners && (stats.corners.home > 0 || stats.corners.away > 0) && <span>Escanteios <b className="text-white/55">{stats.corners.home}–{stats.corners.away}</b></span>}
             {stats.possession && (stats.possession.home > 0) && <span>Posse <b className="text-white/55">{stats.possession.home.toFixed(0)}%–{stats.possession.away.toFixed(0)}%</b></span>}
           </div>
+        )}
+        {/* V2.6: ranking reasons in advanced mode */}
+        {isAdvanced && rankingReasons && rankingReasons.length > 0 && (
+          <p className="text-[9px] text-white/20 mt-1">Destaque: {rankingReasons.join(' · ')}</p>
         )}
       </div>
     </div>

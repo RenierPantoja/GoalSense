@@ -25,7 +25,8 @@
  * logic are intentionally untouched.
  */
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { buildPressureTimeline } from '@/features/matches/buildPressureTimeline'
 import { buildPressureRead } from '@/features/matches/buildPressureRead'
 import { normalizeEvents } from '@/features/matches/normalizeMatchEvents'
@@ -42,6 +43,7 @@ import {
   PressureEventIconBox,
   PressureEventIconInline,
 } from './pressureEventIcons'
+import { getTeamGraphPalette } from '@/lib/teamGraphPalette'
 
 interface Props {
   events: { clock: string; text: string; type: string; team: string }[]
@@ -178,6 +180,7 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
 
   const [hovered, setHovered] = useState<HoverState | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const graphContainerRef = useRef<HTMLDivElement>(null)
 
   const density = useMemo<'normal' | 'dense' | 'very_dense'>(() => {
     if (graphEvents.length > 25) return 'very_dense'
@@ -194,11 +197,13 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
     }
   }, [onEventSelect])
 
-  // Curve colors
-  const hc = `#${homeColors[0] || '22d3ee'}`
-  const hcFill = `${hc}80`
-  const ac = `#${awayColors[0] || 'f472b6'}`
-  const acFill = `${ac}66`
+  // Curve colors — V2.6: contrast-aware palette for dark teams
+  const homePalette = useMemo(() => getTeamGraphPalette(homeColors, homeName), [homeColors, homeName])
+  const awayPalette = useMemo(() => getTeamGraphPalette(awayColors, awayName), [awayColors, awayName])
+  const hc = homePalette.stroke
+  const hcFill = homePalette.fill
+  const ac = awayPalette.stroke
+  const acFill = awayPalette.fill
 
   const { blocks, maxPressure, currentMinute } = timeline
 
@@ -372,8 +377,8 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
   }, [graphEvents])
 
   // Resolve team accent (without #) per side, used by goal halos.
-  const homeAccentHex = (homeColors[0] || '22d3ee').replace('#', '')
-  const awayAccentHex = (awayColors[0] || 'f472b6').replace('#', '')
+  const homeAccentHex = homePalette.marker
+  const awayAccentHex = awayPalette.marker
 
   // Halftime line as percent
   const halftimePercent = currentMinute > 45 ? (45 / currentMinute) * 100 : null
@@ -418,7 +423,7 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
       </div>
 
       {/* Graph + overlay container */}
-      <div className="relative rounded-2xl bg-[#080b12] border border-white/[0.04] overflow-hidden" style={{ height: '260px' }}>
+      <div ref={graphContainerRef} className="relative rounded-2xl bg-[#080b12] border border-white/[0.04] overflow-hidden" style={{ height: '260px' }}>
         {/* Curve SVG (unchanged from V2.3) */}
         <svg
           viewBox={`0 0 ${SVG_W} ${SVG_H}`}
@@ -527,14 +532,14 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
               )
             })}
 
-          {/* Smart-positioned HTML tooltip (unchanged behavior) */}
-          {hovered && (
-            <SmartTooltip xPct={hovered.xPercent} yPct={hovered.yPercent}>
+          {/* Tooltip rendered via portal to avoid overflow:hidden clipping */}
+          {hovered && graphContainerRef.current && (
+            <PortalTooltip containerRef={graphContainerRef} xPct={hovered.xPercent} yPct={hovered.yPercent}>
               {hovered.kind === 'event'
                 ? <EventTooltipBody event={hovered.event} score={goalScoreMap.get(hovered.event.id)} homeName={homeName} awayName={awayName} />
                 : <GroupTooltipBody events={hovered.events} minute={hovered.minute} />
               }
-            </SmartTooltip>
+            </PortalTooltip>
           )}
         </div>
       </div>
@@ -554,28 +559,50 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
   )
 }
 
-// --- Smart tooltip wrapper ------------------------------------------------
+// --- Portal tooltip (V2.6 — never clipped by overflow:hidden) -----------
 
-function SmartTooltip({ xPct, yPct, children }: { xPct: number; yPct: number; children: React.ReactNode }) {
-  const horiz: 'left' | 'right' | 'center' = xPct < 18 ? 'left' : xPct > 82 ? 'right' : 'center'
-  const placeBelow = yPct < 35
+function PortalTooltip({ containerRef, xPct, yPct, children }: { containerRef: React.RefObject<HTMLDivElement | null>; xPct: number; yPct: number; children: React.ReactNode }) {
+  const container = containerRef.current
+  if (!container) return null
 
-  let translateX = '-50%'
-  let leftCss = `${xPct}%`
-  if (horiz === 'left') { translateX = '0'; leftCss = `calc(${xPct}% + 12px)` }
-  if (horiz === 'right') { translateX = '-100%'; leftCss = `calc(${xPct}% - 12px)` }
+  const rect = container.getBoundingClientRect()
+  // Anchor point in viewport coordinates
+  const anchorX = rect.left + (xPct / 100) * rect.width
+  const anchorY = rect.top + (yPct / 100) * rect.height
 
-  const translateY = placeBelow ? '12px' : 'calc(-100% - 12px)'
-  const topCss = `${yPct}%`
+  // Tooltip dimensions estimate (max-width 300px, height ~120px)
+  const tooltipW = 280
+  const tooltipH = 130
+  const margin = 12
 
-  return (
+  // Horizontal: center, clamp to viewport
+  let left = anchorX - tooltipW / 2
+  if (left < margin) left = margin
+  if (left + tooltipW > window.innerWidth - margin) left = window.innerWidth - margin - tooltipW
+
+  // Vertical: prefer above, flip below if no space
+  let top: number
+  if (anchorY - tooltipH - margin > 0) {
+    top = anchorY - tooltipH - margin
+  } else {
+    top = anchorY + margin
+  }
+
+  return createPortal(
     <div
       role="tooltip"
-      className="absolute z-30 max-w-[300px] pointer-events-none rounded-xl border border-white/[0.08] bg-[#0b1018]/95 backdrop-blur-md shadow-[0_8px_24px_rgba(0,0,0,0.5)] px-3.5 py-2.5 text-left animate-fadeIn"
-      style={{ left: leftCss, top: topCss, transform: `translate(${translateX}, ${translateY})` }}
+      className="pointer-events-none rounded-xl border border-white/[0.08] bg-[#0b1018]/95 backdrop-blur-md shadow-[0_8px_24px_rgba(0,0,0,0.5)] px-3.5 py-2.5 text-left animate-fadeIn"
+      style={{
+        position: 'fixed',
+        left,
+        top,
+        zIndex: 9999,
+        maxWidth: 300,
+      }}
     >
       {children}
-    </div>
+    </div>,
+    document.body,
   )
 }
 
