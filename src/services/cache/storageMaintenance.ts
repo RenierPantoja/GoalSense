@@ -109,6 +109,12 @@ export function clearOutcomes(): void {
 }
 
 export function clearTriggeredAlerts(): void {
+  // Both keys store dispatched alerts:
+  // - goalsense_triggered_v2 → TriggeredAlert[] surfaced in Command Center "Alertas"
+  // - goalsense_command_alerts → CommandCenterAlert[] consumed by AlertsContext
+  // The Settings UI offers a single "Limpar alertas disparados" button so we
+  // clear both together to keep the state coherent for the user.
+  try { localStorage.removeItem('goalsense_triggered_v2') } catch { /* */ }
   try { localStorage.removeItem('goalsense_command_alerts') } catch { /* */ }
 }
 
