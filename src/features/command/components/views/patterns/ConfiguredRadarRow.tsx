@@ -19,9 +19,11 @@ interface ConfiguredRadarRowProps {
   onDuplicate: () => void
   onDelete: () => void
   isAdvanced: boolean
+  /** Optional V4.4 prefetch hook for the CustomPatternModal chunk. */
+  onPrefetch?: () => void
 }
 
-export function ConfiguredRadarRow({ pattern, health, triggeredAlerts, onToggle, onEdit, onDuplicate, onDelete, isAdvanced }: ConfiguredRadarRowProps) {
+export function ConfiguredRadarRow({ pattern, health, triggeredAlerts, onToggle, onEdit, onDuplicate, onDelete, isAdvanced, onPrefetch }: ConfiguredRadarRowProps) {
   const isActive = pattern.status === 'active'
   const lastHit = triggeredAlerts.find(t => t.patternId === pattern.id)?.timestamp || null
   const hits = triggeredAlerts.filter(t => t.patternId === pattern.id).length
@@ -68,7 +70,7 @@ export function ConfiguredRadarRow({ pattern, health, triggeredAlerts, onToggle,
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={onEdit} type="button" className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/65 hover:text-white/95 hover:bg-white/[0.05] transition-colors">Editar</button>
+          <button onClick={onEdit} onMouseEnter={onPrefetch} onFocus={onPrefetch} type="button" className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/65 hover:text-white/95 hover:bg-white/[0.05] transition-colors">Editar</button>
           <button onClick={onDuplicate} type="button" className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/65 hover:text-white/95 hover:bg-white/[0.05] transition-colors">Duplicar</button>
           <button onClick={onDelete} type="button" className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/45 hover:text-rose-300 hover:bg-rose-500/8 transition-colors" aria-label="Excluir">Excluir</button>
         </div>

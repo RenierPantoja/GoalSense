@@ -14,9 +14,15 @@ interface TemplateCardProps {
   health?: PatternHealth
   onToggle: () => void
   onConfigure: () => void
+  /**
+   * Optional: fired on hover/focus of the card or the configure button so the
+   * caller can prefetch the TemplateConfigModal chunk (V4.4). Pure side-effect,
+   * safe to be a no-op when not provided.
+   */
+  onPrefetch?: () => void
 }
 
-export function TemplateCard({ template, existing, isActive, health, onToggle, onConfigure }: TemplateCardProps) {
+export function TemplateCard({ template, existing, isActive, health, onToggle, onConfigure, onPrefetch }: TemplateCardProps) {
   const cat = categorizeTemplate(template)
   const sevDot = template.severity === 'critical' ? 'bg-rose-300/85' : template.severity === 'attention' ? 'bg-amber-300/85' : 'bg-cyan-300/85'
   const sevLabel = template.severity === 'critical' ? 'Crítico' : template.severity === 'attention' ? 'Atenção' : 'Info'
@@ -28,7 +34,7 @@ export function TemplateCard({ template, existing, isActive, health, onToggle, o
       : 'border-white/[0.07]')
     : 'border-white/[0.07]'
   return (
-    <div className={`group rounded-2xl border bg-white/[0.012] p-4 transition-colors duration-200 hover:border-white/[0.14] ${borderTone}`}>
+    <div onMouseEnter={onPrefetch} className={`group rounded-2xl border bg-white/[0.012] p-4 transition-colors duration-200 hover:border-white/[0.14] ${borderTone}`}>
       <div className="flex items-start justify-between gap-3 mb-2.5">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1.5 text-[10px]">
@@ -62,7 +68,7 @@ export function TemplateCard({ template, existing, isActive, health, onToggle, o
       </div>
       <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.04]">
         <span className="text-[10.5px] text-white/45">Confiança sugerida: <span className="text-white/75 font-semibold">{template.defaultConfidence}</span></span>
-        <button onClick={onConfigure} type="button" className="text-[11px] font-medium text-white/85 hover:text-white transition-colors">Configurar →</button>
+        <button onClick={onConfigure} onFocus={onPrefetch} type="button" className="text-[11px] font-medium text-white/85 hover:text-white transition-colors">Configurar →</button>
       </div>
     </div>
   )

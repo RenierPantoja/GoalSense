@@ -10,9 +10,11 @@ interface ReviewableRowProps {
   pattern: Pattern
   health: PatternHealth
   onEdit: () => void
+  /** Optional V4.4 prefetch hook for the CustomPatternModal chunk. */
+  onPrefetch?: () => void
 }
 
-export function ReviewableRow({ pattern, health, onEdit }: ReviewableRowProps) {
+export function ReviewableRow({ pattern, health, onEdit, onPrefetch }: ReviewableRowProps) {
   const tone = HEALTH_TONE[health.status]
   return (
     <div className="rounded-xl border border-white/[0.07] bg-white/[0.012] px-4 py-3 flex items-start gap-3">
@@ -31,7 +33,7 @@ export function ReviewableRow({ pattern, health, onEdit }: ReviewableRowProps) {
           </ul>
         )}
       </div>
-      <button onClick={onEdit} type="button" className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-colors">Editar</button>
+      <button onClick={onEdit} onMouseEnter={onPrefetch} onFocus={onPrefetch} type="button" className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-colors">Editar</button>
     </div>
   )
 }

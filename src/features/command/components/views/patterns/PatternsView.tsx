@@ -30,15 +30,20 @@ import { TemplateCard } from './TemplateCard'
 // V4.3 — lazy load the three large Pattern Studio modals so the initial chunk
 // of the Command Center doesn't pay for them. They only ship when the user
 // actually clicks "Criar radar", "Configurar template" or "Configurar motor".
-// Wrapped in a `then` adapter because the modals use named exports.
+//
+// V4.4 — share the import promises with the prefetch helpers via
+// `./modalPreload` so hover/focus on the relevant CTA can warm the chunk
+// before the click without ever ending up with two separate chunks.
+import { importAutoDiscoveryConfigModal, importCustomPatternModal, importTemplateConfigModal, preloadAutoDiscoveryConfigModal, preloadCustomPatternModal, preloadTemplateConfigModal } from '../../pattern-studio/modals/modalPreload'
+
 const CustomPatternModal = lazy(() =>
-  import('../../pattern-studio/modals/CustomPatternModal').then(m => ({ default: m.CustomPatternModal }))
+  importCustomPatternModal().then(m => ({ default: m.CustomPatternModal }))
 )
 const TemplateConfigModal = lazy(() =>
-  import('../../pattern-studio/modals/TemplateConfigModal').then(m => ({ default: m.TemplateConfigModal }))
+  importTemplateConfigModal().then(m => ({ default: m.TemplateConfigModal }))
 )
 const AutoDiscoveryConfigModal = lazy(() =>
-  import('../../pattern-studio/modals/AutoDiscoveryConfigModal').then(m => ({ default: m.AutoDiscoveryConfigModal }))
+  importAutoDiscoveryConfigModal().then(m => ({ default: m.AutoDiscoveryConfigModal }))
 )
 
 /**
@@ -344,10 +349,10 @@ export function PatternsView({ patterns, templates, createFromTemplate: _createF
             <p className="text-[13px] text-white/55 mt-2 max-w-[560px] leading-relaxed">Combine gatilhos reais e configure o motor automático para detectar sinais ao vivo nas partidas.</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button onClick={() => setShowAutoConfig(true)} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/[0.14] transition-colors flex items-center gap-1.5">
+            <button onClick={() => setShowAutoConfig(true)} onMouseEnter={preloadAutoDiscoveryConfigModal} onFocus={preloadAutoDiscoveryConfigModal} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/[0.14] transition-colors flex items-center gap-1.5">
               <Sparkles size={13} />Configurar motor
             </button>
-            <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold border border-white/30 bg-white/[0.95] hover:bg-white transition-colors duration-200 flex items-center gap-1.5" style={{ color: '#0b0d12' }}>
+            <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} onMouseEnter={preloadCustomPatternModal} onFocus={preloadCustomPatternModal} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold border border-white/30 bg-white/[0.95] hover:bg-white transition-colors duration-200 flex items-center gap-1.5" style={{ color: '#0b0d12' }}>
               <Plus size={14} />Criar radar
             </button>
           </div>
@@ -362,7 +367,7 @@ export function PatternsView({ patterns, templates, createFromTemplate: _createF
       </header>
 
       {/* Motor automático — quiet operational module */}
-      <section className="rounded-2xl border border-white/[0.07] bg-white/[0.012] p-5">
+      <section onMouseEnter={preloadAutoDiscoveryConfigModal} className="rounded-2xl border border-white/[0.07] bg-white/[0.012] p-5">
         <div className="flex items-center gap-4 flex-wrap">
           <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border ${isAutoActive ? 'border-emerald-400/25 bg-emerald-500/[0.06]' : 'border-white/[0.08] bg-white/[0.04]'}`}>
             <Sparkles size={15} className={isAutoActive ? 'text-emerald-200/85' : 'text-white/55'} />
@@ -382,7 +387,7 @@ export function PatternsView({ patterns, templates, createFromTemplate: _createF
             </p>
           </div>
           <PremiumToggle checked={isAutoActive} onChange={(v) => { if (v && !discoveryConfig.userConfigured) setShowAutoConfig(true); else updateDiscoveryConfig({ enabled: v }) }} ariaLabel="Motor automático" />
-          <button onClick={() => setShowAutoConfig(true)} type="button" className="px-3.5 py-2 rounded-xl text-[11.5px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/[0.14] transition-colors">Configurar</button>
+          <button onClick={() => setShowAutoConfig(true)} onFocus={preloadAutoDiscoveryConfigModal} type="button" className="px-3.5 py-2 rounded-xl text-[11.5px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/[0.14] transition-colors">Configurar</button>
         </div>
       </section>
 
@@ -403,6 +408,7 @@ export function PatternsView({ patterns, templates, createFromTemplate: _createF
                 pattern={p}
                 health={health}
                 onEdit={() => { setEditingPattern(p); setShowBuilder(true) }}
+                onPrefetch={preloadCustomPatternModal}
               />
             ))}
           </div>
@@ -417,10 +423,10 @@ export function PatternsView({ patterns, templates, createFromTemplate: _createF
               <h3 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">Radares configurados</h3>
               <p className="text-[11px] text-white/40 mt-0.5">{activeCount} {activeCount === 1 ? 'ativo' : 'ativos'} · {pausedCount} {pausedCount === 1 ? 'pausado' : 'pausados'}</p>
             </div>
-            <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} type="button" className="text-[11px] font-medium text-white/65 hover:text-white/95 transition-colors flex items-center gap-1"><Plus size={11} />Novo radar</button>
+            <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} onMouseEnter={preloadCustomPatternModal} onFocus={preloadCustomPatternModal} type="button" className="text-[11px] font-medium text-white/65 hover:text-white/95 transition-colors flex items-center gap-1"><Plus size={11} />Novo radar</button>
           </div>
           <div className="space-y-2">
-            {patterns.map(p => <ConfiguredRadarRow key={p.id} pattern={p} health={healthByPattern.get(p.id)} triggeredAlerts={triggeredAlerts} onToggle={() => togglePattern(p.id)} onEdit={() => { setEditingPattern(p); setShowBuilder(true) }} onDuplicate={() => { createPattern({ ...p, name: `${p.name} (cópia)`, status: 'paused', isTemplate: false, templateId: undefined }) }} onDelete={() => deletePattern(p.id)} isAdvanced={isAdvanced} />)}
+            {patterns.map(p => <ConfiguredRadarRow key={p.id} pattern={p} health={healthByPattern.get(p.id)} triggeredAlerts={triggeredAlerts} onToggle={() => togglePattern(p.id)} onEdit={() => { setEditingPattern(p); setShowBuilder(true) }} onDuplicate={() => { createPattern({ ...p, name: `${p.name} (cópia)`, status: 'paused', isTemplate: false, templateId: undefined }) }} onDelete={() => deletePattern(p.id)} isAdvanced={isAdvanced} onPrefetch={preloadCustomPatternModal} />)}
           </div>
         </section>
       ) : (
@@ -431,11 +437,11 @@ export function PatternsView({ patterns, templates, createFromTemplate: _createF
           <p className="text-[15px] text-white/90 font-semibold">Você ainda não configurou nenhum radar</p>
           <p className="text-[12px] text-white/55 mt-1 max-w-[440px] mx-auto leading-relaxed">Comece por um template recomendado, crie um padrão personalizado do zero ou ative o motor automático para descobertas sem configuração.</p>
           <div className="mt-5 flex items-center justify-center gap-2 flex-wrap">
-            <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} type="button" className="px-4 py-2 rounded-xl text-[12px] font-semibold border border-white/30 bg-white/[0.95] hover:bg-white transition-colors duration-200" style={{ color: '#0b0d12' }}>+ Criar radar personalizado</button>
+            <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} onMouseEnter={preloadCustomPatternModal} onFocus={preloadCustomPatternModal} type="button" className="px-4 py-2 rounded-xl text-[12px] font-semibold border border-white/30 bg-white/[0.95] hover:bg-white transition-colors duration-200" style={{ color: '#0b0d12' }}>+ Criar radar personalizado</button>
             {templates.length > 0 && (
-              <button onClick={() => { const first = templates[0]; if (first) handleTemplateConfigure(first) }} type="button" className="px-4 py-2 rounded-xl text-[12px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-colors">Ativar template</button>
+              <button onClick={() => { const first = templates[0]; if (first) handleTemplateConfigure(first) }} onMouseEnter={preloadTemplateConfigModal} onFocus={preloadTemplateConfigModal} type="button" className="px-4 py-2 rounded-xl text-[12px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-colors">Ativar template</button>
             )}
-            <button onClick={() => setShowAutoConfig(true)} type="button" className="px-4 py-2 rounded-xl text-[12px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-colors">Configurar motor</button>
+            <button onClick={() => setShowAutoConfig(true)} onMouseEnter={preloadAutoDiscoveryConfigModal} onFocus={preloadAutoDiscoveryConfigModal} type="button" className="px-4 py-2 rounded-xl text-[12px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-colors">Configurar motor</button>
           </div>
         </section>
       )}
@@ -481,7 +487,7 @@ export function PatternsView({ patterns, templates, createFromTemplate: _createF
               const existing = patterns.find(p => p.templateId === t.id) || null
               const isActiveTpl = !!existing && existing.status === 'active'
               const tplHealth = existing ? healthByPattern.get(existing.id) : undefined
-              return <TemplateCard key={t.id} template={t} existing={existing} isActive={isActiveTpl} health={tplHealth} onToggle={() => handleTemplateToggle(t)} onConfigure={() => handleTemplateConfigure(t)} />
+              return <TemplateCard key={t.id} template={t} existing={existing} isActive={isActiveTpl} health={tplHealth} onToggle={() => handleTemplateToggle(t)} onConfigure={() => handleTemplateConfigure(t)} onPrefetch={preloadTemplateConfigModal} />
             })}
           </div>
         )}
