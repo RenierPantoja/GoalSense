@@ -23,6 +23,7 @@ import { normalizeEvents } from '@/features/matches/normalizeMatchEvents'
 import { buildPlayerEventMap, getBadgesForPlayer, getBadgeStyle } from '@/features/matches/buildPlayerEventMap'
 import { MatchStoryline, PlayerImpactPanel, DangerousAttackPanel, StatsInsightHeader } from '@/features/matches/matchSections'
 import { LivePressureGraph } from '@/components/matches/LivePressureGraph'
+import type { PressureGraphEvent } from '@/features/matches/pressureGraphEvents'
 import { MatchHighlightsSection } from '@/features/matches/highlights/MatchHighlightsSection'
 import { PreMatchIntelligencePanel } from '@/features/match-detail/PreMatchIntelligencePanel'
 import { PostMatchIntelligencePanel } from '@/features/match-detail/PostMatchIntelligencePanel'
@@ -62,6 +63,19 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [narFilter, setNarFilter] = useState<NarrationFilter>('important')
+  // V2.5: when a marker on the Live Pressure Graph is activated we lift the
+  // event id here so the GroupedTimeline below can highlight the matching
+  // row for ~4s. Both surfaces feed from the same `events` prop and call
+  // `normalizeEvents` on it, so `id = evt-{index}-{minute}` is shared.
+  const [highlightedTimelineId, setHighlightedTimelineId] = useState<string | null>(null)
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handlePressureMarkerSelect = useCallback((event: PressureGraphEvent) => {
+    setHighlightedTimelineId(event.id)
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+    highlightTimerRef.current = setTimeout(() => setHighlightedTimelineId(null), 4000)
+    try { document.getElementById('sec-timeline')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) } catch { /* no-op */ }
+  }, [])
+  useEffect(() => () => { if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current) }, [])
   const narRef = useRef<HTMLDivElement>(null)
   const { commandAlerts } = useAlerts()
   const { getActivePatterns } = usePatterns()
@@ -731,12 +745,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
           elapsed={elapsed}
           homeColors={home.colors}
           awayColors={away.colors}
-          onEventSelect={() => {
-            // V2.1 — when the user activates a marker we scroll to the
-            // timeline section so they can read the event in context.
-            // Best-effort: if the section isn't mounted yet we just no-op.
-            try { document.getElementById('sec-timeline')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) } catch { /* */ }
-          }}
+          onEventSelect={handlePressureMarkerSelect}
         />
       </div>
       )}
@@ -751,7 +760,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       {/* 5. KEY MOMENTS + IMPACT */}
       {!isMatchScheduled && (events.length > 0 || stats.length > 0) && (
         <div id="sec-timeline" className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          {events.length > 0 && <GroupedTimeline events={events} homeName={home.name} awayName={away.name} />}
+          {events.length > 0 && <GroupedTimeline events={events} homeName={home.name} awayName={away.name} highlightedId={highlightedTimelineId} />}
           <div className="space-y-4">
             <PlayerImpactPanel events={events} />
             {stats.length > 0 && <DangerousAttackPanel stats={stats} events={events} homeName={home.name} awayName={away.name} />}
@@ -863,7 +872,7 @@ function DiagnosticPanel({ stats, homeName, awayName, homeScore, awayScore, elap
 }
 
 // --- PREMIUM TIMELINE ---
-function GroupedTimeline({ events, homeName, awayName }: { events: { clock: string; text: string; type: string; team: string }[]; homeName?: string; awayName?: string }) {
+function GroupedTimeline({ events, homeName, awayName, highlightedId }: { events: { clock: string; text: string; type: string; team: string }[]; homeName?: string; awayName?: string; highlightedId?: string | null }) {
   const [filter, setFilter] = useState<string>('all')
   const normalized = normalizeEvents(events)
 
@@ -909,8 +918,10 @@ function GroupedTimeline({ events, homeName, awayName }: { events: { clock: stri
       : isCorner ? <Flag size={10} className="text-white/20" />
       : <Circle size={8} className="text-white/15" />
 
+    const isHighlighted = highlightedId === ev.id
+
     return (
-      <div key={i} className={`relative flex gap-3 rounded-xl px-3 py-2.5 border ${borderColor} ${bgColor}`}>
+      <div key={i} className={`relative flex gap-3 rounded-xl px-3 py-2.5 border ${borderColor} ${bgColor} ${isHighlighted ? 'ring-1 ring-cyan-400/30 bg-cyan-400/[0.06]' : ''} transition-colors duration-500`}>
         <div className="shrink-0 w-8 text-right">
           <span className={`text-[13px] font-bold tabular-nums ${isGoal ? 'text-emerald-400' : 'text-white/35'}`}>{ev.minute}'</span>
         </div>

@@ -339,7 +339,7 @@ function internalSizeFor(type: PressureGraphEventType): number {
 export function PressureEventIconBox({ type, sizePx, selected, hovered, muted, teamAccent }: PressureEventIconBoxProps) {
   const internalSize = internalSizeFor(type)
   const opacity = muted ? 0.55 : 1
-  const scale = hovered ? 1.06 : 1
+  const scale = hovered ? 1.04 : 1
   return (
     <span
       aria-hidden="true"
@@ -454,7 +454,7 @@ function SoccerBallBox(props: { size: number; variant: 'goal' | 'own_goal' | 'pe
 // ---------------------------------------------------------------------------
 
 export function GroupBubbleBox({ count, sizePx, accent, hovered }: { count: number; sizePx: number; accent: string; hovered?: boolean }) {
-  const scale = hovered ? 1.06 : 1
+  const scale = hovered ? 1.04 : 1
   const radius = 11 + (count >= 10 ? 1.6 : 0.8)
   return (
     <span

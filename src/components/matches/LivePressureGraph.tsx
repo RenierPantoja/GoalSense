@@ -8,11 +8,18 @@
  * V2.2 added: full premium custom-SVG icon system for every event type.
  * V2.3 added: lucide-react primitives wrapped in GoalSense badges for
  *             non-football glyphs (target / goalpost / substitution).
- * V2.4 adds : markers move OUT of the distorted curve SVG into a pixel-perfect
+ * V2.4 added: markers move OUT of the distorted curve SVG into a pixel-perfect
  *             HTML overlay positioned in percentage coordinates. The curve
  *             still renders inside the same `preserveAspectRatio="none"` SVG
  *             so the engine and curve geometry remain unchanged. Each marker
  *             is now a real square HTML button with proper aspect ratio.
+ * V2.5 adds : final visual calibration (sizes / vertical offsets / hover),
+ *             running score derived from real goal events shown in the goal
+ *             tooltip when available, refined microcopy for the empty state,
+ *             and a richer marker accessibility label (includes scorer/assist).
+ *             The component still does NOT invent data: the running score is
+ *             computed deterministically from real per-minute goal events;
+ *             if there are no goal events the score is never shown.
  *
  * The pressure engine, normalization, readings, confidence and time-axis
  * logic are intentionally untouched.
@@ -47,22 +54,25 @@ interface Props {
   onEventSelect?: (event: PressureGraphEvent) => void
 }
 
-// --- Marker sizing per type (CSS pixels) ----------------------------------
+// --- Marker sizing per type (CSS pixels) ---
+// V2.5 calibration: goal protagonista, substituição secundária, cartões legíveis.
 
 const MARKER_SIZES_PX: Record<PressureGraphEventType, number> = {
-  goal: 22,
-  own_goal: 22,
-  penalty_scored: 22,
-  penalty_missed: 20,
+  goal: 24,
+  own_goal: 24,
+  penalty_scored: 23,
+  penalty_missed: 21,
   shot_on_target: 16,
   shot_off_target: 16,
   yellow_card: 18,
-  red_card: 18,
-  second_yellow: 19,
-  substitution: 15,
-  var: 18,
+  red_card: 19,
+  second_yellow: 20,
+  substitution: 14,
+  var: 17,
   unknown: 12,
 }
+
+const GROUP_MARKER_SIZE_PX = 20
 
 // Density: types that fade when the match is busy. Critical events
 // (goals, red cards, penalties, second yellows) never fade.
@@ -142,6 +152,29 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
     const normalized = normalizeEvents(events)
     return normalizePressureGraphEvents(normalized, homeName, awayName)
   }, [events, homeName, awayName])
+
+  // V2.5: compute a running score from real goal events. Only events with
+  // type goal / own_goal / penalty_scored count; we never invent or smooth.
+  // The score map is keyed by event.id so the tooltip lookup is O(1).
+  const goalScoreMap = useMemo(() => {
+    const map = new Map<string, { home: number; away: number }>()
+    let h = 0
+    let a = 0
+    const goalsInOrder = graphEvents
+      .filter(ev => ev.type === 'goal' || ev.type === 'own_goal' || ev.type === 'penalty_scored')
+      .slice()
+      .sort((x, y) => x.minute - y.minute || (x.addedTime || 0) - (y.addedTime || 0))
+    for (const ev of goalsInOrder) {
+      // own_goal counts for the OPPOSITE side; everything else for the side
+      // that scored.
+      const benefitsHome = ev.type === 'own_goal' ? ev.side === 'away' : ev.side === 'home'
+      const benefitsAway = ev.type === 'own_goal' ? ev.side === 'home' : ev.side === 'away'
+      if (benefitsHome) h += 1
+      if (benefitsAway) a += 1
+      map.set(ev.id, { home: h, away: a })
+    }
+    return map
+  }, [graphEvents])
 
   const [hovered, setHovered] = useState<HoverState | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -253,8 +286,11 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
 
     // Stack offsets, expressed as a percentage of the graph height. The
     // graph container is 260px tall; the curve baseline (mid) sits at 50%.
-    // Each stacked marker steps ~9% (~23px) further away from baseline.
-    const baseOffsetPct = 9
+    // V2.5 calibration: a slightly larger base offset (10%) makes goals
+    // visually breathe above/below the curve without overlapping the
+    // strongest pressure peaks. Stack step is unchanged so a 3-event stack
+    // never extends past the visible area.
+    const baseOffsetPct = 10
     const stackStepPct = 9
 
     const out: MarkerLayoutItem[] = []
@@ -306,7 +342,7 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
           id: `g-${first.minute}-${side}`,
           xPercent,
           yPercent: groupYPercent,
-          sizePx: 22,
+          sizePx: GROUP_MARKER_SIZE_PX,
           zIndex: 70,
           side,
           events: overflow,
@@ -495,7 +531,7 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
           {hovered && (
             <SmartTooltip xPct={hovered.xPercent} yPct={hovered.yPercent}>
               {hovered.kind === 'event'
-                ? <EventTooltipBody event={hovered.event} />
+                ? <EventTooltipBody event={hovered.event} score={goalScoreMap.get(hovered.event.id)} homeName={homeName} awayName={awayName} />
                 : <GroupTooltipBody events={hovered.events} minute={hovered.minute} />
               }
             </SmartTooltip>
@@ -512,7 +548,7 @@ export function LivePressureGraph({ events, commentary, homeName, awayName, elap
       {typeCounts.size > 0 ? (
         <Legend counts={typeCounts} />
       ) : (
-        <p className="text-[10px] text-white/25 mt-3 px-1">Eventos detalhados indisponíveis para este provider.</p>
+        <p className="text-[10px] text-white/25 mt-3 px-1">Eventos com minuto não disponíveis para este provider.</p>
       )}
     </section>
   )
@@ -543,7 +579,8 @@ function SmartTooltip({ xPct, yPct, children }: { xPct: number; yPct: number; ch
   )
 }
 
-function EventTooltipBody({ event }: { event: PressureGraphEvent }) {
+function EventTooltipBody({ event, score, homeName, awayName }: { event: PressureGraphEvent; score?: { home: number; away: number }; homeName?: string; awayName?: string }) {
+  const showScore = !!score && (event.type === 'goal' || event.type === 'own_goal' || event.type === 'penalty_scored')
   return (
     <>
       <div className="flex items-center gap-2 mb-1.5">
@@ -561,6 +598,11 @@ function EventTooltipBody({ event }: { event: PressureGraphEvent }) {
       )}
       {event.assistName && (
         <p className="text-[10.5px] text-white/55 leading-snug mt-0.5">Assistência: {event.assistName}</p>
+      )}
+      {showScore && score && (
+        <p className="text-[10.5px] text-emerald-400/70 leading-snug mt-1 tabular-nums">
+          Placar: {homeName ? <span className="text-white/65">{homeName} </span> : null}{score.home}–{score.away}{awayName ? <span className="text-white/65"> {awayName}</span> : null}
+        </p>
       )}
       {event.description && event.description !== event.rawText && (
         <p className="text-[10.5px] text-white/45 leading-snug mt-1.5 border-t border-white/[0.05] pt-1.5">{event.description}</p>
@@ -615,7 +657,15 @@ interface SingleMarkerButtonProps {
 }
 
 function SingleMarkerButton({ event, xPercent, yPercent, sizePx, zIndex, muted, selected, hovered, teamAccent, onHover, onLeave, onSelect }: SingleMarkerButtonProps) {
-  const ariaLabel = `${eventLabel(event.type)} aos ${formatMinuteLabel(event.minute, event.addedTime)}${event.teamName ? ` · ${event.teamName}` : ''}${event.playerName ? ` · ${event.playerName}` : ''}`
+  // V2.5: enrich aria-label so screen readers and tooltips on focus convey
+  // the full context (assist + running score) for important events.
+  const parts: string[] = [
+    `${eventLabel(event.type)} aos ${formatMinuteLabel(event.minute, event.addedTime)}`,
+  ]
+  if (event.teamName) parts.push(event.teamName)
+  if (event.playerName) parts.push(event.playerName)
+  if (event.assistName) parts.push(`assistência de ${event.assistName}`)
+  const ariaLabel = parts.join(' · ')
   // Hit area is slightly bigger than the visual marker for easier click/tap.
   const hitSize = Math.max(sizePx + 6, 24)
   return (
@@ -647,7 +697,7 @@ function SingleMarkerButton({ event, xPercent, yPercent, sizePx, zIndex, muted, 
         outline: 'none',
         borderRadius: '50%',
       }}
-      className="gs-pressure-marker"
+      className="gs-pressure-marker focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400/70 focus-visible:outline-offset-2"
     >
       <PressureEventIconBox
         type={event.type}
@@ -706,7 +756,7 @@ function GroupMarkerButton({ events, minute, xPercent, yPercent, sizePx, zIndex,
         outline: 'none',
         borderRadius: '50%',
       }}
-      className="gs-pressure-marker"
+      className="gs-pressure-marker focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400/70 focus-visible:outline-offset-2"
     >
       <GroupBubbleBox sizePx={sizePx} count={events.length} accent={accent} hovered={hovered} />
     </button>
