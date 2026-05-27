@@ -21,6 +21,7 @@ import { resolveAlert } from './intelligence/patternResolutionEngine'
 import { recordScopeEntities } from '@/services/intelligence/scopeKnowledgeBase'
 import { isLiveFx, detectChanges, type ChangeEvent } from './commandHelpers'
 import type { Pattern, FixtureStatsForPattern, ScannerEntry } from './types/commandTypes'
+import { useCommandAlertNotifications } from '@/features/notifications/useCommandAlertNotifications'
 import { CockpitView } from './components/views/cockpit/CockpitView'
 import { PatternsView } from './components/views/patterns/PatternsView'
 import { ScannerView } from './components/views/scanner/ScannerView'
@@ -55,6 +56,11 @@ export function CommandCenterPage() {
   const hasManualPatterns = activePatternCount > 0
   const hasAutoDiscovery = discoveryConfig.enabled && discoveryConfig.userConfigured
   const hasIntelligence = hasManualPatterns || hasAutoDiscovery
+
+  // V5.1 — opt-in foreground notification stream. Hook ignores backlog and
+  // only fires for ids that appear after first mount. Every guard (opt-in,
+  // permission, dedup, rate limit) lives inside the bridge.
+  useCommandAlertNotifications(commandAlerts)
 
   // ─── Fetch ─────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async (silent = false) => {

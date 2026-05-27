@@ -143,3 +143,63 @@ um checklist manual para validação em browser real.
 2. Recarregar.
 3. Permissão de notificação NÃO é revogada automaticamente (é controle
    do browser por origem). Para revogar, usar configurações do site.
+
+## V5.1 — Notificações locais para alertas do Command Center
+
+### O que mudou
+
+- `maybeNotifyCommandAlert` agora é típado e auditável: retorna
+  `'sent' | 'disabled' | 'unsupported' | 'permission_not_granted' |
+  'invalid_alert' | 'duplicate' | 'rate_limited' | 'error'`.
+- `notifiedAlertsStore.ts` adiciona dedup persistente
+  (`goalsense_notified_command_alerts`) com TTL de 7 dias, cap de 200
+  ids, e rate limit (`goalsense_notification_rate_limit`) de 3 fires
+  em 60 s.
+- `useCommandAlertNotifications` hook conecta o stream de
+  `commandAlerts` (do `AlertsContext`) ao bridge sem disparar para
+  backlog: snapshot dos ids no primeiro mount, fires apenas para ids
+  novos depois.
+- `CommandCenterPage` consome o hook. Nada é chamado em loop, nenhum
+  histórico é replicado.
+- Settings copy ajustada: "Alertas locais do Command Center" + frase
+  honesta sobre push em segundo plano ainda exigir backend.
+
+### Checklist de QA manual
+
+1. Buildar produção: `npm run build && npm run preview`.
+2. Abrir `/app/settings`.
+3. Confirmar Service Worker = Ativo.
+4. Clicar em "Ativar notificações". Aceitar prompt do navegador.
+5. Clicar em "Enviar notificação de teste". Confirmar que aparece com
+   título "GoalSense" e corpo curto.
+6. Ativar o toggle "Alertas locais do Command Center".
+7. Ir para `/app/command` → aba Padrões.
+8. Criar um radar simples (template ou personalizado) e ativar.
+9. Quando um alerta real for registrado pelo Command Center, deve
+   aparecer notificação:
+   - Título: "GoalSense · Alerta detectado"
+   - Body: "{padrão} em {mandante} x {visitante} · {confiança}%"
+   - Click leva para `/app/alerts`.
+10. Recarregar a página. O mesmo alerta NÃO dispara notificação de
+    novo (dedup persistente).
+11. Disparar 4+ alertas em sequência rápida. Apenas as 3 primeiras em
+    60 s viram notificação (rate limit).
+12. Abrir DevTools → Application → Local Storage. Conferir entradas
+    `goalsense_notified_command_alerts` e
+    `goalsense_notification_rate_limit`.
+13. Settings → Limpar tudo do GoalSense → recarregar → confirmar que
+    as duas chaves foram apagadas.
+
+### Limites conhecidos
+
+- **Funciona apenas com a aba/app aberta.** Em desktop pode aparecer
+  com a janela minimizada, mas em mobile geralmente exige aba ativa.
+- **Push em segundo plano ainda exige backend / Web Push / FCM**
+  (registro do `pushManager`, VAPID, endpoint de envio). Estrutura
+  atual do service worker em `public/sw.js` está pronta para receber
+  handlers `push` e `notificationclick` sem reescrita.
+- **Rate limit é por janela de 60 s.** Se realmente chegarem 5 alertas
+  ao mesmo tempo, 2 ficam silenciados. O usuário ainda os vê em
+  `/app/alerts` — só não há notificação para eles.
+- **Dedup é por `alert.id`.** Se a mesma partida disparar dois padrões
+  diferentes, ambos notificam (cada um tem id próprio). Esperado.

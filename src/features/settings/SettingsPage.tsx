@@ -406,8 +406,8 @@ function AppNotificationsSection() {
         <div className="rounded-xl border border-white/[0.05] bg-white/[0.012] px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[12px] font-medium text-white/85">Alertas do Command Center</p>
-              <p className="text-[10.5px] text-white/45 mt-0.5">Mostra um aviso local ao registrar um novo alerta enquanto a aba estiver aberta.</p>
+              <p className="text-[12px] font-medium text-white/85">Alertas locais do Command Center</p>
+              <p className="text-[10.5px] text-white/45 mt-0.5">Enquanto o GoalSense estiver aberto, você pode receber notificações locais para novos alertas detectados. Push em segundo plano ainda exige backend.</p>
             </div>
             <button
               onClick={handleToggleCommandAlerts}
@@ -421,8 +421,8 @@ function AppNotificationsSection() {
               <span aria-hidden className={`absolute top-[3px] h-3.5 w-3.5 rounded-full transition-[left] ${settings.commandAlertsEnabled && canShowLocalNotification() ? 'left-[20px] bg-white' : 'left-[3px] bg-white/65'}`} />
             </button>
           </div>
-          {!canShowLocalNotification() && settings.commandAlertsEnabled && (
-            <p className="text-[10.5px] text-amber-300/80 mt-2">Permissão é necessária para receber estes avisos. Ative as notificações acima.</p>
+          {settings.commandAlertsEnabled && permission !== 'granted' && (
+            <p className="text-[10.5px] text-amber-300/80 mt-2">Ative a permissão do navegador para receber notificações.</p>
           )}
         </div>
       )}
