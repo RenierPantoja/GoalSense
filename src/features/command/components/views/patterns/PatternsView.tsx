@@ -11,7 +11,7 @@
  * prefilled drafts coming from Match Detail and the deletion / duplication
  * paths all stay identical.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Plus, Sparkles } from 'lucide-react'
 import type { LiveFixture } from '@/lib/apiClient'
 import type { CommandCenterAlert } from '@/context/AlertsContext'
@@ -21,14 +21,42 @@ import type { AutoDiscoveryConfig, Pattern, PatternTemplate, TriggeredAlert } fr
 import { CATEGORY_LABELS, categorizeTemplate, type TemplateCategory } from '../../../utils/commandFormatters'
 import { buildPatternHealth, isReviewableHealth, type PatternHealth } from '../../../intelligence/patternHealthEngine'
 import { PremiumToggle } from '../../pattern-studio/shell/PremiumToggle'
-import { CustomPatternModal } from '../../pattern-studio/modals/CustomPatternModal'
-import { TemplateConfigModal } from '../../pattern-studio/modals/TemplateConfigModal'
-import { AutoDiscoveryConfigModal } from '../../pattern-studio/modals/AutoDiscoveryConfigModal'
 import { CounterCell } from '../shared/CounterCell'
 import { ConfiguredRadarRow } from './ConfiguredRadarRow'
 import { ReviewableRow } from './ReviewableRow'
 import { ScopeHealthPanel } from './ScopeHealthPanel'
 import { TemplateCard } from './TemplateCard'
+
+// V4.3 — lazy load the three large Pattern Studio modals so the initial chunk
+// of the Command Center doesn't pay for them. They only ship when the user
+// actually clicks "Criar radar", "Configurar template" or "Configurar motor".
+// Wrapped in a `then` adapter because the modals use named exports.
+const CustomPatternModal = lazy(() =>
+  import('../../pattern-studio/modals/CustomPatternModal').then(m => ({ default: m.CustomPatternModal }))
+)
+const TemplateConfigModal = lazy(() =>
+  import('../../pattern-studio/modals/TemplateConfigModal').then(m => ({ default: m.TemplateConfigModal }))
+)
+const AutoDiscoveryConfigModal = lazy(() =>
+  import('../../pattern-studio/modals/AutoDiscoveryConfigModal').then(m => ({ default: m.AutoDiscoveryConfigModal }))
+)
+
+/**
+ * ModalLoadingFallback — discreet centered indicator shown while a Pattern
+ * Studio modal chunk is being fetched. Stays brief because chunks are tiny
+ * relative to the rest of the app, but renders something honest so the user
+ * never sees a frozen UI.
+ */
+function ModalLoadingFallback() {
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#0b0d12]/60 backdrop-blur-sm">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-9 w-9 rounded-full border-2 border-white/[0.08] border-t-cyan-400/80 animate-spin" />
+        <span className="text-[11px] tracking-wider uppercase text-white/45">Carregando estúdio</span>
+      </div>
+    </div>
+  )
+}
 
 export interface PatternsViewProps {
   patterns: Pattern[]
@@ -291,10 +319,21 @@ export function PatternsView({ patterns, templates, createFromTemplate: _createF
 
   return (
     <div className="space-y-6">
-      {/* Modals */}
-      <CustomPatternModal open={showBuilder} initial={editingPattern} onClose={() => { setShowBuilder(false); setEditingPattern(null); if (prefilledDraft) clearPrefilledDraft() }} onSave={handleCustomSave} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} />
-      <TemplateConfigModal open={!!templateModal} template={templateModal?.template || null} existingPattern={templateModal?.existing || null} onClose={() => setTemplateModal(null)} onSave={handleTemplateSave} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} />
-      <AutoDiscoveryConfigModal open={showAutoConfig} config={discoveryConfig} onClose={() => setShowAutoConfig(false)} onChange={updateDiscoveryConfig} onActivate={handleActivateAuto} onDeactivate={handleDeactivateAuto} />
+      {/* Modals — lazy-loaded and conditionally mounted so their JS chunk
+          only ships when the user actually opens one. The local Suspense
+          renders a discreet overlay during the (typically tiny) network
+          fetch the first time. After mount they keep working as before. */}
+      <Suspense fallback={<ModalLoadingFallback />}>
+        {showBuilder && (
+          <CustomPatternModal open={showBuilder} initial={editingPattern} onClose={() => { setShowBuilder(false); setEditingPattern(null); if (prefilledDraft) clearPrefilledDraft() }} onSave={handleCustomSave} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} />
+        )}
+        {templateModal && (
+          <TemplateConfigModal open={!!templateModal} template={templateModal.template} existingPattern={templateModal.existing} onClose={() => setTemplateModal(null)} onSave={handleTemplateSave} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} />
+        )}
+        {showAutoConfig && (
+          <AutoDiscoveryConfigModal open={showAutoConfig} config={discoveryConfig} onClose={() => setShowAutoConfig(false)} onChange={updateDiscoveryConfig} onActivate={handleActivateAuto} onDeactivate={handleDeactivateAuto} />
+        )}
+      </Suspense>
 
       {/* Header — Pattern Studio premium */}
       <header className="rounded-[20px] border border-white/[0.06] bg-white/[0.012] p-6 sm:p-7">
