@@ -24,6 +24,10 @@ import { buildPreMatchOutcomeSummary } from '@/services/intelligence/preMatchOut
 import { recordScopeEntities, getKnownLeagues, getKnownTeams, getKnownMatches, getKnownLeaguesRich, getKnownTeamsRich, type ScopeKbMatch, type ScopeKbLeague, type ScopeKbTeam } from '@/services/intelligence/scopeKnowledgeBase'
 import { isLiveFx, detectChanges, type ChangeEvent } from './commandHelpers'
 import type { Pattern, PatternTemplate, PatternHit, PatternCondition, PatternConditionType, FixtureStatsForPattern, ScannerEntry, TriggeredAlert, AutoDiscoveryConfig } from './types/commandTypes'
+import { COND_LABELS, formatConditionHuman, categorizeTemplate, CATEGORY_LABELS, type TemplateCategory } from './utils/commandFormatters'
+import { TRIGGER_LIBRARY, TRIGGER_BY_TYPE, TRIGGER_CATEGORY_LABELS, TRIGGER_CATEGORY_HINTS, COVERAGE_LABEL, COVERAGE_TONE, MODE_LABEL, type TriggerCategory, type TriggerSpec } from './intelligence/triggerLibrary'
+import { TRIGGER_RECIPES, type TriggerRecipe } from './intelligence/triggerRecipes'
+import { PARAM_CLAMP, clampParam, normalizeText, matchStatusBadge, matchDateLabel, useScopeLookups } from './utils/patternStudioHelpers'
 
 function toScoring(fx: LiveFixture) {
   return { competition: { name: fx.league.name }, homeTeam: { name: fx.homeTeam.name, shortName: fx.homeTeam.name }, awayTeam: { name: fx.awayTeam.name, shortName: fx.awayTeam.name }, score: { fullTime: { home: fx.score.home, away: fx.score.away } }, status: fx.status.short === 'LIVE' || fx.status.short === 'HT' ? 'IN_PLAY' : fx.status.short === 'FT' ? 'FINISHED' : 'TIMED', utcDate: fx.date, area: { name: fx.league.country } }
@@ -457,78 +461,8 @@ function SideAction({ label, onClick }: { label: string; onClick: () => void }) 
 
 
 // ═══ PATTERN STUDIO ═══════════════════════════════════════════════════════
-// Helpers
-const COND_LABELS: Record<PatternConditionType, string> = {
-  is_live: 'Jogo ao vivo',
-  is_final_phase: 'Reta final (70\'+)',
-  is_pre_live: 'Começa em breve',
-  minute_between: 'Minuto entre',
-  score_tied: 'Placar empatado',
-  score_diff_lte: 'Diferença gols ≤',
-  favorite_involved: 'Favorito envolvido',
-  shots_recent_gte: 'Finalizações ≥',
-  shots_on_target_gte: 'No alvo ≥',
-  corners_gte: 'Escanteios ≥',
-  cards_gte: 'Cartões ≥',
-  possession_gte: 'Posse ≥',
-  goals_total_gte: 'Gols totais ≥',
-  goals_total_lte: 'Gols totais ≤',
-  away_shots_on_target_gte: 'Visitante no alvo ≥',
-  away_goals_gte: 'Gols visitante ≥',
-  away_possession_gte: 'Posse visitante ≥',
-  home_shots_on_target_gte: 'Mandante no alvo ≥',
-  home_goals_gte: 'Gols mandante ≥',
-  home_possession_gte: 'Posse mandante ≥',
-  home_corners_gte: 'Escanteios mandante ≥',
-  away_corners_gte: 'Escanteios visitante ≥',
-  shots_total_gte: 'Finalizações totais ≥',
-  yellow_cards_gte: 'Amarelos ≥',
-  red_cards_gte: 'Vermelhos ≥',
-}
-
-function formatConditionHuman(c: PatternCondition): string {
-  const v = (k: string) => Number(c.params[k] ?? 0)
-  switch (c.type) {
-    case 'is_live': return 'Partida ao vivo'
-    case 'is_final_phase': return 'Reta final (após 70\')'
-    case 'is_pre_live': return `Começa em até ${v('minutes') || 60} minutos`
-    case 'minute_between': return `Entre ${v('min')}\' e ${v('max')}\''`
-    case 'score_tied': return 'Placar empatado'
-    case 'score_diff_lte': return v('maxDiff') === 0 ? 'Placar empatado' : `Diferença no placar até ${v('maxDiff')} gol${v('maxDiff') === 1 ? '' : 's'}`
-    case 'favorite_involved': return 'Favorito envolvido'
-    case 'shots_recent_gte': return `Pelo menos ${v('value')} finalizações recentes`
-    case 'shots_on_target_gte': return `Pelo menos ${v('value')} chutes no alvo`
-    case 'corners_gte': return `${v('value')}+ escanteios`
-    case 'cards_gte': return `${v('value')}+ cartões`
-    case 'possession_gte': return `Posse acima de ${v('value')}%`
-    case 'goals_total_gte': return `${v('value')}+ gols na partida`
-    case 'goals_total_lte': return `Até ${v('value')} gol${v('value') === 1 ? '' : 's'} na partida`
-    case 'away_shots_on_target_gte': return `Visitante com ${v('value')}+ chutes no alvo`
-    case 'away_goals_gte': return `Visitante com ${v('value')}+ gols`
-    case 'away_possession_gte': return `Visitante com posse acima de ${v('value')}%`
-    case 'home_shots_on_target_gte': return `Mandante com ${v('value')}+ chutes no alvo`
-    case 'home_goals_gte': return `Mandante com ${v('value')}+ gols`
-    case 'home_possession_gte': return `Mandante com posse acima de ${v('value')}%`
-    case 'home_corners_gte': return `Mandante com ${v('value')}+ escanteios`
-    case 'away_corners_gte': return `Visitante com ${v('value')}+ escanteios`
-    case 'shots_total_gte': return `${v('value')}+ finalizações totais`
-    case 'yellow_cards_gte': return `${v('value')}+ cartões amarelos`
-    case 'red_cards_gte': return `${v('value')}+ cartões vermelhos`
-  }
-}
-
-type TemplateCategory = 'pressao' | 'reta_final' | 'favoritos' | 'gols' | 'disciplina' | 'visitante'
-
-function categorizeTemplate(t: PatternTemplate): TemplateCategory {
-  const id = t.id.toLowerCase()
-  if (id.includes('card')) return 'disciplina'
-  if (id.includes('away') || id.includes('dangerous_away') || id.includes('visitante')) return 'visitante'
-  if (id.includes('favorite') || id.includes('underdog')) return 'favoritos'
-  if (id.includes('open') || id.includes('over') || id.includes('locked')) return 'gols'
-  if (id.includes('final') || id.includes('late') || id.includes('hot_second')) return 'reta_final'
-  return 'pressao'
-}
-const CATEGORY_LABELS: Record<TemplateCategory, string> = { pressao: 'Pressão ofensiva', reta_final: 'Reta final', favoritos: 'Favoritos e zebras', gols: 'Gols', disciplina: 'Disciplina', visitante: 'Visitante / mandante' }
+// Helpers — pure formatters and template taxonomy live in
+// `./utils/commandFormatters` so non-UI code (tests, evaluators) can reuse them.
 
 // ═══ MODAL SHELL — premium overlay rendered via portal so it escapes any
 // ═══ MODAL SHELL — Apple-like dark glass surface. Avoids blue-tinted neon
@@ -604,216 +538,9 @@ function PremiumToggle({ checked, onChange, ariaLabel, size = 'md' }: { checked:
 }
 
 // ═══ CONDITIONS EDITOR — shared between TemplateConfigModal and CustomPatternModal
-// Organizes the "add condition" buttons into categories so the user isn't
-// faced with a wall of unorganized chips.
-const COND_CATEGORIES: { label: string; types: PatternConditionType[] }[] = [
-  { label: 'Tempo', types: ['is_live', 'is_pre_live', 'minute_between', 'is_final_phase'] },
-  { label: 'Placar', types: ['score_tied', 'score_diff_lte', 'goals_total_gte', 'goals_total_lte'] },
-  { label: 'Ataque', types: ['shots_recent_gte', 'shots_on_target_gte', 'corners_gte', 'away_shots_on_target_gte'] },
-  { label: 'Disciplina', types: ['cards_gte'] },
-  { label: 'Contexto', types: ['favorite_involved', 'possession_gte', 'away_goals_gte', 'away_possession_gte'] },
-]
-
-// ═══ TRIGGER LIBRARY (V3.14) ═════════════════════════════════════════════════
-// Data-driven catalog of every gatilho the Trigger Lab exposes. Every entry
-// here is backed by a real condition the evaluator can resolve — no fake
-// triggers. Coverage tells the user how reliable provider data is for that
-// signal so they can decide what to combine.
-type TriggerCategory = 'tempo' | 'placar' | 'pressao' | 'controle' | 'escanteios' | 'disciplina' | 'contexto'
-type TriggerCoverage = 'high' | 'medium' | 'variable'
-type TriggerMode = 'pre_match' | 'live' | 'post_match'
-
-interface TriggerSpec {
-  id: string
-  type: PatternConditionType
-  category: TriggerCategory
-  title: string
-  description: string
-  coverage: TriggerCoverage
-  modes: TriggerMode[]
-  defaultParams: Record<string, number | string | boolean>
-  // Bounds for the editable numeric params (used by the param editor below).
-  paramBounds?: Partial<Record<string, { min: number; max: number; step?: number; label?: string }>>
-  requires: string[]
-}
-
-const TRIGGER_LIBRARY: TriggerSpec[] = [
-  // ── TEMPO ───────────────────────────────────────────────────────────────────
-  { id: 't_live', type: 'is_live', category: 'tempo', title: 'Partida ao vivo', description: 'Avalia somente quando a partida está em andamento.', coverage: 'high', modes: ['live'], defaultParams: {}, requires: ['status'] },
-  { id: 't_prelive', type: 'is_pre_live', category: 'tempo', title: 'Começa em breve', description: 'Partida ainda não começou e está dentro do intervalo configurado.', coverage: 'high', modes: ['pre_match'], defaultParams: { minutes: 60 }, paramBounds: { minutes: { min: 5, max: 240, step: 5, label: 'minutos' } }, requires: ['status', 'date'] },
-  { id: 't_minute', type: 'minute_between', category: 'tempo', title: 'Minuto entre', description: 'Avalia somente entre dois minutos da partida.', coverage: 'high', modes: ['live'], defaultParams: { min: 60, max: 90 }, paramBounds: { min: { min: 0, max: 120, label: 'min' }, max: { min: 0, max: 120, label: 'max' } }, requires: ['minute'] },
-  { id: 't_final', type: 'is_final_phase', category: 'tempo', title: 'Reta final (70\'+)', description: 'Após o minuto 70 da partida.', coverage: 'high', modes: ['live'], defaultParams: {}, requires: ['minute'] },
-
-  // ── PLACAR ──────────────────────────────────────────────────────────────────
-  { id: 't_tied', type: 'score_tied', category: 'placar', title: 'Placar empatado', description: 'Mandante e visitante com o mesmo número de gols.', coverage: 'high', modes: ['live'], defaultParams: {}, requires: ['score'] },
-  { id: 't_diff_lte', type: 'score_diff_lte', category: 'placar', title: 'Placar curto', description: 'Diferença no placar de no máximo X gols.', coverage: 'high', modes: ['live'], defaultParams: { maxDiff: 1 }, paramBounds: { maxDiff: { min: 0, max: 10, label: 'até' } }, requires: ['score'] },
-  { id: 't_goals_gte', type: 'goals_total_gte', category: 'placar', title: 'Gols totais ≥', description: 'Soma dos gols de mandante e visitante alcançou o limite.', coverage: 'high', modes: ['live'], defaultParams: { value: 3 }, paramBounds: { value: { min: 0, max: 20, label: 'gols' } }, requires: ['score'] },
-  { id: 't_goals_lte', type: 'goals_total_lte', category: 'placar', title: 'Gols totais ≤', description: 'Soma dos gols ainda abaixo do limite — útil para under/jogo travado.', coverage: 'high', modes: ['live'], defaultParams: { value: 1 }, paramBounds: { value: { min: 0, max: 20, label: 'gols' } }, requires: ['score'] },
-  { id: 't_home_goals', type: 'home_goals_gte', category: 'placar', title: 'Mandante marcou ≥', description: 'Quantidade mínima de gols do mandante.', coverage: 'high', modes: ['live'], defaultParams: { value: 1 }, paramBounds: { value: { min: 0, max: 20, label: 'gols' } }, requires: ['score'] },
-  { id: 't_away_goals', type: 'away_goals_gte', category: 'placar', title: 'Visitante marcou ≥', description: 'Quantidade mínima de gols do visitante.', coverage: 'high', modes: ['live'], defaultParams: { value: 1 }, paramBounds: { value: { min: 0, max: 20, label: 'gols' } }, requires: ['score'] },
-
-  // ── PRESSÃO OFENSIVA ────────────────────────────────────────────────────────
-  { id: 't_shots_recent', type: 'shots_recent_gte', category: 'pressao', title: 'Finalizações totais ≥', description: 'Soma de finalizações dos dois times.', coverage: 'medium', modes: ['live'], defaultParams: { value: 8 }, paramBounds: { value: { min: 0, max: 50, label: 'finalizações' } }, requires: ['stats'] },
-  { id: 't_shots_total', type: 'shots_total_gte', category: 'pressao', title: 'Finalizações totais grandes', description: 'Atinge volume alto de finalizações na partida.', coverage: 'medium', modes: ['live'], defaultParams: { value: 18 }, paramBounds: { value: { min: 0, max: 50, label: 'finalizações' } }, requires: ['stats'] },
-  { id: 't_sot', type: 'shots_on_target_gte', category: 'pressao', title: 'Chutes no alvo ≥', description: 'Soma de chutes no alvo dos dois times.', coverage: 'medium', modes: ['live'], defaultParams: { value: 4 }, paramBounds: { value: { min: 0, max: 30, label: 'no alvo' } }, requires: ['stats'] },
-  { id: 't_home_sot', type: 'home_shots_on_target_gte', category: 'pressao', title: 'Mandante no alvo ≥', description: 'Mandante atingiu volume mínimo de chutes no alvo.', coverage: 'medium', modes: ['live'], defaultParams: { value: 3 }, paramBounds: { value: { min: 0, max: 30, label: 'no alvo' } }, requires: ['stats'] },
-  { id: 't_away_sot', type: 'away_shots_on_target_gte', category: 'pressao', title: 'Visitante no alvo ≥', description: 'Visitante atingiu volume mínimo de chutes no alvo.', coverage: 'medium', modes: ['live'], defaultParams: { value: 3 }, paramBounds: { value: { min: 0, max: 30, label: 'no alvo' } }, requires: ['stats'] },
-
-  // ── CONTROLE / DOMÍNIO ──────────────────────────────────────────────────────
-  { id: 't_poss', type: 'possession_gte', category: 'controle', title: 'Posse acima de X%', description: 'Pelo menos um dos times atingiu posse alta.', coverage: 'medium', modes: ['live'], defaultParams: { value: 60 }, paramBounds: { value: { min: 30, max: 90, label: '% posse' } }, requires: ['stats'] },
-  { id: 't_home_poss', type: 'home_possession_gte', category: 'controle', title: 'Posse mandante acima de X%', description: 'Mandante dominando a posse.', coverage: 'medium', modes: ['live'], defaultParams: { value: 58 }, paramBounds: { value: { min: 30, max: 90, label: '% posse' } }, requires: ['stats'] },
-  { id: 't_away_poss', type: 'away_possession_gte', category: 'controle', title: 'Posse visitante acima de X%', description: 'Visitante controlando o jogo.', coverage: 'medium', modes: ['live'], defaultParams: { value: 50 }, paramBounds: { value: { min: 30, max: 90, label: '% posse' } }, requires: ['stats'] },
-
-  // ── ESCANTEIOS ──────────────────────────────────────────────────────────────
-  { id: 't_corners', type: 'corners_gte', category: 'escanteios', title: 'Escanteios totais ≥', description: 'Total de escanteios na partida.', coverage: 'variable', modes: ['live'], defaultParams: { value: 6 }, paramBounds: { value: { min: 0, max: 30, label: 'escanteios' } }, requires: ['stats'] },
-  { id: 't_home_corners', type: 'home_corners_gte', category: 'escanteios', title: 'Escanteios mandante ≥', description: 'Mandante batendo escanteios em volume.', coverage: 'variable', modes: ['live'], defaultParams: { value: 4 }, paramBounds: { value: { min: 0, max: 30, label: 'escanteios' } }, requires: ['stats'] },
-  { id: 't_away_corners', type: 'away_corners_gte', category: 'escanteios', title: 'Escanteios visitante ≥', description: 'Visitante batendo escanteios em volume.', coverage: 'variable', modes: ['live'], defaultParams: { value: 4 }, paramBounds: { value: { min: 0, max: 30, label: 'escanteios' } }, requires: ['stats'] },
-
-  // ── DISCIPLINA ──────────────────────────────────────────────────────────────
-  { id: 't_cards', type: 'cards_gte', category: 'disciplina', title: 'Cartões totais ≥', description: 'Soma dos cartões na partida (amarelos contam).', coverage: 'variable', modes: ['live'], defaultParams: { value: 4 }, paramBounds: { value: { min: 0, max: 20, label: 'cartões' } }, requires: ['stats'] },
-  { id: 't_yellow', type: 'yellow_cards_gte', category: 'disciplina', title: 'Amarelos ≥', description: 'Total de cartões amarelos.', coverage: 'variable', modes: ['live'], defaultParams: { value: 4 }, paramBounds: { value: { min: 0, max: 20, label: 'amarelos' } }, requires: ['stats'] },
-  { id: 't_red', type: 'red_cards_gte', category: 'disciplina', title: 'Vermelhos ≥', description: 'Pelo menos X expulsões na partida.', coverage: 'variable', modes: ['live'], defaultParams: { value: 1 }, paramBounds: { value: { min: 0, max: 5, label: 'vermelhos' } }, requires: ['stats'] },
-
-  // ── CONTEXTO ────────────────────────────────────────────────────────────────
-  { id: 't_fav', type: 'favorite_involved', category: 'contexto', title: 'Favorito envolvido', description: 'Pelo menos um time favorito está jogando.', coverage: 'high', modes: ['pre_match', 'live'], defaultParams: {}, requires: ['favorites'] },
-]
-
-const TRIGGER_BY_TYPE: Record<PatternConditionType, TriggerSpec | undefined> = TRIGGER_LIBRARY.reduce((acc, t) => {
-  acc[t.type] = t
-  return acc
-}, {} as Record<PatternConditionType, TriggerSpec | undefined>)
-
-const TRIGGER_CATEGORY_LABELS: Record<TriggerCategory, string> = {
-  tempo: 'Tempo',
-  placar: 'Placar',
-  pressao: 'Pressão',
-  controle: 'Controle',
-  escanteios: 'Escanteios',
-  disciplina: 'Disciplina',
-  contexto: 'Contexto',
-}
-
-const TRIGGER_CATEGORY_HINTS: Record<TriggerCategory, string> = {
-  tempo: 'Quando o radar deve estar atento.',
-  placar: 'Estado do placar e total de gols.',
-  pressao: 'Volume ofensivo do jogo.',
-  controle: 'Domínio territorial via posse.',
-  escanteios: 'Cobertura varia por provedor.',
-  disciplina: 'Cartões e expulsões.',
-  contexto: 'Favoritos e contexto do usuário.',
-}
-
-const COVERAGE_LABEL: Record<TriggerCoverage, string> = { high: 'Alta', medium: 'Média', variable: 'Variável' }
-const COVERAGE_TONE: Record<TriggerCoverage, string> = {
-  high: 'text-emerald-200/80 bg-emerald-500/8 border-emerald-400/15',
-  medium: 'text-cyan-200/80 bg-cyan-500/8 border-cyan-400/15',
-  variable: 'text-amber-200/80 bg-amber-500/8 border-amber-400/15',
-}
-
-const MODE_LABEL: Record<TriggerMode, string> = { pre_match: 'Pré', live: 'Ao vivo', post_match: 'Pós' }
-
-// ═══ TRIGGER RECIPES ═════════════════════════════════════════════════════════
-// Curated combinations of triggers. Each recipe applies multiple conditions
-// at once, deduping against existing ones (by type — first occurrence wins).
-interface TriggerRecipe {
-  id: string
-  title: string
-  description: string
-  conditions: PatternCondition[]
-}
-
-const TRIGGER_RECIPES: TriggerRecipe[] = [
-  {
-    id: 'r_pressure_goal',
-    title: 'Pressão por gol',
-    description: 'Reta final, placar curto e volume ofensivo subindo.',
-    conditions: [
-      { type: 'is_live', params: {} },
-      { type: 'minute_between', params: { min: 55, max: 90 } },
-      { type: 'score_diff_lte', params: { maxDiff: 1 } },
-      { type: 'shots_on_target_gte', params: { value: 4 } },
-    ],
-  },
-  {
-    id: 'r_late_danger',
-    title: 'Reta final perigosa',
-    description: 'Últimos 20 minutos com placar curto e finalizações intensas.',
-    conditions: [
-      { type: 'is_live', params: {} },
-      { type: 'minute_between', params: { min: 70, max: 90 } },
-      { type: 'score_diff_lte', params: { maxDiff: 1 } },
-      { type: 'shots_recent_gte', params: { value: 10 } },
-    ],
-  },
-  {
-    id: 'r_over_trend',
-    title: 'Tendência de gols',
-    description: 'Jogo aberto com gols somados e bom volume de chutes.',
-    conditions: [
-      { type: 'is_live', params: {} },
-      { type: 'goals_total_gte', params: { value: 2 } },
-      { type: 'shots_recent_gte', params: { value: 12 } },
-    ],
-  },
-  {
-    id: 'r_fav_at_risk',
-    title: 'Favorito em risco',
-    description: 'Favorito envolvido em jogo equilibrado depois do intervalo.',
-    conditions: [
-      { type: 'favorite_involved', params: {} },
-      { type: 'is_live', params: {} },
-      { type: 'minute_between', params: { min: 45, max: 90 } },
-      { type: 'score_diff_lte', params: { maxDiff: 1 } },
-    ],
-  },
-  {
-    id: 'r_dangerous_away',
-    title: 'Visitante perigoso',
-    description: 'Visitante com posse e finalizações no alvo, placar curto.',
-    conditions: [
-      { type: 'is_live', params: {} },
-      { type: 'away_shots_on_target_gte', params: { value: 3 } },
-      { type: 'away_possession_gte', params: { value: 45 } },
-      { type: 'score_diff_lte', params: { maxDiff: 1 } },
-    ],
-  },
-  {
-    id: 'r_corners_growing',
-    title: 'Escanteios em crescimento',
-    description: 'Volume alto de escanteios em jogo travado.',
-    conditions: [
-      { type: 'is_live', params: {} },
-      { type: 'minute_between', params: { min: 30, max: 90 } },
-      { type: 'corners_gte', params: { value: 7 } },
-      { type: 'score_diff_lte', params: { maxDiff: 1 } },
-    ],
-  },
-  {
-    id: 'r_physical_match',
-    title: 'Jogo físico',
-    description: 'Cartões em alta a partir do meio do primeiro tempo.',
-    conditions: [
-      { type: 'is_live', params: {} },
-      { type: 'minute_between', params: { min: 30, max: 90 } },
-      { type: 'cards_gte', params: { value: 4 } },
-    ],
-  },
-]
-
-// Param clamp bounds for safe numeric input across all params we expose.
-const PARAM_CLAMP: Record<string, { min: number; max: number }> = {
-  value: { min: 0, max: 50 },
-  min: { min: 0, max: 120 },
-  max: { min: 0, max: 120 },
-  maxDiff: { min: 0, max: 10 },
-  minutes: { min: 5, max: 240 },
-}
-function clampParam(key: string, raw: number, bound?: { min: number; max: number }): number {
-  const fallback = PARAM_CLAMP[key] || { min: 0, max: 999 }
-  const b = bound || fallback
-  if (Number.isNaN(raw)) return b.min
-  return Math.max(b.min, Math.min(b.max, Math.round(raw)))
-}
+// Pulls catalog and recipes from `./intelligence/triggerLibrary` and
+// `./intelligence/triggerRecipes`. Param clamping comes from
+// `./utils/patternStudioHelpers` so the editor stays focused on UI.
 
 function ConditionsEditor({ conditions, onChange }: { conditions: PatternCondition[]; onChange: (c: PatternCondition[]) => void }) {
   const [activeCategory, setActiveCategory] = useState<TriggerCategory>('tempo')
@@ -1493,45 +1220,8 @@ function EntityAvatar({ src, name, size = 32, square = false }: { src?: string |
   )
 }
 
-// useScopeLookups — turns rich available lists into normalized name → record
-// maps so the inspector can resolve mini avatars in O(1) per excluded item
-// without re-scanning the arrays on every render.
-function useScopeLookups(leagues: ScopeKbLeague[], teams: ScopeKbTeam[], matches: ScopeKbMatch[]) {
-  return useMemo(() => {
-    const leagueLookup = new Map<string, ScopeKbLeague>()
-    for (const l of leagues) leagueLookup.set(normalizeText(l.name), l)
-    const teamLookup = new Map<string, ScopeKbTeam>()
-    for (const t of teams) teamLookup.set(normalizeText(t.name), t)
-    const matchLookup = new Map<string, ScopeKbMatch>()
-    for (const m of matches) matchLookup.set(m.canonicalMatchId, m)
-    return { leagueLookup, teamLookup, matchLookup }
-  }, [leagues, teams, matches])
-}
-function matchStatusBadge(status?: string): { label: string; tone: string } | null {
-  if (!status) return null
-  if (status === 'LIVE' || status === '1H' || status === '2H' || status === 'HT') {
-    return { label: status === 'HT' ? 'Intervalo' : 'Ao vivo', tone: 'bg-emerald-500/10 text-emerald-200/85 border-emerald-400/20' }
-  }
-  if (status === 'NS' || status === 'TBD') return { label: 'Agendada', tone: 'bg-white/[0.04] text-white/55 border-white/[0.07]' }
-  if (status === 'FT' || status === 'AET' || status === 'PEN') return { label: 'Encerrada', tone: 'bg-white/[0.04] text-white/55 border-white/[0.07]' }
-  if (status === 'PST' || status === 'CANC' || status === 'ABD') return { label: status, tone: 'bg-rose-500/10 text-rose-200/85 border-rose-400/15' }
-  return { label: status, tone: 'bg-white/[0.04] text-white/55 border-white/[0.07]' }
-}
-
-function matchDateLabel(date?: string): string | null {
-  if (!date) return null
-  const d = new Date(date)
-  if (isNaN(d.getTime())) return null
-  const now = new Date()
-  const sameDay = d.toDateString() === now.toDateString()
-  const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-  if (sameDay) return `Hoje · ${time}`
-  return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} · ${time}`
-}
-
-function normalizeText(s: string): string {
-  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-}
+// useScopeLookups, matchStatusBadge, matchDateLabel and normalizeText now
+// live in `./utils/patternStudioHelpers` so non-UI consumers can reuse them.
 
 // LeaguePicker — premium league picker with cards + search + selected summary.
 type ScopeMode = 'include' | 'exclude'
