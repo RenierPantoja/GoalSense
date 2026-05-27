@@ -4,10 +4,7 @@
  */
 import type { LiveFixture } from '@/lib/apiClient'
 import { getMatchImportanceScore, getMatchImportanceReason } from '@/utils/matchImportance'
-
-function toScoring(fx: LiveFixture) {
-  return { competition: { name: fx.league.name }, homeTeam: { name: fx.homeTeam.name, shortName: fx.homeTeam.name }, awayTeam: { name: fx.awayTeam.name, shortName: fx.awayTeam.name }, score: { fullTime: { home: fx.score.home, away: fx.score.away } }, status: fx.status.short === 'LIVE' || fx.status.short === 'HT' ? 'IN_PLAY' : fx.status.short === 'FT' ? 'FINISHED' : 'TIMED', utcDate: fx.date, area: { name: fx.league.country } }
-}
+import { toScoring } from './utils/fixtureScoring'
 
 export function isLiveFx(fx: LiveFixture) { return fx.status.short === 'LIVE' || fx.status.short === 'HT' || (fx as any).status?.state === 'in' }
 

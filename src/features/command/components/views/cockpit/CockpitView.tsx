@@ -20,15 +20,8 @@ import { getMatchImportanceScore } from '@/utils/matchImportance'
 import { isLiveFx, type ChangeEvent } from '../../../commandHelpers'
 import type { AutoDiscovery } from '../../../intelligence/autoDiscoveryEngine'
 import type { Pattern, PatternHit, PatternTemplate, TriggeredAlert } from '../../../types/commandTypes'
+import { toScoring } from '../../../utils/fixtureScoring'
 import { SideAction } from './SideAction'
-
-// Local helper — converts a LiveFixture to the shape expected by the match
-// importance scorer. Mirrors the helper in commandHelpers.ts and the auto
-// discovery engine; kept inline so the cockpit view has zero coupling beyond
-// already-shared utilities.
-function toScoring(fx: LiveFixture) {
-  return { competition: { name: fx.league.name }, homeTeam: { name: fx.homeTeam.name, shortName: fx.homeTeam.name }, awayTeam: { name: fx.awayTeam.name, shortName: fx.awayTeam.name }, score: { fullTime: { home: fx.score.home, away: fx.score.away } }, status: fx.status.short === 'LIVE' || fx.status.short === 'HT' ? 'IN_PLAY' : fx.status.short === 'FT' ? 'FINISHED' : 'TIMED', utcDate: fx.date, area: { name: fx.league.country } }
-}
 
 export interface CockpitViewProps {
   hasIntelligence: boolean
