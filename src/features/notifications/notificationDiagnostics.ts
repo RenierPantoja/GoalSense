@@ -10,6 +10,13 @@ import { loadNotificationSettings } from './notificationSettings'
 import { clearNotifiedAlerts, clearNotificationRateLimit } from './notifiedAlertsStore'
 import { clearNotificationEvents } from './notificationEventsStore'
 
+export type NotificationReadinessStatus =
+  | 'ready'
+  | 'disabled'
+  | 'permission_default'
+  | 'permission_denied'
+  | 'unsupported'
+
 export interface NotificationReadiness {
   /** True when `window.Notification` is constructible. */
   supported: boolean
@@ -23,6 +30,12 @@ export interface NotificationReadiness {
    * because they are per-event — readiness is about the channel itself.
    */
   ready: boolean
+  /**
+   * Single discrete state that maps directly to a badge in Settings.
+   * Lets the UI distinguish "not requested yet" from "browser denied", which
+   * require very different user actions.
+   */
+  status: NotificationReadinessStatus
   /** Hard reasons the channel is not ready (resolve before ready can flip). */
   blockers: string[]
   /** Soft caveats the user should know even when ready === true. */
@@ -47,11 +60,24 @@ export function getNotificationReadiness(): NotificationReadiness {
 
   const ready = supported && permission === 'granted' && settings.commandAlertsEnabled
 
+  // Pick the most actionable state. Order matters: a denied permission is a
+  // harder blocker than the toggle being off, so we surface it first.
+  const status: NotificationReadinessStatus = !supported
+    ? 'unsupported'
+    : permission === 'denied'
+      ? 'permission_denied'
+      : permission === 'default'
+        ? 'permission_default'
+        : !settings.commandAlertsEnabled
+          ? 'disabled'
+          : 'ready'
+
   return {
     supported,
     permission,
     commandAlertsEnabled: settings.commandAlertsEnabled,
     ready,
+    status,
     blockers,
     warnings: [...STATIC_WARNINGS],
   }

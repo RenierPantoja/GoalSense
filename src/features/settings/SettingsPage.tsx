@@ -323,7 +323,15 @@ function AppNotificationsSection() {
 
   const handleSendTest = () => {
     if (!canShowLocalNotification()) {
+      // Permission was likely revoked between renders. Log a real event so
+      // the diagnostics history reflects the attempt, then guide the user.
+      recordNotificationEvent({
+        status: 'test_failed',
+        title: 'GoalSense (teste)',
+        reason: 'permission_not_granted',
+      })
       showFeedback('Permissão necessária antes de testar')
+      refreshDiagnostics()
       return
     }
     const ok = showLocalNotification('GoalSense', {
@@ -399,10 +407,19 @@ function AppNotificationsSection() {
   })()
 
   const overallBadge = (() => {
-    if (!readiness.supported) return { label: 'Não suportado', tone: 'text-white/45 bg-white/[0.04] border-white/[0.07]' }
-    if (readiness.ready) return { label: 'Pronto', tone: 'text-emerald-300 bg-emerald-500/10 border-emerald-400/20' }
-    if (readiness.permission !== 'granted') return { label: 'Precisa de permissão', tone: 'text-amber-300 bg-amber-500/10 border-amber-400/20' }
-    return { label: 'Desligado', tone: 'text-white/55 bg-white/[0.04] border-white/[0.07]' }
+    switch (readiness.status) {
+      case 'ready':
+        return { label: 'Pronto', tone: 'text-emerald-300 bg-emerald-500/10 border-emerald-400/20' }
+      case 'disabled':
+        return { label: 'Desligado', tone: 'text-white/55 bg-white/[0.04] border-white/[0.07]' }
+      case 'permission_default':
+        return { label: 'Precisa de permissão', tone: 'text-amber-300 bg-amber-500/10 border-amber-400/20' }
+      case 'permission_denied':
+        return { label: 'Bloqueado pelo navegador', tone: 'text-rose-300 bg-rose-500/10 border-rose-400/20' }
+      case 'unsupported':
+      default:
+        return { label: 'Não suportado', tone: 'text-white/45 bg-white/[0.04] border-white/[0.07]' }
+    }
   })()
 
   return (

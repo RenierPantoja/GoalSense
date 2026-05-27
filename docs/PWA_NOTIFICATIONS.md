@@ -289,3 +289,100 @@ o resto pelo prefixo `goalsense_`.
 11. Clicar "Limpar rate limit" → métrica `Janela (60s)` zera.
 12. Clicar "Limpar dedup" → mesmo `alert.id` pode notificar de novo.
 13. Clicar "Limpar diagnóstico" → métricas e histórico zeram.
+
+## V5.3 — Fechamento da fase Local Notifications
+
+Esta seção encerra a fase V5 e estabelece o ponto de partida para
+quando partirmos para Web Push real.
+
+### Estado atual da fase V5
+
+| Recurso | Status |
+|---|---|
+| Manifest PWA (`/manifest.webmanifest`) | ✅ servido com `application/manifest+json` |
+| Ícone (`/icons/icon.svg`) | ✅ servido com `image/svg+xml` |
+| Service Worker (`/sw.js`) | ✅ servido, registra em produção, não cacheia API live |
+| Notification API support detection | ✅ `isNotificationSupported()` |
+| Permissão (granted / default / denied / unsupported) | ✅ exposto em UI |
+| Botão "Ativar notificações" | ✅ user-gesture only |
+| Botão "Enviar notificação de teste" | ✅ grava `test_sent` / `test_failed` (V5.3 também grava em `permission_not_granted`) |
+| Toggle "Alertas locais do Command Center" | ✅ opt-in default false |
+| Hook `useCommandAlertNotifications` | ✅ liga ao `commandAlerts` sem replicar backlog |
+| Dedup por `alert.id` | ✅ TTL 7 dias, cap 200 |
+| Rate limit 3/60s | ✅ persistente no localStorage |
+| Histórico de eventos (até 50, TTL 7d) | ✅ painel em Settings |
+| Painel "Diagnóstico" com badge de 5 estados | ✅ V5.3 |
+| Botões: Limpar dedup / rate / diagnóstico / histórico | ✅ |
+| Push em segundo plano | ❌ exige backend / Web Push / FCM |
+
+### O que funciona hoje
+
+- App é instalável via `Add to Home Screen` em browsers que suportam
+  PWA, sob HTTPS.
+- Service worker em produção mantém shell offline básico, sem
+  contaminar dados live.
+- Permissão é pedida apenas com clique explícito.
+- Notificações locais aparecem quando a aba está aberta, com:
+  - dedup por id (sem replay em reload);
+  - rate limit (sem spam de rajada);
+  - histórico auditável.
+- Diagnóstico mostra status real, sem invenção.
+- Limpeza granular ou umbrella disponível em Settings.
+
+### O que não funciona ainda
+
+- **Push em segundo plano (aba fechada).** Exige backend real,
+  registro VAPID/FCM, gerenciamento de tokens por usuário, endpoint
+  de envio e handler `push` no service worker. Estrutura atual
+  do `sw.js` está pronta para receber esses handlers sem reescrita.
+- **Sincronização entre dispositivos.** Histórico, dedup e rate
+  limit vivem em `localStorage`, por origem. Trocar de browser ou
+  abrir em modo anônimo zera tudo.
+- **Detecção de instalação.** Hoje não detectamos se o usuário
+  instalou o app. Implementar `beforeinstallprompt` é trivial mas
+  não foi prioridade na V5.
+- **Notificação rica** (ações, imagens grandes, expiração). A V5
+  cobre apenas o subset foreground básico.
+
+### Quando partir para Web Push real
+
+Pré-requisitos:
+
+1. **Backend** com endpoint para receber `subscription` e enviar
+   notificações via FCM / Web Push protocol.
+2. **VAPID keys** geradas e armazenadas em segredo no servidor; a
+   chave pública distribuída para o cliente.
+3. **Auth real** — push subscription precisa estar associada a um
+   usuário, não a um navegador anônimo, para fazer sentido.
+4. **Política de notificações server-side** — quem decide qual
+   alerta merece push? Toda vez que o evaluator do Command Center
+   roda no client, está rodando dentro da janela; em background
+   precisa rodar no server. Avaliar se o evaluator será portado
+   para Node ou se o server emite push para alertas baseados em
+   eventos provenientes dos providers.
+
+Quando esses 4 itens estiverem prontos, o caminho de implementação:
+
+1. Adicionar handlers `push` e `notificationclick` em `sw.js`.
+2. Adicionar `pushManager.subscribe(...)` no client com a chave
+   pública VAPID, salvando o `subscription` no backend.
+3. Adicionar toggle "Notificações em segundo plano" em Settings,
+   também opt-in.
+4. Garantir que o backend respeite as preferências do usuário (não
+   enviar push se o toggle estiver off).
+5. Manter o caminho foreground existente como fallback quando o SO
+   suprime o push (Focus Assist / DnD / battery saver).
+
+### Checklist curto para release da V5
+
+- [ ] `npm run check:encoding` ✓
+- [ ] `npx tsc --noEmit` ✓
+- [ ] `npx vite build` ✓
+- [ ] Manifest e SW chegam ao `dist/`
+- [ ] Em browser: instalar app → confirmar ícone + standalone window
+- [ ] Em browser: ativar permissão → enviar teste → ver evento `test_sent`
+- [ ] Em browser: criar radar real → ver evento `sent` no histórico
+- [ ] Em browser: recarregar → ver `duplicate` se mesma render tentar
+- [ ] Em browser: gerar 4+ alertas em 60s → ver `rate_limited`
+- [ ] Em browser: limpar dedup → confirmar zerou métricas
+- [ ] Settings → Limpar tudo do GoalSense → confirmar reset completo
