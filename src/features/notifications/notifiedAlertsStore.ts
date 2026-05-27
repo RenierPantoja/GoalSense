@@ -119,3 +119,64 @@ export function recordNotificationFire(): void {
   recent.push(now)
   saveRateList(recent)
 }
+
+
+// ─── Diagnostics (V5.2) ─────────────────────────────────────────────────────
+
+/** Configuration constants exposed for the diagnostic UI. */
+export const NOTIFICATION_RATE_LIMIT = {
+  windowMs: RATE_WINDOW_MS,
+  windowSeconds: RATE_WINDOW_MS / 1000,
+  max: RATE_MAX,
+} as const
+
+export interface NotifiedAlertsStats {
+  /** How many alert ids are currently in the dedup map (within TTL). */
+  notifiedCount: number
+  /** Most recent dedup timestamp, or undefined if none. */
+  lastNotifiedAt?: number
+  /** Oldest dedup timestamp, or undefined if none. */
+  oldestEntryAt?: number
+  /** How many fires sit inside the current rolling 60s window. */
+  rateWindowCount: number
+  /** Maximum allowed fires per window (constant). */
+  rateWindowLimit: number
+  /** Window length in seconds (constant, for UI copy). */
+  rateWindowSeconds: number
+}
+
+/**
+ * Snapshot of dedup + rate-limit state. Pure read, no side effects. Safe to
+ * call from a React render path because it only reads localStorage.
+ */
+export function getNotifiedAlertsStats(): NotifiedAlertsStats {
+  const map = loadNotified()
+  const ttlNow = Date.now()
+  const liveEntries = Object.values(map).filter(ts => (ttlNow - ts) < TRACK_TTL_MS)
+  liveEntries.sort((a, b) => a - b)
+  const oldestEntryAt = liveEntries[0]
+  const lastNotifiedAt = liveEntries[liveEntries.length - 1]
+
+  const rateNow = Date.now()
+  const recent = loadRateList().filter(ts => (rateNow - ts) < RATE_WINDOW_MS)
+
+  return {
+    notifiedCount: liveEntries.length,
+    lastNotifiedAt,
+    oldestEntryAt,
+    rateWindowCount: recent.length,
+    rateWindowLimit: RATE_MAX,
+    rateWindowSeconds: RATE_WINDOW_MS / 1000,
+  }
+}
+
+/** Wipe the dedup map. Next time the same alert.id flows through the bridge,
+ *  it is allowed to notify again. */
+export function clearNotifiedAlerts(): void {
+  try { localStorage.removeItem(NOTIFIED_KEY) } catch { /* */ }
+}
+
+/** Wipe the rate-limit window so the next call passes the gate immediately. */
+export function clearNotificationRateLimit(): void {
+  try { localStorage.removeItem(RATE_KEY) } catch { /* */ }
+}

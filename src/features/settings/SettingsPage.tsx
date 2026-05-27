@@ -10,6 +10,9 @@ import { getGoalSenseStorageStats, cleanupExpiredCache, clearPreMatchCache, clea
 import { getServiceWorkerStatus, type ServiceWorkerStatus } from '@/features/pwa/pwaRegistration'
 import { canShowLocalNotification, getNotificationPermission, isNotificationSupported, requestNotificationPermission, showLocalNotification, type NotificationPermissionState } from '@/features/notifications/notificationService'
 import { loadNotificationSettings, updateNotificationSettings, type NotificationSettings } from '@/features/notifications/notificationSettings'
+import { clearNotifiedAlerts, clearNotificationRateLimit, getNotifiedAlertsStats, type NotifiedAlertsStats } from '@/features/notifications/notifiedAlertsStore'
+import { clearNotificationEvents, getNotificationEvents, recordNotificationEvent, type NotificationEvent } from '@/features/notifications/notificationEventsStore'
+import { clearNotificationDiagnostics, getNotificationReadiness, type NotificationReadiness } from '@/features/notifications/notificationDiagnostics'
 
 export function SettingsPage() {
   const { teams, leagues, matches, clearAll, hasAnyFavorite } = useFavorites()
@@ -281,15 +284,25 @@ function AppNotificationsSection() {
   const [swStatus, setSwStatus] = useState<ServiceWorkerStatus>('inactive')
   const [permission, setPermission] = useState<NotificationPermissionState>(() => getNotificationPermission())
   const [settings, setSettings] = useState<NotificationSettings>(() => loadNotificationSettings())
+  const [readiness, setReadiness] = useState<NotificationReadiness>(() => getNotificationReadiness())
+  const [stats, setStats] = useState<NotifiedAlertsStats>(() => getNotifiedAlertsStats())
+  const [events, setEvents] = useState<NotificationEvent[]>(() => getNotificationEvents())
   const [feedback, setFeedback] = useState<string>('')
   const [busy, setBusy] = useState(false)
 
   const supported = isNotificationSupported()
 
+  const refreshDiagnostics = useCallback(() => {
+    setReadiness(getNotificationReadiness())
+    setStats(getNotifiedAlertsStats())
+    setEvents(getNotificationEvents())
+  }, [])
+
   const refresh = useCallback(async () => {
     setSwStatus(await getServiceWorkerStatus())
     setPermission(getNotificationPermission())
-  }, [])
+    refreshDiagnostics()
+  }, [refreshDiagnostics])
 
   useEffect(() => { void refresh() }, [refresh])
 
@@ -304,6 +317,7 @@ function AppNotificationsSection() {
       if (result === 'granted') showFeedback('Notificações ativadas')
       else if (result === 'denied') showFeedback('Permissão negada — altere nas permissões do site')
       else showFeedback('Permissão não concedida')
+      refreshDiagnostics()
     } finally { setBusy(false) }
   }
 
@@ -317,7 +331,13 @@ function AppNotificationsSection() {
       tag: 'gs-notif-test',
       url: '/app/settings',
     })
+    recordNotificationEvent({
+      status: ok ? 'test_sent' : 'test_failed',
+      title: 'GoalSense (teste)',
+      reason: ok ? undefined : 'showLocalNotification returned false',
+    })
     showFeedback(ok ? 'Notificação de teste enviada' : 'Não foi possível disparar a notificação')
+    refreshDiagnostics()
   }
 
   const handleToggleCommandAlerts = () => {
@@ -327,7 +347,32 @@ function AppNotificationsSection() {
     }
     const next = !settings.commandAlertsEnabled
     setSettings(updateNotificationSettings({ commandAlertsEnabled: next }))
-    showFeedback(next ? 'Alertas do Command Center ligados' : 'Alertas do Command Center desligados')
+    showFeedback(next ? 'Alertas locais ligados' : 'Alertas locais desligados')
+    refreshDiagnostics()
+  }
+
+  const handleClearDedup = () => {
+    clearNotifiedAlerts()
+    showFeedback('Dedup de notificações limpo')
+    refreshDiagnostics()
+  }
+
+  const handleClearRate = () => {
+    clearNotificationRateLimit()
+    showFeedback('Rate limit limpo')
+    refreshDiagnostics()
+  }
+
+  const handleClearEvents = () => {
+    clearNotificationEvents()
+    showFeedback('Histórico de eventos limpo')
+    refreshDiagnostics()
+  }
+
+  const handleClearAllDiagnostics = () => {
+    clearNotificationDiagnostics()
+    showFeedback('Diagnóstico de notificações limpo')
+    refreshDiagnostics()
   }
 
   // ─── Render helpers ────────────────────────────────────────────────────────
@@ -353,6 +398,13 @@ function AppNotificationsSection() {
     }
   })()
 
+  const overallBadge = (() => {
+    if (!readiness.supported) return { label: 'Não suportado', tone: 'text-white/45 bg-white/[0.04] border-white/[0.07]' }
+    if (readiness.ready) return { label: 'Pronto', tone: 'text-emerald-300 bg-emerald-500/10 border-emerald-400/20' }
+    if (readiness.permission !== 'granted') return { label: 'Precisa de permissão', tone: 'text-amber-300 bg-amber-500/10 border-amber-400/20' }
+    return { label: 'Desligado', tone: 'text-white/55 bg-white/[0.04] border-white/[0.07]' }
+  })()
+
   return (
     <div className="rounded-[18px] border border-white/[0.05] bg-white/[0.015] p-5 space-y-4">
       <div className="flex items-center gap-3">
@@ -361,7 +413,7 @@ function AppNotificationsSection() {
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-[13px] font-semibold text-white/70">App e notificações</h3>
-          <p className="text-[10px] text-white/40 mt-0.5">Instalação como aplicativo e preferências de aviso local.</p>
+          <p className="text-[10px] text-white/40 mt-0.5">Instalação como aplicativo e notificações locais. Funcionam enquanto o GoalSense estiver aberto.</p>
         </div>
         <button onClick={() => void refresh()} type="button" className="text-[10px] font-semibold uppercase tracking-wider text-white/45 hover:text-white/75 transition-colors">Recarregar</button>
       </div>
@@ -407,7 +459,7 @@ function AppNotificationsSection() {
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[12px] font-medium text-white/85">Alertas locais do Command Center</p>
-              <p className="text-[10.5px] text-white/45 mt-0.5">Enquanto o GoalSense estiver aberto, você pode receber notificações locais para novos alertas detectados. Push em segundo plano ainda exige backend.</p>
+              <p className="text-[10.5px] text-white/45 mt-0.5">Enquanto o GoalSense estiver aberto, você recebe notificações locais para novos alertas detectados. Para segundo plano real, será necessário backend / Web Push.</p>
             </div>
             <button
               onClick={handleToggleCommandAlerts}
@@ -427,6 +479,22 @@ function AppNotificationsSection() {
         </div>
       )}
 
+      {/* Diagnóstico (V5.2) */}
+      <NotificationDiagnosticsBlock
+        readiness={readiness}
+        stats={stats}
+        overallBadge={overallBadge}
+        onClearDedup={handleClearDedup}
+        onClearRate={handleClearRate}
+        onClearAll={handleClearAllDiagnostics}
+      />
+
+      {/* Histórico de eventos */}
+      <NotificationEventsList
+        events={events}
+        onClear={handleClearEvents}
+      />
+
       {feedback && <p className="text-[11px] text-emerald-300/85 animate-fadeIn">{feedback}</p>}
 
       <p className="text-[10.5px] text-white/35 leading-relaxed">
@@ -434,4 +502,146 @@ function AppNotificationsSection() {
       </p>
     </div>
   )
+}
+
+// ─── Diagnostic block (V5.2) ────────────────────────────────────────────────
+
+interface DiagnosticsBlockProps {
+  readiness: NotificationReadiness
+  stats: NotifiedAlertsStats
+  overallBadge: { label: string; tone: string }
+  onClearDedup: () => void
+  onClearRate: () => void
+  onClearAll: () => void
+}
+
+function NotificationDiagnosticsBlock({ readiness, stats, overallBadge, onClearDedup, onClearRate, onClearAll }: DiagnosticsBlockProps) {
+  return (
+    <div className="rounded-xl border border-white/[0.05] bg-white/[0.012] px-4 py-3 space-y-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-[12px] font-medium text-white/85">Diagnóstico</p>
+          <p className="text-[10.5px] text-white/45 mt-0.5">Estado real do canal de notificações locais neste navegador.</p>
+        </div>
+        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md border ${overallBadge.tone}`}>{overallBadge.label}</span>
+      </div>
+
+      {readiness.blockers.length > 0 && (
+        <ul className="space-y-1">
+          {readiness.blockers.map((b, i) => (
+            <li key={`b-${i}`} className="flex items-start gap-2 text-[11px] text-rose-300/85"><span className="mt-1 h-1 w-1 rounded-full bg-rose-300/85 shrink-0" />{b}</li>
+          ))}
+        </ul>
+      )}
+      {readiness.warnings.length > 0 && (
+        <ul className="space-y-1">
+          {readiness.warnings.map((w, i) => (
+            <li key={`w-${i}`} className="flex items-start gap-2 text-[10.5px] text-white/55"><span className="mt-1 h-1 w-1 rounded-full bg-white/45 shrink-0" />{w}</li>
+          ))}
+        </ul>
+      )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-white/[0.04]">
+        <DiagStat label="Enviadas (7d)" value={stats.notifiedCount} />
+        <DiagStat label="Última" value={formatRelative(stats.lastNotifiedAt)} />
+        <DiagStat label={`Janela (${stats.rateWindowSeconds}s)`} value={`${stats.rateWindowCount}/${stats.rateWindowLimit}`} />
+        <DiagStat label="Mais antigo" value={formatRelative(stats.oldestEntryAt)} />
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-white/[0.04]">
+        <button onClick={onClearDedup} type="button" className="px-3 py-1.5 rounded-lg text-[10.5px] font-medium text-white/65 border border-white/[0.07] hover:text-white/95 hover:border-white/[0.12] transition-colors">Limpar dedup</button>
+        <button onClick={onClearRate} type="button" className="px-3 py-1.5 rounded-lg text-[10.5px] font-medium text-white/65 border border-white/[0.07] hover:text-white/95 hover:border-white/[0.12] transition-colors">Limpar rate limit</button>
+        <button onClick={onClearAll} type="button" className="px-3 py-1.5 rounded-lg text-[10.5px] font-medium text-rose-300/80 border border-rose-400/20 bg-rose-500/8 hover:bg-rose-500/15 transition-colors">Limpar diagnóstico</button>
+      </div>
+    </div>
+  )
+}
+
+function DiagStat({ label, value }: { label: string; value: number | string }) {
+  const display = typeof value === 'number' ? value : value || '—'
+  return (
+    <div className="rounded-lg bg-white/[0.02] border border-white/[0.04] px-3 py-2 text-center">
+      <span className="text-[14px] font-bold text-white/75 block tabular-nums leading-none">{display}</span>
+      <span className="text-[9px] text-white/40 uppercase tracking-wider block mt-1 font-semibold">{label}</span>
+    </div>
+  )
+}
+
+function formatRelative(ts?: number): string {
+  if (!ts) return ''
+  const diff = Date.now() - ts
+  if (diff < 60_000) return 'agora'
+  const min = Math.floor(diff / 60_000)
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `${h} h`
+  const d = Math.floor(h / 24)
+  return `${d} d`
+}
+
+// ─── Event history (V5.2) ───────────────────────────────────────────────────
+
+function NotificationEventsList({ events, onClear }: { events: NotificationEvent[]; onClear: () => void }) {
+  return (
+    <div className="rounded-xl border border-white/[0.05] bg-white/[0.012] px-4 py-3 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[12px] font-medium text-white/85">Últimos eventos de notificação</p>
+          <p className="text-[10.5px] text-white/45 mt-0.5">Histórico real (últimos 7 dias, máximo 50). Útil para entender por que algo não notificou.</p>
+        </div>
+        {events.length > 0 && (
+          <button onClick={onClear} type="button" className="text-[10px] font-semibold uppercase tracking-wider text-white/45 hover:text-rose-300/80 transition-colors">Limpar</button>
+        )}
+      </div>
+      {events.length === 0 ? (
+        <p className="text-[11px] text-white/45">Nenhum evento de notificação registrado ainda.</p>
+      ) : (
+        <ul className="space-y-1.5 max-h-[260px] overflow-y-auto pr-1">
+          {events.slice(0, 30).map(ev => (
+            <li key={ev.id} className="flex items-center gap-2 text-[11px]">
+              <EventBadge status={ev.status} />
+              <span className="text-white/75 truncate flex-1 min-w-0">
+                {ev.matchLabel || statusFallbackLabel(ev.status)}
+              </span>
+              {ev.reason && <span className="text-white/30 shrink-0">· {ev.reason}</span>}
+              <span className="text-white/30 tabular-nums shrink-0">{formatRelative(ev.createdAt)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function EventBadge({ status }: { status: NotificationEvent['status'] }) {
+  const tone = (() => {
+    switch (status) {
+      case 'sent': case 'test_sent': return { label: 'Enviada', cls: 'text-emerald-300 bg-emerald-500/10 border-emerald-400/20' }
+      case 'duplicate': return { label: 'Duplicada', cls: 'text-cyan-300 bg-cyan-500/10 border-cyan-400/20' }
+      case 'rate_limited': return { label: 'Rate limit', cls: 'text-amber-300 bg-amber-500/10 border-amber-400/20' }
+      case 'disabled': return { label: 'Desligada', cls: 'text-white/55 bg-white/[0.04] border-white/[0.07]' }
+      case 'permission_not_granted': return { label: 'Sem permissão', cls: 'text-amber-300 bg-amber-500/10 border-amber-400/20' }
+      case 'unsupported': return { label: 'Não suportado', cls: 'text-white/45 bg-white/[0.03] border-white/[0.07]' }
+      case 'invalid_alert': return { label: 'Inválida', cls: 'text-rose-300 bg-rose-500/10 border-rose-400/20' }
+      case 'test_failed': case 'error': return { label: 'Erro', cls: 'text-rose-300 bg-rose-500/10 border-rose-400/20' }
+      default: return { label: status, cls: 'text-white/55 bg-white/[0.04] border-white/[0.07]' }
+    }
+  })()
+  return <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border shrink-0 ${tone.cls}`}>{tone.label}</span>
+}
+
+function statusFallbackLabel(status: NotificationEvent['status']): string {
+  switch (status) {
+    case 'invalid_alert': return 'Alerta inválido'
+    case 'unsupported': return 'API de notificação ausente'
+    case 'disabled': return 'Toggle de alertas desligado'
+    case 'permission_not_granted': return 'Permissão do navegador não concedida'
+    case 'duplicate': return 'Alerta já notificado anteriormente'
+    case 'rate_limited': return 'Limite de notificações por minuto atingido'
+    case 'error': return 'Falha ao disparar notificação'
+    case 'test_sent': return 'Notificação de teste enviada'
+    case 'test_failed': return 'Notificação de teste falhou'
+    case 'sent': return 'Alerta enviado'
+    default: return status
+  }
 }

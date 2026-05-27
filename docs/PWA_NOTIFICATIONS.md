@@ -203,3 +203,89 @@ um checklist manual para validação em browser real.
   `/app/alerts` — só não há notificação para eles.
 - **Dedup é por `alert.id`.** Se a mesma partida disparar dois padrões
   diferentes, ambos notificam (cada um tem id próprio). Esperado.
+
+## V5.2 — Diagnóstico e histórico de notificações
+
+### Como ler o painel de diagnóstico
+
+`Settings → App e notificações → Diagnóstico` mostra o estado real
+do canal de notificações locais:
+
+- **Status geral** (badge superior):
+  - `Pronto` — suporte + permissão concedida + toggle ligado.
+  - `Precisa de permissão` — falta granted.
+  - `Desligado` — toggle desligado.
+  - `Não suportado` — Notification API ausente.
+- **Bloqueadores** — itens em rosa que precisam ser resolvidos para
+  o canal ficar pronto. Listados pela ordem dos guards (suporte →
+  permissão → opt-in).
+- **Avisos** — itens neutros que valem mesmo quando tudo está OK
+  ("funciona apenas com o GoalSense aberto", "push em segundo
+  plano exige backend").
+- **Métricas reais**:
+  - `Enviadas (7d)` — quantos `alert.id` distintos estão na dedup
+    map dentro da janela de 7 dias.
+  - `Última` — quando a última notificação foi disparada.
+  - `Janela (60s)` — fires no rolling window vs limite (default 3).
+  - `Mais antigo` — entrada mais antiga ainda dentro do TTL.
+
+### Botões de limpeza
+
+- **Limpar dedup** — remove a chave
+  `goalsense_notified_command_alerts`. O mesmo `alert.id` pode voltar
+  a notificar.
+- **Limpar rate limit** — remove
+  `goalsense_notification_rate_limit`. A próxima chamada passa pelo
+  gate temporal imediatamente.
+- **Limpar diagnóstico** — chamada umbrella: dedup + rate limit +
+  histórico de eventos.
+- **Limpar histórico** — remove apenas `goalsense_notification_events`.
+
+### Histórico de eventos
+
+Cada chamada ao bridge (incluindo o botão de teste) grava um evento
+em `goalsense_notification_events` com o resultado real. A lista
+compacta mostra:
+
+- Badge do status (`Enviada`, `Duplicada`, `Rate limit`, `Sem permissão`,
+  `Desligada`, `Não suportado`, `Inválida`, `Erro`).
+- `matchLabel` quando disponível (ex: "Pressão por gol em LAFC x
+  Seattle"). Se não houver, mostra a descrição padrão do status.
+- Tempo relativo ("agora", "5 min", "2 h", "3 d").
+
+Histórico é local por navegador. `clearAllGoalSense()` apaga junto com
+o resto pelo prefixo `goalsense_`.
+
+### Significado dos status
+
+| Status | Significado |
+|---|---|
+| `sent` | Notificação local foi disparada via `new Notification(...)`. Entrega final ainda depende do SO/browser. |
+| `test_sent` / `test_failed` | Resultado do botão "Enviar notificação de teste" em Settings. |
+| `disabled` | Toggle "Alertas locais do Command Center" está desligado. |
+| `permission_not_granted` | Permission ≠ granted (default ou denied). |
+| `unsupported` | Browser sem `window.Notification`. |
+| `invalid_alert` | Alerta sem `id` válido — chamada de fora do contrato. |
+| `duplicate` | Esse `alert.id` já notificou nos últimos 7 dias. |
+| `rate_limited` | Já houve 3 notificações na janela de 60s. |
+| `error` | `showLocalNotification` retornou `false` (browser policy, focus assist, etc.). |
+
+### Checklist V5.2
+
+1. Build prod: `npm run build && npm run preview`.
+2. Abrir `/app/settings` → seção "App e notificações".
+3. Confirmar painel "Diagnóstico" com badge correto.
+4. Antes de ativar permissão: bloqueador "A permissão de notificações
+   ainda não foi concedida.".
+5. Ativar permissão → bloqueador some, badge vira `Desligado`.
+6. Ativar toggle "Alertas locais do Command Center" → badge vira `Pronto`.
+7. Clicar "Enviar notificação de teste" → evento `test_sent` aparece
+   no histórico, métrica `Enviadas (7d)` = 1.
+8. Ir para `/app/command`, aguardar alerta real → evento `sent` aparece.
+9. Recarregar a página → mesmo alerta NÃO notifica de novo, evento
+   `duplicate` aparece se outra renderização tentar.
+10. Disparar 4+ alertas em sequência rápida → 4º+ aparecem como
+    `rate_limited`.
+11. Clicar "Limpar rate limit" → métrica `Janela (60s)` zera.
+12. Clicar "Limpar dedup" → mesmo `alert.id` pode notificar de novo.
+13. Clicar "Limpar diagnóstico" → métricas e histórico zeram.
