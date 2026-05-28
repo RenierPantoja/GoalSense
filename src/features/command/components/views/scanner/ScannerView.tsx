@@ -18,7 +18,7 @@ import { CounterCell } from '../shared/CounterCell'
 import { ScannerRow } from './ScannerRow'
 import { ScannerSidebar } from './ScannerSidebar'
 
-type ScannerFilter = 'all' | 'critical' | 'attention' | 'favorites' | 'live' | 'soon' | 'rich'
+type ScannerFilter = 'all' | 'critical' | 'attention' | 'favorites' | 'live' | 'soon' | 'rich' | 'ready' | 'blocked'
 
 export interface ScannerViewProps {
   hasIntelligence: boolean
@@ -58,6 +58,10 @@ export function ScannerView({ hasIntelligence, entries, openMatch, isAdvanced, o
   const attentionCount = entries.filter(e => e.priority === 'attention').length
   const favCount = entries.filter(e => isFavoriteTeam(e.fixture.homeTeam.name) || isFavoriteTeam(e.fixture.awayTeam.name)).length
   const richCount = entries.filter(e => e.fixture.provider === 'espn').length
+  // V5 precision counters
+  const readyCount = entries.filter(e => e.signalState === 'ready_to_alert').length
+  const candidateCount = entries.filter(e => e.signalState === 'strong_candidate').length
+  const blockedCount = entries.filter(e => e.signalState === 'blocked').length
 
   const filteredEntries = entries.filter(e => {
     if (filter === 'all') return true
@@ -67,6 +71,8 @@ export function ScannerView({ hasIntelligence, entries, openMatch, isAdvanced, o
     if (filter === 'live') return isLiveFx(e.fixture)
     if (filter === 'soon') return !isLiveFx(e.fixture) && new Date(e.fixture.date).getTime() - Date.now() <= 60 * 60 * 1000
     if (filter === 'rich') return e.fixture.provider === 'espn'
+    if (filter === 'ready') return e.signalState === 'ready_to_alert'
+    if (filter === 'blocked') return e.signalState === 'blocked'
     return true
   })
 
@@ -97,12 +103,13 @@ export function ScannerView({ hasIntelligence, entries, openMatch, isAdvanced, o
         <div className="flex flex-wrap gap-1.5">
           {([
             ['all', 'Todos', entries.length],
+            ['ready', 'Prontos', readyCount],
             ['critical', 'Críticos', criticalCount],
             ['attention', 'Atenção', attentionCount],
             ['favorites', 'Favoritos', favCount],
             ['live', 'Ao vivo', liveCount],
-            ['soon', 'Em breve', soonCount],
             ['rich', 'Dados ricos', richCount],
+            ...(isAdvanced && blockedCount > 0 ? [['blocked', 'Bloqueados', blockedCount] as [ScannerFilter, string, number]] : []),
           ] as [ScannerFilter, string, number][]).map(([key, label, count]) => {
             const isActive = filter === key
             return (

@@ -81,6 +81,40 @@ export function ScannerRow({ entry, openMatch, isAdvanced, isFavoriteTeam, patte
             ))}
           </div>
         )}
+        {/* V5 Precision: signal state + data quality */}
+        {entry.signalState && (
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
+            <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+              entry.signalState === 'ready_to_alert' ? 'bg-emerald-500/12 text-emerald-300 border-emerald-400/20' :
+              entry.signalState === 'strong_candidate' ? 'bg-amber-500/10 text-amber-300 border-amber-400/15' :
+              entry.signalState === 'watch_only' ? 'bg-white/[0.04] text-white/50 border-white/[0.06]' :
+              'bg-rose-500/10 text-rose-300 border-rose-400/15'
+            }`}>
+              {entry.signalState === 'ready_to_alert' ? 'Pronto' : entry.signalState === 'strong_candidate' ? 'Candidato' : entry.signalState === 'watch_only' ? 'Observação' : 'Bloqueado'}
+            </span>
+            {entry.dataQuality && (
+              <span className={`text-[9px] font-medium px-2 py-0.5 rounded-md border ${
+                entry.dataQuality === 'rich' ? 'text-emerald-300/70 border-emerald-400/12 bg-emerald-500/5' :
+                entry.dataQuality === 'partial' ? 'text-amber-300/70 border-amber-400/12 bg-amber-500/5' :
+                'text-rose-300/60 border-rose-400/10 bg-rose-500/5'
+              }`}>
+                {entry.dataQuality === 'rich' ? 'Dados ricos' : entry.dataQuality === 'partial' ? 'Dados parciais' : 'Dados pobres'}
+              </span>
+            )}
+          </div>
+        )}
+        {/* V5 Precision: blockers in advanced mode */}
+        {isAdvanced && entry.blockers && entry.blockers.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-white/[0.04]">
+            <span className="text-[9px] uppercase tracking-wider text-rose-300/60 font-semibold">Por que não disparou:</span>
+            <div className="flex items-center gap-1.5 flex-wrap mt-1">
+              {entry.blockers.slice(0, 4).map((b, i) => (
+                <span key={i} className="text-[9px] text-rose-200/60 bg-rose-500/5 border border-rose-400/10 px-2 py-0.5 rounded">{b}</span>
+              ))}
+              {entry.blockers.length > 4 && <span className="text-[9px] text-white/30">+{entry.blockers.length - 4}</span>}
+            </div>
+          </div>
+        )}
         {isAdvanced && entry.topPattern && (
           <div className="mt-2 pt-2 border-t border-white/[0.04] text-[10px] text-white/35 font-mono">
             cond:{entry.topPattern.matchedConditions}/{entry.topPattern.totalConditions} · sev:{entry.topPattern.severity} · provider:{fx.provider}
