@@ -67,12 +67,25 @@ async function fetchEspnAsCalendar(selectedDate: string): Promise<FDMatch[]> {
 }
 
 function mapStatus(s: string) {
-  if (s === 'IN_PLAY' || s === 'LIVE') return { label: 'Ao vivo', live: true, finished: false, upcoming: false }
-  if (s === 'PAUSED') return { label: 'Intervalo', live: true, finished: false, upcoming: false }
-  if (s === 'FINISHED') return { label: 'Encerrado', live: false, finished: true, upcoming: false }
-  if (s === 'TIMED' || s === 'SCHEDULED') return { label: 'Agendado', live: false, finished: false, upcoming: true }
-  if (s === 'POSTPONED') return { label: 'Adiado', live: false, finished: false, upcoming: false }
-  return { label: s, live: false, finished: false, upcoming: true }
+  const upper = (s || '').trim().toUpperCase()
+  // Live
+  if (upper === 'IN_PLAY' || upper === 'LIVE' || upper === '1H' || upper === '2H' || upper === 'ET' || upper === 'BT' || upper === 'P') return { label: 'Ao vivo', live: true, finished: false, upcoming: false }
+  if (upper === 'PAUSED' || upper === 'HT' || upper === 'HALFTIME') return { label: 'Intervalo', live: true, finished: false, upcoming: false }
+  // Finished — comprehensive list covering all providers
+  if (upper === 'FINISHED' || upper === 'FT' || upper === 'AET' || upper === 'PEN' ||
+      upper === 'FULL_TIME' || upper === 'MATCH FINISHED' || upper === 'FINAL' ||
+      upper === 'AWD' || upper === 'WO' || upper === 'ENCERRADO' ||
+      upper === 'STATUS_FULL_TIME' || upper === 'STATUS_FINAL' ||
+      upper === 'POST' || upper === 'COMPLETED') {
+    return { label: 'Encerrado', live: false, finished: true, upcoming: false }
+  }
+  // Scheduled
+  if (upper === 'TIMED' || upper === 'SCHEDULED' || upper === 'NS' || upper === 'TBD' || upper === 'PRE') return { label: 'Agendado', live: false, finished: false, upcoming: true }
+  // Postponed/Cancelled
+  if (upper === 'POSTPONED' || upper === 'PPD' || upper === 'PST') return { label: 'Adiado', live: false, finished: false, upcoming: false }
+  if (upper === 'CANCELLED' || upper === 'CANCELED' || upper === 'CANC' || upper === 'ABD' || upper === 'SUSPENDED') return { label: 'Cancelado', live: false, finished: false, upcoming: false }
+  // Unknown — do NOT default to upcoming
+  return { label: s || 'Desconhecido', live: false, finished: false, upcoming: false }
 }
 
 function translateComp(name: string): string {
