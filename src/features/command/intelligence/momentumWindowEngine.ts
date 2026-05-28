@@ -26,6 +26,10 @@ export interface MomentumWindowResult {
   trend: 'rising' | 'stable' | 'falling' | 'unknown'
   confidence: number // how confident we are in this momentum reading
   hasRecentActivity: boolean
+  /** Source of momentum data — determines confidence caps. */
+  momentumSource: 'timed_events' | 'mixed' | 'stats_proxy' | 'insufficient'
+  /** How confident we are that the activity is RECENT (not just accumulated). */
+  recencyConfidence: number
   explanation: string
   blockers: string[]
   dataQuality: {
@@ -92,6 +96,8 @@ export function buildMomentumWindow(
       trend: 'unknown',
       confidence: 0,
       hasRecentActivity: false,
+      momentumSource: 'insufficient',
+      recencyConfidence: 0,
       explanation: 'Sem dados estatísticos disponíveis',
       blockers: ['Provider não entregou estatísticas'],
       dataQuality: { hasTimedEvents: false, hasStats: false, hasRecentProxy: false, missing: ['stats'] },
@@ -113,6 +119,8 @@ export function buildMomentumWindow(
       trend: 'unknown',
       confidence: 15,
       hasRecentActivity: false,
+      momentumSource: 'insufficient',
+      recencyConfidence: 5,
       explanation: 'Estatísticas ofensivas indisponíveis',
       blockers: ['Sem dados de finalizações ou escanteios'],
       dataQuality: { hasTimedEvents: false, hasStats: true, hasRecentProxy: false, missing },
@@ -202,6 +210,25 @@ export function buildMomentumWindow(
     blockers.push('Sem eventos com minuto — usando estatísticas agregadas como proxy')
   }
 
+  // Determine momentum source and recency confidence
+  const momentumSource: MomentumWindowResult['momentumSource'] = hasTimedEvents
+    ? (hasStats ? 'mixed' : 'timed_events')
+    : (hasStats && strength > 0 ? 'stats_proxy' : 'insufficient')
+
+  // Recency confidence: how sure we are this is happening NOW
+  // Without timed events, recency is always uncertain
+  let recencyConfidence: number
+  if (hasTimedEvents) {
+    recencyConfidence = Math.min(95, confidence + 10)
+  } else if (hasRecentActivity && trend === 'rising') {
+    recencyConfidence = Math.min(65, confidence - 5)
+  } else if (hasRecentActivity) {
+    recencyConfidence = Math.min(55, confidence - 10)
+  } else {
+    recencyConfidence = Math.min(40, confidence - 15)
+  }
+  recencyConfidence = Math.max(0, recencyConfidence)
+
   return {
     windowMinutes,
     currentMinute: elapsed || null,
@@ -210,6 +237,8 @@ export function buildMomentumWindow(
     trend,
     confidence,
     hasRecentActivity,
+    momentumSource,
+    recencyConfidence,
     explanation,
     blockers,
     dataQuality: { hasTimedEvents, hasStats, hasRecentProxy: hasRecentActivity, missing },

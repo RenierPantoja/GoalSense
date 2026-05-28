@@ -170,12 +170,32 @@ export function applyPrecisionChecks(
       adjustedConfidence = Math.max(20, Math.min(confidenceCap, adjustedConfidence + adjustment))
       if (momReason) reasons.push(momReason)
     }
-    // Re-check min confidence after momentum adjustment
-    if (adjustedConfidence < pattern.minConfidence) {
+
+    // Apply momentum source caps
+    const momentumCap = momentum.momentumSource === 'timed_events' ? 95
+      : momentum.momentumSource === 'mixed' ? 88
+      : momentum.momentumSource === 'stats_proxy' ? 68
+      : 50
+    if (adjustedConfidence > momentumCap) {
+      adjustedConfidence = momentumCap
+      reasons.push(`Cap por fonte de momentum (${momentum.momentumSource}): max ${momentumCap}%`)
+    }
+
+    // Strict mode: critical offensive patterns require confirmed recency
+    if (pattern.severity === 'critical' && pattern.action === 'register_alert') {
+      if (momentum.momentumSource === 'stats_proxy' || momentum.momentumSource === 'insufficient') {
+        blockers.push('Padrão crítico exige recência confirmada por eventos')
+      } else if (momentum.momentumSource === 'mixed' && momentum.recencyConfidence < 70) {
+        blockers.push('Recência insuficiente para padrão crítico')
+      }
+    }
+
+    // Re-check min confidence after momentum adjustment + caps
+    if (adjustedConfidence < pattern.minConfidence && blockers.length === 0) {
       blockers.push(`Confiança pós-momentum ${adjustedConfidence}% abaixo do mínimo ${pattern.minConfidence}%`)
     }
-    // Add momentum blockers
-    if (!momentum.hasRecentActivity && momentum.trend === 'falling') {
+    // Add momentum blockers for falling trend
+    if (!momentum.hasRecentActivity && momentum.trend === 'falling' && blockers.length === 0) {
       blockers.push('Sem pressão ofensiva recente')
     }
   }
