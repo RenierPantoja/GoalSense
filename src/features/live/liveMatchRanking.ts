@@ -219,6 +219,21 @@ export function scoreLiveMatchForFeature(fx: LiveFixture, options: RankingOption
   if (totalGoals >= 4) { dramaScore = Math.min(dramaScore + 7, 25); reasons.push('Jogo de muitos gols') }
   score += Math.min(dramaScore, 25)
 
+  // 4b. BIG CLUB IN TROUBLE BONUS
+  // If a club with anchor >= 90 is losing, add extra relevance
+  const homeAnchor = getClubAnchor(fx.homeTeam.name)
+  const awayAnchor = getClubAnchor(fx.awayTeam.name)
+  const maxAnchor = Math.max(homeAnchor, awayAnchor)
+  if (maxAnchor >= TIER_B_CONTINENTAL_GIANT && isLive) {
+    const bigClubIsHome = homeAnchor >= TIER_B_CONTINENTAL_GIANT
+    const bigClubLosing = bigClubIsHome ? homeGoals < awayGoals : awayGoals < homeGoals
+    if (bigClubLosing) {
+      score += 20
+      reasons.push('Grande clube perdendo')
+      if (diff >= 2) { score += 8; reasons.push('Derrota por 2+ gols') }
+    }
+  }
+
   // 5. FAVORITES (up to 30)
   if (options.isFavoriteTeam) {
     if (options.isFavoriteTeam(fx.homeTeam.name) || options.isFavoriteTeam(fx.awayTeam.name)) {
