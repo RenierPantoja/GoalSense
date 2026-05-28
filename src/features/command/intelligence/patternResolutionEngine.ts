@@ -1,14 +1,18 @@
 /**
- * Pattern Resolution Engine V2 — resolves triggered alerts with
+ * Pattern Resolution Engine V3 — resolves triggered alerts with
  * strong/partial confirmation, failure, expiry, and unknown states.
+ * V3 uses PatternResolutionType for type-specific windows and criteria.
  * No mocks. Uses real score/stats changes only.
  */
 import type { LiveFixture } from '@/lib/apiClient'
 import type { CommandAlertStatus, ResolutionStrength } from '@/context/AlertsContext'
+import { inferPatternResolutionType, getResolutionWindow, type PatternResolutionType } from './patternResolutionTypes'
 
 export interface ResolutionInput {
   id: string
   patternName: string
+  patternId?: string
+  templateId?: string
   fixtureId: number
   minuteAtTrigger: number | null
   scoreAtTrigger: { home: number; away: number }
@@ -24,6 +28,10 @@ export interface ResolutionResult {
   reason: string
   evidence: string[]
   confidence: number
+  /** V3: resolution type used for evaluation. */
+  resolutionType?: PatternResolutionType
+  /** V3: window used for evaluation. */
+  windowMinutes?: number
 }
 
 export function resolveAlert(
@@ -50,6 +58,10 @@ export function resolveAlert(
   const alertAge = Date.now() - new Date(alert.createdAt).getTime()
   const score = { home: cH, away: cA }
   const pn = alert.patternName.toLowerCase()
+
+  // V3: Infer resolution type and use type-specific window
+  const resType = inferPatternResolutionType({ name: alert.patternName, templateId: alert.templateId, description: '', conditions: [], severity: 'attention', status: 'active', isTemplate: false, scope: 'all', minConfidence: 50, action: 'register_alert', maxTriggersPerMatch: 2, antiDuplicateWindow: 5, id: alert.patternId || '', createdAt: '', updatedAt: '' })
+  const typeWindow = getResolutionWindow(resType)
 
   // ─── Time-based expiry ─────────────────────────────────────────────────
   if (alertAge > 2.5 * 60 * 60 * 1000 && !isFinished) {
