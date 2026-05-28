@@ -169,6 +169,12 @@ export interface ScannerEntry {
   blockers?: string[]
   /** Data quality assessment. */
   dataQuality?: 'rich' | 'partial' | 'poor'
+  /** V5 Phase 7: momentum source. */
+  momentumSource?: 'timed_events' | 'mixed' | 'stats_proxy' | 'insufficient'
+  /** V5 Phase 7: recency confidence 0-100. */
+  recencyConfidence?: number
+  /** V5 Phase 7: recent events used for momentum (max 5). */
+  recentEventsUsed?: { minute: number; type: string; side: string; teamName?: string; playerName?: string }[]
 }
 
 // ─── Stats for pattern evaluation ────────────────────────────────────────────

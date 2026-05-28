@@ -81,7 +81,7 @@ export function ScannerRow({ entry, openMatch, isAdvanced, isFavoriteTeam, patte
             ))}
           </div>
         )}
-        {/* V5 Precision: signal state + data quality */}
+        {/* V5 Precision: signal state + data quality + momentum source */}
         {entry.signalState && (
           <div className="mt-2 flex items-center gap-2 flex-wrap">
             <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
@@ -101,6 +101,16 @@ export function ScannerRow({ entry, openMatch, isAdvanced, isFavoriteTeam, patte
                 {entry.dataQuality === 'rich' ? 'Dados ricos' : entry.dataQuality === 'partial' ? 'Dados parciais' : 'Dados pobres'}
               </span>
             )}
+            {entry.momentumSource && (
+              <span className={`text-[9px] font-medium px-2 py-0.5 rounded-md border ${
+                entry.momentumSource === 'timed_events' ? 'text-emerald-300/70 border-emerald-400/12 bg-emerald-500/5' :
+                entry.momentumSource === 'mixed' ? 'text-cyan-300/70 border-cyan-400/12 bg-cyan-500/5' :
+                entry.momentumSource === 'stats_proxy' ? 'text-amber-300/60 border-amber-400/10 bg-amber-500/5' :
+                'text-rose-300/50 border-rose-400/8 bg-rose-500/4'
+              }`}>
+                {entry.momentumSource === 'timed_events' ? 'Momentum confirmado' : entry.momentumSource === 'mixed' ? 'Momentum misto' : entry.momentumSource === 'stats_proxy' ? 'Momentum estimado' : 'Sem recência'}
+              </span>
+            )}
           </div>
         )}
         {/* V5 Precision: blockers in advanced mode */}
@@ -115,6 +125,27 @@ export function ScannerRow({ entry, openMatch, isAdvanced, isFavoriteTeam, patte
             </div>
           </div>
         )}
+        {/* V5 Phase 7B: recent events used in advanced mode */}
+        {isAdvanced && entry.recentEventsUsed && entry.recentEventsUsed.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-white/[0.04]">
+            <span className="text-[9px] uppercase tracking-wider text-cyan-300/50 font-semibold">Eventos recentes usados:</span>
+            <div className="mt-1 space-y-0.5">
+              {entry.recentEventsUsed.map((ev, i) => (
+                <div key={i} className="text-[9px] text-white/45">
+                  <span className="text-white/60 font-mono">{ev.minute}'</span>{' '}
+                  <span>{translateEventType(ev.type)}</span>
+                  {ev.teamName && <span className="text-white/30"> — {ev.teamName}</span>}
+                  {ev.playerName && <span className="text-white/25"> · {ev.playerName}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {isAdvanced && entry.momentumSource === 'stats_proxy' && !entry.recentEventsUsed?.length && (
+          <div className="mt-2 pt-2 border-t border-white/[0.04]">
+            <p className="text-[9px] text-amber-300/40 italic">Sem eventos minutados recentes. Motor usou estatísticas agregadas como proxy conservador.</p>
+          </div>
+        )}
         {isAdvanced && entry.topPattern && (
           <div className="mt-2 pt-2 border-t border-white/[0.04] text-[10px] text-white/35 font-mono">
             cond:{entry.topPattern.matchedConditions}/{entry.topPattern.totalConditions} · sev:{entry.topPattern.severity} · provider:{fx.provider}
@@ -123,4 +154,25 @@ export function ScannerRow({ entry, openMatch, isAdvanced, isFavoriteTeam, patte
       </div>
     </div>
   )
+}
+
+
+function translateEventType(type: string): string {
+  switch (type) {
+    case 'goal': return 'Gol'
+    case 'own_goal': return 'Gol contra'
+    case 'penalty_scored': return 'Pênalti convertido'
+    case 'penalty_missed': return 'Pênalti perdido'
+    case 'shot_on_target': return 'Finalização no gol'
+    case 'shot_off_target': return 'Finalização para fora'
+    case 'corner': return 'Escanteio'
+    case 'yellow_card': return 'Cartão amarelo'
+    case 'red_card': return 'Cartão vermelho'
+    case 'second_yellow': return 'Segundo amarelo'
+    case 'substitution': return 'Substituição'
+    case 'var': return 'VAR'
+    case 'dangerous_attack': return 'Ataque perigoso'
+    case 'attack': return 'Ataque'
+    default: return type
+  }
 }

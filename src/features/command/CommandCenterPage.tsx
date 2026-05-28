@@ -298,7 +298,7 @@ export function CommandCenterPage() {
       if (top) {
         const pat = patterns.find(p => p.id === top.patternId)
         if (pat) {
-          const precision = applyPrecisionChecks(top, pat, fx, fxStats)
+          const precision = applyPrecisionChecks(top, pat, fx, fxStats, eventsMap.get(fx.id))
           signalState = precision.signalState
           adjustedConf = precision.adjustedConfidence
           if (precision.blockers.length > 0) blockersList = precision.blockers
@@ -306,9 +306,25 @@ export function CommandCenterPage() {
         }
       }
 
+      // V5 Phase 7B: extract momentum/events data for UI
+      const fxEvents = eventsMap.get(fx.id)
+      let momentumSrc: ScannerEntry['momentumSource']
+      let recencyConf: number | undefined
+      let recentEvts: ScannerEntry['recentEventsUsed']
+      if (fxEvents && fxEvents.length > 0 && fx.status.elapsed) {
+        const recent = fxEvents.filter(e => e.minute >= (fx.status.elapsed! - 10) && e.minute <= fx.status.elapsed!)
+        const offensiveTypes = ['shot_on_target', 'shot_off_target', 'corner', 'dangerous_attack', 'goal', 'penalty_scored', 'penalty_missed']
+        const offensiveRecent = recent.filter(e => offensiveTypes.includes(e.type))
+        momentumSrc = offensiveRecent.length >= 1 ? 'timed_events' : 'stats_proxy'
+        recencyConf = offensiveRecent.length >= 3 ? 85 : offensiveRecent.length >= 1 ? 65 : 35
+        recentEvts = recent.slice(0, 5).map(e => ({ minute: e.minute, type: e.type, side: e.side, teamName: e.teamName, playerName: e.playerName }))
+      } else {
+        momentumSrc = fxStats ? 'stats_proxy' : 'insufficient'
+      }
+
       const conf = adjustedConf
       const priority: ScannerEntry['priority'] = conf >= 75 ? 'critical' : conf >= 50 ? 'attention' : conf >= 35 ? 'watch' : 'low'
-      entries.push({ fixture: fx, patterns: fxHits, topPattern: top, priority, confidence: conf, reason: top?.patternName || disc?.insight || '', signalState, blockers: blockersList, dataQuality: dq })
+      entries.push({ fixture: fx, patterns: fxHits, topPattern: top, priority, confidence: conf, reason: top?.patternName || disc?.insight || '', signalState, blockers: blockersList, dataQuality: dq, momentumSource: momentumSrc, recencyConfidence: recencyConf, recentEventsUsed: recentEvts })
     }
     return entries.sort((a, b) => b.confidence - a.confidence)
   }, [hasIntelligence, fixtures, patternHits, discoveries, statsMap, patterns])
