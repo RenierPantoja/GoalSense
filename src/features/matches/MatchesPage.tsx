@@ -16,6 +16,7 @@ import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
 import { classifyMatch, type MatchClassification } from '@/lib/matchesClassification'
 import { getMainMatches, scoreMatchImportance } from '@/features/matches/mainMatchRanking'
 import { isMatchBrazil, isMatchEurope } from '@/features/matches/matchRegionClassifier'
+import { buildMatchDisplayModel, type MatchDisplayModel } from '@/features/matches/buildMatchDisplayModel'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -914,68 +915,70 @@ function SidebarRelevantCard({ match: m, rank, onClick }: { match: FDMatch; rank
 // ─── Agenda Row (premium, not a table) ───────────────────────────────────────
 
 function AgendaRow({ match: m, onClick, isLast }: { match: FDMatch; onClick: () => void; isLast: boolean }) {
-  const { live, finished, staleScheduled, cls } = mapStatus(m)
-  const time = formatMatchTime(m.utcDate)
-  const diffMin = Math.round((new Date(m.utcDate).getTime() - Date.now()) / 60000)
-  const soon = !staleScheduled && diffMin > 0 && diffMin <= 60
+  const display = buildMatchDisplayModel(m)
+  const { classification: cls } = display
   const insightBadge = getInsightBadge(m)
   const imp = calcImportance(m)
   const { isFavoriteMatch: isFavMatch, toggleFavoriteMatch: toggleFav, isFavoriteTeam: isFavTeam } = useFavorites()
   const { isAdvanced } = useViewMode()
   const matchId = buildCanonicalMatchId(m.homeTeam.shortName || m.homeTeam.name, m.awayTeam.shortName || m.awayTeam.name, m.utcDate)
   const isFav = isFavMatch(matchId) || isFavTeam(m.homeTeam.shortName || m.homeTeam.name) || isFavTeam(m.awayTeam.shortName || m.awayTeam.name)
-  // Micro-text only for relevant matches
   const microText = (() => {
     if (imp < 40) return ''
     const comp = m.competition.name.toLowerCase()
-    if (live) return ''
-    if (finished && isDominant(m)) return 'Placar dominante'
-    if (comp.includes('brasil') || comp.includes('série')) return finished ? 'Brasileirão · Encerrado' : 'Brasileirão'
-    if (soon) return 'Analisar pré-jogo'
+    if (cls.isLive) return ''
+    if (cls.isFinished && isDominant(m)) return 'Placar dominante'
+    if (comp.includes('brasil') || comp.includes('série')) return cls.isFinished ? 'Brasileirão · Encerrado' : 'Brasileirão'
+    if (display.statusKey === 'starting_soon') return 'Analisar pré-jogo'
     if (comp.includes('premier') || comp.includes('champions') || comp.includes('bundesliga')) return 'Liga forte'
     return ''
   })()
 
   return (
-    <div onClick={onClick} className={`group flex items-center gap-4 px-5 py-[18px] cursor-pointer transition-all hover:bg-white/[0.04] hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)] ${live ? 'bg-emerald-500/[0.02]' : ''} ${isFav ? 'border-l-2 border-l-cyan-500/30' : ''} ${!isLast ? 'border-b border-white/[0.03]' : ''}`}>
-      {/* Status/Time */}
+    <div onClick={onClick} className={`group flex items-center gap-4 px-5 py-[18px] cursor-pointer transition-all hover:bg-white/[0.04] hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)] ${cls.isLive ? 'bg-emerald-500/[0.02]' : ''} ${isFav ? 'border-l-2 border-l-cyan-500/30' : ''} ${!isLast ? 'border-b border-white/[0.03]' : ''}`}>
+      {/* Status/Time — driven by display model */}
       <div className="w-[70px] shrink-0 text-center">
-        {live ? (
+        {display.statusKey === 'live' ? (
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/15">
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] font-bold text-emerald-400">Ao vivo</span>
+            <span className="text-[10px] font-bold text-emerald-400">{display.primaryLabel}</span>
           </div>
-        ) : finished ? (
-          <span className="inline-block text-[10px] font-medium text-white/30 px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.04]">Enc.</span>
-        ) : staleScheduled ? (
+        ) : display.statusKey === 'finished' ? (
+          <span className="inline-block text-[10px] font-medium text-white/30 px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.04]">{display.badgeLabel}</span>
+        ) : display.statusKey === 'stale_pending' || display.statusKey === 'stale_strong' ? (
           <div>
-            <span className="text-[9px] font-medium text-amber-400/70 block">{cls.labelShort}</span>
-            <span className="text-[9px] text-white/20 mt-0.5 block">Prev. {time}</span>
+            <span className="text-[9px] font-medium text-amber-400/70 block">{display.badgeLabel}</span>
+            {display.secondaryLabel && <span className="text-[9px] text-white/20 mt-0.5 block">{display.secondaryLabel}</span>}
+          </div>
+        ) : display.statusKey === 'awaiting_kickoff' ? (
+          <div>
+            <span className="text-[9px] font-medium text-amber-400/70 block">{display.badgeLabel}</span>
+            <span className="text-[9px] text-white/20 mt-0.5 block">{display.kickoffTime}</span>
           </div>
         ) : (
           <div>
-            <span className="text-[13px] font-bold tabular-nums text-white/55 block">{time}</span>
-            {soon && <span className="text-[10px] font-bold text-amber-400/90 mt-0.5 block">Em breve</span>}
+            <span className="text-[13px] font-bold tabular-nums text-white/55 block">{display.primaryLabel}</span>
+            {display.secondaryLabel && <span className="text-[10px] font-bold text-amber-400/90 mt-0.5 block">{display.secondaryLabel}</span>}
           </div>
         )}
       </div>
 
       {/* Home team */}
       <div className="flex items-center gap-3 flex-1 justify-end min-w-0">
-        <span className="text-[13px] font-semibold text-white/80 truncate text-right">{m.homeTeam.shortName || m.homeTeam.name}</span>
-        <ClubLogo src={m.homeTeam.crest} name={m.homeTeam.name} size={30} />
+        <span className="text-[13px] font-semibold text-white/80 truncate text-right" title={display.homeName}>{display.homeName}</span>
+        <ClubLogo src={m.homeTeam.crest} name={display.homeName} size={30} />
       </div>
 
       {/* Score */}
-      <div className="flex items-center gap-2.5 min-w-[64px] justify-center">
-        <span className={`text-[20px] font-bold tabular-nums ${live ? 'text-white' : 'text-white/75'}`}>{m.score.fullTime.home ?? '-'}</span>
+      <div className="flex items-center gap-2.5 min-w-[64px] justify-center shrink-0">
+        <span className={`text-[20px] font-bold tabular-nums ${cls.isLive ? 'text-white' : 'text-white/75'}`}>{display.homeScore ?? '-'}</span>
         <span className="text-[11px] text-white/12 font-light">:</span>
-        <span className={`text-[20px] font-bold tabular-nums ${live ? 'text-white' : 'text-white/75'}`}>{m.score.fullTime.away ?? '-'}</span>
+        <span className={`text-[20px] font-bold tabular-nums ${cls.isLive ? 'text-white' : 'text-white/75'}`}>{display.awayScore ?? '-'}</span>
       </div>
 
       {/* Away team */}
       <div className="flex items-center gap-3 flex-1 min-w-0">
-        <ClubLogo src={m.awayTeam.crest} name={m.awayTeam.name} size={30} />
+        <ClubLogo src={m.awayTeam.crest} name={display.awayName} size={30} />
         <span className="text-[13px] font-semibold text-white/60 truncate">{m.awayTeam.shortName || m.awayTeam.name}</span>
       </div>
 
@@ -998,46 +1001,44 @@ function AgendaRow({ match: m, onClick, isLast }: { match: FDMatch; onClick: () 
 // ─── Compact Row ─────────────────────────────────────────────────────────────
 
 function CompactRow({ match: m, onClick }: { match: FDMatch; onClick: () => void }) {
-  const { live, finished, staleScheduled, cls } = mapStatus(m)
-  const time = formatMatchTime(m.utcDate)
+  const display = buildMatchDisplayModel(m)
+  const { classification: cls } = display
   const { isFavoriteMatch: isFavMatch, toggleFavoriteMatch: toggleFav, isFavoriteTeam: isFavTeam } = useFavorites()
   const matchId = buildCanonicalMatchId(m.homeTeam.shortName || m.homeTeam.name, m.awayTeam.shortName || m.awayTeam.name, m.utcDate)
   const isFav = isFavMatch(matchId) || isFavTeam(m.homeTeam.shortName || m.homeTeam.name) || isFavTeam(m.awayTeam.shortName || m.awayTeam.name)
-  const homeName = m.homeTeam.shortName || m.homeTeam.name
-  const awayName = m.awayTeam.shortName || m.awayTeam.name
   return (
     <div onClick={onClick} className={`grid grid-cols-[72px_1fr_56px_1fr_28px] items-center px-4 min-h-[48px] cursor-pointer hover:bg-white/[0.035] transition-colors border-b border-white/[0.04] last:border-b-0 ${isFav ? 'border-l-2 border-l-cyan-500/30' : ''}`}>
       {/* Time/Status */}
       <div className="text-center overflow-hidden">
-        {live ? (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />AO VIVO</span>
-        ) : finished ? (
-          <span className="text-[10px] font-semibold text-white/30">FIM</span>
-        ) : staleScheduled ? (
-          <span className="text-[9px] font-medium text-amber-400/60">{cls.labelShort}</span>
+        {display.statusKey === 'live' ? (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />{display.primaryLabel}</span>
+        ) : display.statusKey === 'finished' ? (
+          <span className="text-[10px] font-semibold text-white/30">{display.badgeLabel}</span>
+        ) : display.statusKey === 'stale_pending' || display.statusKey === 'stale_strong' || display.statusKey === 'awaiting_kickoff' ? (
+          <span className="text-[9px] font-medium text-amber-400/60">{display.badgeLabel}</span>
         ) : (
-          <span className="text-[12px] font-semibold tabular-nums text-white/55">{time}</span>
+          <span className="text-[12px] font-semibold tabular-nums text-white/55">{display.primaryLabel}</span>
         )}
       </div>
       {/* Home team */}
       <div className="flex items-center gap-2 justify-end pr-2 min-w-0 overflow-hidden">
-        <span className="text-[12px] font-medium text-white/80 truncate text-right" title={homeName}>{homeName}</span>
-        <ClubLogo src={m.homeTeam.crest} name={homeName} size={22} />
+        <span className="text-[12px] font-medium text-white/80 truncate text-right" title={display.homeName}>{display.homeName}</span>
+        <ClubLogo src={display.homeLogo} name={display.homeName} size={22} />
       </div>
       {/* Score */}
       <div className="flex items-center justify-center gap-1 shrink-0">
-        <span className={`text-[14px] font-bold tabular-nums ${live ? 'text-white' : 'text-white/75'}`}>{m.score.fullTime.home ?? '-'}</span>
+        <span className={`text-[14px] font-bold tabular-nums ${cls.isLive ? 'text-white' : 'text-white/75'}`}>{display.homeScore ?? '-'}</span>
         <span className="text-[9px] text-white/15">:</span>
-        <span className={`text-[14px] font-bold tabular-nums ${live ? 'text-white' : 'text-white/75'}`}>{m.score.fullTime.away ?? '-'}</span>
+        <span className={`text-[14px] font-bold tabular-nums ${cls.isLive ? 'text-white' : 'text-white/75'}`}>{display.awayScore ?? '-'}</span>
       </div>
       {/* Away team */}
       <div className="flex items-center gap-2 pl-2 min-w-0 overflow-hidden">
-        <ClubLogo src={m.awayTeam.crest} name={awayName} size={22} />
-        <span className="text-[12px] font-medium text-white/65 truncate" title={awayName}>{awayName}</span>
+        <ClubLogo src={display.awayLogo} name={display.awayName} size={22} />
+        <span className="text-[12px] font-medium text-white/65 truncate" title={display.awayName}>{display.awayName}</span>
       </div>
       {/* Favorite */}
       <div className="flex justify-center shrink-0">
-        <FavoriteButton active={isFav} onClick={() => toggleFav({ canonicalMatchId: matchId, homeTeam: homeName, awayTeam: awayName, competition: m.competition.name, utcDate: m.utcDate })} size={11} />
+        <FavoriteButton active={isFav} onClick={() => toggleFav({ canonicalMatchId: matchId, homeTeam: display.homeName, awayTeam: display.awayName, competition: m.competition.name, utcDate: m.utcDate })} size={11} />
       </div>
     </div>
   )
@@ -1138,17 +1139,13 @@ function HighlightSection({ title, icon, matches, openMatch }: { title: string; 
 }
 
 function HighlightCard({ match: m, onClick }: { match: FDMatch; onClick: () => void }) {
-  const { live, finished, staleScheduled, cls } = mapStatus(m)
+  const display = buildMatchDisplayModel(m)
+  const { classification: cls } = display
   const insight = getInsight(m)
   const reason = getRelevanceReason(m)
-  const time = formatMatchTime(m.utcDate)
   const { isFavoriteMatch: isFavMatch, toggleFavoriteMatch: toggleFav, isFavoriteTeam: isFavTeam } = useFavorites()
   const matchId = buildCanonicalMatchId(m.homeTeam.shortName || m.homeTeam.name, m.awayTeam.shortName || m.awayTeam.name, m.utcDate)
   const isFav = isFavMatch(matchId) || isFavTeam(m.homeTeam.shortName || m.homeTeam.name) || isFavTeam(m.awayTeam.shortName || m.awayTeam.name)
-  const homeName = m.homeTeam.shortName || m.homeTeam.name
-  const awayName = m.awayTeam.shortName || m.awayTeam.name
-
-  const statusLabel = live ? cls.labelShort : finished ? 'Enc.' : staleScheduled ? cls.labelShort : time
 
   return (
     <div onClick={onClick} className={`group rounded-[18px] border ${isFav ? 'border-cyan-500/20' : 'border-white/[0.05]'} bg-gradient-to-b from-white/[0.03] to-transparent p-5 cursor-pointer hover:border-white/[0.12] hover:shadow-[0_12px_40px_-12px_rgba(0,0,0,0.4)] transition-all overflow-hidden`}>
@@ -1156,38 +1153,37 @@ function HighlightCard({ match: m, onClick }: { match: FDMatch; onClick: () => v
       <div className="flex items-center justify-between mb-3.5">
         <span className="text-[9px] font-semibold text-white/25 uppercase tracking-wider truncate mr-2">{reason}</span>
         <div className="flex items-center gap-1.5 shrink-0">
-          <FavoriteButton active={isFav} onClick={() => toggleFav({ canonicalMatchId: matchId, homeTeam: homeName, awayTeam: awayName, competition: m.competition.name, utcDate: m.utcDate })} size={12} />
-          <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-md whitespace-nowrap ${live ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : staleScheduled ? 'text-amber-400/60' : 'text-white/20'}`}>
-            {live && <span className="inline-block h-1 w-1 rounded-full bg-emerald-400 animate-pulse mr-1" />}
-            {statusLabel}
+          <FavoriteButton active={isFav} onClick={() => toggleFav({ canonicalMatchId: matchId, homeTeam: display.homeName, awayTeam: display.awayName, competition: m.competition.name, utcDate: m.utcDate })} size={12} />
+          <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-md whitespace-nowrap ${display.badgeTone === 'live' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : display.badgeTone === 'pending' ? 'text-amber-400/60' : 'text-white/20'}`}>
+            {cls.isLive && <span className="inline-block h-1 w-1 rounded-full bg-emerald-400 animate-pulse mr-1" />}
+            {display.badgeLabel}
           </span>
         </div>
       </div>
       {/* Match body — grid with fixed score column */}
       <div className="grid grid-cols-[1fr_72px_1fr] items-center gap-2 mb-3">
-        {/* Home */}
         <div className="flex items-center gap-2 justify-end min-w-0 overflow-hidden">
-          <span className="text-[12px] font-bold text-white/70 truncate text-right" title={homeName}>{homeName}</span>
-          <ClubLogo src={m.homeTeam.crest} name={homeName} size={28} />
+          <span className="text-[12px] font-bold text-white/70 truncate text-right" title={display.homeName}>{display.homeName}</span>
+          <ClubLogo src={display.homeLogo} name={display.homeName} size={28} />
         </div>
-        {/* Score */}
         <div className="flex items-center justify-center gap-1.5 shrink-0">
-          <span className="text-[20px] font-bold tabular-nums text-white">{m.score.fullTime.home ?? '-'}</span>
+          <span className="text-[20px] font-bold tabular-nums text-white">{display.homeScore ?? '-'}</span>
           <span className="text-[10px] text-white/10">:</span>
-          <span className="text-[20px] font-bold tabular-nums text-white">{m.score.fullTime.away ?? '-'}</span>
+          <span className="text-[20px] font-bold tabular-nums text-white">{display.awayScore ?? '-'}</span>
         </div>
-        {/* Away */}
         <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-          <ClubLogo src={m.awayTeam.crest} name={awayName} size={28} />
-          <span className="text-[12px] font-bold text-white/50 truncate" title={awayName}>{awayName}</span>
+          <ClubLogo src={display.awayLogo} name={display.awayName} size={28} />
+          <span className="text-[12px] font-bold text-white/50 truncate" title={display.awayName}>{display.awayName}</span>
         </div>
       </div>
       {/* Footer */}
       <div className="flex items-center justify-between">
-        <span className="text-[9px] text-white/20 truncate mr-2">{translateComp(m.competition.name)}</span>
+        <span className="text-[9px] text-white/20 truncate mr-2">{translateComp(display.competitionLabel)}</span>
         {insight && <span className="text-[9px] text-white/25 italic truncate">{insight}</span>}
       </div>
-      {staleScheduled && <span className="block text-[8px] text-amber-400/40 mt-1">Previsto {time}</span>}
+      {display.secondaryLabel && (display.statusKey === 'stale_pending' || display.statusKey === 'stale_strong') && (
+        <span className="block text-[8px] text-amber-400/40 mt-1">{display.secondaryLabel}</span>
+      )}
       <span className="block text-[9px] text-cyan-400/0 group-hover:text-cyan-400/60 mt-2 font-semibold transition-colors">Analisar →</span>
     </div>
   )
