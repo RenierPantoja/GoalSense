@@ -14,7 +14,7 @@
  * No push handlers are registered yet. When real backend + token management
  * lands, push/notificationclick handlers can be added here without rewrites.
  */
-const SW_VERSION = 'v5-2026-05-26'
+const SW_VERSION = 'v5-4-navigation-fix'
 const STATIC_CACHE = `gs-static-${SW_VERSION}`
 const SHELL_CACHE = `gs-shell-${SW_VERSION}`
 
@@ -64,8 +64,11 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
 
   // Strategy 1: Live data. Always network. Don't cache match results.
+  // If network fails, let it fail naturally (no fake fallback for live data).
   if (isApiRequest(url)) {
-    event.respondWith(fetch(request))
+    event.respondWith(
+      fetch(request).catch(() => new Response(JSON.stringify({ ok: false, error: 'network' }), { status: 503, headers: { 'Content-Type': 'application/json' } }))
+    )
     return
   }
 
@@ -89,16 +92,29 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Strategy 3: Navigations. Network-first, fall back to cached shell.
+  // For SPA routes like /app/live, /app/matches, the server may return 404
+  // since there's no physical file. We fall back to index.html which loads
+  // the React router and handles the route client-side.
   if (isNavigationRequest(request)) {
     event.respondWith((async () => {
       try {
         const fresh = await fetch(request)
+        // If the response is ok (200), cache it and return
         if (fresh.ok) {
           const cache = await caches.open(SHELL_CACHE)
           cache.put('/index.html', fresh.clone()).catch(() => undefined)
+          return fresh
         }
+        // Non-ok response (404, 500, etc.) for a SPA route: fall back to index.html
+        const cached = await caches.match('/index.html')
+        if (cached) return cached
+        // Last resort: try fetching index.html directly
+        const indexFresh = await fetch('/index.html')
+        if (indexFresh.ok) return indexFresh
+        // Nothing worked — return the original error response
         return fresh
       } catch (e) {
+        // Network failure: serve cached shell
         const cached = await caches.match('/index.html')
         if (cached) return cached
         return new Response('Sem conexão.', { status: 503, statusText: 'Service Unavailable', headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
