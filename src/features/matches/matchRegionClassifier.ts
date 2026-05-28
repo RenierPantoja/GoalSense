@@ -28,30 +28,75 @@ function norm(s: string): string {
 }
 
 // --- Brazilian clubs (keywords that appear in team names) ------------------
-// We use KEYWORDS (substrings) not exact matches, because providers send
-// names like "SC Corinthians Paulista", "CR Flamengo", "SE Palmeiras" etc.
+// We use KEYWORDS but with WORD BOUNDARY matching to avoid false positives
+// like "Sporting" matching "sport". Keywords are checked as whole words or
+// multi-word sequences within the normalized name.
 
-const BRAZILIAN_CLUB_KEYWORDS = [
-  'flamengo', 'palmeiras', 'corinthians', 'sao paulo', 'santos',
-  'vasco', 'botafogo', 'fluminense', 'gremio', 'internacional',
-  'cruzeiro', 'atletico mineiro', 'atletico mg', 'athletico paranaense',
-  'athletico pr', 'bahia', 'fortaleza', 'ceara', 'sport',
-  'vitoria', 'coritiba', 'goias', 'atletico goianiense', 'atletico go',
-  'bragantino', 'juventude', 'criciuma', 'cuiaba',
-  'america mineiro', 'america mg', 'paysandu', 'remo', 'avai',
-  'chapecoense', 'ponte preta', 'guarani', 'mirassol', 'novorizontino',
-  'operario', 'vila nova', 'crb', 'csa', 'nautico', 'santa cruz',
-  'botafogo sp', 'botafogo pb', 'abc', 'sampaio correa',
-  'tombense', 'londrina', 'ituano',
+// Safe single-word keywords (unique enough to not cause false positives)
+const BRAZIL_SAFE_KEYWORDS = [
+  'flamengo', 'palmeiras', 'corinthians', 'santos', 'vasco',
+  'botafogo', 'fluminense', 'gremio', 'internacional', 'cruzeiro',
+  'bahia', 'fortaleza', 'coritiba', 'chapecoense', 'mirassol',
+  'novorizontino', 'paysandu', 'remo', 'avai', 'guarani',
+  'juventude', 'criciuma', 'cuiaba', 'tombense', 'londrina', 'ituano',
+  'bragantino', 'nautico', 'abc', 'csa', 'crb',
 ]
+
+// Multi-word keywords (must appear as sequence)
+const BRAZIL_MULTIWORD_KEYWORDS = [
+  'sao paulo', 'atletico mineiro', 'atletico mg', 'athletico paranaense',
+  'athletico pr', 'atletico goianiense', 'atletico go',
+  'sport recife', 'sport club', 'sport c recife',
+  'america mineiro', 'america mg', 'vila nova', 'santa cruz',
+  'ponte preta', 'sampaio correa', 'botafogo sp', 'botafogo pb',
+  'red bull bragantino', 'rb bragantino',
+  'vasco da gama', 'ceara sc',
+]
+
+// Ambiguous single words that need context (opponent or competition must also be Brazilian)
+const BRAZIL_AMBIGUOUS_KEYWORDS = ['vitoria', 'ceara', 'goias', 'operario', 'sport']
 
 function isBrazilianClub(teamName: string): boolean {
   const n = norm(teamName)
   if (!n || n.length < 3) return false
-  for (const keyword of BRAZILIAN_CLUB_KEYWORDS) {
-    if (n.includes(keyword)) return true
+
+  // 1. Check safe single-word keywords with word boundary
+  for (const kw of BRAZIL_SAFE_KEYWORDS) {
+    if (hasWordBoundary(n, kw)) return true
   }
+
+  // 2. Check multi-word keywords (substring is fine for multi-word)
+  for (const kw of BRAZIL_MULTIWORD_KEYWORDS) {
+    if (n.includes(kw)) return true
+  }
+
+  // 3. Ambiguous keywords: only match with word boundary AND the name
+  //    doesn't start with a known false-positive prefix
+  for (const kw of BRAZIL_AMBIGUOUS_KEYWORDS) {
+    if (hasWordBoundary(n, kw) && !isFalsePositivePrefix(n)) return true
+  }
+
   return false
+}
+
+/** Check if `keyword` appears as a whole word in `text`. */
+function hasWordBoundary(text: string, keyword: string): boolean {
+  // Build a regex with word boundaries
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`\\b${escaped}\\b`).test(text)
+}
+
+/** Known prefixes that indicate a non-Brazilian club even if it contains
+ *  an ambiguous keyword like "sport" or "vitoria". */
+function isFalsePositivePrefix(normalizedName: string): boolean {
+  return (
+    normalizedName.startsWith('sporting') ||
+    normalizedName.startsWith('sportivo') ||
+    normalizedName.includes('sporting') ||
+    normalizedName.includes('sportivo') ||
+    normalizedName.includes('sports ') ||
+    normalizedName.includes(' sports')
+  )
 }
 
 // --- Brazilian competitions -----------------------------------------------
@@ -65,16 +110,15 @@ const BRAZIL_COMP_KEYWORDS = [
 
 const BRAZIL_COUNTRIES = new Set(['brazil', 'brasil'])
 
-// --- European clubs (keywords) --------------------------------------------
+// --- European clubs (keywords with word boundary) -------------------------
 
 const EUROPEAN_CLUB_KEYWORDS = [
   'real madrid', 'barcelona', 'manchester united', 'manchester city',
   'liverpool', 'arsenal', 'chelsea', 'tottenham', 'bayern',
   'borussia dortmund', 'dortmund', 'psg', 'paris saint',
-  'juventus', 'milan', 'inter', 'internazionale', 'napoli', 'roma',
-  'lazio', 'atalanta', 'fiorentina',
+  'juventus', 'napoli', 'roma', 'lazio', 'atalanta', 'fiorentina',
   'atletico madrid', 'atletico de madrid',
-  'benfica', 'porto', 'sporting',
+  'benfica', 'porto', 'sporting cp', 'sporting lisbon',
   'ajax', 'psv', 'feyenoord',
   'celtic', 'rangers',
   'galatasaray', 'fenerbahce', 'besiktas',
@@ -82,22 +126,45 @@ const EUROPEAN_CLUB_KEYWORDS = [
   'real betis', 'deportivo', 'espanyol', 'celta',
   'bayer leverkusen', 'leverkusen', 'rb leipzig', 'leipzig',
   'eintracht frankfurt', 'stuttgart', 'wolfsburg', 'monchengladbach',
-  'marseille', 'lyon', 'monaco', 'lille', 'nice', 'lens', 'rennes',
+  'marseille', 'lyon', 'monaco', 'lille', 'rennes',
   'newcastle', 'west ham', 'aston villa', 'brighton',
-  'nottingham forest', 'wolves', 'wolverhampton', 'crystal palace',
+  'nottingham forest', 'wolverhampton', 'crystal palace',
   'everton', 'fulham', 'bournemouth', 'brentford',
   'leicester', 'leeds', 'southampton',
   'rayo vallecano', 'getafe', 'osasuna', 'mallorca', 'girona',
   'torino', 'bologna', 'udinese', 'sassuolo', 'empoli', 'lecce',
   'genoa', 'cagliari', 'verona', 'monza', 'como',
+  'inter milan', 'internazionale', 'ac milan',
+]
+
+// Safe single-word European keywords (unique enough)
+const EUROPE_SAFE_SINGLE = [
+  'liverpool', 'arsenal', 'chelsea', 'tottenham', 'bayern',
+  'juventus', 'napoli', 'lazio', 'atalanta', 'fiorentina',
+  'benfica', 'ajax', 'psv', 'feyenoord', 'celtic', 'rangers',
+  'galatasaray', 'fenerbahce', 'besiktas', 'sevilla', 'villarreal',
+  'leverkusen', 'leipzig', 'stuttgart', 'wolfsburg',
+  'marseille', 'lyon', 'monaco', 'lille', 'rennes',
+  'newcastle', 'brighton', 'everton', 'fulham', 'bournemouth', 'brentford',
+  'leicester', 'leeds', 'southampton', 'getafe', 'osasuna', 'mallorca',
+  'girona', 'torino', 'bologna', 'udinese', 'empoli', 'lecce',
+  'genoa', 'cagliari', 'monza', 'espanyol', 'dortmund', 'psg',
 ]
 
 function isEuropeanClub(teamName: string): boolean {
   const n = norm(teamName)
   if (!n || n.length < 3) return false
-  for (const keyword of EUROPEAN_CLUB_KEYWORDS) {
-    if (n.includes(keyword)) return true
+
+  // Multi-word keywords (substring match is safe for multi-word)
+  for (const kw of EUROPEAN_CLUB_KEYWORDS) {
+    if (kw.includes(' ') && n.includes(kw)) return true
   }
+
+  // Single-word safe keywords with word boundary
+  for (const kw of EUROPE_SAFE_SINGLE) {
+    if (hasWordBoundary(n, kw)) return true
+  }
+
   return false
 }
 
