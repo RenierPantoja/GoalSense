@@ -750,12 +750,13 @@ function SingleMarkerButton({ event, xPercent, yPercent, sizePx, zIndex, muted, 
   if (event.assistName) parts.push(`assistência de ${event.assistName}`)
   const ariaLabel = parts.join(' · ')
   // Hit area is slightly bigger than the visual marker for easier click/tap.
-  const hitSize = Math.max(sizePx + 6, 24)
+  const hitSize = Math.max(sizePx + 6, 28)
   return (
     <button
       type="button"
       aria-label={ariaLabel}
       title={ariaLabel}
+      data-event-type={event.type}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
       onFocus={onHover}

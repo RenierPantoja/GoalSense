@@ -513,32 +513,31 @@ function MiniBallIcon({ size, accent }: { size: number; accent: string }) {
   )
 }
 
-// V2.9: Substitution — clean white arrows without dark badge.
-// No circle background. Just the glyph with a subtle drop shadow for contrast.
+// V2.10B: Substitution — pure white arrows, no background, no shadow circle.
 function SubstitutionIcon({ size }: { size: number }) {
   const r = size
-  // Arrow geometry: two opposing arrows (in/out swap)
-  const arrowLen = r * 0.7
-  const arrowHead = r * 0.28
-  const gap = r * 0.18
+  const arrowLen = r * 0.75
+  const arrowHead = r * 0.3
+  const gap = r * 0.22
 
   return (
     <g>
-      {/* Subtle halo for contrast against any curve color */}
-      <circle r={r * 0.95} fill="rgba(255,255,255,0.06)" />
-      {/* Drop shadow layer */}
-      <g stroke="rgba(0,0,0,0.4)" strokeWidth={Math.max(2.0, r * 0.18)} strokeLinecap="round" strokeLinejoin="round" fill="none">
-        <line x1={-arrowLen * 0.5} y1={-gap} x2={arrowLen * 0.5} y2={-gap} />
-        <line x1={-arrowLen * 0.5} y1={gap} x2={arrowLen * 0.5} y2={gap} />
-      </g>
-      {/* Main arrows — bright white */}
-      <g stroke="#f8fafc" strokeWidth={Math.max(1.4, r * 0.14)} strokeLinecap="round" strokeLinejoin="round" fill="none">
-        {/* Top arrow: pointing right (player in) */}
-        <line x1={-arrowLen * 0.5} y1={-gap} x2={arrowLen * 0.5} y2={-gap} />
-        <polyline points={`${arrowLen * 0.5 - arrowHead},${-gap - arrowHead * 0.7} ${arrowLen * 0.5},${-gap} ${arrowLen * 0.5 - arrowHead},${-gap + arrowHead * 0.7}`} />
-        {/* Bottom arrow: pointing left (player out) */}
-        <line x1={arrowLen * 0.5} y1={gap} x2={-arrowLen * 0.5} y2={gap} />
-        <polyline points={`${-arrowLen * 0.5 + arrowHead},${gap - arrowHead * 0.7} ${-arrowLen * 0.5},${gap} ${-arrowLen * 0.5 + arrowHead},${gap + arrowHead * 0.7}`} />
+      {/* Main arrows — bright white with built-in contrast via stroke outline */}
+      <g strokeLinecap="round" strokeLinejoin="round" fill="none">
+        {/* Dark outline for contrast (thin) */}
+        <g stroke="rgba(0,0,0,0.5)" strokeWidth={Math.max(2.8, r * 0.2)}>
+          <line x1={-arrowLen * 0.5} y1={-gap} x2={arrowLen * 0.5} y2={-gap} />
+          <polyline points={`${arrowLen * 0.5 - arrowHead},${-gap - arrowHead * 0.7} ${arrowLen * 0.5},${-gap} ${arrowLen * 0.5 - arrowHead},${-gap + arrowHead * 0.7}`} />
+          <line x1={arrowLen * 0.5} y1={gap} x2={-arrowLen * 0.5} y2={gap} />
+          <polyline points={`${-arrowLen * 0.5 + arrowHead},${gap - arrowHead * 0.7} ${-arrowLen * 0.5},${gap} ${-arrowLen * 0.5 + arrowHead},${gap + arrowHead * 0.7}`} />
+        </g>
+        {/* White foreground */}
+        <g stroke="#ffffff" strokeWidth={Math.max(1.6, r * 0.13)}>
+          <line x1={-arrowLen * 0.5} y1={-gap} x2={arrowLen * 0.5} y2={-gap} />
+          <polyline points={`${arrowLen * 0.5 - arrowHead},${-gap - arrowHead * 0.7} ${arrowLen * 0.5},${-gap} ${arrowLen * 0.5 - arrowHead},${-gap + arrowHead * 0.7}`} />
+          <line x1={arrowLen * 0.5} y1={gap} x2={-arrowLen * 0.5} y2={gap} />
+          <polyline points={`${-arrowLen * 0.5 + arrowHead},${gap - arrowHead * 0.7} ${-arrowLen * 0.5},${gap} ${-arrowLen * 0.5 + arrowHead},${gap + arrowHead * 0.7}`} />
+        </g>
       </g>
     </g>
   )
