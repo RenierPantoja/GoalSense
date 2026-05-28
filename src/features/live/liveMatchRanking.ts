@@ -39,7 +39,16 @@ function norm(s: string): string {
   return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/['\-.~]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-// --- Club tiers (keyword substring matching) ------------------------------
+// --- Club tiers with AUDIENCE ANCHOR scores ------------------------------
+// The anchor score represents how much a SINGLE club draws audience.
+// Hero selection uses max(homeAnchor, awayAnchor), not the sum.
+
+const TIER_A_GLOBAL_ELITE = 100  // Real Madrid, Barcelona, etc.
+const TIER_B_CONTINENTAL_GIANT = 90  // Flamengo, River Plate, Corinthians, etc.
+const TIER_C_NATIONAL_GIANT = 78  // Fluminense, Peñarol, Vasco, etc.
+const TIER_D_REGIONAL_STRONG = 62  // Bragantino, Fortaleza, Ind. Santa Fe, etc.
+const TIER_E_KNOWN = 35  // Blooming, Platense, Carabobo, etc.
+const TIER_F_LOW = 5
 
 const TIER1_GLOBAL_ELITE: string[] = [
   'real madrid', 'barcelona', 'manchester united', 'manchester city',
@@ -48,18 +57,24 @@ const TIER1_GLOBAL_ELITE: string[] = [
   'tottenham',
 ]
 
-const TIER2_GIANTS: string[] = [
-  'flamengo', 'palmeiras', 'corinthians', 'sao paulo', 'santos',
-  'vasco', 'botafogo', 'fluminense', 'gremio', 'internacional',
+// Continental giants: clubs with massive fanbases that draw continental/global attention
+const TIER2A_CONTINENTAL_GIANTS: string[] = [
+  'flamengo', 'palmeiras', 'corinthians', 'sao paulo',
+  'river plate', 'boca juniors',
+  'milan', 'ac milan', 'inter milan', 'internazionale', 'napoli', 'roma',
+  'benfica', 'porto',
+]
+
+// National giants: very popular but slightly below continental draw
+const TIER2B_NATIONAL_GIANTS: string[] = [
+  'santos', 'vasco', 'botafogo', 'fluminense', 'gremio', 'internacional',
   'cruzeiro', 'atletico mineiro', 'atletico mg',
-  'river plate', 'boca juniors', 'ca independiente', 'racing club',
-  'san lorenzo', 'estudiantes', 'velez',
+  'ca independiente', 'racing club', 'san lorenzo', 'estudiantes', 'velez',
   'penarol', 'peñarol', 'nacional',
   'colo colo', 'colo-colo', 'olimpia', 'cerro porteno',
   'libertad', 'ldu', 'liga de quito', 'atletico nacional',
   'america de cali', 'millonarios',
-  'milan', 'ac milan', 'inter milan', 'internazionale', 'napoli', 'roma',
-  'benfica', 'porto', 'sporting cp',
+  'sporting cp', 'ajax', 'psv',
 ]
 
 const TIER3_STRONG: string[] = [
@@ -70,13 +85,14 @@ const TIER3_STRONG: string[] = [
   'independiente rivadavia', 'independiente petrolero',
   'cruz azul', 'pumas', 'club america', 'chivas', 'tigres', 'monterrey',
   'lafc', 'la galaxy', 'seattle sounders', 'inter miami',
-  'ajax', 'psv', 'feyenoord', 'celtic', 'rangers',
+  'feyenoord', 'celtic', 'rangers',
   'galatasaray', 'fenerbahce', 'besiktas',
   'sevilla', 'valencia', 'villarreal', 'real sociedad', 'real betis',
   'lazio', 'atalanta', 'fiorentina',
   'marseille', 'lyon', 'monaco',
   'newcastle', 'west ham', 'aston villa', 'brighton',
   'leverkusen', 'leipzig', 'eintracht frankfurt',
+  'bolivar',
 ]
 
 // Ambiguous keywords that need word boundary matching to avoid false positives
@@ -84,10 +100,8 @@ const AMBIGUOUS_CLUB_KEYWORDS = new Set(['sport', 'racing', 'nacional', 'vitoria
 
 function hasWordMatch(text: string, keyword: string): boolean {
   if (AMBIGUOUS_CLUB_KEYWORDS.has(keyword)) {
-    // Use word boundary for ambiguous keywords
     const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     if (!new RegExp(`\\b${escaped}\\b`).test(text)) return false
-    // Reject false positives
     if (keyword === 'sport' && (text.includes('sporting') || text.includes('sportivo') || text.includes('sports '))) return false
     if (keyword === 'independiente' && (text.includes('santa fe') || text.includes('del valle') || text.includes('rivadavia') || text.includes('petrolero'))) return false
     if (keyword === 'racing' && text.includes('racing louisville')) return false
@@ -97,12 +111,24 @@ function hasWordMatch(text: string, keyword: string): boolean {
   return text.includes(keyword)
 }
 
-function getClubScore(teamName: string): number {
+/** Returns the audience anchor score for a single team. */
+function getClubAnchor(teamName: string): number {
   const n = norm(teamName)
-  if (!n) return 0
-  for (const kw of TIER1_GLOBAL_ELITE) { if (hasWordMatch(n, kw)) return 70 }
-  for (const kw of TIER2_GIANTS) { if (hasWordMatch(n, kw)) return 55 }
-  for (const kw of TIER3_STRONG) { if (hasWordMatch(n, kw)) return 38 }
+  if (!n) return TIER_F_LOW
+  for (const kw of TIER1_GLOBAL_ELITE) { if (hasWordMatch(n, kw)) return TIER_A_GLOBAL_ELITE }
+  for (const kw of TIER2A_CONTINENTAL_GIANTS) { if (hasWordMatch(n, kw)) return TIER_B_CONTINENTAL_GIANT }
+  for (const kw of TIER2B_NATIONAL_GIANTS) { if (hasWordMatch(n, kw)) return TIER_C_NATIONAL_GIANT }
+  for (const kw of TIER3_STRONG) { if (hasWordMatch(n, kw)) return TIER_D_REGIONAL_STRONG }
+  return TIER_E_KNOWN
+}
+
+/** Legacy compat — returns a score for sum-based calculations. */
+function getClubScore(teamName: string): number {
+  const anchor = getClubAnchor(teamName)
+  if (anchor >= TIER_A_GLOBAL_ELITE) return 70
+  if (anchor >= TIER_B_CONTINENTAL_GIANT) return 55
+  if (anchor >= TIER_C_NATIONAL_GIANT) return 55
+  if (anchor >= TIER_D_REGIONAL_STRONG) return 38
   return 5
 }
 
@@ -242,34 +268,29 @@ export function scoreLiveMatchForFeature(fx: LiveFixture, options: RankingOption
 
 /**
  * Sort fixtures by featured ranking score (descending).
- * Includes a big-club priority guard: if scores are within 25 points,
- * the fixture with the higher maxClubScore wins.
+ * Uses audience anchor as the primary tie-breaker within 25 points.
  */
 export function sortByFeaturedRanking(
   fixtures: LiveFixture[],
   options: { isFavoriteTeam?: (name: string) => boolean; statsMap?: Map<number, FixtureStats> } = {},
 ): LiveFixture[] {
-  // Pre-compute scores and club data for stable sorting
   const scored = fixtures.map(fx => {
     const result = scoreLiveMatchForFeature(fx, { isFavoriteTeam: options.isFavoriteTeam, stats: options.statsMap?.get(fx.id), allFixtures: fixtures })
-    const homeClub = getClubScore(fx.homeTeam.name)
-    const awayClub = getClubScore(fx.awayTeam.name)
-    return { fx, score: result.score, maxClub: Math.max(homeClub, awayClub), totalClub: homeClub + awayClub, elapsed: fx.status.elapsed || 0 }
+    const homeAnchor = getClubAnchor(fx.homeTeam.name)
+    const awayAnchor = getClubAnchor(fx.awayTeam.name)
+    const maxAnchor = Math.max(homeAnchor, awayAnchor)
+    return { fx, score: result.score, maxAnchor, elapsed: fx.status.elapsed || 0 }
   })
 
   scored.sort((a, b) => {
-    // Primary: score difference
     const scoreDiff = b.score - a.score
-    if (Math.abs(scoreDiff) > 25) return scoreDiff
-
-    // Big club priority guard: within 25 points, prefer higher maxClub
-    if (b.maxClub !== a.maxClub) return b.maxClub - a.maxClub
-    if (b.totalClub !== a.totalClub) return b.totalClub - a.totalClub
-
-    // Then by raw score
+    // If score difference is large (>30), trust the score
+    if (Math.abs(scoreDiff) > 30) return scoreDiff
+    // Within 30 points: audience anchor decides (the bigger club wins)
+    if (b.maxAnchor !== a.maxAnchor) return b.maxAnchor - a.maxAnchor
+    // Same anchor tier: use raw score
     if (scoreDiff !== 0) return scoreDiff
-
-    // Final tie-breakers
+    // Final: elapsed
     return b.elapsed - a.elapsed
   })
 
