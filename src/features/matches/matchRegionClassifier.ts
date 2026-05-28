@@ -5,10 +5,12 @@
  * Brazilian club is playing (even in Libertadores, friendlies, etc.).
  * Same logic for "Europa" with European competitions/clubs.
  *
+ * Detection uses KEYWORD SUBSTRING matching on normalized names (lowercase,
+ * no accents, no hyphens). This is intentionally more permissive than exact
+ * set matching because providers send wildly different name formats.
+ *
  * No mocks. No invented data. No API calls.
  */
-
-import { normalizeTeamName } from '@/features/providers/teamNameNormalizer'
 
 // --- Types ----------------------------------------------------------------
 
@@ -22,34 +24,32 @@ export interface RegionMatchResult {
 // --- Normalization --------------------------------------------------------
 
 function norm(s: string): string {
-  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/['\-\.~]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-// --- Brazilian clubs ------------------------------------------------------
+// --- Brazilian clubs (keywords that appear in team names) ------------------
+// We use KEYWORDS (substrings) not exact matches, because providers send
+// names like "SC Corinthians Paulista", "CR Flamengo", "SE Palmeiras" etc.
 
-const BRAZILIAN_CLUBS = new Set([
+const BRAZILIAN_CLUB_KEYWORDS = [
   'flamengo', 'palmeiras', 'corinthians', 'sao paulo', 'santos',
-  'vasco', 'vasco da gama', 'botafogo', 'fluminense',
-  'gremio', 'internacional', 'cruzeiro',
-  'atletico-mg', 'atletico mineiro', 'atletico mg',
-  'athletico-pr', 'athletico paranaense', 'ath paranaense',
-  'bahia', 'fortaleza', 'ceara', 'sport', 'sport recife',
-  'vitoria', 'coritiba', 'goias', 'atletico-go', 'atletico goianiense',
-  'bragantino', 'red bull bragantino', 'rb bragantino',
-  'juventude', 'criciuma', 'cuiaba', 'america-mg', 'america mineiro',
-  'paysandu', 'remo', 'avai', 'chapecoense', 'ponte preta',
-  'guarani', 'mirassol', 'novorizontino', 'operario',
-  'vila nova', 'crb', 'csa', 'nautico', 'santa cruz',
-  'botafogo-sp', 'botafogo pb', 'abc', 'sampaio correa',
-  'tombense', 'londrina', 'ituano', 'athletic club',
-])
+  'vasco', 'botafogo', 'fluminense', 'gremio', 'internacional',
+  'cruzeiro', 'atletico mineiro', 'atletico mg', 'athletico paranaense',
+  'athletico pr', 'bahia', 'fortaleza', 'ceara', 'sport',
+  'vitoria', 'coritiba', 'goias', 'atletico goianiense', 'atletico go',
+  'bragantino', 'juventude', 'criciuma', 'cuiaba',
+  'america mineiro', 'america mg', 'paysandu', 'remo', 'avai',
+  'chapecoense', 'ponte preta', 'guarani', 'mirassol', 'novorizontino',
+  'operario', 'vila nova', 'crb', 'csa', 'nautico', 'santa cruz',
+  'botafogo sp', 'botafogo pb', 'abc', 'sampaio correa',
+  'tombense', 'londrina', 'ituano',
+]
 
 function isBrazilianClub(teamName: string): boolean {
-  const n = normalizeTeamName(teamName)
-  if (BRAZILIAN_CLUBS.has(n)) return true
-  // Fuzzy: check if normalized name starts with a known club
-  for (const club of BRAZILIAN_CLUBS) {
-    if (n.startsWith(club) || club.startsWith(n)) return true
+  const n = norm(teamName)
+  if (!n || n.length < 3) return false
+  for (const keyword of BRAZILIAN_CLUB_KEYWORDS) {
+    if (n.includes(keyword)) return true
   }
   return false
 }
@@ -65,23 +65,23 @@ const BRAZIL_COMP_KEYWORDS = [
 
 const BRAZIL_COUNTRIES = new Set(['brazil', 'brasil'])
 
-// --- European clubs -------------------------------------------------------
+// --- European clubs (keywords) --------------------------------------------
 
-const EUROPEAN_CLUBS = new Set([
+const EUROPEAN_CLUB_KEYWORDS = [
   'real madrid', 'barcelona', 'manchester united', 'manchester city',
-  'liverpool', 'arsenal', 'chelsea', 'tottenham', 'bayern', 'bayern munich',
-  'borussia dortmund', 'dortmund', 'psg', 'paris saint-germain',
-  'juventus', 'milan', 'ac milan', 'inter', 'internazionale', 'napoli', 'roma',
+  'liverpool', 'arsenal', 'chelsea', 'tottenham', 'bayern',
+  'borussia dortmund', 'dortmund', 'psg', 'paris saint',
+  'juventus', 'milan', 'inter', 'internazionale', 'napoli', 'roma',
   'lazio', 'atalanta', 'fiorentina',
   'atletico madrid', 'atletico de madrid',
-  'benfica', 'porto', 'sporting', 'sporting cp',
+  'benfica', 'porto', 'sporting',
   'ajax', 'psv', 'feyenoord',
   'celtic', 'rangers',
   'galatasaray', 'fenerbahce', 'besiktas',
-  'sevilla', 'valencia', 'villarreal', 'athletic club', 'real sociedad',
-  'real betis', 'deportivo la coruna', 'espanyol', 'celta vigo',
-  'bayer leverkusen', 'leverkusen', 'rb leipzig', 'eintracht frankfurt',
-  'stuttgart', 'wolfsburg', 'monchengladbach',
+  'sevilla', 'valencia', 'villarreal', 'athletic bilbao', 'real sociedad',
+  'real betis', 'deportivo', 'espanyol', 'celta',
+  'bayer leverkusen', 'leverkusen', 'rb leipzig', 'leipzig',
+  'eintracht frankfurt', 'stuttgart', 'wolfsburg', 'monchengladbach',
   'marseille', 'lyon', 'monaco', 'lille', 'nice', 'lens', 'rennes',
   'newcastle', 'west ham', 'aston villa', 'brighton',
   'nottingham forest', 'wolves', 'wolverhampton', 'crystal palace',
@@ -90,13 +90,13 @@ const EUROPEAN_CLUBS = new Set([
   'rayo vallecano', 'getafe', 'osasuna', 'mallorca', 'girona',
   'torino', 'bologna', 'udinese', 'sassuolo', 'empoli', 'lecce',
   'genoa', 'cagliari', 'verona', 'monza', 'como',
-])
+]
 
 function isEuropeanClub(teamName: string): boolean {
-  const n = normalizeTeamName(teamName)
-  if (EUROPEAN_CLUBS.has(n)) return true
-  for (const club of EUROPEAN_CLUBS) {
-    if (n.startsWith(club) || club.startsWith(n)) return true
+  const n = norm(teamName)
+  if (!n || n.length < 3) return false
+  for (const keyword of EUROPEAN_CLUB_KEYWORDS) {
+    if (n.includes(keyword)) return true
   }
   return false
 }
