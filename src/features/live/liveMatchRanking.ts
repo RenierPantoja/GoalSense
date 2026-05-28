@@ -78,12 +78,27 @@ const TIER3_STRONG: string[] = [
   'leverkusen', 'leipzig', 'eintracht frankfurt',
 ]
 
+// Ambiguous keywords that need word boundary matching to avoid false positives
+const AMBIGUOUS_CLUB_KEYWORDS = new Set(['sport', 'racing', 'independiente', 'nacional', 'vitoria', 'athletico'])
+
+function hasWordMatch(text: string, keyword: string): boolean {
+  if (AMBIGUOUS_CLUB_KEYWORDS.has(keyword)) {
+    // Use word boundary for ambiguous keywords
+    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    if (!new RegExp(`\\b${escaped}\\b`).test(text)) return false
+    // Also reject if it's actually "sporting", "sportivo", etc.
+    if (keyword === 'sport' && (text.includes('sporting') || text.includes('sportivo') || text.includes('sports '))) return false
+    return true
+  }
+  return text.includes(keyword)
+}
+
 function getClubScore(teamName: string): number {
   const n = norm(teamName)
   if (!n) return 0
-  for (const kw of TIER1_GLOBAL_ELITE) { if (n.includes(kw)) return 70 }
-  for (const kw of TIER2_GIANTS) { if (n.includes(kw)) return 55 }
-  for (const kw of TIER3_STRONG) { if (n.includes(kw)) return 38 }
+  for (const kw of TIER1_GLOBAL_ELITE) { if (hasWordMatch(n, kw)) return 70 }
+  for (const kw of TIER2_GIANTS) { if (hasWordMatch(n, kw)) return 55 }
+  for (const kw of TIER3_STRONG) { if (hasWordMatch(n, kw)) return 38 }
   return 5
 }
 
