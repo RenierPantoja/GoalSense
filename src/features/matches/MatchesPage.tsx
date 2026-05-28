@@ -13,6 +13,7 @@ import { useFavorites } from '@/context/FavoritesContext'
 import { useViewMode } from '@/context/ViewModeContext'
 import { FavoriteButton } from '@/components/ui/FavoriteButton'
 import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
+import { isUpcomingMatch, isStaleScheduled } from '@/lib/matchTemporalGuard'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -228,7 +229,7 @@ export function MatchesPage() {
   const stats = useMemo(() => {
     const l = matches.filter(m => mapStatus(m.status).live).length
     const f = matches.filter(m => mapStatus(m.status).finished).length
-    const u = matches.filter(m => mapStatus(m.status).upcoming).length
+    const u = matches.filter(m => isUpcomingMatch({ status: m.status, utcDate: m.utcDate })).length
     const br = matches.filter(m => isBrazil(m)).length
     const eu = matches.filter(m => isEurope(m)).length
     const dominant = matches.filter(m => isDominant(m)).length
@@ -247,7 +248,7 @@ export function MatchesPage() {
     switch (filter) {
       case 'main': return list.filter(m => getMatchImportanceScore(m) >= 90 || isFavoriteTeam(m.homeTeam.shortName || m.homeTeam.name) || isFavoriteTeam(m.awayTeam.shortName || m.awayTeam.name)).sort((a, b) => calcImportance(b) - calcImportance(a))
       case 'live': return list.filter(m => mapStatus(m.status).live)
-      case 'upcoming': return list.filter(m => mapStatus(m.status).upcoming)
+      case 'upcoming': return list.filter(m => isUpcomingMatch({ status: m.status, utcDate: m.utcDate }))
       case 'finished': return list.filter(m => mapStatus(m.status).finished)
       case 'brazil': return list.filter(m => isBrazil(m))
       case 'europe': return list.filter(m => isEurope(m))
@@ -261,7 +262,7 @@ export function MatchesPage() {
 
   const grouped = useMemo(() => { const map = new Map<string, FDMatch[]>(); for (const m of filtered) { const k = m.competition.name; if (!map.has(k)) map.set(k, []); map.get(k)!.push(m) }; return map }, [filtered])
   const curated = useMemo(() => curateMatches(matches, isFavoriteTeam, (id) => isFavoriteMatch(id), (name) => isFavoriteLeague(name)), [matches, isFavoriteTeam, isFavoriteMatch, isFavoriteLeague])
-  const sidebarNext = useMemo(() => curated.soonMatches.length > 0 ? curated.soonMatches.slice(0, 4) : matches.filter(m => mapStatus(m.status).upcoming).sort((a, b) => getMatchImportanceScore(b) - getMatchImportanceScore(a)).slice(0, 4), [curated, matches])
+  const sidebarNext = useMemo(() => curated.soonMatches.length > 0 ? curated.soonMatches.slice(0, 4) : matches.filter(m => isUpcomingMatch({ status: m.status, utcDate: m.utcDate })).sort((a, b) => getMatchImportanceScore(b) - getMatchImportanceScore(a)).slice(0, 4), [curated, matches])
   const sidebarTop = useMemo(() => sortMatchesByImportance(matches).slice(0, 6), [matches])
   const mainMatch = useMemo(() => getMainGlobalMatch(matches), [matches])
   const brazilMatch = useMemo(() => getBrazilFeaturedMatch(matches), [matches])
@@ -437,7 +438,7 @@ export function MatchesPage() {
               Array.from(grouped.entries()).map(([comp, items]) => {
                 const live = items.filter(i => mapStatus(i.status).live).length
                 const fin = items.filter(i => mapStatus(i.status).finished).length
-                const upc = items.filter(i => mapStatus(i.status).upcoming).length
+                const upc = items.filter(i => isUpcomingMatch({ status: i.status, utcDate: i.utcDate })).length
                 const country = getCountry(items[0])
                 return (
                   <section key={comp}>
@@ -490,7 +491,7 @@ export function MatchesPage() {
             })()}
             {/* Próximos principais */}
             {(() => {
-              const upcoming = curated.mainMatches.filter(m => mapStatus(m.status).upcoming).slice(0, 3)
+              const upcoming = curated.mainMatches.filter(m => isUpcomingMatch({ status: m.status, utcDate: m.utcDate })).slice(0, 3)
               if (upcoming.length === 0) return null
               return (
                 <div className="rounded-[20px] border border-white/[0.05] bg-white/[0.015] p-5">
@@ -1022,7 +1023,7 @@ function HighlightsView({ matches, openMatch }: { matches: FDMatch[]; openMatch:
   const brazil = rest.filter(m => isBrazil(m))
   const europe = rest.filter(m => isEurope(m) && !isBrazil(m))
   const fin = rest.filter(m => mapStatus(m.status).finished && !isBrazil(m) && !isEurope(m))
-  const upcoming = rest.filter(m => mapStatus(m.status).upcoming && !isBrazil(m) && !isEurope(m))
+  const upcoming = rest.filter(m => isUpcomingMatch({ status: m.status, utcDate: m.utcDate }) && !isBrazil(m) && !isEurope(m))
   const other = rest.filter(m => !brazil.includes(m) && !europe.includes(m) && !fin.includes(m) && !upcoming.includes(m))
 
   return (
