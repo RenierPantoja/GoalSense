@@ -237,6 +237,19 @@ export function MatchesPage() {
     }).catch(e => setError((e as Error).message)).finally(() => setLoading(false))
   }, [date, reloadKey])
 
+  // V3: Auto-refresh when there are stale/pending matches (every 45s while visible)
+  useEffect(() => {
+    const hasPending = matches.some(m => {
+      const cls = classifyMatch(m)
+      return cls.isStaleScheduled || cls.isStartingSoon
+    })
+    if (!hasPending || matches.length === 0) return
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') setReloadKey(k => k + 1)
+    }, 45_000)
+    return () => clearInterval(id)
+  }, [matches])
+
   const stats = useMemo(() => {
     const now = new Date()
     const classifications = matches.map(m => classifyMatch(m, now))
