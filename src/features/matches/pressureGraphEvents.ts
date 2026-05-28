@@ -100,10 +100,10 @@ function refineType(ev: NormalizedEvent): PressureGraphEventType {
   // line is concrete — aggregated counts never reach this path because the
   // upstream normalizer requires a `clock`/event line.
   if (ev.type === 'shot') {
-    if (lower.includes('off target') || lower.includes('off the target') || lower.includes('misses') || lower.includes('wide of') || lower.includes('over the bar')) {
+    if (lower.includes('off target') || lower.includes('off the target') || lower.includes('misses') || lower.includes('wide of') || lower.includes('over the bar') || lower.includes('para fora') || lower.includes('por cima') || lower.includes('wide') || lower.includes('missed')) {
       return 'shot_off_target'
     }
-    if (lower.includes('on target') || lower.includes('saved') || lower.includes('blocked') || lower.includes('parries') || lower.includes('strikes the post') || lower.includes('hits the post') || lower.includes('hits the bar')) {
+    if (lower.includes('on target') || lower.includes('saved') || lower.includes('blocked') || lower.includes('parries') || lower.includes('strikes the post') || lower.includes('hits the post') || lower.includes('hits the bar') || lower.includes('no alvo') || lower.includes('defendid') || lower.includes('goleiro') || lower.includes('goalkeeper') || lower.includes('attempt saved')) {
       return 'shot_on_target'
     }
     // Generic shot without verb: keep visible as off-target so it does not

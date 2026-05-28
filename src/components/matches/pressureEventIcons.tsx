@@ -317,8 +317,7 @@ export interface PressureEventIconBoxProps {
   teamAccent?: string
 }
 
-// Per-type internal radius hint (in user units within the 32x32 viewBox).
-// V2.7: tuned per type for proportional fill.
+// V2.8: internal sizes tuned for larger pixel boxes.
 function internalSizeFor(type: PressureGraphEventType): number {
   switch (type) {
     case 'goal':
@@ -329,23 +328,24 @@ function internalSizeFor(type: PressureGraphEventType): number {
     case 'yellow_card':
     case 'red_card':
     case 'second_yellow':
-      return 11.5
+      return 12
     case 'shot_on_target':
-      return 11
+      return 12
     case 'shot_off_target':
-      return 11
+      return 12.5
     case 'substitution':
-      return 8.5
+      return 11
     case 'var':
-      return 9
+      return 9.5
     default:
-      return 8
+      return 9
   }
 }
 
 export function PressureEventIconBox({ type, sizePx, selected, hovered, muted, teamAccent }: PressureEventIconBoxProps) {
   const internalSize = internalSizeFor(type)
-  const opacity = muted ? 0.55 : 1
+  // V2.8: muted opacity raised — secondary events must remain visible
+  const opacity = muted ? 0.72 : 1
   const scale = hovered ? 1.04 : 1
   return (
     <span
@@ -484,14 +484,12 @@ function SoccerBallBox(props: { size: number; variant: 'goal' | 'own_goal' | 'pe
   )
 }
 
-// V2.7: Mini ball for shot_on_target — smaller than goal, with accent ring.
-// Communicates "shot at goal" without being confused with an actual goal.
+// V2.8: Mini ball for shot_on_target — bright white ball with cyan ring.
 function MiniBallIcon({ size, accent }: { size: number; accent: string }) {
   const r = size
-  const ballR = r * 0.6
+  const ballR = r * 0.62
   const badgeR = r * 1.0
 
-  // Simplified ball: circle + small pentagon hint
   const pr = ballR * 0.35
   const pentPoints = Array.from({ length: 5 }, (_, i) => {
     const angle = (i * 72 - 90) * (Math.PI / 180)
@@ -502,35 +500,34 @@ function MiniBallIcon({ size, accent }: { size: number; accent: string }) {
   return (
     <g>
       {/* Halo */}
-      <circle r={badgeR * 1.3} fill={accent} opacity="0.15" />
+      <circle r={badgeR * 1.3} fill={accent} opacity="0.18" />
       {/* Badge */}
-      <circle r={badgeR} fill="rgba(8,11,18,0.9)" stroke={accent} strokeWidth={Math.max(0.6, badgeR * 0.12)} />
-      {/* Ball */}
-      <circle r={ballR} fill="#ffffff" stroke="#cbd5e1" strokeWidth={Math.max(0.5, ballR * 0.08)} />
+      <circle r={badgeR} fill="rgba(8,11,18,0.9)" stroke={accent} strokeWidth={Math.max(0.7, badgeR * 0.12)} />
+      {/* Ball — bright white */}
+      <circle r={ballR} fill="#ffffff" stroke="#e2e8f0" strokeWidth={Math.max(0.6, ballR * 0.08)} />
       {/* Pentagon hint */}
-      <path d={pentPath} fill="#475569" stroke="#334155" strokeWidth={Math.max(0.3, ballR * 0.05)} strokeLinejoin="round" />
+      <path d={pentPath} fill="#334155" stroke="#475569" strokeWidth={Math.max(0.4, ballR * 0.06)} strokeLinejoin="round" />
       {/* Highlight */}
-      <ellipse cx={-ballR * 0.3} cy={-ballR * 0.3} rx={ballR * 0.2} ry={ballR * 0.12} fill="rgba(255,255,255,0.5)" />
+      <ellipse cx={-ballR * 0.3} cy={-ballR * 0.3} rx={ballR * 0.22} ry={ballR * 0.12} fill="rgba(255,255,255,0.55)" />
     </g>
   )
 }
 
-// V2.7: Compact substitution icon — small badge with simple swap arrows.
-// Deliberately minimal so it doesn't compete with goals/cards.
+// V2.8: Substitution icon — bright white arrows for visibility.
 function SubstitutionIcon({ size }: { size: number }) {
   const r = size
-  const badgeR = r * 0.9
+  const badgeR = r * 0.95
 
   return (
     <g>
       {/* Badge */}
-      <circle r={badgeR} fill="rgba(8,11,18,0.85)" stroke="#64748b" strokeWidth={Math.max(0.4, badgeR * 0.1)} opacity="0.8" />
-      {/* Swap arrows: up-right and down-left */}
-      <g stroke="#94a3b8" strokeWidth={Math.max(0.8, r * 0.1)} strokeLinecap="round" strokeLinejoin="round" fill="none">
-        {/* Arrow going up-right (in) */}
+      <circle r={badgeR} fill="rgba(8,11,18,0.88)" stroke="rgba(255,255,255,0.2)" strokeWidth={Math.max(0.5, badgeR * 0.1)} />
+      {/* Swap arrows in white */}
+      <g stroke="#f1f5f9" strokeWidth={Math.max(1.0, r * 0.12)} strokeLinecap="round" strokeLinejoin="round" fill="none">
+        {/* Arrow up-right (in) */}
         <path d={`M ${-r * 0.35} ${r * 0.15} L ${r * 0.15} ${-r * 0.35}`} />
         <path d={`M ${r * 0.15} ${-r * 0.35} L ${r * 0.15} ${-r * 0.1} M ${r * 0.15} ${-r * 0.35} L ${-r * 0.08} ${-r * 0.35}`} />
-        {/* Arrow going down-left (out) */}
+        {/* Arrow down-left (out) */}
         <path d={`M ${r * 0.35} ${-r * 0.15} L ${-r * 0.15} ${r * 0.35}`} />
         <path d={`M ${-r * 0.15} ${r * 0.35} L ${-r * 0.15} ${r * 0.1} M ${-r * 0.15} ${r * 0.35} L ${r * 0.08} ${r * 0.35}`} />
       </g>
@@ -538,37 +535,37 @@ function SubstitutionIcon({ size }: { size: number }) {
   )
 }
 
-// V2.6B: Custom goalpost icon — bolder posts, thicker crossbar, clearer ball.
+// V2.8: Custom goalpost icon — bright white strokes for visibility.
 function GoalpostIcon({ size }: { size: number }) {
   const r = size
   const badgeR = r * 1.05
   const postH = r * 1.0
   const postW = r * 1.3
   const barY = -postH * 0.45
-  const postStroke = Math.max(1.2, r * 0.12)
+  const postStroke = Math.max(1.4, r * 0.13)
 
   return (
     <g>
       {/* Halo */}
-      <circle r={badgeR * 1.35} fill="#94a3b8" opacity="0.12" />
+      <circle r={badgeR * 1.35} fill="#e2e8f0" opacity="0.12" />
       {/* Glass badge */}
-      <circle r={badgeR} fill="rgba(8,11,18,0.92)" stroke="#64748b" strokeWidth={Math.max(0.6, badgeR * 0.1)} opacity="0.95" />
-      {/* Goalpost: two vertical posts + crossbar — thick white */}
-      <g stroke="#f1f5f9" strokeWidth={postStroke} strokeLinecap="round" strokeLinejoin="round" fill="none">
+      <circle r={badgeR} fill="rgba(8,11,18,0.92)" stroke="rgba(255,255,255,0.22)" strokeWidth={Math.max(0.7, badgeR * 0.1)} />
+      {/* Goalpost: bright white posts + crossbar */}
+      <g stroke="#f8fafc" strokeWidth={postStroke} strokeLinecap="round" strokeLinejoin="round" fill="none">
         <line x1={-postW * 0.5} y1={barY} x2={-postW * 0.5} y2={postH * 0.4} />
         <line x1={postW * 0.5} y1={barY} x2={postW * 0.5} y2={postH * 0.4} />
         <line x1={-postW * 0.5} y1={barY} x2={postW * 0.5} y2={barY} />
       </g>
-      {/* Net hint (subtle diagonal lines inside goal) */}
-      <g stroke="#475569" strokeWidth={Math.max(0.4, r * 0.035)} opacity="0.4">
+      {/* Net hint */}
+      <g stroke="#94a3b8" strokeWidth={Math.max(0.4, r * 0.035)} opacity="0.35">
         <line x1={-postW * 0.3} y1={barY + postH * 0.15} x2={-postW * 0.15} y2={postH * 0.35} />
         <line x1={0} y1={barY + postH * 0.1} x2={0} y2={postH * 0.35} />
         <line x1={postW * 0.3} y1={barY + postH * 0.15} x2={postW * 0.15} y2={postH * 0.35} />
       </g>
-      {/* Ball flying away (top-right) */}
-      <circle cx={postW * 0.6 + r * 0.15} cy={barY - r * 0.35} r={r * 0.2} fill="#94a3b8" stroke="#64748b" strokeWidth="0.5" />
+      {/* Ball flying away — bright */}
+      <circle cx={postW * 0.6 + r * 0.15} cy={barY - r * 0.35} r={r * 0.2} fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="0.6" />
       {/* Motion trail */}
-      <line x1={postW * 0.35} y1={barY - r * 0.05} x2={postW * 0.55 + r * 0.05} y2={barY - r * 0.28} stroke="#94a3b8" strokeWidth={Math.max(0.5, r * 0.05)} strokeLinecap="round" opacity="0.5" strokeDasharray="1.5 1" />
+      <line x1={postW * 0.35} y1={barY - r * 0.05} x2={postW * 0.55 + r * 0.05} y2={barY - r * 0.28} stroke="#cbd5e1" strokeWidth={Math.max(0.6, r * 0.06)} strokeLinecap="round" opacity="0.6" strokeDasharray="1.5 1" />
     </g>
   )
 }

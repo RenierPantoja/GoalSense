@@ -57,24 +57,24 @@ interface Props {
 }
 
 // --- Marker sizing per type (CSS pixels) ---
-// V2.7: proportional hierarchy. Goals dominate, substitutions are minimal.
+// V2.8: readability fix. Secondary events (shots, subs) are larger and brighter.
 
 const MARKER_SIZES_PX: Record<PressureGraphEventType, number> = {
   goal: 34,
   own_goal: 34,
-  penalty_scored: 33,
-  penalty_missed: 29,
-  shot_on_target: 23,
-  shot_off_target: 21,
-  yellow_card: 23,
+  penalty_scored: 32,
+  penalty_missed: 30,
+  shot_on_target: 25,
+  shot_off_target: 26,
+  yellow_card: 24,
   red_card: 26,
-  second_yellow: 27,
-  substitution: 17,
-  var: 20,
-  unknown: 14,
+  second_yellow: 26,
+  substitution: 22,
+  var: 22,
+  unknown: 16,
 }
 
-const GROUP_MARKER_SIZE_PX = 22
+const GROUP_MARKER_SIZE_PX = 24
 
 // Density: types that fade when the match is busy. Critical events
 // (goals, red cards, penalties, second yellows) never fade.
