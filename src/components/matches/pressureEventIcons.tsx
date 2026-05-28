@@ -334,7 +334,7 @@ function internalSizeFor(type: PressureGraphEventType): number {
     case 'shot_off_target':
       return 12.5
     case 'substitution':
-      return 11
+      return 12
     case 'var':
       return 9.5
     default:
@@ -513,23 +513,32 @@ function MiniBallIcon({ size, accent }: { size: number; accent: string }) {
   )
 }
 
-// V2.8: Substitution icon — bright white arrows for visibility.
+// V2.9: Substitution — clean white arrows without dark badge.
+// No circle background. Just the glyph with a subtle drop shadow for contrast.
 function SubstitutionIcon({ size }: { size: number }) {
   const r = size
-  const badgeR = r * 0.95
+  // Arrow geometry: two opposing arrows (in/out swap)
+  const arrowLen = r * 0.7
+  const arrowHead = r * 0.28
+  const gap = r * 0.18
 
   return (
     <g>
-      {/* Badge */}
-      <circle r={badgeR} fill="rgba(8,11,18,0.88)" stroke="rgba(255,255,255,0.2)" strokeWidth={Math.max(0.5, badgeR * 0.1)} />
-      {/* Swap arrows in white */}
-      <g stroke="#f1f5f9" strokeWidth={Math.max(1.0, r * 0.12)} strokeLinecap="round" strokeLinejoin="round" fill="none">
-        {/* Arrow up-right (in) */}
-        <path d={`M ${-r * 0.35} ${r * 0.15} L ${r * 0.15} ${-r * 0.35}`} />
-        <path d={`M ${r * 0.15} ${-r * 0.35} L ${r * 0.15} ${-r * 0.1} M ${r * 0.15} ${-r * 0.35} L ${-r * 0.08} ${-r * 0.35}`} />
-        {/* Arrow down-left (out) */}
-        <path d={`M ${r * 0.35} ${-r * 0.15} L ${-r * 0.15} ${r * 0.35}`} />
-        <path d={`M ${-r * 0.15} ${r * 0.35} L ${-r * 0.15} ${r * 0.1} M ${-r * 0.15} ${r * 0.35} L ${r * 0.08} ${r * 0.35}`} />
+      {/* Subtle halo for contrast against any curve color */}
+      <circle r={r * 0.95} fill="rgba(255,255,255,0.06)" />
+      {/* Drop shadow layer */}
+      <g stroke="rgba(0,0,0,0.4)" strokeWidth={Math.max(2.0, r * 0.18)} strokeLinecap="round" strokeLinejoin="round" fill="none">
+        <line x1={-arrowLen * 0.5} y1={-gap} x2={arrowLen * 0.5} y2={-gap} />
+        <line x1={-arrowLen * 0.5} y1={gap} x2={arrowLen * 0.5} y2={gap} />
+      </g>
+      {/* Main arrows — bright white */}
+      <g stroke="#f8fafc" strokeWidth={Math.max(1.4, r * 0.14)} strokeLinecap="round" strokeLinejoin="round" fill="none">
+        {/* Top arrow: pointing right (player in) */}
+        <line x1={-arrowLen * 0.5} y1={-gap} x2={arrowLen * 0.5} y2={-gap} />
+        <polyline points={`${arrowLen * 0.5 - arrowHead},${-gap - arrowHead * 0.7} ${arrowLen * 0.5},${-gap} ${arrowLen * 0.5 - arrowHead},${-gap + arrowHead * 0.7}`} />
+        {/* Bottom arrow: pointing left (player out) */}
+        <line x1={arrowLen * 0.5} y1={gap} x2={-arrowLen * 0.5} y2={gap} />
+        <polyline points={`${-arrowLen * 0.5 + arrowHead},${gap - arrowHead * 0.7} ${-arrowLen * 0.5},${gap} ${-arrowLen * 0.5 + arrowHead},${gap + arrowHead * 0.7}`} />
       </g>
     </g>
   )
