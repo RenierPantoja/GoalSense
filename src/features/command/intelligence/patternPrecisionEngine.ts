@@ -9,6 +9,7 @@
  */
 import type { LiveFixture } from '@/lib/apiClient'
 import type { PatternHit, FixtureStatsForPattern, Pattern } from '../types/commandTypes'
+import type { CommandTimedEvent } from './commandTimedEvents'
 import { buildMomentumWindow, getMomentumAdjustment, patternRequiresMomentum, getMomentumWindowForPattern, type MomentumWindowResult } from './momentumWindowEngine'
 
 // --- Types ----------------------------------------------------------------
@@ -132,6 +133,7 @@ export function applyPrecisionChecks(
   pattern: Pattern,
   fixture: LiveFixture,
   stats: FixtureStatsForPattern | undefined,
+  events?: CommandTimedEvent[],
 ): PrecisionResult {
   const reasons: string[] = []
   const blockers: string[] = []
@@ -164,7 +166,7 @@ export function applyPrecisionChecks(
   let momentum: MomentumWindowResult | undefined
   if (patternRequiresMomentum(pattern) && blockers.length === 0) {
     const windowMin = getMomentumWindowForPattern(pattern)
-    momentum = buildMomentumWindow(fixture, stats, windowMin)
+    momentum = buildMomentumWindow(fixture, stats, windowMin, events)
     const { adjustment, reason: momReason } = getMomentumAdjustment(momentum, pattern.name)
     if (adjustment !== 0) {
       adjustedConfidence = Math.max(20, Math.min(confidenceCap, adjustedConfidence + adjustment))

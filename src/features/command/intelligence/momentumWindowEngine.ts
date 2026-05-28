@@ -15,6 +15,8 @@
 
 import type { LiveFixture } from '@/lib/apiClient'
 import type { FixtureStatsForPattern, Pattern } from '../types/commandTypes'
+import type { CommandTimedEvent } from './commandTimedEvents'
+import { getEventsInWindow } from './commandTimedEvents'
 
 // --- Types ----------------------------------------------------------------
 
@@ -81,10 +83,17 @@ export function buildMomentumWindow(
   fixture: LiveFixture,
   stats: FixtureStatsForPattern | undefined,
   windowMinutes: number = 10,
+  events?: CommandTimedEvent[],
 ): MomentumWindowResult {
   const elapsed = fixture.status.elapsed || 0
   const blockers: string[] = []
   const missing: string[] = []
+
+  // Check for real timed events within the window
+  const recentEvents = events && events.length > 0 && elapsed > 0
+    ? getEventsInWindow(events, elapsed, windowMinutes)
+    : []
+  const hasTimedEvents = recentEvents.length > 0
 
   // Without stats, we can't assess momentum at all
   if (!stats) {
@@ -104,10 +113,8 @@ export function buildMomentumWindow(
     }
   }
 
-  // We don't have timed events in the current architecture (stats are aggregated).
-  // Use stats volume as a PROXY for activity level, with reduced confidence.
+  // We have stats. Check if we also have timed events for stronger confidence.
   const hasStats = true
-  const hasTimedEvents = false // Future: integrate with normalizeEvents when available
 
   if (!stats.shots && !stats.shotsOnTarget && !stats.corners) {
     missing.push('shots', 'shotsOnTarget', 'corners')
@@ -180,19 +187,25 @@ export function buildMomentumWindow(
     trend = 'falling'
   }
 
-  // Confidence: reduced because we're using aggregated stats, not timed events
-  // Base 50 (proxy), boosted by volume, penalized by missing data
-  let confidence = 50
+  // Confidence: boosted by timed events, reduced for stats-only proxy
+  let confidence = hasTimedEvents ? 70 : 50
   if (totalSOT >= 4) confidence += 15
   if (totalShots >= 8) confidence += 10
   if (totalCorners >= 5) confidence += 5
   if (isSterilePossession) confidence -= 20
   if (trend === 'falling') confidence -= 10
   if (trend === 'rising') confidence += 10
-  confidence = Math.max(10, Math.min(85, confidence))
+  // Timed events boost: each offensive event in window adds confidence
+  if (hasTimedEvents) {
+    const offensiveRecent = recentEvents.filter(e => ['shot_on_target', 'shot_off_target', 'corner', 'dangerous_attack', 'goal'].includes(e.type))
+    confidence += Math.min(15, offensiveRecent.length * 5)
+  }
+  confidence = Math.max(10, Math.min(95, confidence))
 
-  // Has recent activity: proxy — if volume is high relative to time, assume yes
-  const hasRecentActivity = strength >= 45 && trend !== 'falling' && !isSterilePossession
+  // Has recent activity: confirmed by timed events OR proxy from stats volume
+  const hasRecentActivity = hasTimedEvents
+    ? recentEvents.filter(e => ['shot_on_target', 'shot_off_target', 'corner', 'dangerous_attack', 'goal'].includes(e.type)).length >= 1
+    : (strength >= 45 && trend !== 'falling' && !isSterilePossession)
 
   // Explanation
   let explanation: string
@@ -216,10 +229,12 @@ export function buildMomentumWindow(
     : (hasStats && strength > 0 ? 'stats_proxy' : 'insufficient')
 
   // Recency confidence: how sure we are this is happening NOW
-  // Without timed events, recency is always uncertain
   let recencyConfidence: number
   if (hasTimedEvents) {
-    recencyConfidence = Math.min(95, confidence + 10)
+    const offensiveRecent = recentEvents.filter(e => ['shot_on_target', 'shot_off_target', 'corner', 'dangerous_attack', 'goal'].includes(e.type))
+    if (offensiveRecent.length >= 3) recencyConfidence = Math.min(95, 80 + offensiveRecent.length * 3)
+    else if (offensiveRecent.length >= 1) recencyConfidence = Math.min(80, 60 + offensiveRecent.length * 8)
+    else recencyConfidence = 50 // events exist but not offensive
   } else if (hasRecentActivity && trend === 'rising') {
     recencyConfidence = Math.min(65, confidence - 5)
   } else if (hasRecentActivity) {

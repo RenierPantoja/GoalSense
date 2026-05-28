@@ -17,6 +17,7 @@ import { useViewMode } from '@/context/ViewModeContext'
 import { usePatterns } from './contexts/PatternContext'
 import { evaluateAllPatterns } from './intelligence/patternEvaluator'
 import { applyPrecisionChecks } from './intelligence/patternPrecisionEngine'
+import { extractEspnTimedEvents, type CommandTimedEvent } from './intelligence/commandTimedEvents'
 import { runAutoDiscovery } from './intelligence/autoDiscoveryEngine'
 import { resolveAlert } from './intelligence/patternResolutionEngine'
 import { recordScopeEntities } from '@/services/intelligence/scopeKnowledgeBase'
@@ -42,6 +43,7 @@ export function CommandCenterPage() {
   const [autoRefresh, setAutoRefresh] = useState(() => { try { return localStorage.getItem('goalsense_cmd_auto') !== 'false' } catch { return true } })
   const [changes, setChanges] = useState<ChangeEvent[]>([])
   const [statsMap, setStatsMap] = useState<Map<number, FixtureStatsForPattern>>(new Map())
+  const [eventsMap, setEventsMap] = useState<Map<number, CommandTimedEvent[]>>(new Map())
   const [activeTab, setActiveTab] = useState<Tab>('cockpit')
   const [showBuilder, setShowBuilder] = useState(false)
   const [prefilledDraft, setPrefilledDraft] = useState<Pattern | null>(null)
@@ -88,11 +90,21 @@ export function CommandCenterPage() {
       const json = await res.json()
       const hS = json.boxscore?.teams?.[0]?.statistics || []; const aS = json.boxscore?.teams?.[1]?.statistics || []
       const g = (arr: any[], n: string) => { const s = arr.find((x: any) => x.name === n || x.label === n); return s ? parseFloat(s.displayValue) || 0 : 0 }
-      return { id: fx.id, stats: { possession: { home: g(hS, 'possessionPct') || g(hS, 'POSSESSION'), away: g(aS, 'possessionPct') || g(aS, 'POSSESSION') }, shots: { home: g(hS, 'totalShots') || g(hS, 'SHOTS'), away: g(aS, 'totalShots') || g(aS, 'SHOTS') }, shotsOnTarget: { home: g(hS, 'shotsOnTarget') || g(hS, 'ON GOAL'), away: g(aS, 'shotsOnTarget') || g(aS, 'ON GOAL') }, corners: { home: g(hS, 'wonCorners') || g(hS, 'Corner Kicks'), away: g(aS, 'wonCorners') || g(aS, 'Corner Kicks') }, yellowCards: { home: g(hS, 'yellowCards') || g(hS, 'Yellow Cards'), away: g(aS, 'yellowCards') || g(aS, 'Yellow Cards') } } as FixtureStatsForPattern }
+      const stats = { possession: { home: g(hS, 'possessionPct') || g(hS, 'POSSESSION'), away: g(aS, 'possessionPct') || g(aS, 'POSSESSION') }, shots: { home: g(hS, 'totalShots') || g(hS, 'SHOTS'), away: g(aS, 'totalShots') || g(aS, 'SHOTS') }, shotsOnTarget: { home: g(hS, 'shotsOnTarget') || g(hS, 'ON GOAL'), away: g(aS, 'shotsOnTarget') || g(aS, 'ON GOAL') }, corners: { home: g(hS, 'wonCorners') || g(hS, 'Corner Kicks'), away: g(aS, 'wonCorners') || g(aS, 'Corner Kicks') }, yellowCards: { home: g(hS, 'yellowCards') || g(hS, 'Yellow Cards'), away: g(aS, 'yellowCards') || g(aS, 'Yellow Cards') } } as FixtureStatsForPattern
+      // V5 Phase 6: extract timed events from the same ESPN response
+      const timedEvents = extractEspnTimedEvents(json, fx.id, fx.homeTeam.name, fx.awayTeam.name)
+      return { id: fx.id, stats, events: timedEvents }
     }))
     const m = new Map<number, FixtureStatsForPattern>()
-    for (const r of results) { if (r.status === 'fulfilled' && r.value) m.set(r.value.id, r.value.stats) }
+    const em = new Map<number, CommandTimedEvent[]>()
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value) {
+        m.set(r.value.id, r.value.stats)
+        if (r.value.events.length > 0) em.set(r.value.id, r.value.events)
+      }
+    }
     setStatsMap(m)
+    setEventsMap(em)
   }, [hasIntelligence])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -169,7 +181,7 @@ export function CommandCenterPage() {
       const fxStats = statsMap.get(fx.id)
 
       // V5 Precision Engine: validate before alerting
-      const precision = applyPrecisionChecks(hit, pat, fx, fxStats)
+      const precision = applyPrecisionChecks(hit, pat, fx, fxStats, eventsMap.get(fx.id))
 
       if (!precision.shouldAlert) continue
 
