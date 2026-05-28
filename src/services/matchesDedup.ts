@@ -4,6 +4,7 @@
  */
 
 import { normalizeTeamName } from '@/features/providers/teamNameNormalizer'
+import { getStatusPrecedence } from '@/lib/matchesClassification'
 
 // ─── Additional aliases for dedup (supplements teamNameNormalizer) ────────────
 
@@ -105,15 +106,12 @@ function getMatchRichness(m: DedupMatch): number {
   if (m.homeTeam.crest) score += 2
   if (m.awayTeam.crest) score += 2
   if (m.competition.emblem) score += 1
-  // Status advancement: finished/live matches are more valuable than scheduled
-  const statusUpper = (m.status || '').toUpperCase()
-  const isLive = statusUpper === 'IN_PLAY' || statusUpper === 'LIVE' || statusUpper === '1H' || statusUpper === '2H' || statusUpper === 'HT' || statusUpper === 'PAUSED' || statusUpper === 'ET'
-  const isFinished = statusUpper === 'FINISHED' || statusUpper === 'FT' || statusUpper === 'AET' || statusUpper === 'PEN' || statusUpper === 'FULL_TIME' || statusUpper === 'MATCH FINISHED' || statusUpper === 'FINAL' || statusUpper === 'AWD' || statusUpper === 'WO'
-  if (isLive) score += 5
-  if (isFinished) score += 4
+  // Status advancement: use canonical precedence. Higher precedence = more valuable.
+  const precedence = getStatusPrecedence(m.status)
+  if (precedence >= 500) score += 5  // live
+  else if (precedence >= 400) score += 4  // finished
   if (m.score.fullTime.home !== null && m.score.fullTime.home > 0) score += 2
   if (m.score.fullTime.away !== null && m.score.fullTime.away > 0) score += 2
-  // Prefer longer/more descriptive names
   if ((m.homeTeam.shortName || m.homeTeam.name).length > 10) score += 1
   return score
 }
@@ -144,9 +142,9 @@ export function dedupeMatches<T extends DedupMatch>(matches: T[]): T[] {
       if (!teamsMatch(homeA, awayA, homeB, awayB)) continue
 
       // Check time proximity
-      const aFinished = ['FINISHED', 'FT', 'AET', 'PEN', 'FULL_TIME'].includes((a.status || '').toUpperCase())
-      const bFinished = ['FINISHED', 'FT', 'AET', 'PEN', 'FULL_TIME'].includes((b.status || '').toUpperCase())
-      const maxMin = (aFinished || bFinished) ? 180 : 90
+      const aPrecedence = getStatusPrecedence(a.status)
+      const bPrecedence = getStatusPrecedence(b.status)
+      const maxMin = (aPrecedence >= 400 || bPrecedence >= 400) ? 180 : 90
       if (!timeClose(a.utcDate, b.utcDate, maxMin)) continue
 
       // Duplicate found — pick best
@@ -165,11 +163,7 @@ export function dedupeMatches<T extends DedupMatch>(matches: T[]): T[] {
         if (!b.awayTeam.crest && a.awayTeam.crest) (b.awayTeam as any).crest = a.awayTeam.crest
         if (!b.competition.emblem && a.competition.emblem) (b.competition as any).emblem = a.competition.emblem
         // Preserve more advanced status from A if B is less advanced
-        const aUp = (a.status || '').toUpperCase()
-        const bUp = (b.status || '').toUpperCase()
-        const aIsAdvanced = ['FINISHED', 'FT', 'AET', 'PEN', 'FULL_TIME', 'IN_PLAY', 'LIVE', '1H', '2H', 'HT', 'PAUSED', 'ET'].includes(aUp)
-        const bIsScheduled = ['TIMED', 'SCHEDULED', 'NS', 'TBD', 'PRE'].includes(bUp)
-        if (aIsAdvanced && bIsScheduled) (b as any).status = a.status
+        if (aPrecedence > bPrecedence) (b as any).status = a.status
         // Preserve score from A if B has no score
         if (a.score.fullTime.home !== null && b.score.fullTime.home === null) (b as any).score = a.score
         removed.add(bestIdx)
@@ -181,11 +175,7 @@ export function dedupeMatches<T extends DedupMatch>(matches: T[]): T[] {
         if (!a.awayTeam.crest && b.awayTeam.crest) (a.awayTeam as any).crest = b.awayTeam.crest
         if (!a.competition.emblem && b.competition.emblem) (a.competition as any).emblem = b.competition.emblem
         // Preserve more advanced status from B if A is less advanced
-        const aUp = (a.status || '').toUpperCase()
-        const bUp = (b.status || '').toUpperCase()
-        const bIsAdvanced = ['FINISHED', 'FT', 'AET', 'PEN', 'FULL_TIME', 'IN_PLAY', 'LIVE', '1H', '2H', 'HT', 'PAUSED', 'ET'].includes(bUp)
-        const aIsScheduled = ['TIMED', 'SCHEDULED', 'NS', 'TBD', 'PRE'].includes(aUp)
-        if (bIsAdvanced && aIsScheduled) (a as any).status = b.status
+        if (bPrecedence > aPrecedence) (a as any).status = b.status
         // Preserve score from B if A has no score
         if (b.score.fullTime.home !== null && a.score.fullTime.home === null) (a as any).score = b.score
         removed.add(j)

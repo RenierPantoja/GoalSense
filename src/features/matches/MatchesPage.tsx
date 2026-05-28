@@ -13,7 +13,7 @@ import { useFavorites } from '@/context/FavoritesContext'
 import { useViewMode } from '@/context/ViewModeContext'
 import { FavoriteButton } from '@/components/ui/FavoriteButton'
 import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
-import { isUpcomingMatch, isStaleScheduled } from '@/lib/matchTemporalGuard'
+import { classifyMatch, type MatchClassification } from '@/lib/matchesClassification'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -66,26 +66,17 @@ async function fetchEspnAsCalendar(selectedDate: string): Promise<FDMatch[]> {
   } catch { return [] }
 }
 
-function mapStatus(s: string) {
-  const upper = (s || '').trim().toUpperCase()
-  // Live
-  if (upper === 'IN_PLAY' || upper === 'LIVE' || upper === '1H' || upper === '2H' || upper === 'ET' || upper === 'BT' || upper === 'P') return { label: 'Ao vivo', live: true, finished: false, upcoming: false }
-  if (upper === 'PAUSED' || upper === 'HT' || upper === 'HALFTIME') return { label: 'Intervalo', live: true, finished: false, upcoming: false }
-  // Finished — comprehensive list covering all providers
-  if (upper === 'FINISHED' || upper === 'FT' || upper === 'AET' || upper === 'PEN' ||
-      upper === 'FULL_TIME' || upper === 'MATCH FINISHED' || upper === 'FINAL' ||
-      upper === 'AWD' || upper === 'WO' || upper === 'ENCERRADO' ||
-      upper === 'STATUS_FULL_TIME' || upper === 'STATUS_FINAL' ||
-      upper === 'POST' || upper === 'COMPLETED') {
-    return { label: 'Encerrado', live: false, finished: true, upcoming: false }
+function mapStatus(s: string, utcDate?: string) {
+  // V2.7 architecture: delegate to canonical classification.
+  // This wrapper preserves the old API shape so all existing call sites work
+  // without modification, but the logic is now unified.
+  const cls = classifyMatch({ status: s, utcDate: utcDate || '', state: '' })
+  return {
+    label: cls.labelShort,
+    live: cls.isLive,
+    finished: cls.isFinished,
+    upcoming: cls.isUpcoming,
   }
-  // Scheduled
-  if (upper === 'TIMED' || upper === 'SCHEDULED' || upper === 'NS' || upper === 'TBD' || upper === 'PRE') return { label: 'Agendado', live: false, finished: false, upcoming: true }
-  // Postponed/Cancelled
-  if (upper === 'POSTPONED' || upper === 'PPD' || upper === 'PST') return { label: 'Adiado', live: false, finished: false, upcoming: false }
-  if (upper === 'CANCELLED' || upper === 'CANCELED' || upper === 'CANC' || upper === 'ABD' || upper === 'SUSPENDED') return { label: 'Cancelado', live: false, finished: false, upcoming: false }
-  // Unknown — do NOT default to upcoming
-  return { label: s || 'Desconhecido', live: false, finished: false, upcoming: false }
 }
 
 function translateComp(name: string): string {
@@ -240,13 +231,15 @@ export function MatchesPage() {
   }, [date, reloadKey])
 
   const stats = useMemo(() => {
-    const l = matches.filter(m => mapStatus(m.status).live).length
-    const f = matches.filter(m => mapStatus(m.status).finished).length
-    const u = matches.filter(m => isUpcomingMatch({ status: m.status, utcDate: m.utcDate })).length
+    const now = new Date()
+    const classifications = matches.map(m => classifyMatch(m, now))
+    const l = classifications.filter(c => c.isLive).length
+    const f = classifications.filter(c => c.isFinished).length
+    const u = classifications.filter(c => c.isUpcoming).length
     const br = matches.filter(m => isBrazil(m)).length
     const eu = matches.filter(m => isEurope(m)).length
     const dominant = matches.filter(m => isDominant(m)).length
-    const soon = matches.filter(m => { if (!mapStatus(m.status).upcoming) return false; const d = Math.round((new Date(m.utcDate).getTime() - Date.now()) / 60000); return d > 0 && d <= 60 }).length
+    const soon = classifications.filter(c => c.isStartingSoon).length
     const comps = new Set(matches.map(m => m.competition.name)).size
     const topComp = (() => { const counts = new Map<string, number>(); matches.forEach(m => counts.set(m.competition.name, (counts.get(m.competition.name) || 0) + 1)); let max = '', maxN = 0; counts.forEach((v, k) => { if (v > maxN) { max = k; maxN = v } }); return max ? translateComp(max) : '' })()
     return { total: matches.length, live: l, finished: f, upcoming: u, comps, br, eu, dominant, soon, topComp }
@@ -260,13 +253,13 @@ export function MatchesPage() {
     }
     switch (filter) {
       case 'main': return list.filter(m => getMatchImportanceScore(m) >= 90 || isFavoriteTeam(m.homeTeam.shortName || m.homeTeam.name) || isFavoriteTeam(m.awayTeam.shortName || m.awayTeam.name)).sort((a, b) => calcImportance(b) - calcImportance(a))
-      case 'live': return list.filter(m => mapStatus(m.status).live)
-      case 'upcoming': return list.filter(m => isUpcomingMatch({ status: m.status, utcDate: m.utcDate }))
-      case 'finished': return list.filter(m => mapStatus(m.status).finished)
+      case 'live': return list.filter(m => classifyMatch(m).isLive)
+      case 'upcoming': return list.filter(m => classifyMatch(m).isUpcoming)
+      case 'finished': return list.filter(m => classifyMatch(m).isFinished)
       case 'brazil': return list.filter(m => isBrazil(m))
       case 'europe': return list.filter(m => isEurope(m))
       case 'relevant': return list.filter(m => calcImportance(m) >= 70).sort((a, b) => calcImportance(b) - calcImportance(a))
-      case 'soon': return list.filter(m => { const { upcoming } = mapStatus(m.status); if (!upcoming) return false; const d = Math.round((new Date(m.utcDate).getTime() - Date.now()) / 60000); return d > 0 && d <= 60 })
+      case 'soon': return list.filter(m => classifyMatch(m).isStartingSoon)
       case 'dominant': return list.filter(m => isDominant(m))
       case 'favorites': return list.filter(m => isFavoriteMatch(buildCanonicalMatchId(m.homeTeam.shortName || m.homeTeam.name, m.awayTeam.shortName || m.awayTeam.name, m.utcDate)) || isFavoriteTeam(m.homeTeam.shortName || m.homeTeam.name) || isFavoriteTeam(m.awayTeam.shortName || m.awayTeam.name) || isFavoriteLeague(String(m.competition.name)))
       default: return list
@@ -275,7 +268,7 @@ export function MatchesPage() {
 
   const grouped = useMemo(() => { const map = new Map<string, FDMatch[]>(); for (const m of filtered) { const k = m.competition.name; if (!map.has(k)) map.set(k, []); map.get(k)!.push(m) }; return map }, [filtered])
   const curated = useMemo(() => curateMatches(matches, isFavoriteTeam, (id) => isFavoriteMatch(id), (name) => isFavoriteLeague(name)), [matches, isFavoriteTeam, isFavoriteMatch, isFavoriteLeague])
-  const sidebarNext = useMemo(() => curated.soonMatches.length > 0 ? curated.soonMatches.slice(0, 4) : matches.filter(m => isUpcomingMatch({ status: m.status, utcDate: m.utcDate })).sort((a, b) => getMatchImportanceScore(b) - getMatchImportanceScore(a)).slice(0, 4), [curated, matches])
+  const sidebarNext = useMemo(() => curated.soonMatches.length > 0 ? curated.soonMatches.slice(0, 4) : matches.filter(m => classifyMatch(m).isUpcoming).sort((a, b) => getMatchImportanceScore(b) - getMatchImportanceScore(a)).slice(0, 4), [curated, matches])
   const sidebarTop = useMemo(() => sortMatchesByImportance(matches).slice(0, 6), [matches])
   const mainMatch = useMemo(() => getMainGlobalMatch(matches), [matches])
   const brazilMatch = useMemo(() => getBrazilFeaturedMatch(matches), [matches])
@@ -449,9 +442,9 @@ export function MatchesPage() {
             ) : (
               /* Filtered/searched: use grouped as before */
               Array.from(grouped.entries()).map(([comp, items]) => {
-                const live = items.filter(i => mapStatus(i.status).live).length
-                const fin = items.filter(i => mapStatus(i.status).finished).length
-                const upc = items.filter(i => isUpcomingMatch({ status: i.status, utcDate: i.utcDate })).length
+                const live = items.filter(i => classifyMatch(i).isLive).length
+                const fin = items.filter(i => classifyMatch(i).isFinished).length
+                const upc = items.filter(i => classifyMatch(i).isUpcoming).length
                 const country = getCountry(items[0])
                 return (
                   <section key={comp}>
@@ -504,7 +497,7 @@ export function MatchesPage() {
             })()}
             {/* Próximos principais */}
             {(() => {
-              const upcoming = curated.mainMatches.filter(m => isUpcomingMatch({ status: m.status, utcDate: m.utcDate })).slice(0, 3)
+              const upcoming = curated.mainMatches.filter(m => classifyMatch(m).isUpcoming).slice(0, 3)
               if (upcoming.length === 0) return null
               return (
                 <div className="rounded-[20px] border border-white/[0.05] bg-white/[0.015] p-5">
@@ -1035,8 +1028,8 @@ function HighlightsView({ matches, openMatch }: { matches: FDMatch[]; openMatch:
 
   const brazil = rest.filter(m => isBrazil(m))
   const europe = rest.filter(m => isEurope(m) && !isBrazil(m))
-  const fin = rest.filter(m => mapStatus(m.status).finished && !isBrazil(m) && !isEurope(m))
-  const upcoming = rest.filter(m => isUpcomingMatch({ status: m.status, utcDate: m.utcDate }) && !isBrazil(m) && !isEurope(m))
+  const fin = rest.filter(m => classifyMatch(m).isFinished && !isBrazil(m) && !isEurope(m))
+  const upcoming = rest.filter(m => classifyMatch(m).isUpcoming && !isBrazil(m) && !isEurope(m))
   const other = rest.filter(m => !brazil.includes(m) && !europe.includes(m) && !fin.includes(m) && !upcoming.includes(m))
 
   return (
