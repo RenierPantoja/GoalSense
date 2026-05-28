@@ -15,6 +15,7 @@ import { FavoriteButton } from '@/components/ui/FavoriteButton'
 import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
 import { classifyMatch, type MatchClassification } from '@/lib/matchesClassification'
 import { getMainMatches, scoreMatchImportance } from '@/features/matches/mainMatchRanking'
+import { isMatchBrazil, isMatchEurope } from '@/features/matches/matchRegionClassifier'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -143,11 +144,11 @@ function isDominant(m: FDMatch): boolean {
 }
 
 function isBrazil(m: FDMatch): boolean {
-  return m.area?.name === 'Brazil' || m.competition.name.toLowerCase().includes('brasil')
+  return isMatchBrazil(m)
 }
 
 function isEurope(m: FDMatch): boolean {
-  return ['England', 'Spain', 'Germany', 'Italy', 'France', 'Netherlands', 'Portugal'].includes(m.area?.name || '')
+  return isMatchEurope(m)
 }
 
 // ─── Main Component ──────────────────────────────────────────────────────────
