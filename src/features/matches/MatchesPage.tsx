@@ -675,9 +675,9 @@ function CompetitionHeader({ emblem, name, country, total, live, finished, upcom
   return (
     <div className="flex items-center gap-4 mb-3 px-2">
       {/* Logo box with glow */}
-      <div className="relative flex items-center justify-center h-11 w-11 rounded-[14px] bg-gradient-to-b from-white/[0.05] to-white/[0.02] border border-white/[0.08] shadow-[0_4px_12px_-4px_rgba(0,0,0,0.3)]">
+      <div className="relative flex items-center justify-center h-12 w-12 rounded-[14px] bg-gradient-to-b from-white/[0.05] to-white/[0.02] border border-white/[0.08] shadow-[0_4px_12px_-4px_rgba(0,0,0,0.3)]">
         {emblem ? (
-          <img src={emblem} alt="" className="h-7 w-7 object-contain" />
+          <img src={emblem} alt="" className="h-9 w-9 object-contain" />
         ) : (
           <Trophy size={18} className="text-white/25" />
         )}
