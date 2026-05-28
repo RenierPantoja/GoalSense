@@ -23,6 +23,24 @@ export interface CommandTimedEvent {
   provider: string
 }
 
+export interface CommandEventsQuality {
+  source: 'espn_summary' | 'none'
+  totalEvents: number
+  timedEvents: number
+  offensiveEvents: number
+  recentEvents: number
+  hasCommentary: boolean
+  hasKeyEvents: boolean
+  quality: 'rich' | 'partial' | 'poor' | 'none'
+  warnings: string[]
+}
+
+/** Offensive event types that count for momentum. */
+export const OFFENSIVE_EVENT_TYPES: CommandTimedEvent['type'][] = [
+  'shot_on_target', 'shot_off_target', 'corner', 'dangerous_attack', 'goal',
+  'penalty_scored', 'penalty_missed',
+]
+
 // --- ESPN event extraction ------------------------------------------------
 
 /**
@@ -82,10 +100,10 @@ export function extractEspnTimedEvents(json: any, fixtureId: number, homeTeamNam
     })
   }
 
-  // Deduplicate by minute+type (keep first)
+  // Deduplicate: use minute+type+side+teamName for more precise dedup
   const seen = new Set<string>()
   return events.filter(e => {
-    const key = `${e.minute}-${e.type}-${e.side}`
+    const key = `${e.minute}-${e.type}-${e.side}-${(e.teamName || '').slice(0, 10)}`
     if (seen.has(key)) return false
     seen.add(key)
     return true
@@ -123,15 +141,29 @@ function classifyEspnEventType(ev: any): CommandTimedEvent['type'] {
 }
 
 function classifyCommentaryType(text: string): CommandTimedEvent['type'] {
-  if (text.includes('goal') && !text.includes('goal kick')) return 'goal'
-  if (text.includes('on target') || text.includes('saved') || text.includes('blocked') || text.includes('hits the post') || text.includes('hits the bar')) return 'shot_on_target'
-  if (text.includes('off target') || text.includes('misses') || text.includes('wide') || text.includes('over the bar')) return 'shot_off_target'
-  if (text.includes('attempt') || text.includes('shot') || text.includes('header')) {
-    if (text.includes('saved') || text.includes('blocked')) return 'shot_on_target'
+  // Goals (but not goal kicks)
+  if ((text.includes('goal') && !text.includes('goal kick') && !text.includes('goalkeeper')) || text.includes('gol')) return 'goal'
+  // Shots on target — comprehensive
+  if (text.includes('on target') || text.includes('attempt saved') || text.includes('saved shot') ||
+      text.includes('goalkeeper save') || text.includes('shot saved') || text.includes('no alvo') ||
+      text.includes('finalização defendida') || text.includes('chute defendido') ||
+      text.includes('defesa do goleiro') || text.includes('hits the post') ||
+      text.includes('hits the bar') || text.includes('strikes the post') ||
+      text.includes('blocked shot') || text.includes('blocked')) return 'shot_on_target'
+  // Shots off target — comprehensive
+  if (text.includes('off target') || text.includes('attempt missed') || text.includes('missed shot') ||
+      text.includes('wide') || text.includes('over the bar') || text.includes('high and wide') ||
+      text.includes('para fora') || text.includes('por cima') || text.includes('finalização para fora') ||
+      text.includes('chute para fora')) return 'shot_off_target'
+  // Generic shot/attempt (classify as off-target to be conservative)
+  if (text.includes('attempt') || text.includes('shot') || text.includes('header') || text.includes('finalização')) {
+    if (text.includes('saved') || text.includes('blocked') || text.includes('defendid')) return 'shot_on_target'
     return 'shot_off_target'
   }
-  if (text.includes('corner')) return 'corner'
-  if (text.includes('dangerous') || text.includes('chance')) return 'dangerous_attack'
+  // Corners
+  if (text.includes('corner') || text.includes('escanteio')) return 'corner'
+  // Dangerous attacks
+  if (text.includes('dangerous') || text.includes('chance') || text.includes('perigoso')) return 'dangerous_attack'
   return 'unknown'
 }
 
@@ -162,4 +194,42 @@ function resolveSideByName(teamName: string, homeName: string, awayName: string)
 export function getEventsInWindow(events: CommandTimedEvent[], currentMinute: number, windowMinutes: number): CommandTimedEvent[] {
   const cutoff = currentMinute - windowMinutes
   return events.filter(e => e.minute >= cutoff && e.minute <= currentMinute)
+}
+
+/**
+ * Assess the quality of extracted events for a fixture.
+ */
+export function assessEventsQuality(events: CommandTimedEvent[], currentMinute: number, windowMinutes: number = 10): CommandEventsQuality {
+  if (events.length === 0) {
+    return { source: 'none', totalEvents: 0, timedEvents: 0, offensiveEvents: 0, recentEvents: 0, hasCommentary: false, hasKeyEvents: false, quality: 'none', warnings: ['Nenhum evento disponível'] }
+  }
+
+  const recent = getEventsInWindow(events, currentMinute, windowMinutes)
+  const offensive = events.filter(e => OFFENSIVE_EVENT_TYPES.includes(e.type))
+  const recentOffensive = recent.filter(e => OFFENSIVE_EVENT_TYPES.includes(e.type))
+  const hasKeyEvents = events.some(e => ['goal', 'own_goal', 'penalty_scored', 'yellow_card', 'red_card', 'substitution'].includes(e.type))
+  const hasCommentary = events.some(e => ['shot_on_target', 'shot_off_target', 'corner', 'dangerous_attack'].includes(e.type))
+
+  const warnings: string[] = []
+  if (!hasCommentary) warnings.push('Sem commentary/shots do provider')
+  if (offensive.length === 0) warnings.push('Sem eventos ofensivos')
+  if (recent.length === 0 && currentMinute > windowMinutes) warnings.push('Sem eventos recentes na janela')
+
+  let quality: CommandEventsQuality['quality']
+  if (hasCommentary && hasKeyEvents && offensive.length >= 4) quality = 'rich'
+  else if ((hasCommentary || hasKeyEvents) && offensive.length >= 2) quality = 'partial'
+  else if (events.length > 0) quality = 'poor'
+  else quality = 'none'
+
+  return {
+    source: 'espn_summary',
+    totalEvents: events.length,
+    timedEvents: events.length,
+    offensiveEvents: offensive.length,
+    recentEvents: recentOffensive.length,
+    hasCommentary,
+    hasKeyEvents,
+    quality,
+    warnings,
+  }
 }
