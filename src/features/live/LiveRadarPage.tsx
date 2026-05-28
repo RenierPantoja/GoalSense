@@ -179,6 +179,13 @@ export function LiveRadarPage() {
   const featuredRanked = useMemo(() => {
     if (filtered.length === 0) return null
     const ranked = sortByFeaturedRanking(filtered, { isFavoriteTeam: isFavTeamLive, statsMap: scannerStats })
+    if (import.meta.env.DEV && ranked.length > 0) {
+      console.debug('[GoalSense][LiveHero] Top 5:', ranked.slice(0, 5).map(fx => ({
+        match: `${fx.homeTeam.name} x ${fx.awayTeam.name}`,
+        score: scoreLiveMatchForFeature(fx, { isFavoriteTeam: isFavTeamLive, stats: scannerStats.get(fx.id), allFixtures: ranked }).score,
+        reasons: scoreLiveMatchForFeature(fx, { isFavoriteTeam: isFavTeamLive, stats: scannerStats.get(fx.id), allFixtures: ranked }).reasons,
+      })))
+    }
     return ranked[0] || null
   }, [filtered, scannerStats, isFavTeamLive])
 

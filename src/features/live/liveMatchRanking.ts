@@ -52,13 +52,13 @@ const TIER2_GIANTS: string[] = [
   'flamengo', 'palmeiras', 'corinthians', 'sao paulo', 'santos',
   'vasco', 'botafogo', 'fluminense', 'gremio', 'internacional',
   'cruzeiro', 'atletico mineiro', 'atletico mg',
-  'river plate', 'boca juniors', 'independiente', 'racing',
+  'river plate', 'boca juniors', 'ca independiente', 'racing club',
   'san lorenzo', 'estudiantes', 'velez',
   'penarol', 'peñarol', 'nacional',
   'colo colo', 'colo-colo', 'olimpia', 'cerro porteno',
   'libertad', 'ldu', 'liga de quito', 'atletico nacional',
   'america de cali', 'millonarios',
-  'milan', 'ac milan', 'inter', 'internazionale', 'napoli', 'roma',
+  'milan', 'ac milan', 'inter milan', 'internazionale', 'napoli', 'roma',
   'benfica', 'porto', 'sporting cp',
 ]
 
@@ -66,7 +66,8 @@ const TIER3_STRONG: string[] = [
   'bragantino', 'bahia', 'fortaleza', 'sport', 'athletico',
   'ceara', 'coritiba', 'goias', 'juventude', 'vitoria',
   'universidad de chile', 'universidad catolica',
-  'independiente del valle',
+  'independiente del valle', 'independiente santa fe',
+  'independiente rivadavia', 'independiente petrolero',
   'cruz azul', 'pumas', 'club america', 'chivas', 'tigres', 'monterrey',
   'lafc', 'la galaxy', 'seattle sounders', 'inter miami',
   'ajax', 'psv', 'feyenoord', 'celtic', 'rangers',
@@ -79,15 +80,18 @@ const TIER3_STRONG: string[] = [
 ]
 
 // Ambiguous keywords that need word boundary matching to avoid false positives
-const AMBIGUOUS_CLUB_KEYWORDS = new Set(['sport', 'racing', 'independiente', 'nacional', 'vitoria', 'athletico'])
+const AMBIGUOUS_CLUB_KEYWORDS = new Set(['sport', 'racing', 'nacional', 'vitoria', 'athletico', 'independiente'])
 
 function hasWordMatch(text: string, keyword: string): boolean {
   if (AMBIGUOUS_CLUB_KEYWORDS.has(keyword)) {
     // Use word boundary for ambiguous keywords
     const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     if (!new RegExp(`\\b${escaped}\\b`).test(text)) return false
-    // Also reject if it's actually "sporting", "sportivo", etc.
+    // Reject false positives
     if (keyword === 'sport' && (text.includes('sporting') || text.includes('sportivo') || text.includes('sports '))) return false
+    if (keyword === 'independiente' && (text.includes('santa fe') || text.includes('del valle') || text.includes('rivadavia') || text.includes('petrolero'))) return false
+    if (keyword === 'racing' && text.includes('racing louisville')) return false
+    if (keyword === 'nacional' && (text.includes('atletico nacional') || text.includes('inter nacional'))) return false
     return true
   }
   return text.includes(keyword)
