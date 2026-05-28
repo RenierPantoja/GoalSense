@@ -176,8 +176,8 @@ export function LiveRadarPage() {
   // V2.7 FINAL: Hero is computed from ALL live fixtures (not filtered by search/summary).
   // Includes audience anchor override: a fixture with anchor >= 90 always beats
   // one with anchor < 90 unless the score difference exceeds 40 points.
-  const { heroFixture, heroRanking } = useMemo(() => {
-    if (liveFixtures.length === 0) return { heroFixture: null, heroRanking: [] }
+  const { heroFixture, heroRanking, heroOverrideInfo } = useMemo(() => {
+    if (liveFixtures.length === 0) return { heroFixture: null, heroRanking: [], heroOverrideInfo: null }
     const ranked = sortByFeaturedRanking(liveFixtures, { isFavoriteTeam: isFavTeamLive, statsMap: scannerStats })
 
     // Build ranking items for debug
@@ -188,28 +188,37 @@ export function LiveRadarPage() {
       return { fx, rank: i + 1, score: result.score, maxAnchor: Math.max(homeAnchor, awayAnchor), reasons: result.reasons }
     })
 
-    // Audience anchor override: if top1 has anchor < 90 but there exists a
-    // fixture with anchor >= 90 within 40 points, promote the higher-anchor one.
+    // Audience anchor override
     let finalHero = items[0]?.fx || null
+    let overrideInfo: { wasOverridden: boolean; rawTop1Label: string; promotedLabel: string; reason: string; scoreDiff: number } | null = null
+
     if (items.length >= 2 && items[0]) {
       const top1 = items[0]
       if (top1.maxAnchor < 90) {
         const betterAnchor = items.find(it => it.maxAnchor >= 90 && (top1.score - it.score) <= 40)
         if (betterAnchor) {
           finalHero = betterAnchor.fx
+          overrideInfo = {
+            wasOverridden: true,
+            rawTop1Label: `${top1.fx.homeTeam.name} x ${top1.fx.awayTeam.name}`,
+            promotedLabel: `${betterAnchor.fx.homeTeam.name} x ${betterAnchor.fx.awayTeam.name}`,
+            reason: `Anchor ${betterAnchor.maxAnchor} > ${top1.maxAnchor}, diff ${top1.score - betterAnchor.score} pts`,
+            scoreDiff: top1.score - betterAnchor.score,
+          }
         }
       }
     }
 
     if (import.meta.env.DEV && items.length > 0) {
-      console.debug('[GoalSense][LiveHero] Final ranking:', items.slice(0, 8).map(it => ({
-        rank: it.rank, match: `${it.fx.homeTeam.name} x ${it.fx.awayTeam.name}`,
-        score: it.score, anchor: it.maxAnchor, reasons: it.reasons,
-      })))
-      console.debug('[GoalSense][LiveHero] Selected:', finalHero ? `${finalHero.homeTeam.name} x ${finalHero.awayTeam.name}` : 'none')
+      console.debug('[GoalSense][LiveHeroSelected]', {
+        finalHero: finalHero ? `${finalHero.homeTeam.name} x ${finalHero.awayTeam.name}` : 'none',
+        rawTop1: items[0] ? `${items[0].fx.homeTeam.name} x ${items[0].fx.awayTeam.name}` : 'none',
+        wasOverridden: !!overrideInfo,
+        overrideReason: overrideInfo?.reason || 'n/a',
+      })
     }
 
-    return { heroFixture: finalHero, heroRanking: items.slice(0, 8) }
+    return { heroFixture: finalHero, heroRanking: items.slice(0, 8), heroOverrideInfo: overrideInfo }
   }, [liveFixtures, scannerStats, isFavTeamLive])
 
   const hero = heroFixture
@@ -349,17 +358,32 @@ export function LiveRadarPage() {
             {/* Debug panel: hero ranking in advanced mode */}
             {isAdvancedMode && heroRanking.length > 0 && (
               <div className="rounded-xl border border-white/[0.04] bg-white/[0.015] p-3 mt-2">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-white/20 mb-2">Ranking do destaque</p>
+                {/* Override explanation */}
+                {heroOverrideInfo && (
+                  <div className="mb-2 pb-2 border-b border-white/[0.04]">
+                    <p className="text-[9px] font-bold text-cyan-400/60 uppercase tracking-wider">Destaque por audiência</p>
+                    <p className="text-[9px] text-white/35 mt-0.5">
+                      {heroOverrideInfo.promotedLabel} promovido sobre {heroOverrideInfo.rawTop1Label}
+                    </p>
+                    <p className="text-[8px] text-white/20 mt-0.5">{heroOverrideInfo.reason}</p>
+                  </div>
+                )}
+                <p className="text-[9px] font-bold uppercase tracking-wider text-white/20 mb-2">Ranking bruto</p>
                 <div className="space-y-1">
-                  {heroRanking.slice(0, 6).map(it => (
-                    <div key={it.fx.id} className={`flex items-center gap-2 text-[9px] tabular-nums ${it.fx.id === hero?.id ? 'text-cyan-400/70' : 'text-white/30'}`}>
-                      <span className="w-4 text-right font-bold">{it.rank}.</span>
-                      <span className="flex-1 truncate min-w-0">{it.fx.homeTeam.name} x {it.fx.awayTeam.name}</span>
-                      <span className="shrink-0">s:{it.score}</span>
-                      <span className="shrink-0">a:{it.maxAnchor}</span>
-                      <span className="shrink-0 text-white/15 truncate max-w-[120px]">{it.reasons.slice(0, 2).join(' · ')}</span>
-                    </div>
-                  ))}
+                  {heroRanking.slice(0, 6).map(it => {
+                    const isHero = it.fx.id === hero?.id
+                    const wasRawTop1 = it.rank === 1 && heroOverrideInfo
+                    return (
+                      <div key={it.fx.id} className={`flex items-center gap-2 text-[9px] tabular-nums ${isHero ? 'text-cyan-400/70' : 'text-white/30'}`}>
+                        <span className="w-4 text-right font-bold">{it.rank}.</span>
+                        <span className="flex-1 truncate min-w-0">{it.fx.homeTeam.name} x {it.fx.awayTeam.name}</span>
+                        <span className="shrink-0">s:{it.score}</span>
+                        <span className="shrink-0">a:{it.maxAnchor}</span>
+                        {isHero && <span className="shrink-0 text-[8px] text-cyan-400/50 font-bold">HERO</span>}
+                        {wasRawTop1 && !isHero && <span className="shrink-0 text-[8px] text-amber-400/50">anchor&lt;90</span>}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
