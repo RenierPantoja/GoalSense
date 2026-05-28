@@ -13,7 +13,7 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { ClubLogo } from '@/components/ui/ClubLogo'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { sortByAttention, calculateAttention } from './attentionQueue'
-import { sortByFeaturedRanking, scoreLiveMatchForFeature } from './liveMatchRanking'
+import { sortByFeaturedRanking, scoreLiveMatchForFeature, getClubAnchorExported } from './liveMatchRanking'
 import { isTrulyLiveFixture, filterTrulyLiveFixtures } from '@/lib/liveFixtureGuard'
 import { LiveScannerTable, type FixtureStats } from './LiveScannerTable'
 import { QUICK_SCANNERS } from './liveQuickScanners'
@@ -173,23 +173,24 @@ export function LiveRadarPage() {
     return sortByAttention(list, scannerStats)
   }, [liveFixtures, search, scannerStats, summaryFilter])
 
-  // V2.6: pick the featured match using the richer ranking algorithm that
-  // considers competition tier, club popularity, favorites, visual coverage.
-  // The rest of the list stays sorted by attention (real-time urgency).
-  const featuredRanked = useMemo(() => {
-    if (filtered.length === 0) return null
-    const ranked = sortByFeaturedRanking(filtered, { isFavoriteTeam: isFavTeamLive, statsMap: scannerStats })
+  // V2.7 FINAL: Hero is computed from ALL live fixtures (not filtered by search/summary).
+  // This ensures the hero is always the most important match regardless of active filters.
+  const heroFixture = useMemo(() => {
+    if (liveFixtures.length === 0) return null
+    const ranked = sortByFeaturedRanking(liveFixtures, { isFavoriteTeam: isFavTeamLive, statsMap: scannerStats })
     if (import.meta.env.DEV && ranked.length > 0) {
-      console.debug('[GoalSense][LiveHero] Top 5:', ranked.slice(0, 5).map(fx => ({
+      console.debug('[GoalSense][LiveHero] Ranked top 8:', ranked.slice(0, 8).map((fx, i) => ({
+        rank: i + 1,
         match: `${fx.homeTeam.name} x ${fx.awayTeam.name}`,
         score: scoreLiveMatchForFeature(fx, { isFavoriteTeam: isFavTeamLive, stats: scannerStats.get(fx.id), allFixtures: ranked }).score,
+        anchor: Math.max(getClubAnchorExported(fx.homeTeam.name), getClubAnchorExported(fx.awayTeam.name)),
         reasons: scoreLiveMatchForFeature(fx, { isFavoriteTeam: isFavTeamLive, stats: scannerStats.get(fx.id), allFixtures: ranked }).reasons,
       })))
     }
     return ranked[0] || null
-  }, [filtered, scannerStats, isFavTeamLive])
+  }, [liveFixtures, scannerStats, isFavTeamLive])
 
-  const hero = featuredRanked || filtered[0] || null
+  const hero = heroFixture
   const rest = filtered.filter(fx => fx.id !== hero?.id)
   const selectedFixture = fixtures.find(f => f.id === selectedId) || null
 

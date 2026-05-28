@@ -266,6 +266,9 @@ export function scoreLiveMatchForFeature(fx: LiveFixture, options: RankingOption
   return { score, reasons: reasons.slice(0, 5), tier }
 }
 
+/** Exported for debug/display in LiveRadarPage advanced mode. */
+export const getClubAnchorExported = getClubAnchor
+
 /**
  * Sort fixtures by featured ranking score (descending).
  * Uses audience anchor as the primary tie-breaker within 25 points.
