@@ -62,135 +62,76 @@ export function resolveAlert(
   // V3: Infer resolution type and use type-specific window
   const resType = inferPatternResolutionType({ name: alert.patternName, templateId: alert.templateId, description: '', conditions: [], severity: 'attention', status: 'active', isTemplate: false, scope: 'all', minConfidence: 50, action: 'register_alert', maxTriggersPerMatch: 2, antiDuplicateWindow: 5, id: alert.patternId || '', createdAt: '', updatedAt: '' })
   const typeWindow = getResolutionWindow(resType)
+  const minutesSinceTrigger = elapsed - trigMin
 
   // ─── Time-based expiry ─────────────────────────────────────────────────
   if (alertAge > 2.5 * 60 * 60 * 1000 && !isFinished) {
-    return { status: 'expired', strength: 'expired', scoreAtResolution: score, reason: 'Alerta expirou (>2.5h)', evidence: [], confidence: 0 }
+    return { status: 'expired', strength: 'expired', scoreAtResolution: score, reason: 'Alerta expirou (>2.5h)', evidence: [], confidence: 0, resolutionType: resType, windowMinutes: typeWindow }
   }
 
-  // ─── GOAL-BASED PATTERNS ───────────────────────────────────────────────
-  if (pn.includes('pressão por gol') || pn.includes('gol tardio') || pn.includes('over tendência')) {
+  // ─── V3: Type-based resolution ─────────────────────────────────────────
+  // Goal-based types: goal_pressure, late_goal, over_trend, open_game, dominance
+  if (resType === 'goal_pressure' || resType === 'late_goal' || resType === 'over_trend' || resType === 'open_game' || resType === 'dominance') {
     if (goalsSince > 0) {
-      return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Gol confirmado: ${tH}-${tA} → ${cH}-${cA}`, evidence: [`Gol após disparo`, `Placar mudou de ${tH}-${tA} para ${cH}-${cA}`], confidence: 95 }
+      return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Gol confirmado: ${tH}-${tA} → ${cH}-${cA}`, evidence: ['Gol após disparo', `Placar mudou de ${tH}-${tA} para ${cH}-${cA}`], confidence: 95, resolutionType: resType, windowMinutes: typeWindow }
     }
     if (isFinished) {
-      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: 'Jogo terminou sem novo gol', evidence: ['Nenhum gol após o disparo'], confidence: 90 }
+      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: 'Jogo terminou sem novo gol', evidence: ['Nenhum gol após o disparo'], confidence: 90, resolutionType: resType, windowMinutes: typeWindow }
     }
-    // Window: 20 min for pressure patterns
-    if (elapsed - trigMin >= 20 && !isFinished) {
-      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: '20 min sem gol após disparo', evidence: ['Janela de pressão expirou'], confidence: 70 }
+    if (minutesSinceTrigger >= typeWindow && !isFinished) {
+      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: `${typeWindow} min sem gol após disparo`, evidence: ['Janela de pressão expirou'], confidence: 70, resolutionType: resType, windowMinutes: typeWindow }
     }
     return null
   }
 
-  // ─── RETA FINAL / 2º TEMPO / TRAVADO / RUPTURA ─────────────────────────
-  if (pn.includes('reta final') || pn.includes('segundo tempo') || pn.includes('travado') || pn.includes('ruptura')) {
+  // Corner-based type
+  if (resType === 'corner_pressure') {
     if (goalsSince > 0) {
-      return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Evento confirmado: gol (${cH}-${cA})`, evidence: [`Gol após disparo`, `${elapsed}'`], confidence: 92 }
+      return { status: 'confirmed', strength: 'partial_confirmation', scoreAtResolution: score, reason: 'Pressão territorial resultou em gol', evidence: ['Gol após pressão de escanteios'], confidence: 60, resolutionType: resType, windowMinutes: typeWindow }
     }
     if (isFinished) {
-      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: 'Jogo terminou sem evento relevante', evidence: ['Sem gol após disparo'], confidence: 85 }
+      return { status: 'unknown', strength: 'unknown_data', scoreAtResolution: score, reason: 'Dados de escanteios indisponíveis para confirmação', evidence: ['Provider não fornece escanteios em tempo real'], confidence: 0, resolutionType: resType, windowMinutes: typeWindow }
     }
-    if (elapsed - trigMin >= 15 && !isFinished) {
-      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: '15 min sem evento', evidence: ['Janela expirou'], confidence: 65 }
+    if (minutesSinceTrigger >= typeWindow) {
+      return { status: 'unknown', strength: 'unknown_data', scoreAtResolution: score, reason: 'Janela expirou sem dados de escanteios', evidence: [], confidence: 0, resolutionType: resType, windowMinutes: typeWindow }
     }
     return null
   }
 
-  // ─── ESCANTEIOS ────────────────────────────────────────────────────────
-  if (pn.includes('escanteio')) {
-    // Without real-time corner tracking, we can't confirm strongly
-    if (goalsSince > 0) {
-      return { status: 'confirmed', strength: 'partial_confirmation', scoreAtResolution: score, reason: 'Pressão territorial resultou em gol', evidence: ['Gol após pressão de escanteios'], confidence: 60 }
-    }
+  // Card-based type
+  if (resType === 'card_heat') {
     if (isFinished) {
-      return { status: 'unknown', strength: 'unknown_data', scoreAtResolution: score, reason: 'Dados de escanteios indisponíveis para confirmação', evidence: ['Provider não fornece escanteios em tempo real'], confidence: 0 }
+      return { status: 'unknown', strength: 'unknown_data', scoreAtResolution: score, reason: 'Dados de cartões indisponíveis para confirmação automática', evidence: ['Sem tracking de cartões em tempo real'], confidence: 0, resolutionType: resType, windowMinutes: typeWindow }
     }
-    if (alertAge > 30 * 60 * 1000) {
-      return { status: 'expired', strength: 'expired', scoreAtResolution: score, reason: 'Janela de 30min expirou', evidence: [], confidence: 0 }
+    if (minutesSinceTrigger >= typeWindow) {
+      return { status: 'unknown', strength: 'unknown_data', scoreAtResolution: score, reason: 'Janela expirou sem dados de cartões', evidence: [], confidence: 0, resolutionType: resType, windowMinutes: typeWindow }
     }
     return null
   }
 
-  // ─── CARTÕES ───────────────────────────────────────────────────────────
-  if (pn.includes('cartão') || pn.includes('cartões')) {
-    // Without real-time card tracking
+  // Favorite/underdog risk types
+  if (resType === 'favorite_risk' || resType === 'underdog_threat') {
     if (isFinished) {
-      return { status: 'unknown', strength: 'unknown_data', scoreAtResolution: score, reason: 'Dados de cartões indisponíveis para confirmação automática', evidence: ['Sem tracking de cartões em tempo real'], confidence: 0 }
-    }
-    if (alertAge > 30 * 60 * 1000) {
-      return { status: 'expired', strength: 'expired', scoreAtResolution: score, reason: 'Janela expirou', evidence: [], confidence: 0 }
-    }
-    return null
-  }
-
-  // ─── FAVORITO EM RISCO ─────────────────────────────────────────────────
-  if (pn.includes('favorito')) {
-    if (isFinished) {
-      // At trigger, score was tied or fav was behind. Check final.
       if (cH === cA || (tH <= tA && cH <= cA) || (tA <= tH && cA <= cH)) {
-        return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Favorito não venceu: ${cH}-${cA}`, evidence: ['Resultado final confirma risco'], confidence: 90 }
+        return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Favorito não venceu: ${cH}-${cA}`, evidence: ['Resultado final confirma risco'], confidence: 90, resolutionType: resType, windowMinutes: typeWindow }
       }
-      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: `Favorito se recuperou: ${cH}-${cA}`, evidence: ['Favorito virou/venceu'], confidence: 85 }
+      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: `Favorito se recuperou: ${cH}-${cA}`, evidence: ['Favorito virou/venceu'], confidence: 85, resolutionType: resType, windowMinutes: typeWindow }
+    }
+    if (goalsSince > 0 && minutesSinceTrigger <= typeWindow) {
+      return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Evento confirmado: gol (${cH}-${cA})`, evidence: ['Gol após disparo'], confidence: 88, resolutionType: resType, windowMinutes: typeWindow }
     }
     return null
   }
 
-  // ─── DOMÍNIO / PRESSIONANDO SEM CONVERTER ──────────────────────────────
-  if (pn.includes('domínio') || pn.includes('pressionando')) {
-    if (goalsSince > 0) {
-      return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Pressão convertida: ${cH}-${cA}`, evidence: ['Gol após domínio'], confidence: 90 }
-    }
-    if (isFinished) {
-      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: 'Pressão não convertida até o fim', evidence: ['Sem gol do time dominante'], confidence: 80 }
-    }
-    if (elapsed - trigMin >= 20) {
-      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: '20 min sem conversão', evidence: ['Janela de pressão expirou'], confidence: 65 }
-    }
-    return null
-  }
-
-  // ─── ZEBRA ─────────────────────────────────────────────────────────────
-  if (pn.includes('zebra')) {
-    if (isFinished) {
-      const trigDiff = tH - tA
-      const curDiff = cH - cA
-      if (Math.abs(curDiff) <= Math.abs(trigDiff) || curDiff * trigDiff >= 0) {
-        return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Zebra sustentada: ${cH}-${cA}`, evidence: ['Azarão manteve resultado'], confidence: 88 }
-      }
-      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: `Favorito virou: ${cH}-${cA}`, evidence: ['Resultado revertido'], confidence: 85 }
-    }
-    return null
-  }
-
-  // ─── VISITANTE PERIGOSO ────────────────────────────────────────────────
-  if (pn.includes('visitante')) {
-    if (cA > tA) {
-      return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Visitante marcou: ${cH}-${cA}`, evidence: ['Gol do visitante'], confidence: 92 }
-    }
-    if (isFinished) {
-      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: 'Visitante não marcou', evidence: ['Sem gol visitante'], confidence: 80 }
-    }
-    return null
-  }
-
-  // ─── JOGO ABERTO ───────────────────────────────────────────────────────
-  if (pn.includes('jogo aberto') || pn.includes('open')) {
-    if (goalsSince > 0) {
-      return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Novo gol: ${cH}-${cA}`, evidence: ['Jogo aberto confirmado com gol'], confidence: 88 }
-    }
-    if (isFinished) {
-      return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: 'Jogo esfriou', evidence: ['Sem novo gol'], confidence: 75 }
-    }
-    return null
-  }
-
-  // ─── GENERIC FALLBACK ──────────────────────────────────────────────────
+  // Custom/unknown type — conservative
   if (isFinished) {
     if (goalsSince > 0) {
-      return { status: 'confirmed', strength: 'partial_confirmation', scoreAtResolution: score, reason: `Evento após disparo: ${cH}-${cA}`, evidence: ['Gol detectado'], confidence: 60 }
+      return { status: 'confirmed', strength: 'partial_confirmation', scoreAtResolution: score, reason: `Evento após disparo: ${cH}-${cA}`, evidence: ['Gol detectado'], confidence: 60, resolutionType: resType, windowMinutes: typeWindow }
     }
-    return { status: 'unknown', strength: 'unknown_data', scoreAtResolution: score, reason: 'Sem dados suficientes para confirmar', evidence: [], confidence: 0 }
+    return { status: 'unknown', strength: 'unknown_data', scoreAtResolution: score, reason: 'Sem dados suficientes para confirmar', evidence: [], confidence: 0, resolutionType: resType, windowMinutes: typeWindow }
+  }
+  if (minutesSinceTrigger >= typeWindow && !isFinished) {
+    return { status: 'unknown', strength: 'unknown_data', scoreAtResolution: score, reason: 'Janela expirou sem dados suficientes', evidence: [], confidence: 0, resolutionType: resType, windowMinutes: typeWindow }
   }
 
   return null
