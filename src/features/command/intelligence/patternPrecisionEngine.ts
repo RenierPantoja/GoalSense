@@ -9,6 +9,7 @@
  */
 import type { LiveFixture } from '@/lib/apiClient'
 import type { PatternHit, FixtureStatsForPattern, Pattern } from '../types/commandTypes'
+import { buildMomentumWindow, getMomentumAdjustment, patternRequiresMomentum, getMomentumWindowForPattern, type MomentumWindowResult } from './momentumWindowEngine'
 
 // --- Types ----------------------------------------------------------------
 
@@ -142,7 +143,7 @@ export function applyPrecisionChecks(
     : CONFIDENCE_CAP_POOR
 
   // 2. Apply confidence cap
-  const adjustedConfidence = Math.min(hit.confidence, confidenceCap)
+  let adjustedConfidence = Math.min(hit.confidence, confidenceCap)
   if (adjustedConfidence < hit.confidence) {
     reasons.push(`Confiança limitada por qualidade de dados (${dataQuality}): ${hit.confidence} → ${adjustedConfidence}`)
   }
@@ -157,6 +158,26 @@ export function applyPrecisionChecks(
   // 4. Check minimum confidence after adjustment
   if (adjustedConfidence < pattern.minConfidence) {
     blockers.push(`Confiança ${adjustedConfidence}% abaixo do mínimo ${pattern.minConfidence}%`)
+  }
+
+  // 4b. Momentum validation for offensive patterns
+  let momentum: MomentumWindowResult | undefined
+  if (patternRequiresMomentum(pattern) && blockers.length === 0) {
+    const windowMin = getMomentumWindowForPattern(pattern)
+    momentum = buildMomentumWindow(fixture, stats, windowMin)
+    const { adjustment, reason: momReason } = getMomentumAdjustment(momentum, pattern.name)
+    if (adjustment !== 0) {
+      adjustedConfidence = Math.max(20, Math.min(confidenceCap, adjustedConfidence + adjustment))
+      if (momReason) reasons.push(momReason)
+    }
+    // Re-check min confidence after momentum adjustment
+    if (adjustedConfidence < pattern.minConfidence) {
+      blockers.push(`Confiança pós-momentum ${adjustedConfidence}% abaixo do mínimo ${pattern.minConfidence}%`)
+    }
+    // Add momentum blockers
+    if (!momentum.hasRecentActivity && momentum.trend === 'falling') {
+      blockers.push('Sem pressão ofensiva recente')
+    }
   }
 
   // 5. Determine signal state
