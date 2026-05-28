@@ -68,16 +68,21 @@ async function fetchEspnAsCalendar(selectedDate: string): Promise<FDMatch[]> {
   } catch { return [] }
 }
 
-function mapStatus(s: string, utcDate?: string) {
+function mapStatus(statusOrMatch: string | { status: string; utcDate: string; state?: string }, utcDate?: string) {
   // V2.7 architecture: delegate to canonical classification.
-  // This wrapper preserves the old API shape so all existing call sites work
-  // without modification, but the logic is now unified.
-  const cls = classifyMatch({ status: s, utcDate: utcDate || '', state: '' })
+  // Accepts either a full match-like object or (status, utcDate) pair.
+  const input = typeof statusOrMatch === 'string'
+    ? { status: statusOrMatch, utcDate: utcDate || '', state: '' }
+    : statusOrMatch
+  const cls = classifyMatch(input)
   return {
     label: cls.labelShort,
     live: cls.isLive,
     finished: cls.isFinished,
     upcoming: cls.isUpcoming,
+    staleScheduled: cls.isStaleScheduled,
+    startingSoon: cls.isStartingSoon,
+    cls,
   }
 }
 
@@ -103,7 +108,7 @@ function calcImportance(m: FDMatch): number {
 }
 
 function getInsight(m: FDMatch): string {
-  const { live, finished } = mapStatus(m.status)
+  const { live, finished } = mapStatus(m)
   const h = m.score.fullTime.home, a = m.score.fullTime.away
   if (live && h !== null && a !== null && (h + a) >= 4) return 'Jogo de muitos gols'
   if (live) return 'Em andamento'
@@ -122,7 +127,7 @@ function getRelevanceBadge(m: FDMatch): { label: string; style: string } {
 }
 
 function getInsightBadge(m: FDMatch): { label: string; style: string } {
-  const { live, finished } = mapStatus(m.status)
+  const { live, finished } = mapStatus(m)
   const h = m.score.fullTime.home, a = m.score.fullTime.away
   if (live) return { label: 'Ao vivo', style: 'border-emerald-500/20 bg-emerald-500/8 text-emerald-400' }
   if (finished && h !== null && a !== null && Math.abs(h - a) >= 3) return { label: 'Placar dominante', style: 'border-violet-500/20 bg-violet-500/8 text-violet-400/70' }
@@ -138,7 +143,7 @@ function getInsightBadge(m: FDMatch): { label: string; style: string } {
 }
 
 function isDominant(m: FDMatch): boolean {
-  const { finished } = mapStatus(m.status)
+  const { finished } = mapStatus(m)
   if (!finished || m.score.fullTime.home === null) return false
   return Math.abs((m.score.fullTime.home || 0) - (m.score.fullTime.away || 0)) >= 3
 }
@@ -277,7 +282,7 @@ export function MatchesPage() {
   const shiftDate = (d: number) => { const dt = new Date(date + 'T12:00:00'); dt.setDate(dt.getDate() + d); const shifted = dt.toISOString().split('T')[0]; setDate(shifted) }
 
   const openMatch = (m: FDMatch) => {
-    const { label, live } = mapStatus(m.status)
+    const { label, live } = mapStatus(m)
     // Preserve real provider provenance — if we have an ESPN event id (either as
     // primary source or via dedupe enrichment), prefer the ESPN path because
     // MatchCenterPage's rich enrichment is gated on provider === 'espn'.
@@ -529,7 +534,7 @@ export function MatchesPage() {
                   </div>
                   <div className="space-y-2">
                     {favMatches.slice(0, 3).map(m => {
-                      const { live } = mapStatus(m.status)
+                      const { live } = mapStatus(m)
                       const time = formatMatchTime(m.utcDate)
                       return (
                         <div key={m.id} onClick={() => openMatch(m)} className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-white/[0.03] cursor-pointer transition-colors">
@@ -713,7 +718,7 @@ function CompetitionHeader({ emblem, name, country, total, live, finished, upcom
 // ─── Featured Match Card (Jogo principal - premium) ──────────────────────────
 
 function FeaturedMatchCard({ match: m, openMatch }: { match: FDMatch; openMatch: (m: FDMatch) => void }) {
-  const { label, live, finished } = mapStatus(m.status)
+  const { label, live, finished } = mapStatus(m)
   const imp = calcImportance(m)
   const reason = imp >= 100 ? 'Jogo principal do dia' : m.competition.name.toLowerCase().includes('brasil') ? 'Brasileirão em destaque' : live ? 'Ao vivo agora' : 'Mais relevante do dia'
   const time = formatMatchTime(m.utcDate)
@@ -768,7 +773,7 @@ function FeaturedMatchCard({ match: m, openMatch }: { match: FDMatch; openMatch:
 // ─── Brazil Featured Card (sidebar) ─────────────────────────────────────────
 
 function BrazilFeaturedCard({ match: m, openMatch }: { match: FDMatch; openMatch: (m: FDMatch) => void }) {
-  const { label, live, finished } = mapStatus(m.status)
+  const { label, live, finished } = mapStatus(m)
   const time = formatMatchTime(m.utcDate)
   const statusText = live ? (label || 'Ao vivo') : finished ? 'Encerrado' : `${time}`
 
@@ -852,7 +857,7 @@ function SidebarNextCard({ match: m, onClick }: { match: FDMatch; onClick: () =>
 // ─── Sidebar Relevant Card ───────────────────────────────────────────────────
 
 function SidebarRelevantCard({ match: m, rank, onClick }: { match: FDMatch; rank: number; onClick: () => void }) {
-  const { live, finished } = mapStatus(m.status)
+  const { live, finished } = mapStatus(m)
   const reason = getRelevanceReason(m)
   const badge = getRelevanceBadge(m)
   const time = formatMatchTime(m.utcDate)
@@ -896,7 +901,7 @@ function SidebarRelevantCard({ match: m, rank, onClick }: { match: FDMatch; rank
 // ─── Agenda Row (premium, not a table) ───────────────────────────────────────
 
 function AgendaRow({ match: m, onClick, isLast }: { match: FDMatch; onClick: () => void; isLast: boolean }) {
-  const { live, finished } = mapStatus(m.status)
+  const { live, finished } = mapStatus(m)
   const time = formatMatchTime(m.utcDate)
   const diffMin = Math.round((new Date(m.utcDate).getTime() - Date.now()) / 60000)
   const soon = diffMin > 0 && diffMin <= 60
@@ -975,46 +980,46 @@ function AgendaRow({ match: m, onClick, isLast }: { match: FDMatch; onClick: () 
 // ─── Compact Row ─────────────────────────────────────────────────────────────
 
 function CompactRow({ match: m, onClick }: { match: FDMatch; onClick: () => void }) {
-  const { live, finished } = mapStatus(m.status)
+  const { live, finished, staleScheduled, cls } = mapStatus(m)
   const time = formatMatchTime(m.utcDate)
   const { isFavoriteMatch: isFavMatch, toggleFavoriteMatch: toggleFav, isFavoriteTeam: isFavTeam } = useFavorites()
   const matchId = buildCanonicalMatchId(m.homeTeam.shortName || m.homeTeam.name, m.awayTeam.shortName || m.awayTeam.name, m.utcDate)
   const isFav = isFavMatch(matchId) || isFavTeam(m.homeTeam.shortName || m.homeTeam.name) || isFavTeam(m.awayTeam.shortName || m.awayTeam.name)
+  const homeName = m.homeTeam.shortName || m.homeTeam.name
+  const awayName = m.awayTeam.shortName || m.awayTeam.name
   return (
-    <div onClick={onClick} className={`grid grid-cols-[76px_1fr_64px_1fr_120px_32px] sm:grid-cols-[76px_1fr_64px_1fr_120px_32px] items-center px-5 min-h-[52px] cursor-pointer hover:bg-white/[0.035] transition-colors border-b border-white/[0.055] last:border-b-0 ${isFav ? 'border-l-2 border-l-cyan-500/30' : ''}`}>
+    <div onClick={onClick} className={`grid grid-cols-[72px_1fr_56px_1fr_28px] items-center px-4 min-h-[48px] cursor-pointer hover:bg-white/[0.035] transition-colors border-b border-white/[0.04] last:border-b-0 ${isFav ? 'border-l-2 border-l-cyan-500/30' : ''}`}>
       {/* Time/Status */}
-      <div className="text-center">
+      <div className="text-center overflow-hidden">
         {live ? (
-          <span className="inline-flex items-center gap-1 text-[12px] font-bold text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />AO VIVO</span>
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />AO VIVO</span>
         ) : finished ? (
-          <span className="text-[12px] font-semibold text-white/30">FIM</span>
+          <span className="text-[10px] font-semibold text-white/30">FIM</span>
+        ) : staleScheduled ? (
+          <span className="text-[9px] font-medium text-amber-400/60">{cls.labelShort}</span>
         ) : (
-          <span className="text-[13px] font-semibold tabular-nums text-white/55">{time}</span>
+          <span className="text-[12px] font-semibold tabular-nums text-white/55">{time}</span>
         )}
       </div>
       {/* Home team */}
-      <div className="flex items-center gap-2.5 justify-end pr-3 min-w-0">
-        <span className="text-[13px] font-medium text-white/80 truncate text-right">{m.homeTeam.shortName}</span>
-        <ClubLogo src={m.homeTeam.crest} name={m.homeTeam.shortName} size={24} />
+      <div className="flex items-center gap-2 justify-end pr-2 min-w-0 overflow-hidden">
+        <span className="text-[12px] font-medium text-white/80 truncate text-right" title={homeName}>{homeName}</span>
+        <ClubLogo src={m.homeTeam.crest} name={homeName} size={22} />
       </div>
       {/* Score */}
-      <div className="flex items-center justify-center gap-1.5">
-        <span className={`text-[15px] font-bold tabular-nums ${live ? 'text-white' : 'text-white/80'}`}>{m.score.fullTime.home ?? '-'}</span>
-        <span className="text-[10px] text-white/15">:</span>
-        <span className={`text-[15px] font-bold tabular-nums ${live ? 'text-white' : 'text-white/80'}`}>{m.score.fullTime.away ?? '-'}</span>
+      <div className="flex items-center justify-center gap-1 shrink-0">
+        <span className={`text-[14px] font-bold tabular-nums ${live ? 'text-white' : 'text-white/75'}`}>{m.score.fullTime.home ?? '-'}</span>
+        <span className="text-[9px] text-white/15">:</span>
+        <span className={`text-[14px] font-bold tabular-nums ${live ? 'text-white' : 'text-white/75'}`}>{m.score.fullTime.away ?? '-'}</span>
       </div>
       {/* Away team */}
-      <div className="flex items-center gap-2.5 pl-3 min-w-0">
-        <ClubLogo src={m.awayTeam.crest} name={m.awayTeam.shortName} size={24} />
-        <span className="text-[13px] font-medium text-white/65 truncate">{m.awayTeam.shortName}</span>
-      </div>
-      {/* Competition */}
-      <div className="text-right min-w-0">
-        <span className="text-[11px] text-white/35 truncate block">{translateComp(m.competition.name)}</span>
+      <div className="flex items-center gap-2 pl-2 min-w-0 overflow-hidden">
+        <ClubLogo src={m.awayTeam.crest} name={awayName} size={22} />
+        <span className="text-[12px] font-medium text-white/65 truncate" title={awayName}>{awayName}</span>
       </div>
       {/* Favorite */}
-      <div className="flex justify-center">
-        <FavoriteButton active={isFav} onClick={() => toggleFav({ canonicalMatchId: matchId, homeTeam: m.homeTeam.shortName || m.homeTeam.name, awayTeam: m.awayTeam.shortName || m.awayTeam.name, competition: m.competition.name, utcDate: m.utcDate })} size={12} />
+      <div className="flex justify-center shrink-0">
+        <FavoriteButton active={isFav} onClick={() => toggleFav({ canonicalMatchId: matchId, homeTeam: homeName, awayTeam: awayName, competition: m.competition.name, utcDate: m.utcDate })} size={11} />
       </div>
     </div>
   )
@@ -1048,7 +1053,7 @@ function HighlightsView({ matches, openMatch }: { matches: FDMatch[]; openMatch:
 }
 
 function HeroHighlightCard({ match: m, onClick }: { match: FDMatch; onClick: () => void }) {
-  const { label, live, finished } = mapStatus(m.status)
+  const { label, live, finished } = mapStatus(m)
   const insight = getInsight(m)
   const imp = calcImportance(m)
   const reason = imp >= 100 ? 'Jogo principal do dia' : live ? 'Ao vivo agora' : getRelevanceReason(m)
@@ -1115,7 +1120,7 @@ function HighlightSection({ title, icon, matches, openMatch }: { title: string; 
 }
 
 function HighlightCard({ match: m, onClick }: { match: FDMatch; onClick: () => void }) {
-  const { label, live, finished } = mapStatus(m.status)
+  const { label, live, finished } = mapStatus(m)
   const insight = getInsight(m)
   const reason = getRelevanceReason(m)
   const time = formatMatchTime(m.utcDate)

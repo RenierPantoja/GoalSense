@@ -80,8 +80,8 @@ const CANCELLED_STATUSES = new Set([
 // --- Temporal constants ---
 
 const STARTING_SOON_MINUTES = 60
-const GRACE_MINUTES = 20
-const STALE_AFTER_MINUTES = 35
+const GRACE_MINUTES = 10
+const STALE_AFTER_MINUTES = 30
 
 // --- Core classification function -----------------------------------------
 
@@ -149,10 +149,10 @@ export function classifyMatch(match: MatchInput, now: Date = new Date()): MatchC
   // Past kickoff with scheduled status
   if (minutesSinceKickoff <= GRACE_MINUTES) {
     // Within grace: could be starting with slight delay
-    return buildResult('starting_soon')
+    return buildResult('starting_soon', 'Aguardando início')
   }
   if (minutesSinceKickoff <= STALE_AFTER_MINUTES) {
-    return buildResult('stale_scheduled')
+    return buildResult('stale_scheduled', 'Aguardando atualização')
   }
   // Definitely stale
   return buildResult('stale_scheduled')
@@ -160,27 +160,30 @@ export function classifyMatch(match: MatchInput, now: Date = new Date()): MatchC
 
 // --- Result builder -------------------------------------------------------
 
-function buildResult(status: MatchCanonicalStatus): MatchClassification {
+function buildResult(status: MatchCanonicalStatus, labelOverride?: string): MatchClassification {
+  let result: MatchClassification
   switch (status) {
     case 'live':
-      return { canonicalStatus: 'live', isLive: true, isFinished: false, isUpcoming: false, isStartingSoon: false, isStaleScheduled: false, isDelayed: false, isCancelled: false, isUnknown: false, labelShort: 'Ao vivo', labelLong: 'Ao vivo', badgeTone: 'live', sortRank: 500 }
+      result = { canonicalStatus: 'live', isLive: true, isFinished: false, isUpcoming: false, isStartingSoon: false, isStaleScheduled: false, isDelayed: false, isCancelled: false, isUnknown: false, labelShort: 'Ao vivo', labelLong: 'Ao vivo', badgeTone: 'live', sortRank: 500 }; break
     case 'halftime':
-      return { canonicalStatus: 'halftime', isLive: true, isFinished: false, isUpcoming: false, isStartingSoon: false, isStaleScheduled: false, isDelayed: false, isCancelled: false, isUnknown: false, labelShort: 'Intervalo', labelLong: 'Intervalo', badgeTone: 'live', sortRank: 480 }
+      result = { canonicalStatus: 'halftime', isLive: true, isFinished: false, isUpcoming: false, isStartingSoon: false, isStaleScheduled: false, isDelayed: false, isCancelled: false, isUnknown: false, labelShort: 'Intervalo', labelLong: 'Intervalo', badgeTone: 'live', sortRank: 480 }; break
     case 'finished':
-      return { canonicalStatus: 'finished', isLive: false, isFinished: true, isUpcoming: false, isStartingSoon: false, isStaleScheduled: false, isDelayed: false, isCancelled: false, isUnknown: false, labelShort: 'FIM', labelLong: 'Encerrado', badgeTone: 'finished', sortRank: 600 }
+      result = { canonicalStatus: 'finished', isLive: false, isFinished: true, isUpcoming: false, isStartingSoon: false, isStaleScheduled: false, isDelayed: false, isCancelled: false, isUnknown: false, labelShort: 'FIM', labelLong: 'Encerrado', badgeTone: 'finished', sortRank: 600 }; break
     case 'scheduled':
-      return { canonicalStatus: 'scheduled', isLive: false, isFinished: false, isUpcoming: true, isStartingSoon: false, isStaleScheduled: false, isDelayed: false, isCancelled: false, isUnknown: false, labelShort: 'Agendado', labelLong: 'Agendado', badgeTone: 'upcoming', sortRank: 300 }
+      result = { canonicalStatus: 'scheduled', isLive: false, isFinished: false, isUpcoming: true, isStartingSoon: false, isStaleScheduled: false, isDelayed: false, isCancelled: false, isUnknown: false, labelShort: 'Agendado', labelLong: 'Agendado', badgeTone: 'upcoming', sortRank: 300 }; break
     case 'starting_soon':
-      return { canonicalStatus: 'starting_soon', isLive: false, isFinished: false, isUpcoming: true, isStartingSoon: true, isStaleScheduled: false, isDelayed: false, isCancelled: false, isUnknown: false, labelShort: 'Em breve', labelLong: 'Começa em breve', badgeTone: 'soon', sortRank: 400 }
+      result = { canonicalStatus: 'starting_soon', isLive: false, isFinished: false, isUpcoming: true, isStartingSoon: true, isStaleScheduled: false, isDelayed: false, isCancelled: false, isUnknown: false, labelShort: 'Em breve', labelLong: 'Começa em breve', badgeTone: 'soon', sortRank: 400 }; break
     case 'stale_scheduled':
-      return { canonicalStatus: 'stale_scheduled', isLive: false, isFinished: false, isUpcoming: false, isStartingSoon: false, isStaleScheduled: true, isDelayed: false, isCancelled: false, isUnknown: false, labelShort: 'Pendente', labelLong: 'Status pendente', badgeTone: 'pending', sortRank: 200 }
+      result = { canonicalStatus: 'stale_scheduled', isLive: false, isFinished: false, isUpcoming: false, isStartingSoon: false, isStaleScheduled: true, isDelayed: false, isCancelled: false, isUnknown: false, labelShort: 'Pendente', labelLong: 'Status pendente', badgeTone: 'pending', sortRank: 200 }; break
     case 'delayed':
-      return { canonicalStatus: 'delayed', isLive: false, isFinished: false, isUpcoming: false, isStartingSoon: false, isStaleScheduled: false, isDelayed: true, isCancelled: false, isUnknown: false, labelShort: 'Adiado', labelLong: 'Adiado', badgeTone: 'delayed', sortRank: 150 }
+      result = { canonicalStatus: 'delayed', isLive: false, isFinished: false, isUpcoming: false, isStartingSoon: false, isStaleScheduled: false, isDelayed: true, isCancelled: false, isUnknown: false, labelShort: 'Adiado', labelLong: 'Adiado', badgeTone: 'delayed', sortRank: 150 }; break
     case 'cancelled':
-      return { canonicalStatus: 'cancelled', isLive: false, isFinished: false, isUpcoming: false, isStartingSoon: false, isStaleScheduled: false, isDelayed: false, isCancelled: true, isUnknown: false, labelShort: 'Cancelado', labelLong: 'Cancelado', badgeTone: 'cancelled', sortRank: 100 }
+      result = { canonicalStatus: 'cancelled', isLive: false, isFinished: false, isUpcoming: false, isStartingSoon: false, isStaleScheduled: false, isDelayed: false, isCancelled: true, isUnknown: false, labelShort: 'Cancelado', labelLong: 'Cancelado', badgeTone: 'cancelled', sortRank: 100 }; break
     default:
-      return { canonicalStatus: 'unknown', isLive: false, isFinished: false, isUpcoming: false, isStartingSoon: false, isStaleScheduled: false, isDelayed: false, isCancelled: false, isUnknown: true, labelShort: 'Indefinido', labelLong: 'Status indefinido', badgeTone: 'unknown', sortRank: 0 }
+      result = { canonicalStatus: 'unknown', isLive: false, isFinished: false, isUpcoming: false, isStartingSoon: false, isStaleScheduled: false, isDelayed: false, isCancelled: false, isUnknown: true, labelShort: 'Indefinido', labelLong: 'Status indefinido', badgeTone: 'unknown', sortRank: 0 }; break
   }
+  if (labelOverride) { result = { ...result, labelShort: labelOverride, labelLong: labelOverride } }
+  return result
 }
 
 // --- Status precedence (used by dedupe) -----------------------------------
