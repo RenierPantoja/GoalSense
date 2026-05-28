@@ -163,6 +163,12 @@ export interface ScannerEntry {
   priority: 'critical' | 'attention' | 'watch' | 'low'
   confidence: number
   reason: string
+  /** V5 precision signal state. */
+  signalState?: 'ready_to_alert' | 'strong_candidate' | 'watch_only' | 'blocked'
+  /** Blockers preventing alert (from precision engine). */
+  blockers?: string[]
+  /** Data quality assessment. */
+  dataQuality?: 'rich' | 'partial' | 'poor'
 }
 
 // ─── Stats for pattern evaluation ────────────────────────────────────────────

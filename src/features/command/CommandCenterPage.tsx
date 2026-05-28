@@ -264,7 +264,7 @@ export function CommandCenterPage() {
     }
   }, [hasAutoDiscovery, discoveryConfig.registerAlertAuto, discoveryConfig.minConfidence, discoveries, triggerAlert, registerCommandAlert, isFavoriteTeam, statsMap])
 
-  // ─── Scanner (ONLY signals) ────────────────────────────────────────────────
+  // ─── Scanner (ONLY signals) — V5 with precision states ──────────────────────
   const scannerEntries = useMemo((): ScannerEntry[] => {
     if (!hasIntelligence) return []
     const hitIds = new Set(patternHits.map(h => h.fixtureId))
@@ -273,13 +273,33 @@ export function CommandCenterPage() {
     for (const fx of fixtures) {
       const fxHits = patternHits.filter(h => h.fixtureId === fx.id)
       if (!hitIds.has(fx.id) && !discIds.has(fx.id)) continue
-      const top = fxHits[0] || null; const disc = discoveries.find(d => d.fixtureId === fx.id)
-      const conf = top?.confidence || disc?.confidence || 0
-      const priority: ScannerEntry['priority'] = conf >= 75 ? 'critical' : conf >= 50 ? 'attention' : 'watch'
-      entries.push({ fixture: fx, patterns: fxHits, topPattern: top, priority, confidence: conf, reason: top?.patternName || disc?.insight || '' })
+      const top = fxHits[0] || null
+      const disc = discoveries.find(d => d.fixtureId === fx.id)
+      const fxStats = statsMap.get(fx.id)
+
+      // Run precision on top hit for signal state
+      let signalState: ScannerEntry['signalState']
+      let adjustedConf = top?.confidence || disc?.confidence || 0
+      let blockersList: string[] | undefined
+      let dq: ScannerEntry['dataQuality']
+
+      if (top) {
+        const pat = patterns.find(p => p.id === top.patternId)
+        if (pat) {
+          const precision = applyPrecisionChecks(top, pat, fx, fxStats)
+          signalState = precision.signalState
+          adjustedConf = precision.adjustedConfidence
+          if (precision.blockers.length > 0) blockersList = precision.blockers
+          dq = precision.dataQuality
+        }
+      }
+
+      const conf = adjustedConf
+      const priority: ScannerEntry['priority'] = conf >= 75 ? 'critical' : conf >= 50 ? 'attention' : conf >= 35 ? 'watch' : 'low'
+      entries.push({ fixture: fx, patterns: fxHits, topPattern: top, priority, confidence: conf, reason: top?.patternName || disc?.insight || '', signalState, blockers: blockersList, dataQuality: dq })
     }
     return entries.sort((a, b) => b.confidence - a.confidence)
-  }, [hasIntelligence, fixtures, patternHits, discoveries])
+  }, [hasIntelligence, fixtures, patternHits, discoveries, statsMap, patterns])
 
   // ─── Decision ──────────────────────────────────────────────────────────────
   const decisionMatch = useMemo(() => {
