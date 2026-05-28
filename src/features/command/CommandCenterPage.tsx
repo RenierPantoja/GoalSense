@@ -16,6 +16,7 @@ import { useAlerts } from '@/context/AlertsContext'
 import { useViewMode } from '@/context/ViewModeContext'
 import { usePatterns } from './contexts/PatternContext'
 import { evaluateAllPatterns } from './intelligence/patternEvaluator'
+import { applyPrecisionChecks } from './intelligence/patternPrecisionEngine'
 import { runAutoDiscovery } from './intelligence/autoDiscoveryEngine'
 import { resolveAlert } from './intelligence/patternResolutionEngine'
 import { recordScopeEntities } from '@/services/intelligence/scopeKnowledgeBase'
@@ -162,14 +163,18 @@ export function CommandCenterPage() {
   useEffect(() => {
     if (!hasIntelligence) return
     for (const hit of patternHits) {
-      if (hit.confidence >= 50) {
-        const pat = patterns.find(p => p.id === hit.patternId)
-        if (pat && pat.action !== 'suggest_only') {
-          const fx = hit.fixture; const fxStats = statsMap.get(fx.id)
-          triggerAlert({ patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, league: fx.league.name, minute: fx.status.elapsed, confidence: hit.confidence, reasons: hit.reasons, timestamp: new Date().toISOString(), status: 'pending', scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 } })
-          registerCommandAlert({ source: 'command_center', patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, competition: fx.league.name, minuteAtTrigger: fx.status.elapsed, scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 }, confidence: hit.confidence, severity: hit.severity, evidences: hit.reasons, status: 'pending', triggerSnapshot: { minute: fx.status.elapsed, homeScore: fx.score.home ?? 0, awayScore: fx.score.away ?? 0, status: fx.status.short, competition: fx.league.name, provider: fx.provider, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, homeLogo: fx.homeTeam.logo, awayLogo: fx.awayTeam.logo, favoriteInvolved: isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name), conditionsMatched: hit.matchedConditions, conditionsTotal: hit.totalConditions, confidenceAtTrigger: hit.confidence, ...(fxStats ? { stats: fxStats } : {}) } })
-        }
-      }
+      const pat = patterns.find(p => p.id === hit.patternId)
+      if (!pat) continue
+      const fx = hit.fixture
+      const fxStats = statsMap.get(fx.id)
+
+      // V5 Precision Engine: validate before alerting
+      const precision = applyPrecisionChecks(hit, pat, fx, fxStats)
+
+      if (!precision.shouldAlert) continue
+
+      triggerAlert({ patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, league: fx.league.name, minute: fx.status.elapsed, confidence: precision.adjustedConfidence, reasons: hit.reasons, timestamp: new Date().toISOString(), status: 'pending', scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 } })
+      registerCommandAlert({ source: 'command_center', patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, competition: fx.league.name, minuteAtTrigger: fx.status.elapsed, scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 }, confidence: precision.adjustedConfidence, severity: hit.severity, evidences: [...hit.reasons, ...precision.reasons], status: 'pending', triggerSnapshot: { minute: fx.status.elapsed, homeScore: fx.score.home ?? 0, awayScore: fx.score.away ?? 0, status: fx.status.short, competition: fx.league.name, provider: fx.provider, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, homeLogo: fx.homeTeam.logo, awayLogo: fx.awayTeam.logo, favoriteInvolved: isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name), conditionsMatched: hit.matchedConditions, conditionsTotal: hit.totalConditions, confidenceAtTrigger: precision.adjustedConfidence, ...(fxStats ? { stats: fxStats } : {}) } })
     }
   }, [patternHits, hasIntelligence, triggerAlert, patterns, registerCommandAlert, isFavoriteTeam, statsMap])
 
