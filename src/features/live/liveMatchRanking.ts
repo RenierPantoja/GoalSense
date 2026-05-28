@@ -175,21 +175,23 @@ export function scoreLiveMatchForFeature(fx: LiveFixture, options: RankingOption
     else if (elapsed >= 45) { score += 4 }
   }
 
-  // 4. DRAMA SCORE (up to 35)
+  // 4. DRAMA SCORE (capped at 25 to prevent drama-only dominance)
   const homeGoals = fx.score.home ?? 0
   const awayGoals = fx.score.away ?? 0
   const totalGoals = homeGoals + awayGoals
   const diff = Math.abs(homeGoals - awayGoals)
+  let dramaScore = 0
 
   if (elapsed >= 60 && diff <= 1 && totalGoals > 0) {
-    score += 18
+    dramaScore = 18
     reasons.push('Placar apertado em fase avançada')
   } else if (homeGoals === awayGoals && totalGoals > 0) {
-    score += 12
+    dramaScore = 12
   } else if (diff === 1) {
-    score += 10
+    dramaScore = 10
   }
-  if (totalGoals >= 4) { score += 8; reasons.push('Jogo de muitos gols') }
+  if (totalGoals >= 4) { dramaScore = Math.min(dramaScore + 7, 25); reasons.push('Jogo de muitos gols') }
+  score += Math.min(dramaScore, 25)
 
   // 5. FAVORITES (up to 30)
   if (options.isFavoriteTeam) {
@@ -240,19 +242,36 @@ export function scoreLiveMatchForFeature(fx: LiveFixture, options: RankingOption
 
 /**
  * Sort fixtures by featured ranking score (descending).
+ * Includes a big-club priority guard: if scores are within 25 points,
+ * the fixture with the higher maxClubScore wins.
  */
 export function sortByFeaturedRanking(
   fixtures: LiveFixture[],
   options: { isFavoriteTeam?: (name: string) => boolean; statsMap?: Map<number, FixtureStats> } = {},
 ): LiveFixture[] {
-  return [...fixtures].sort((a, b) => {
-    const sa = scoreLiveMatchForFeature(a, { isFavoriteTeam: options.isFavoriteTeam, stats: options.statsMap?.get(a.id), allFixtures: fixtures })
-    const sb = scoreLiveMatchForFeature(b, { isFavoriteTeam: options.isFavoriteTeam, stats: options.statsMap?.get(b.id), allFixtures: fixtures })
-    if (sb.score !== sa.score) return sb.score - sa.score
-    // Tie-breakers
-    const clubA = getClubScore(a.homeTeam.name) + getClubScore(a.awayTeam.name)
-    const clubB = getClubScore(b.homeTeam.name) + getClubScore(b.awayTeam.name)
-    if (clubB !== clubA) return clubB - clubA
-    return (b.status.elapsed || 0) - (a.status.elapsed || 0)
+  // Pre-compute scores and club data for stable sorting
+  const scored = fixtures.map(fx => {
+    const result = scoreLiveMatchForFeature(fx, { isFavoriteTeam: options.isFavoriteTeam, stats: options.statsMap?.get(fx.id), allFixtures: fixtures })
+    const homeClub = getClubScore(fx.homeTeam.name)
+    const awayClub = getClubScore(fx.awayTeam.name)
+    return { fx, score: result.score, maxClub: Math.max(homeClub, awayClub), totalClub: homeClub + awayClub, elapsed: fx.status.elapsed || 0 }
   })
+
+  scored.sort((a, b) => {
+    // Primary: score difference
+    const scoreDiff = b.score - a.score
+    if (Math.abs(scoreDiff) > 25) return scoreDiff
+
+    // Big club priority guard: within 25 points, prefer higher maxClub
+    if (b.maxClub !== a.maxClub) return b.maxClub - a.maxClub
+    if (b.totalClub !== a.totalClub) return b.totalClub - a.totalClub
+
+    // Then by raw score
+    if (scoreDiff !== 0) return scoreDiff
+
+    // Final tie-breakers
+    return b.elapsed - a.elapsed
+  })
+
+  return scored.map(s => s.fx)
 }
