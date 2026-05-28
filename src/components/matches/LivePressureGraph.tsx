@@ -69,7 +69,7 @@ const MARKER_SIZES_PX: Record<PressureGraphEventType, number> = {
   yellow_card: 24,
   red_card: 26,
   second_yellow: 26,
-  substitution: 26,
+  substitution: 30,
   var: 22,
   unknown: 16,
 }

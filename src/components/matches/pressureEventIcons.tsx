@@ -110,7 +110,7 @@ function renderIcon(type: PressureGraphEventType, size: number, teamAccent?: str
     case 'yellow_card': return <CardIcon size={size} variant="yellow" />
     case 'red_card': return <CardIcon size={size} variant="red" />
     case 'second_yellow': return <CardIcon size={size} variant="second_yellow" />
-    case 'substitution': return <BadgedLucideSvg nodes={LUCIDE_ARROW_RIGHT_LEFT} size={size} accent="#94a3b8" haloOpacity={0.10} dimmed />
+    case 'substitution': return <SubstitutionIcon size={size} />
     case 'var': return <VarTag size={size} />
     case 'unknown':
     default: return <UnknownDot size={size} />
@@ -334,7 +334,7 @@ function internalSizeFor(type: PressureGraphEventType): number {
     case 'shot_off_target':
       return 12.5
     case 'substitution':
-      return 12
+      return 14
     case 'var':
       return 9.5
     default:
