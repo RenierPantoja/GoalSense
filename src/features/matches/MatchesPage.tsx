@@ -14,6 +14,7 @@ import { useViewMode } from '@/context/ViewModeContext'
 import { FavoriteButton } from '@/components/ui/FavoriteButton'
 import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
 import { classifyMatch, type MatchClassification } from '@/lib/matchesClassification'
+import { getMainMatches, scoreMatchImportance } from '@/features/matches/mainMatchRanking'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -35,7 +36,7 @@ interface FDMatch {
   venue?: string | null
 }
 
-type FilterKey = 'all' | 'main' | 'live' | 'upcoming' | 'finished' | 'brazil' | 'europe' | 'relevant' | 'soon' | 'dominant' | 'favorites'
+type FilterKey = 'all' | 'main' | 'live' | 'upcoming' | 'finished' | 'brazil' | 'europe' | 'soon' | 'dominant' | 'favorites'
 type ViewMode = 'agenda' | 'highlights' | 'compact'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -252,13 +253,12 @@ export function MatchesPage() {
       list = list.filter(m => [m.homeTeam.shortName, m.homeTeam.name, m.awayTeam.shortName, m.awayTeam.name, m.competition.name].some(s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(q)))
     }
     switch (filter) {
-      case 'main': return list.filter(m => getMatchImportanceScore(m) >= 90 || isFavoriteTeam(m.homeTeam.shortName || m.homeTeam.name) || isFavoriteTeam(m.awayTeam.shortName || m.awayTeam.name)).sort((a, b) => calcImportance(b) - calcImportance(a))
+      case 'main': return getMainMatches(list, { isFavoriteTeam }) as typeof list
       case 'live': return list.filter(m => classifyMatch(m).isLive)
       case 'upcoming': return list.filter(m => classifyMatch(m).isUpcoming)
       case 'finished': return list.filter(m => classifyMatch(m).isFinished)
       case 'brazil': return list.filter(m => isBrazil(m))
       case 'europe': return list.filter(m => isEurope(m))
-      case 'relevant': return list.filter(m => calcImportance(m) >= 70).sort((a, b) => calcImportance(b) - calcImportance(a))
       case 'soon': return list.filter(m => classifyMatch(m).isStartingSoon)
       case 'dominant': return list.filter(m => isDominant(m))
       case 'favorites': return list.filter(m => isFavoriteMatch(buildCanonicalMatchId(m.homeTeam.shortName || m.homeTeam.name, m.awayTeam.shortName || m.awayTeam.name, m.utcDate)) || isFavoriteTeam(m.homeTeam.shortName || m.homeTeam.name) || isFavoriteTeam(m.awayTeam.shortName || m.awayTeam.name) || isFavoriteLeague(String(m.competition.name)))
@@ -363,7 +363,7 @@ export function MatchesPage() {
             {search && <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 hover:text-white/40"><X size={14} /></button>}
           </div>
           <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-            {([['all','Todos'],['main','Principais'],['live','Ao vivo'],['upcoming','Próximos'],['finished','Encerrados'],['relevant','Alta relevância'],['soon','Em breve'],['brazil','Brasil'],['europe','Europa'],['dominant','Placar definido'],['favorites','Favoritos']] as [FilterKey,string][]).map(([k,l]) => (
+            {([['all','Todos'],['main','Principais'],['live','Ao vivo'],['upcoming','Próximos'],['finished','Encerrados'],['soon','Em breve'],['brazil','Brasil'],['europe','Europa'],['dominant','Placar definido'],['favorites','Favoritos']] as [FilterKey,string][]).map(([k,l]) => (
               <button key={k} onClick={() => setFilter(k)} className={`shrink-0 px-3 py-1.5 rounded-xl text-[10px] font-medium transition-all ${filter === k ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/25 shadow-[0_0_12px_-4px_rgba(34,211,238,0.15)]' : 'text-white/30 hover:text-white/50 hover:bg-white/[0.03] border border-transparent'}`}>{l}</button>
             ))}
           </div>
