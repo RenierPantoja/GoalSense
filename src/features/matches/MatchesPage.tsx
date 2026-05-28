@@ -901,10 +901,10 @@ function SidebarRelevantCard({ match: m, rank, onClick }: { match: FDMatch; rank
 // ─── Agenda Row (premium, not a table) ───────────────────────────────────────
 
 function AgendaRow({ match: m, onClick, isLast }: { match: FDMatch; onClick: () => void; isLast: boolean }) {
-  const { live, finished } = mapStatus(m)
+  const { live, finished, staleScheduled, cls } = mapStatus(m)
   const time = formatMatchTime(m.utcDate)
   const diffMin = Math.round((new Date(m.utcDate).getTime() - Date.now()) / 60000)
-  const soon = diffMin > 0 && diffMin <= 60
+  const soon = !staleScheduled && diffMin > 0 && diffMin <= 60
   const insightBadge = getInsightBadge(m)
   const imp = calcImportance(m)
   const { isFavoriteMatch: isFavMatch, toggleFavoriteMatch: toggleFav, isFavoriteTeam: isFavTeam } = useFavorites()
@@ -934,6 +934,11 @@ function AgendaRow({ match: m, onClick, isLast }: { match: FDMatch; onClick: () 
           </div>
         ) : finished ? (
           <span className="inline-block text-[10px] font-medium text-white/30 px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.04]">Enc.</span>
+        ) : staleScheduled ? (
+          <div>
+            <span className="text-[9px] font-medium text-amber-400/70 block">{cls.labelShort}</span>
+            <span className="text-[9px] text-white/20 mt-0.5 block">Prev. {time}</span>
+          </div>
         ) : (
           <div>
             <span className="text-[13px] font-bold tabular-nums text-white/55 block">{time}</span>
@@ -1120,46 +1125,57 @@ function HighlightSection({ title, icon, matches, openMatch }: { title: string; 
 }
 
 function HighlightCard({ match: m, onClick }: { match: FDMatch; onClick: () => void }) {
-  const { label, live, finished } = mapStatus(m)
+  const { live, finished, staleScheduled, cls } = mapStatus(m)
   const insight = getInsight(m)
   const reason = getRelevanceReason(m)
   const time = formatMatchTime(m.utcDate)
   const { isFavoriteMatch: isFavMatch, toggleFavoriteMatch: toggleFav, isFavoriteTeam: isFavTeam } = useFavorites()
   const matchId = buildCanonicalMatchId(m.homeTeam.shortName || m.homeTeam.name, m.awayTeam.shortName || m.awayTeam.name, m.utcDate)
   const isFav = isFavMatch(matchId) || isFavTeam(m.homeTeam.shortName || m.homeTeam.name) || isFavTeam(m.awayTeam.shortName || m.awayTeam.name)
+  const homeName = m.homeTeam.shortName || m.homeTeam.name
+  const awayName = m.awayTeam.shortName || m.awayTeam.name
+
+  const statusLabel = live ? cls.labelShort : finished ? 'Enc.' : staleScheduled ? cls.labelShort : time
 
   return (
-    <div onClick={onClick} className={`group rounded-[18px] border ${isFav ? 'border-cyan-500/20' : 'border-white/[0.05]'} bg-gradient-to-b from-white/[0.03] to-transparent p-5 cursor-pointer hover:border-white/[0.12] hover:shadow-[0_12px_40px_-12px_rgba(0,0,0,0.4)] transition-all`}>
+    <div onClick={onClick} className={`group rounded-[18px] border ${isFav ? 'border-cyan-500/20' : 'border-white/[0.05]'} bg-gradient-to-b from-white/[0.03] to-transparent p-5 cursor-pointer hover:border-white/[0.12] hover:shadow-[0_12px_40px_-12px_rgba(0,0,0,0.4)] transition-all overflow-hidden`}>
+      {/* Header */}
       <div className="flex items-center justify-between mb-3.5">
-        <span className="text-[9px] font-semibold text-white/25 uppercase tracking-wider">{reason}</span>
-        <div className="flex items-center gap-1.5">
-          <FavoriteButton active={isFav} onClick={() => toggleFav({ canonicalMatchId: matchId, homeTeam: m.homeTeam.shortName || m.homeTeam.name, awayTeam: m.awayTeam.shortName || m.awayTeam.name, competition: m.competition.name, utcDate: m.utcDate })} size={12} />
-          <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-md ${live ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : 'text-white/20'}`}>
+        <span className="text-[9px] font-semibold text-white/25 uppercase tracking-wider truncate mr-2">{reason}</span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <FavoriteButton active={isFav} onClick={() => toggleFav({ canonicalMatchId: matchId, homeTeam: homeName, awayTeam: awayName, competition: m.competition.name, utcDate: m.utcDate })} size={12} />
+          <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-md whitespace-nowrap ${live ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' : staleScheduled ? 'text-amber-400/60' : 'text-white/20'}`}>
             {live && <span className="inline-block h-1 w-1 rounded-full bg-emerald-400 animate-pulse mr-1" />}
-            {live ? label : finished ? 'Enc.' : time}
+            {statusLabel}
           </span>
         </div>
       </div>
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2.5">
-          <ClubLogo src={m.homeTeam.crest} name={m.homeTeam.shortName} size={30} />
-          <span className="text-[12px] font-bold text-white/70">{m.homeTeam.shortName}</span>
+      {/* Match body — grid with fixed score column */}
+      <div className="grid grid-cols-[1fr_72px_1fr] items-center gap-2 mb-3">
+        {/* Home */}
+        <div className="flex items-center gap-2 justify-end min-w-0 overflow-hidden">
+          <span className="text-[12px] font-bold text-white/70 truncate text-right" title={homeName}>{homeName}</span>
+          <ClubLogo src={m.homeTeam.crest} name={homeName} size={28} />
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[22px] font-bold tabular-nums text-white">{m.score.fullTime.home ?? '-'}</span>
-          <span className="text-[11px] text-white/10">:</span>
-          <span className="text-[22px] font-bold tabular-nums text-white">{m.score.fullTime.away ?? '-'}</span>
+        {/* Score */}
+        <div className="flex items-center justify-center gap-1.5 shrink-0">
+          <span className="text-[20px] font-bold tabular-nums text-white">{m.score.fullTime.home ?? '-'}</span>
+          <span className="text-[10px] text-white/10">:</span>
+          <span className="text-[20px] font-bold tabular-nums text-white">{m.score.fullTime.away ?? '-'}</span>
         </div>
-        <div className="flex items-center gap-2.5">
-          <span className="text-[12px] font-bold text-white/50">{m.awayTeam.shortName}</span>
-          <ClubLogo src={m.awayTeam.crest} name={m.awayTeam.shortName} size={30} />
+        {/* Away */}
+        <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+          <ClubLogo src={m.awayTeam.crest} name={awayName} size={28} />
+          <span className="text-[12px] font-bold text-white/50 truncate" title={awayName}>{awayName}</span>
         </div>
       </div>
+      {/* Footer */}
       <div className="flex items-center justify-between">
-        <span className="text-[9px] text-white/20">{translateComp(m.competition.name)}</span>
-        {insight && <span className="text-[9px] text-white/25 italic">{insight}</span>}
+        <span className="text-[9px] text-white/20 truncate mr-2">{translateComp(m.competition.name)}</span>
+        {insight && <span className="text-[9px] text-white/25 italic truncate">{insight}</span>}
       </div>
-      <span className="block text-[9px] text-cyan-400/0 group-hover:text-cyan-400/60 mt-2.5 font-semibold transition-colors">Analisar →</span>
+      {staleScheduled && <span className="block text-[8px] text-amber-400/40 mt-1">Previsto {time}</span>}
+      <span className="block text-[9px] text-cyan-400/0 group-hover:text-cyan-400/60 mt-2 font-semibold transition-colors">Analisar →</span>
     </div>
   )
 }
