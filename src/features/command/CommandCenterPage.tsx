@@ -185,8 +185,17 @@ export function CommandCenterPage() {
 
       if (!precision.shouldAlert) continue
 
+      // Build temporal evidence for audit trail
+      const fxEvts = eventsMap.get(fx.id)
+      const recentWindow = 10
+      const recentEvts = fxEvts && fx.status.elapsed ? fxEvts.filter(e => e.minute >= (fx.status.elapsed! - recentWindow) && e.minute <= fx.status.elapsed!).slice(0, 5) : []
+      const offTypes = ['shot_on_target', 'shot_off_target', 'corner', 'dangerous_attack', 'goal', 'penalty_scored']
+      const offRecent = recentEvts.filter(e => offTypes.includes(e.type))
+      const momSrc = offRecent.length >= 1 ? 'timed_events' : fxStats ? 'stats_proxy' : 'insufficient'
+      const recConf = offRecent.length >= 3 ? 85 : offRecent.length >= 1 ? 65 : 35
+
       triggerAlert({ patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, league: fx.league.name, minute: fx.status.elapsed, confidence: precision.adjustedConfidence, reasons: hit.reasons, timestamp: new Date().toISOString(), status: 'pending', scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 } })
-      registerCommandAlert({ source: 'command_center', patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, competition: fx.league.name, minuteAtTrigger: fx.status.elapsed, scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 }, confidence: precision.adjustedConfidence, severity: hit.severity, evidences: [...hit.reasons, ...precision.reasons], status: 'pending', triggerSnapshot: { minute: fx.status.elapsed, homeScore: fx.score.home ?? 0, awayScore: fx.score.away ?? 0, status: fx.status.short, competition: fx.league.name, provider: fx.provider, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, homeLogo: fx.homeTeam.logo, awayLogo: fx.awayTeam.logo, favoriteInvolved: isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name), conditionsMatched: hit.matchedConditions, conditionsTotal: hit.totalConditions, confidenceAtTrigger: precision.adjustedConfidence, ...(fxStats ? { stats: fxStats } : {}) } })
+      registerCommandAlert({ source: 'command_center', patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, competition: fx.league.name, minuteAtTrigger: fx.status.elapsed, scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 }, confidence: precision.adjustedConfidence, severity: hit.severity, evidences: [...hit.reasons, ...precision.reasons], status: 'pending', triggerSnapshot: { minute: fx.status.elapsed, homeScore: fx.score.home ?? 0, awayScore: fx.score.away ?? 0, status: fx.status.short, competition: fx.league.name, provider: fx.provider, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, homeLogo: fx.homeTeam.logo, awayLogo: fx.awayTeam.logo, favoriteInvolved: isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name), conditionsMatched: hit.matchedConditions, conditionsTotal: hit.totalConditions, confidenceAtTrigger: precision.adjustedConfidence, ...(fxStats ? { stats: fxStats } : {}) }, temporalEvidence: { momentumSource: momSrc as any, recencyConfidence: recConf, windowMinutes: recentWindow, recentEventsUsed: recentEvts.map(e => ({ minute: e.minute, type: e.type, side: e.side, teamName: e.teamName, playerName: e.playerName })) } })
     }
   }, [patternHits, hasIntelligence, triggerAlert, patterns, registerCommandAlert, isFavoriteTeam, statsMap])
 

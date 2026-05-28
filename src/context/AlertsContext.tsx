@@ -80,6 +80,13 @@ export interface CommandCenterAlert {
   resolutionStrength?: ResolutionStrength
   triggerSnapshot?: TriggerSnapshot
   resolutionSnapshot?: ResolutionSnapshot
+  /** V5 Phase 7C: temporal evidence at trigger time. */
+  temporalEvidence?: {
+    momentumSource: 'timed_events' | 'mixed' | 'stats_proxy' | 'insufficient'
+    recencyConfidence?: number
+    windowMinutes?: number
+    recentEventsUsed: { minute: number; type: string; side: string; teamName?: string; playerName?: string }[]
+  }
   createdAt: string
   resolvedAt?: string
 }
