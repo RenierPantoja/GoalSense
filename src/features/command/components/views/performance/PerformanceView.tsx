@@ -34,6 +34,10 @@ export interface PerformanceViewProps {
   triggeredAlerts: TriggeredAlert[]
   commandAlerts: CommandCenterAlert[]
   isAdvanced: boolean
+  /** Backend performance reports (Phase B5). If available, shown as primary source. */
+  backendReports?: PatternPerformanceReport[] | null
+  /** Performance data source indicator */
+  performanceSource?: 'backend' | 'local'
 }
 
 // ─── Reliability Summary Cards ───────────────────────────────────────────────
@@ -254,7 +258,7 @@ function LocalBacktestSection({ reports }: { reports: PatternPerformanceReport[]
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export function PerformanceView({ patterns, triggeredAlerts, commandAlerts, isAdvanced }: PerformanceViewProps) {
+export function PerformanceView({ patterns, triggeredAlerts, commandAlerts, isAdvanced, backendReports, performanceSource }: PerformanceViewProps) {
   // Pattern Health engine (for PatternStatRow compatibility)
   const cmdAlertsForHealth = useMemo(
     () => commandAlerts.map(a => ({ patternId: a.patternId, status: a.status, confidence: a.confidence, timestamp: a.createdAt })),
@@ -268,11 +272,17 @@ export function PerformanceView({ patterns, triggeredAlerts, commandAlerts, isAd
     }))
   }, [patterns, triggeredAlerts, cmdAlertsForHealth])
 
-  // Performance analytics reports — single source of truth
+  // Performance analytics reports — hybrid source (backend preferred, local fallback)
   const performanceReports = useMemo(
-    () => buildAllPerformanceReports(patterns, commandAlerts, triggeredAlerts),
-    [patterns, commandAlerts, triggeredAlerts]
+    () => {
+      // Use backend reports if available and non-empty
+      if (backendReports && backendReports.length > 0) return backendReports
+      // Fallback to local calculation
+      return buildAllPerformanceReports(patterns, commandAlerts, triggeredAlerts)
+    },
+    [patterns, commandAlerts, triggeredAlerts, backendReports]
   )
+  const activeSource = backendReports && backendReports.length > 0 ? 'backend' : 'local'
 
   const totalDispatched = triggeredAlerts.length
   const totalConfirmed = triggeredAlerts.filter(t => t.status === 'confirmed').length
@@ -303,7 +313,7 @@ export function PerformanceView({ patterns, triggeredAlerts, commandAlerts, isAd
         <header className="rounded-[20px] border border-white/[0.06] bg-gradient-to-br from-white/[0.02] to-transparent p-6">
           <div>
             <h2 className="text-[20px] font-bold text-white/90 tracking-tight">Performance dos radares</h2>
-            <p className="text-[12px] text-white/55 mt-1">Mede padrões disparados, resoluções e jornadas pré-jogo vs resultado.</p>
+            <p className="text-[12px] text-white/55 mt-1">Mede padrões disparados, resoluções e jornadas pré-jogo vs resultado.{isAdvanced && <span className={`ml-2 text-[10px] ${activeSource === 'backend' ? 'text-emerald-400/60' : 'text-white/35'}`}>· Fonte: {activeSource === 'backend' ? 'Backend' : 'Local'}</span>}</p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-px rounded-xl overflow-hidden border border-white/[0.05] bg-white/[0.01] mt-5">
             <CounterCell label="Padrões ativos" value={activePatterns} tone="cyan" />

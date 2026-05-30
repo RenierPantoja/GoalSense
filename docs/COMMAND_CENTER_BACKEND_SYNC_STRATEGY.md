@@ -153,6 +153,15 @@ backendResolutionId?: string    // Backend resolution record ID
 - localStorage updated as mirror
 - Automatic conflict resolution with `updatedAt` comparison
 
+### Phase B5: Performance Backend Analytics ✅ (Current)
+- Backend calculates performance from real alerts/resolutions in DB
+- Frontend fetches backend performance when online
+- Falls back to local analytics when backend unavailable
+- Source indicator in advanced mode
+- Same metrics/rules as local engine (unknown ≠ failed, min sample 5)
+- Breakdowns by momentum source, data quality, provider, resolution type
+- Server-side recommendations based on evidence
+
 ## Conflict Resolution (Phase 4 — Future)
 
 | Scenario | Resolution |

@@ -89,3 +89,17 @@ export async function resolveBackendAlert(id: string, data: any): Promise<any | 
 // --- Status ---
 
 export { isEnabled as isBackendEnabled }
+
+// --- Performance ---
+
+export async function getBackendPerformancePatterns(): Promise<any[] | null> {
+  return fetchApi('/api/performance/patterns')
+}
+
+export async function getBackendPerformancePattern(patternId: string): Promise<any | null> {
+  return fetchApi(`/api/performance/patterns/${patternId}`)
+}
+
+export async function getBackendPerformanceSummary(): Promise<any | null> {
+  return fetchApi('/api/performance/summary')
+}

@@ -1,0 +1,310 @@
+/**
+ * Performance Service — calculates pattern performance from real alerts/resolutions.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Rules:
+ * - Unknown does NOT count as failed
+ * - Rates only with resolvedCount >= 5
+ * - No invented metrics
+ * - Honest recommendations based on evidence
+ */
+import { prisma } from '../../db/client.js'
+
+const DEFAULT_USER = 'default'
+const MIN_SAMPLE_FOR_RATE = 5
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+export interface PerformanceBucket {
+  total: number
+  confirmed: number
+  confirmedPartial: number
+  failed: number
+  unknown: number
+  pending: number
+  usefulRate: number | null
+  confirmedRate: number | null
+}
+
+export type ReliabilityLabel =
+  | 'insufficient_sample'
+  | 'preliminary'
+  | 'promising'
+  | 'reliable'
+  | 'noisy'
+  | 'data_limited'
+  | 'underperforming'
+
+export interface PatternPerformanceReport {
+  patternId: string
+  patternName: string
+  sampleSize: number
+  resolvedCount: number
+  pendingCount: number
+  confirmedCount: number
+  confirmedPartialCount: number
+  failedCount: number
+  unknownCount: number
+  expiredCount: number
+  confirmedRate: number | null
+  usefulRate: number | null
+  failedRate: number | null
+  unknownRate: number | null
+  averageConfidence: number | null
+  reliability: ReliabilityLabel
+  warnings: string[]
+  recommendations: string[]
+  breakdowns: {
+    byResolutionType: Record<string, number>
+    byDataQuality: Record<string, number>
+    byMomentumSource: Record<string, number>
+    byProvider: Record<string, number>
+  }
+}
+
+export interface PerformanceSummary {
+  totalAlerts: number
+  resolvedCount: number
+  pendingCount: number
+  confirmedCount: number
+  confirmedPartialCount: number
+  failedCount: number
+  unknownCount: number
+  expiredCount: number
+  usefulRate: number | null
+  failedRate: number | null
+  unknownRate: number | null
+  reliablePatterns: number
+  promisingPatterns: number
+  noisyPatterns: number
+  insufficientSamplePatterns: number
+  underperformingPatterns: number
+  dataLimitedPatterns: number
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function safeParseJson(str: string | null | undefined, fallback: any): any {
+  if (!str) return fallback
+  try { return JSON.parse(str) } catch { return fallback }
+}
+
+function calculateRates(confirmed: number, partial: number, failed: number, unknown: number, total: number) {
+  const resolved = confirmed + partial + failed
+  return {
+    resolvedCount: resolved,
+    confirmedRate: resolved >= MIN_SAMPLE_FOR_RATE ? confirmed / resolved : null,
+    usefulRate: resolved >= MIN_SAMPLE_FOR_RATE ? (confirmed + partial) / resolved : null,
+    failedRate: resolved >= MIN_SAMPLE_FOR_RATE ? failed / resolved : null,
+    unknownRate: total >= MIN_SAMPLE_FOR_RATE ? unknown / total : null,
+  }
+}
+
+function calculateReliability(
+  sampleSize: number,
+  usefulRate: number | null,
+  failedRate: number | null,
+  unknownRate: number | null,
+): ReliabilityLabel {
+  if (sampleSize < MIN_SAMPLE_FOR_RATE) return 'insufficient_sample'
+  if (sampleSize < 30 && usefulRate === null) return 'preliminary'
+  if (unknownRate !== null && unknownRate > 0.4) return 'data_limited'
+  if (failedRate !== null && failedRate > 0.5) return 'underperforming'
+  if (usefulRate !== null && usefulRate < 0.4 && failedRate !== null && failedRate > 0.35) return 'noisy'
+  if (usefulRate !== null && usefulRate >= 0.55) return 'reliable'
+  if (usefulRate !== null && usefulRate >= 0.4) return 'promising'
+  if (sampleSize < 30) return 'preliminary'
+  return 'promising'
+}
+
+function buildWarningsAndRecommendations(
+  sampleSize: number,
+  usefulRate: number | null,
+  failedRate: number | null,
+  unknownRate: number | null,
+  byMomentumSource: Record<string, number>,
+): { warnings: string[]; recommendations: string[] } {
+  const warnings: string[] = []
+  const recommendations: string[] = []
+
+  if (sampleSize < MIN_SAMPLE_FOR_RATE) {
+    warnings.push('Amostra insuficiente para conclusão.')
+  }
+  if (unknownRate !== null && unknownRate > 0.4) {
+    warnings.push(`${Math.round(unknownRate * 100)}% dos alertas ficaram sem resolução.`)
+    recommendations.push('Provider não entrega dados suficientes. Use requireRichData ou restrinja ligas.')
+  }
+  if (failedRate !== null && failedRate > 0.45) {
+    warnings.push(`Taxa de falha alta: ${Math.round(failedRate * 100)}%.`)
+    recommendations.push('Aumente confiança mínima ou exija momentum confirmado.')
+  }
+  if (usefulRate !== null && usefulRate > 0.6 && sampleSize >= 30) {
+    recommendations.push('Padrão confiável com amostra significativa.')
+  } else if (usefulRate !== null && usefulRate > 0.6) {
+    recommendations.push('Padrão promissor. Manter ativo e coletar mais amostra.')
+  }
+  if ((byMomentumSource['stats_proxy'] || 0) > 5 && (byMomentumSource['timed_events'] || 0) > 5) {
+    recommendations.push('Considere exigir eventos minutados para melhor precisão.')
+  }
+
+  return { warnings, recommendations }
+}
+
+// ─── Main Functions ──────────────────────────────────────────────────────────
+
+export async function buildPatternPerformance(patternId: string): Promise<PatternPerformanceReport | null> {
+  const pattern = await prisma.pattern.findFirst({ where: { id: patternId, userId: DEFAULT_USER } })
+  if (!pattern) return null
+
+  const alerts = await prisma.alert.findMany({
+    where: { patternId, userId: DEFAULT_USER },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  const sampleSize = alerts.length
+  if (sampleSize === 0) {
+    return {
+      patternId, patternName: pattern.name,
+      sampleSize: 0, resolvedCount: 0, pendingCount: 0,
+      confirmedCount: 0, confirmedPartialCount: 0, failedCount: 0, unknownCount: 0, expiredCount: 0,
+      confirmedRate: null, usefulRate: null, failedRate: null, unknownRate: null, averageConfidence: null,
+      reliability: 'insufficient_sample',
+      warnings: ['Nenhum alerta registrado para este padrão.'],
+      recommendations: [],
+      breakdowns: { byResolutionType: {}, byDataQuality: {}, byMomentumSource: {}, byProvider: {} },
+    }
+  }
+
+  const confirmedCount = alerts.filter(a => a.status === 'confirmed').length
+  const confirmedPartialCount = alerts.filter(a => a.status === 'confirmed_partial').length
+  const failedCount = alerts.filter(a => a.status === 'failed').length
+  const unknownCount = alerts.filter(a => a.status === 'unknown').length
+  const expiredCount = alerts.filter(a => a.status === 'expired').length
+  const pendingCount = alerts.filter(a => a.status === 'pending').length
+
+  const rates = calculateRates(confirmedCount, confirmedPartialCount, failedCount, unknownCount, sampleSize)
+  const averageConfidence = Math.round(alerts.reduce((s, a) => s + a.confidence, 0) / sampleSize)
+
+  // Breakdowns from evidence/temporal JSON
+  const byResolutionType: Record<string, number> = {}
+  const byDataQuality: Record<string, number> = {}
+  const byMomentumSource: Record<string, number> = {}
+  const byProvider: Record<string, number> = {}
+
+  for (const alert of alerts) {
+    // Resolution type from resolution table
+    const evidence = safeParseJson(alert.evidenceJson, {})
+    const temporal = safeParseJson(alert.temporalEvidenceJson, null)
+
+    // Momentum source
+    const momentum = temporal?.momentumSource || 'unknown'
+    byMomentumSource[momentum] = (byMomentumSource[momentum] || 0) + 1
+
+    // Data quality (from triggerSnapshot in evidence)
+    const snapshot = evidence?.triggerSnapshot
+    if (snapshot?.stats?.shotsOnTarget && snapshot?.stats?.possession) {
+      byDataQuality['rich'] = (byDataQuality['rich'] || 0) + 1
+    } else if (snapshot?.stats) {
+      byDataQuality['partial'] = (byDataQuality['partial'] || 0) + 1
+    } else {
+      byDataQuality['poor'] = (byDataQuality['poor'] || 0) + 1
+    }
+
+    // Provider
+    const provider = snapshot?.provider || evidence?.provider || 'unknown'
+    byProvider[provider] = (byProvider[provider] || 0) + 1
+  }
+
+  // Resolution types from AlertResolution table
+  const resolutions = await prisma.alertResolution.findMany({
+    where: { alertId: { in: alerts.map(a => a.id) } },
+  })
+  for (const r of resolutions) {
+    const type = r.resolutionType || r.resolutionStatus
+    byResolutionType[type] = (byResolutionType[type] || 0) + 1
+  }
+
+  const reliability = calculateReliability(sampleSize, rates.usefulRate, rates.failedRate, rates.unknownRate)
+  const { warnings, recommendations } = buildWarningsAndRecommendations(
+    sampleSize, rates.usefulRate, rates.failedRate, rates.unknownRate, byMomentumSource,
+  )
+
+  return {
+    patternId,
+    patternName: pattern.name,
+    sampleSize,
+    resolvedCount: rates.resolvedCount,
+    pendingCount,
+    confirmedCount,
+    confirmedPartialCount,
+    failedCount,
+    unknownCount,
+    expiredCount,
+    confirmedRate: rates.confirmedRate,
+    usefulRate: rates.usefulRate,
+    failedRate: rates.failedRate,
+    unknownRate: rates.unknownRate,
+    averageConfidence,
+    reliability,
+    warnings,
+    recommendations,
+    breakdowns: { byResolutionType, byDataQuality, byMomentumSource, byProvider },
+  }
+}
+
+export async function buildAllPatternPerformance(): Promise<PatternPerformanceReport[]> {
+  const patterns = await prisma.pattern.findMany({
+    where: { userId: DEFAULT_USER, status: { not: 'archived' } },
+    orderBy: { updatedAt: 'desc' },
+  })
+
+  const reports: PatternPerformanceReport[] = []
+  for (const pattern of patterns) {
+    const report = await buildPatternPerformance(pattern.id)
+    if (report) reports.push(report)
+  }
+
+  return reports.sort((a, b) => b.sampleSize - a.sampleSize)
+}
+
+export async function buildPerformanceSummary(): Promise<PerformanceSummary> {
+  const alerts = await prisma.alert.findMany({ where: { userId: DEFAULT_USER } })
+
+  const totalAlerts = alerts.length
+  const confirmedCount = alerts.filter(a => a.status === 'confirmed').length
+  const confirmedPartialCount = alerts.filter(a => a.status === 'confirmed_partial').length
+  const failedCount = alerts.filter(a => a.status === 'failed').length
+  const unknownCount = alerts.filter(a => a.status === 'unknown').length
+  const expiredCount = alerts.filter(a => a.status === 'expired').length
+  const pendingCount = alerts.filter(a => a.status === 'pending').length
+
+  const rates = calculateRates(confirmedCount, confirmedPartialCount, failedCount, unknownCount, totalAlerts)
+
+  // Get pattern-level reliability counts
+  const reports = await buildAllPatternPerformance()
+  const reliablePatterns = reports.filter(r => r.reliability === 'reliable').length
+  const promisingPatterns = reports.filter(r => r.reliability === 'promising' || r.reliability === 'preliminary').length
+  const noisyPatterns = reports.filter(r => r.reliability === 'noisy').length
+  const insufficientSamplePatterns = reports.filter(r => r.reliability === 'insufficient_sample').length
+  const underperformingPatterns = reports.filter(r => r.reliability === 'underperforming').length
+  const dataLimitedPatterns = reports.filter(r => r.reliability === 'data_limited').length
+
+  return {
+    totalAlerts,
+    resolvedCount: rates.resolvedCount,
+    pendingCount,
+    confirmedCount,
+    confirmedPartialCount,
+    failedCount,
+    unknownCount,
+    expiredCount,
+    usefulRate: rates.usefulRate,
+    failedRate: rates.failedRate,
+    unknownRate: rates.unknownRate,
+    reliablePatterns,
+    promisingPatterns,
+    noisyPatterns,
+    insufficientSamplePatterns,
+    underperformingPatterns,
+    dataLimitedPatterns,
+  }
+}

@@ -8,6 +8,7 @@ import { env } from './env.js'
 import { healthRoutes } from './routes/health.routes.js'
 import { patternRoutes } from './modules/patterns/patterns.routes.js'
 import { alertRoutes } from './modules/alerts/alerts.routes.js'
+import { performanceRoutes } from './modules/performance/performance.routes.js'
 
 const app = Fastify({ logger: true })
 
@@ -20,6 +21,7 @@ await app.register(cors, {
 app.register(healthRoutes, { prefix: '/api' })
 app.register(patternRoutes, { prefix: '/api' })
 app.register(alertRoutes, { prefix: '/api' })
+app.register(performanceRoutes, { prefix: '/api' })
 
 // Start
 const start = async () => {
