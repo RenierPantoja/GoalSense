@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Patterns ────────────────────────────────────────────────────────────────
+
+model Pattern {
+  id              String   @id @default(cuid())
+  userId          String   @default("default")
+  name            String
+  description     String   @default("")
+  status          String   @default("paused") // active, paused, archived
+  severity        String   @default("attention") // critical, attention, info
+  scope           String   @default("all")
+  action          String   @default("register_alert")
+  minConfidence   Int      @default(50)
+  requireRichData Boolean  @default(false)
+  onlyLive        Boolean  @default(false)
+  onlyPreMatch    Boolean  @default(false)
+  conditionsJson  String   @default("[]") // JSON array of PatternCondition
+  scopeFilterJson String?  // JSON array of scope filters
+  templateId      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  alerts          Alert[]
+  performance     PatternPerformance?
+}
+
+// ─── Fixtures ────────────────────────────────────────────────────────────────
+
+model Fixture {
+  id                String   @id @default(cuid())
+  provider          String
+  providerFixtureId String
+  canonicalKey      String
+  homeName          String
+  awayName          String
+  competition       String
+  status            String
+  startTime         DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  snapshots         LiveSnapshot[]
+  alerts            Alert[]
+
+  @@unique([provider, providerFixtureId])
+  @@index([canonicalKey])
+  @@index([startTime])
+}
+
+// ─── Live Snapshots ──────────────────────────────────────────────────────────
+
+model LiveSnapshot {
+  id            String   @id @default(cuid())
+  fixtureId     String
+  minute        Int?
+  status        String
+  scoreHome     Int      @default(0)
+  scoreAway     Int      @default(0)
+  penaltyHome   Int?
+  penaltyAway   Int?
+  dataQuality   String   @default("poor") // rich, partial, poor
+  provider      String
+  statsJson     String?  // JSON object with stats
+  eventsJson    String?  // JSON array of events
+  capturedAt    DateTime @default(now())
+
+  fixture       Fixture  @relation(fields: [fixtureId], references: [id])
+
+  @@index([fixtureId, capturedAt])
+}
+
+// ─── Alerts ──────────────────────────────────────────────────────────────────
+
+model Alert {
+  id                    String   @id @default(cuid())
+  userId                String   @default("default")
+  patternId             String
+  fixtureId             String
+  status                String   @default("pending") // pending, confirmed, confirmed_partial, failed, unknown, expired
+  confidence            Int
+  signalState           String   @default("ready_to_alert")
+  triggerMinute         Int?
+  triggerScoreHome      Int      @default(0)
+  triggerScoreAway      Int      @default(0)
+  evidenceJson          String   @default("[]")
+  temporalEvidenceJson  String?
+  duplicateSignature    String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  pattern               Pattern  @relation(fields: [patternId], references: [id])
+  fixture               Fixture  @relation(fields: [fixtureId], references: [id])
+  resolution            AlertResolution?
+
+  @@index([patternId])
+  @@index([fixtureId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ─── Alert Resolutions ───────────────────────────────────────────────────────
+
+model AlertResolution {
+  id               String   @id @default(cuid())
+  alertId          String   @unique
+  resolutionStatus String   // confirmed, confirmed_partial, failed, unknown, expired
+  resolutionType   String?  // goal_pressure, corner_pressure, etc.
+  windowMinutes    Int?
+  evidenceJson     String   @default("[]")
+  resolvedAt       DateTime @default(now())
+
+  alert            Alert    @relation(fields: [alertId], references: [id])
+}
+
+// ─── Pattern Performance ─────────────────────────────────────────────────────
+
+model PatternPerformance {
+  id            String   @id @default(cuid())
+  patternId     String   @unique
+  sampleSize    Int      @default(0)
+  confirmedRate Float?
+  usefulRate    Float?
+  failedRate    Float?
+  unknownRate   Float?
+  reliability   String   @default("insufficient_sample")
+  updatedAt     DateTime @updatedAt
+
+  pattern       Pattern  @relation(fields: [patternId], references: [id])
+}
+
+// ─── Provider Health ─────────────────────────────────────────────────────────
+
+model ProviderHealth {
+  id           String   @id @default(cuid())
+  provider     String
+  endpoint     String
+  status       String   // ok, degraded, down
+  latencyMs    Int?
+  errorMessage String?
+  checkedAt    DateTime @default(now())
+
+  @@index([provider, checkedAt])
+}
+
+// ─── Audit Log ───────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String   @default("default")
+  action      String
+  entityType  String
+  entityId    String?
+  payloadJson String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+}

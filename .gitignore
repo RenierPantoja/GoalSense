@@ -8,3 +8,7 @@ dist
 .next
 .vercel
 .env*
+
+# Backend
+backend/dist
+backend/node_modules
