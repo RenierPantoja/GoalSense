@@ -66,6 +66,8 @@ export interface LiveFixture {
   referee: string | null
   date: string
   raw: string
+  /** V15: Source metadata for score/status debugging. */
+  _scoreSource?: string
 }
 
 interface LiveResponse {
@@ -105,6 +107,10 @@ function pickBestFixture(a: LiveFixture, b: LiveFixture): LiveFixture {
     if (!winner.penaltyScore && loser.penaltyScore) {
       winner.penaltyScore = loser.penaltyScore
     }
+    // Tag source if winner is from a different provider
+    if (winner.provider !== loser.provider) {
+      winner._scoreSource = `${winner.provider} (won by status over ${loser.provider})`
+    }
     return winner
   }
 
@@ -116,6 +122,9 @@ function pickBestFixture(a: LiveFixture, b: LiveFixture): LiveFixture {
     const loser = minA > minB ? b : a
     if (!winner.penaltyScore && loser.penaltyScore) {
       winner.penaltyScore = loser.penaltyScore
+    }
+    if (winner.provider !== loser.provider) {
+      winner._scoreSource = `${winner.provider} (won by minute over ${loser.provider})`
     }
     return winner
   }

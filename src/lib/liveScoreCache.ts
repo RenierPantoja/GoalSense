@@ -76,6 +76,7 @@ export function reconcileFixtureScore(fixture: LiveFixture): void {
   if (cachedTotal > providerTotal) {
     fixture.score.home = cached.home
     fixture.score.away = cached.away
+    fixture._scoreSource = `events_confirmed (was ${fixture.provider})`
   }
 }
 

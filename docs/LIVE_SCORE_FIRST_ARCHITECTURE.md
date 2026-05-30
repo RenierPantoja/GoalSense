@@ -87,3 +87,37 @@ ESPN Summary (/apis/site/v2/sports/soccer/all/summary?event=ID) → Stats + Even
 - Does NOT fetch summary for all matches (only top 15 in Command Center + opened match)
 - Does NOT use localStorage for score persistence (in-memory only, expires in 5min)
 - Does NOT invent scores or simulate clocks
+
+## Multi-Provider Score Race (Already Implemented)
+
+### How It Works
+
+`getLiveFixtures()` fetches ESPN + football-data + API-Football in parallel. The merge process IS the score race:
+
+1. ESPN fixtures added first (best logos)
+2. football-data checked — if same match exists, `pickBestFixture()` chooses the one with better status/minute
+3. API-Football checked — same logic, plus score/minute merge if duplicate
+
+`pickBestFixture()` decides the winner by:
+1. Status score (P > ET > 2H > HT > 1H > NS)
+2. Minute (higher wins)
+3. Penalty score presence
+4. Logo presence
+
+### Field-Level Source Metadata
+
+Each fixture carries `_scoreSource?: string` for debugging:
+- `"espn"` — ESPN won (default, first in array)
+- `"api_football (won by minute over espn)"` — API-Football had fresher minute
+- `"events_confirmed (was espn)"` — Score cache corrected a stale provider score
+
+### Why a Separate "Score Race" Module Is Unnecessary
+
+The existing `getLiveFixtures()` + `pickBestFixture()` + `reconcileAllFixtureScores()` pipeline already:
+- Fetches all providers in parallel ✅
+- Picks the best version per match ✅
+- Applies event-confirmed corrections ✅
+- Never regresses ✅
+- Tags the source for debugging ✅
+
+Creating a separate `liveScoreRace.ts` module would duplicate this logic without adding value.
