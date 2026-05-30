@@ -63,8 +63,8 @@ export function getAdaptivePollingInterval(fixtures: LiveFixture[]): number {
     return ['LIVE', '1H', '2H', 'HT', 'ET', 'BT', 'P'].includes(s)
   })
 
-  if (hasCritical) return 10_000  // 10s for critical moments
-  if (hasLive) return 15_000      // 15s for normal live
+  if (hasCritical) return 8_000   // 8s for critical moments (score-first)
+  if (hasLive) return 12_000      // 12s for normal live
   return 45_000                    // 45s when no live matches
 }
 
