@@ -6,6 +6,7 @@ import { storeFixtureForNavigation } from '@/lib/matchNavigation'
 import { getMatchLocalDateKey, formatMatchTime, isMatchOnSelectedLocalDate, formatSelectedDateLabel, getTodayLocalDateKey, debugMatchDate } from '@/utils/matchDate'
 import { getMatchImportanceScore, getMatchImportanceReason, getMatchImportanceBadge, sortMatchesByImportance, getMainGlobalMatch, getBrazilFeaturedMatch } from '@/utils/matchImportance'
 import { dedupeMatches, normalizeCompetitionName } from '@/services/matchesDedup'
+import { teamsAreSame } from '@/features/providers/teamNameNormalizer'
 import { curateMatches, getMatchRelevanceReason, type CompetitionGroup } from '@/features/matches/matchCuration'
 import { MainMatchesEditorial } from '@/features/matches/MainMatchesEditorial'
 import type { LiveFixture } from '@/lib/apiClient'
@@ -219,8 +220,8 @@ export function MatchesPage() {
         // MatchCenterPage can still try the rich ESPN summary path.
         for (const em of espnMatches) {
           const dupIndex = fdMatches.findIndex(fd =>
-            fd.homeTeam.shortName.toLowerCase().includes(em.homeTeam.shortName.toLowerCase().slice(0, 5)) &&
-            fd.awayTeam.shortName.toLowerCase().includes(em.awayTeam.shortName.toLowerCase().slice(0, 5))
+            teamsAreSame(fd.homeTeam.shortName || fd.homeTeam.name, em.homeTeam.shortName || em.homeTeam.name) &&
+            teamsAreSame(fd.awayTeam.shortName || fd.awayTeam.name, em.awayTeam.shortName || em.awayTeam.name)
           )
           if (dupIndex >= 0) {
             const dup = fdMatches[dupIndex]
