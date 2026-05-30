@@ -45,6 +45,24 @@ interface MatchData {
   commentary: { clock: string; text: string }[]
   homeRoster: Player[]; awayRoster: Player[]
 }
+
+/** V15: Merge new match data with previous, preserving events/commentary that might be dropped by partial payloads. */
+function mergeMatchData(prev: MatchData | null, next: MatchData): MatchData {
+  if (!prev) return next
+  return {
+    ...next,
+    // Preserve events if new payload has fewer (partial response)
+    events: next.events.length >= prev.events.length ? next.events : prev.events,
+    // Preserve commentary if new payload has fewer
+    commentary: next.commentary.length >= prev.commentary.length ? next.commentary : prev.commentary,
+    // Preserve rosters if new payload is empty
+    homeRoster: next.homeRoster.length > 0 ? next.homeRoster : prev.homeRoster,
+    awayRoster: next.awayRoster.length > 0 ? next.awayRoster : prev.awayRoster,
+    // Score: use higher (non-regression)
+    home: { ...next.home, score: Math.max(next.home.score, prev.home.score) },
+    away: { ...next.away, score: Math.max(next.away.score, prev.away.score) },
+  }
+}
 interface Player { jersey: string; name: string; starter: boolean; goal?: boolean; yellowCard?: boolean; redCard?: boolean; subbed?: boolean }
 
 type NarrationFilter = 'important' | 'all' | 'goals' | 'cards' | 'subs' | 'shots'
@@ -120,26 +138,26 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       // Strict validation in tryEspnSummary protects against ID collisions.
       if (isEspnFixture) {
         const summaryData = await tryEspnSummary(effectiveFixtureId, expectedHome, expectedAway)
-        if (summaryData) { setData(summaryData); setError(null); return }
+        if (summaryData) { setData(prev => mergeMatchData(prev, summaryData)); setError(null); return }
       }
 
       // Attempt 2: Search ESPN scoreboard by team names.
       // Provider-agnostic — recovers rich data even when fixture came from football-data.
       // Uses the fixture's actual date so finished/scheduled matches enrich correctly.
       const searchData = await searchEspnScoreboard(expectedHome, expectedAway, fixtureDateKey)
-      if (searchData) { setData(searchData); setError(null); return }
+      if (searchData) { setData(prev => mergeMatchData(prev, searchData)); setError(null); return }
 
       // Attempt 3: Try provider-specific data (non-ESPN or ESPN failed)
       const apiData = await tryApiFootballLive(expectedHome, expectedAway)
-      if (apiData) { setData(apiData); setError(null); return }
+      if (apiData) { setData(prev => mergeMatchData(prev, apiData)); setError(null); return }
 
       if (fixtureState?.provider === 'football_data' && effectiveFixtureId) {
         const fdData = await tryFootballDataDetail(effectiveFixtureId, expectedHome, expectedAway)
-        if (fdData) { setData(fdData); setError(null); return }
+        if (fdData) { setData(prev => mergeMatchData(prev, fdData)); setError(null); return }
       }
 
       const fptData = await tryFutPythonTrader(expectedHome, expectedAway)
-      if (fptData) { setData(fptData); setError(null); return }
+      if (fptData) { setData(prev => mergeMatchData(prev, fptData)); setError(null); return }
 
       // Attempt 4: Safe fallback — always shows the correct match
       if (fixtureState) {
