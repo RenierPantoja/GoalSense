@@ -227,6 +227,15 @@ export function MatchesPage() {
             if (!dup._espnEventId && em._espnEventId) {
               fdMatches[dupIndex] = { ...dup, _espnEventId: em._espnEventId, venue: dup.venue || em.venue }
             }
+            // V15: If ESPN has a more advanced score for a live match, use it
+            // (ESPN scoreboard updates faster than football-data for live matches)
+            if (em.status === 'IN_PLAY' || dup.status === 'IN_PLAY') {
+              const espnTotal = (em.score.fullTime.home ?? 0) + (em.score.fullTime.away ?? 0)
+              const fdTotal = (dup.score.fullTime.home ?? 0) + (dup.score.fullTime.away ?? 0)
+              if (espnTotal > fdTotal) {
+                fdMatches[dupIndex] = { ...fdMatches[dupIndex], score: em.score, status: em.status }
+              }
+            }
           } else {
             fdMatches.push(em)
           }
@@ -239,15 +248,18 @@ export function MatchesPage() {
   }, [date, reloadKey])
 
   // V3: Auto-refresh when there are stale/pending matches (every 45s while visible)
+  // V15: Faster refresh (20s) when there are live matches for score-first consistency
   useEffect(() => {
+    const hasLive = matches.some(m => m.status === 'IN_PLAY' || m.status === 'LIVE')
     const hasPending = matches.some(m => {
       const cls = classifyMatch(m)
       return cls.isStaleScheduled || cls.isStartingSoon
     })
-    if (!hasPending || matches.length === 0) return
+    if (!hasPending && !hasLive || matches.length === 0) return
+    const interval = hasLive ? 20_000 : 45_000
     const id = setInterval(() => {
       if (document.visibilityState === 'visible') setReloadKey(k => k + 1)
-    }, 45_000)
+    }, interval)
     return () => clearInterval(id)
   }, [matches])
 
