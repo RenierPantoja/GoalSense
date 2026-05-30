@@ -42,6 +42,8 @@ const DEDUP_ALIASES: Record<string, string> = {
   'bvb': 'dortmund',
   'paris saint-germain': 'psg',
   'paris saint germain': 'psg',
+  'paris saint-germain fc': 'psg',
+  'paris s-g': 'psg',
   'real sociedad ii': 'real sociedad b',
   'bayern munich': 'bayern',
   'bayern munchen': 'bayern',

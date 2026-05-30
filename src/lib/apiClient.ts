@@ -72,6 +72,87 @@ interface LiveResponse {
   liveCount?: number
 }
 
+// --- V13: Fixture deduplication helpers ---
+
+/** Status advancement score — higher = more advanced in the match lifecycle. */
+function getFixtureStatusScore(fx: LiveFixture): number {
+  const s = fx.status.short?.toUpperCase() || ''
+  if (s === 'FT' || s === 'AET' || s === 'PEN') return 100
+  if (s === 'ET' || s === 'BT' || s === 'P') return 90
+  if (s === '2H' || s === 'LIVE') return 80
+  if (s === 'HT') return 70
+  if (s === '1H') return 60
+  if (s === 'NS' || s === 'TBD') return 10
+  return 50
+}
+
+/** Pick the best fixture when two represent the same match. */
+function pickBestFixture(a: LiveFixture, b: LiveFixture): LiveFixture {
+  const scoreA = getFixtureStatusScore(a)
+  const scoreB = getFixtureStatusScore(b)
+
+  // More advanced status wins
+  if (scoreA !== scoreB) return scoreA > scoreB ? a : b
+
+  // Same status: higher minute wins
+  const minA = a.status.elapsed || 0
+  const minB = b.status.elapsed || 0
+  if (minA !== minB) return minA > minB ? a : b
+
+  // Same minute: prefer the one with a logo
+  if (a.homeTeam.logo && !b.homeTeam.logo) return a
+  if (b.homeTeam.logo && !a.homeTeam.logo) return b
+
+  // Default: keep first
+  return a
+}
+
+/** Dedup within a single provider's fixtures (ESPN can return same match from multiple league feeds). */
+function deduplicateIntraProvider(fixtures: LiveFixture[]): LiveFixture[] {
+  if (fixtures.length <= 1) return fixtures
+  const seen = new Map<string, LiveFixture>()
+  for (const fx of fixtures) {
+    const key = buildCanonicalMatchId(fx.homeTeam.name, fx.awayTeam.name, fx.date)
+    const existing = seen.get(key)
+    if (!existing) {
+      seen.set(key, fx)
+    } else {
+      // Keep the better version
+      seen.set(key, pickBestFixture(existing, fx))
+    }
+  }
+  return Array.from(seen.values())
+}
+
+/** Final dedup pass on the fully merged array — catches cross-provider duplicates that slipped through canonical ID differences (e.g., date timezone edge cases). */
+function finalDeduplicateFixtures(fixtures: LiveFixture[]): LiveFixture[] {
+  if (fixtures.length <= 1) return fixtures
+  const result: LiveFixture[] = []
+  const consumed = new Set<number>()
+
+  for (let i = 0; i < fixtures.length; i++) {
+    if (consumed.has(i)) continue
+    let best = fixtures[i]
+
+    for (let j = i + 1; j < fixtures.length; j++) {
+      if (consumed.has(j)) continue
+      const candidate = fixtures[j]
+
+      // Check if same match using team name similarity
+      if (teamsAreSame(best.homeTeam.name, candidate.homeTeam.name) &&
+          teamsAreSame(best.awayTeam.name, candidate.awayTeam.name)) {
+        // Same match — pick the best version
+        best = pickBestFixture(best, candidate)
+        consumed.add(j)
+      }
+    }
+
+    result.push(best)
+  }
+
+  return result
+}
+
 export async function getLiveFixtures(): Promise<LiveResponse> {
   // Fetch ESPN, football-data.org, and API-Football in parallel
   const [espnResult, fdResult, afResult] = await Promise.allSettled([
@@ -84,13 +165,16 @@ export async function getLiveFixtures(): Promise<LiveResponse> {
   const fdFixtures = fdResult.status === 'fulfilled' ? fdResult.value : []
   const afFixtures = afResult.status === 'fulfilled' ? afResult.value : []
 
+  // V13: Intra-provider dedup for ESPN (ESPN /all/scoreboard can return same match from multiple league feeds)
+  const dedupedEspn = deduplicateIntraProvider(espnFixtures)
+
   // Dedup using canonical match IDs and team name similarity
   // Priority: ESPN first (best logos, reliable), then football-data (Brazilian calendar), then API-Football (stats but no logos)
   const canonicalMap = new Map<string, LiveFixture>()
   const merged: LiveFixture[] = []
 
   // ESPN first (best logos and event IDs)
-  for (const fx of espnFixtures) {
+  for (const fx of dedupedEspn) {
     const canonical = buildCanonicalMatchId(fx.homeTeam.name, fx.awayTeam.name, fx.date)
     canonicalMap.set(canonical, fx)
     merged.push(fx)
@@ -140,7 +224,10 @@ export async function getLiveFixtures(): Promise<LiveResponse> {
   }
 
   if (merged.length > 0) {
-    return { ok: true, source: 'fusion', fetchedAt: new Date().toISOString(), count: merged.length, fixtures: merged }
+    // V13: Final dedup pass — catches any remaining duplicates that slipped through
+    // (e.g., same match with slightly different dates across providers)
+    const finalDeduped = finalDeduplicateFixtures(merged)
+    return { ok: true, source: 'fusion', fetchedAt: new Date().toISOString(), count: finalDeduped.length, fixtures: finalDeduped }
   }
 
   return { ok: true, source: 'combined', fetchedAt: new Date().toISOString(), count: 0, fixtures: [] }
