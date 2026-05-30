@@ -35,8 +35,11 @@ export function isCriticalLiveMoment(fixture: LiveFixture): boolean {
 
   if (!isLive) return false
 
-  // Extra time or penalties
-  if (['ET', 'BT', 'P'].includes(status)) return true
+  // Penalty shootout — always critical
+  if (status === 'P') return true
+
+  // Extra time or penalties break
+  if (['ET', 'BT'].includes(status)) return true
 
   // Final phase (75'+)
   if (elapsed >= 75) return true
@@ -73,6 +76,9 @@ export function getMatchDetailPollingInterval(fixture: LiveFixture): number {
   const isLive = ['LIVE', '1H', '2H', 'HT', 'ET', 'BT', 'P'].includes(status)
 
   if (!isLive) return 60_000
+
+  // Penalty shootout — fastest possible
+  if (status === 'P') return 5_000
 
   if (isCriticalLiveMoment(fixture)) return 8_000  // 8s for critical
   return 12_000  // 12s for normal live match detail

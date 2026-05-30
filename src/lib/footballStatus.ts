@@ -25,7 +25,7 @@ export function getStatusLabel(short: string, elapsed?: number | null): string {
     'HT': 'Intervalo',
     '2H': '2º tempo',
     'ET': 'Prorrogação',
-    'BT': 'Break',
+    'BT': 'Intervalo prorrogação',
     'P': 'Pênaltis',
     'SUSP': 'Suspenso',
     'INT': 'Interrompido',

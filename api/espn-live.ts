@@ -66,11 +66,29 @@ function extractLeague(event: any) {
 
 function mapEspnStatus(name: string): string {
   if (!name) return "NS"
-  if (name === "STATUS_IN_PROGRESS" || name === "STATUS_FIRST_HALF" || name === "STATUS_SECOND_HALF") return "LIVE"
+  // Live statuses
+  if (name === "STATUS_IN_PROGRESS") return "LIVE"
+  if (name === "STATUS_FIRST_HALF") return "1H"
+  if (name === "STATUS_SECOND_HALF") return "2H"
   if (name === "STATUS_HALFTIME" || name === "STATUS_END_PERIOD") return "HT"
-  if (name === "STATUS_FULL_TIME") return "FT"
-  if (name === "STATUS_SCHEDULED") return "NS"
+  // Extra time & penalties (live)
+  if (name === "STATUS_EXTRA_TIME" || name === "STATUS_OVERTIME") return "ET"
+  if (name === "STATUS_EXTRA_TIME_HALF_TIME") return "BT"
+  if (name === "STATUS_SHOOTOUT" || name === "STATUS_PENALTY_SHOOTOUT") return "P"
+  // Finished statuses
+  if (name === "STATUS_FULL_TIME" || name === "STATUS_FINAL") return "FT"
+  if (name === "STATUS_FINAL_AET" || name === "STATUS_FINAL_EXTRA_TIME") return "AET"
+  if (name === "STATUS_FINAL_PEN" || name === "STATUS_FINAL_SHOOTOUT") return "PEN"
+  // Scheduled/other
+  if (name === "STATUS_SCHEDULED" || name === "STATUS_PRE_EVENT") return "NS"
+  if (name === "STATUS_POSTPONED") return "PST"
+  if (name === "STATUS_CANCELED" || name === "STATUS_CANCELLED") return "CANC"
+  if (name === "STATUS_SUSPENDED" || name === "STATUS_DELAYED") return "SUSP"
+  // Fallback heuristics
+  if (name.includes("SHOOTOUT") || name.includes("PENALTY")) return "P"
+  if (name.includes("EXTRA") || name.includes("OVERTIME")) return "ET"
   if (name.includes("PROGRESS") || name.includes("HALF")) return "LIVE"
+  if (name.includes("FINAL")) return "FT"
   return name.replace("STATUS_", "")
 }
 
