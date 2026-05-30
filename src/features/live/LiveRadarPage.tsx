@@ -12,6 +12,7 @@ import { translateStage } from '@/lib/competitionLabels'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { ClubLogo } from '@/components/ui/ClubLogo'
 import { ScoreDebugBadge } from '@/components/ui/ScoreDebugBadge'
+import { isPenaltyShootout } from '@/lib/penaltyShootout'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { sortByAttention, calculateAttention } from './attentionQueue'
 import { sortByFeaturedRanking, scoreLiveMatchForFeature, getClubAnchorExported } from './liveMatchRanking'
@@ -477,11 +478,14 @@ function HeroContent({ fixture, stats, rankingReasons }: { fixture: LiveFixture;
             <span className="text-[72px] font-bold tabular-nums text-white leading-none">{fixture.score.away ?? 0}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`h-2.5 w-2.5 rounded-full animate-pulse ${level === 'critical' ? 'bg-rose-400 shadow-[0_0_10px_rgba(251,113,133,0.5)]' : 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.4)]'}`} />
-            <span className={`text-[14px] font-semibold ${level === 'critical' ? 'text-rose-400' : 'text-emerald-400'}`}>
-              {elapsed ? `${elapsed}'` : 'Ao vivo'}
+            <span className={`h-2.5 w-2.5 rounded-full animate-pulse ${isPenaltyShootout(fixture.status.short) ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]' : level === 'critical' ? 'bg-rose-400 shadow-[0_0_10px_rgba(251,113,133,0.5)]' : 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.4)]'}`} />
+            <span className={`text-[14px] font-semibold ${isPenaltyShootout(fixture.status.short) ? 'text-amber-400' : level === 'critical' ? 'text-rose-400' : 'text-emerald-400'}`}>
+              {isPenaltyShootout(fixture.status.short) ? 'Pênaltis' : elapsed ? `${elapsed}'` : 'Ao vivo'}
             </span>
           </div>
+          {fixture.penaltyScore && fixture.penaltyScore.home !== null && fixture.penaltyScore.away !== null && (
+            <span className="text-[13px] font-bold tabular-nums text-amber-300/80">Pên. {fixture.penaltyScore.home} - {fixture.penaltyScore.away}</span>
+          )}
           <span className="text-[12px] text-white/25">{fixture.league.name}</span>
           <ScoreDebugBadge fixture={fixture} />
         </div>
@@ -532,8 +536,8 @@ function MatchRow({ fixture, selected, onSelect, onOpen }: { fixture: LiveFixtur
       className={`group flex items-center rounded-2xl px-6 py-5 cursor-pointer transition-all duration-200 border ${selected ? 'border-white/[0.08] bg-white/[0.03]' : isFav ? 'border-cyan-500/15 hover:bg-white/[0.02]' : 'border-transparent hover:bg-white/[0.02] hover:border-white/[0.04]'}`}>
       <div className="w-16 shrink-0">
         <span className="flex items-center gap-2 text-[12px] font-semibold tabular-nums text-emerald-400">
-          <span className={`h-2 w-2 rounded-full ${dotColor} animate-pulse`} />
-          {elapsed ? `${elapsed}'` : 'LIVE'}
+          <span className={`h-2 w-2 rounded-full ${isPenaltyShootout(fixture.status.short) ? 'bg-amber-400' : dotColor} animate-pulse`} />
+          {isPenaltyShootout(fixture.status.short) ? 'Pên.' : elapsed ? `${elapsed}'` : 'LIVE'}
         </span>
       </div>
       <div className="flex items-center gap-3 flex-1 min-w-0 justify-end">
