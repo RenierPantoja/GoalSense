@@ -49,19 +49,28 @@ interface MatchData {
 /** V15: Merge new match data with previous, preserving events/commentary that might be dropped by partial payloads. */
 function mergeMatchData(prev: MatchData | null, next: MatchData): MatchData {
   if (!prev) return next
+
+  const fullPayload = next.events.length >= prev.events.length
+
+  // Score correction trace (DEV only)
+  if (import.meta.env.DEV && fullPayload && (next.home.score < prev.home.score || next.away.score < prev.away.score)) {
+    console.debug('[GoalSense][ScoreCorrection]', {
+      match: `${next.home.name} vs ${next.away.name}`,
+      before: `${prev.home.score}-${prev.away.score}`,
+      after: `${next.home.score}-${next.away.score}`,
+      reason: 'Provider returned complete payload with lower score (possible VAR/goal disallowed)',
+      eventsCount: { prev: prev.events.length, next: next.events.length },
+    })
+  }
+
   return {
     ...next,
-    // Preserve events if new payload has fewer (partial response)
-    events: next.events.length >= prev.events.length ? next.events : prev.events,
-    // Preserve commentary if new payload has fewer
+    events: fullPayload ? next.events : prev.events,
     commentary: next.commentary.length >= prev.commentary.length ? next.commentary : prev.commentary,
-    // Preserve rosters if new payload is empty
     homeRoster: next.homeRoster.length > 0 ? next.homeRoster : prev.homeRoster,
     awayRoster: next.awayRoster.length > 0 ? next.awayRoster : prev.awayRoster,
-    // Score: accept provider score if it's equal or higher, OR if events support it
-    // (allows VAR/goal disallowed corrections when provider + events agree on lower score)
-    home: { ...next.home, score: next.events.length >= prev.events.length ? next.home.score : Math.max(next.home.score, prev.home.score) },
-    away: { ...next.away, score: next.events.length >= prev.events.length ? next.away.score : Math.max(next.away.score, prev.away.score) },
+    home: { ...next.home, score: fullPayload ? next.home.score : Math.max(next.home.score, prev.home.score) },
+    away: { ...next.away, score: fullPayload ? next.away.score : Math.max(next.away.score, prev.away.score) },
   }
 }
 interface Player { jersey: string; name: string; starter: boolean; goal?: boolean; yellowCard?: boolean; redCard?: boolean; subbed?: boolean }
