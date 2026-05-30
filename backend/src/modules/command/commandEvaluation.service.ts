@@ -67,7 +67,7 @@ function evaluateCondition(
     case 'goals_total_lte':
       return (score.home + score.away) <= (params.value || 3)
     case 'possession_gte':
-      return s?.possessionHome != null && (s.possessionHome >= (params.value || 60) || s.possessionAway! >= (params.value || 60))
+      return s?.possessionHome != null && (s.possessionHome >= (params.value || 60) || (s.possessionAway ?? 0) >= (params.value || 60))
     case 'shots_on_target_gte':
       return s?.shotsOnTargetHome != null && ((s.shotsOnTargetHome + (s.shotsOnTargetAway ?? 0)) >= (params.value || 4))
     case 'corners_gte':
@@ -110,8 +110,8 @@ export function evaluatePatternAgainstInput(
     return { patternId: pattern.id, fixtureId: input.fixtureId, matchLabel: input.matchLabel, shouldAlert: false, confidence: 0, signalState: 'blocked', reasons, blockers, momentum: null, matchedConditions: 0, totalConditions: pattern.conditions.length }
   }
 
-  if (pattern.action === 'suggest_only') {
-    blockers.push('Pattern action is suggest_only')
+  if (pattern.action === 'suggest_only' || pattern.action === 'highlight') {
+    blockers.push(`Pattern action is ${pattern.action}`)
     return { patternId: pattern.id, fixtureId: input.fixtureId, matchLabel: input.matchLabel, shouldAlert: false, confidence: 0, signalState: 'blocked', reasons, blockers, momentum: null, matchedConditions: 0, totalConditions: pattern.conditions.length }
   }
 

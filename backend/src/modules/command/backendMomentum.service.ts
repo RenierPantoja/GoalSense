@@ -49,27 +49,35 @@ export function evaluateMomentum(input: PatternEvaluationInput, side?: 'home' | 
 
   const count = relevant.length
 
-  // Determine strength
+  // Determine strength and confidence based on offensive event count
   let strength: MomentumResult['strength'] = 'none'
-  if (count >= 4) strength = 'strong'
-  else if (count >= 2) strength = 'moderate'
-  else if (count >= 1) strength = 'weak'
-
-  // Recency confidence
   let recencyConfidence = 0
-  if (count >= 4) recencyConfidence = 85
-  else if (count >= 2) recencyConfidence = 65
-  else if (count >= 1) recencyConfidence = 45
-  else recencyConfidence = 20
-
-  // Determine source
   let momentumSource: MomentumResult['momentumSource'] = 'timed_events'
-  if (count === 0 && input.stats) {
-    momentumSource = 'stats_proxy'
-    recencyConfidence = 35
-  } else if (count === 0) {
-    momentumSource = 'insufficient'
-    recencyConfidence = 0
+
+  if (count >= 4) {
+    strength = 'strong'
+    recencyConfidence = 85
+  } else if (count >= 2) {
+    strength = 'moderate'
+    recencyConfidence = 65
+  } else if (count >= 1) {
+    strength = 'weak'
+    recencyConfidence = 45
+  } else {
+    // No offensive events in window
+    if (input.stats && (input.stats.shotsOnTargetHome !== undefined || input.stats.shotsHome !== undefined)) {
+      // Have stats but no recent offensive events — use stats as proxy
+      momentumSource = 'stats_proxy'
+      strength = 'weak'
+      recencyConfidence = 35
+      blockers.push('No recent offensive events in window, using stats proxy')
+    } else {
+      // No events AND no stats in this path means events exist but none are offensive/recent
+      momentumSource = 'insufficient'
+      strength = 'none'
+      recencyConfidence = 0
+      blockers.push('No offensive events in window and no stats')
+    }
   }
 
   return {
