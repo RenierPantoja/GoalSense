@@ -195,8 +195,10 @@ export function teamNameSimilarity(nameA: string, nameB: string): number {
   // One is clearly a prefix/start of the other (e.g. "parma" in "parma calcio")
   if (a.startsWith(b + ' ') || b.startsWith(a + ' ')) return 0.92
 
-  // One contains the other entirely
-  if ((a.includes(b) && b.length >= 4) || (b.includes(a) && a.length >= 4)) return 0.85
+  // One contains the other entirely — but only if the shorter name is a substantial
+  // portion of the longer (prevents "sport" matching "sporting", "inter" matching "internacional")
+  if (b.length >= 4 && a.includes(b) && b.length >= a.length * 0.8) return 0.85
+  if (a.length >= 4 && b.includes(a) && a.length >= b.length * 0.8) return 0.85
 
   // First significant word match (requires at least one word with 4+ chars to match)
   const wordsA = a.split(' ').filter(w => w.length >= 4)
