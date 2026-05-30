@@ -83,7 +83,10 @@ export function shouldStoreSnapshot(
 
   // Check if enriched events added new data
   if (enrichedEvents && enrichedEvents.length > 0) {
-    const lastEventsCount = lastSnapshot.eventsJson ? (JSON.parse(lastSnapshot.eventsJson) as any[]).length : 0
+    let lastEventsCount = 0
+    if (lastSnapshot.eventsJson) {
+      try { lastEventsCount = (JSON.parse(lastSnapshot.eventsJson) as any[]).length } catch { /* malformed JSON, treat as 0 */ }
+    }
     if (enrichedEvents.length > lastEventsCount) return { shouldStore: true, reason: 'new_events' }
   }
 

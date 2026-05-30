@@ -280,11 +280,26 @@ export function extractEspnTimedEvents(summary: any, homeTeam?: string, awayTeam
 
   for (const raw of rawEvents) {
     const clock = raw.clock || raw.time || {}
-    const minute = typeof clock.displayValue === 'string'
-      ? parseInt(clock.displayValue)
-      : (typeof clock.minutes === 'number' ? clock.minutes : null)
+    let minute: number | null = null
+    let addedTime: number | undefined
 
-    if (minute === null || isNaN(minute)) continue // Skip events without minute
+    if (typeof clock.displayValue === 'string') {
+      // Handle formats like "45", "45'+2", "90+3"
+      const display = clock.displayValue.replace(/'/g, '')
+      const parts = display.split('+')
+      const base = parseInt(parts[0])
+      if (!isNaN(base)) {
+        minute = base
+        if (parts[1]) {
+          const added = parseInt(parts[1])
+          if (!isNaN(added)) addedTime = added
+        }
+      }
+    } else if (typeof clock.minutes === 'number') {
+      minute = clock.minutes
+    }
+
+    if (minute === null) continue // Skip events without minute
 
     const rawType = (raw.type?.text || raw.type?.name || raw.text || '').toLowerCase().trim()
     const type = EVENT_TYPE_MAP[rawType] || 'unknown'
@@ -303,7 +318,7 @@ export function extractEspnTimedEvents(summary: any, homeTeam?: string, awayTeam
     events.push({
       provider: 'espn',
       minute,
-      addedTime: clock.addedMinutes || undefined,
+      addedTime: addedTime || clock.addedMinutes || undefined,
       type,
       side,
       teamName,

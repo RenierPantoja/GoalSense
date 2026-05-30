@@ -18,6 +18,11 @@ let lastError: string | null = null
 let totalRuns = 0
 let totalFixturesSeen = 0
 let totalSnapshotsCreated = 0
+let totalSummariesFetched = 0
+let totalSummariesFailed = 0
+let totalRichSnapshots = 0
+let totalPartialSnapshots = 0
+let totalPoorSnapshots = 0
 let consecutiveErrors = 0
 const MAX_CONSECUTIVE_ERRORS = 5
 const BACKOFF_MULTIPLIER = 2
@@ -58,6 +63,11 @@ async function runOnce(): Promise<MonitorRunResult | null> {
     totalRuns++
     totalFixturesSeen += result.fixturesSeen
     totalSnapshotsCreated += result.snapshotsCreated
+    totalSummariesFetched += result.summariesFetched
+    totalSummariesFailed += result.summariesFailed
+    totalRichSnapshots += result.richSnapshots
+    totalPartialSnapshots += result.partialSnapshots
+    totalPoorSnapshots += result.poorSnapshots
     consecutiveErrors = 0
 
     console.log(`[LiveWorker] Run #${totalRuns}: ${result.fixturesSeen} fixtures, ${result.snapshotsCreated} snapshots (${result.richSnapshots} rich, ${result.partialSnapshots} partial, ${result.poorSnapshots} poor), ${result.summariesFetched} summaries${result.errors.length > 0 ? `, ${result.errors.length} errors` : ''}`)
@@ -117,7 +127,14 @@ export function getLiveMonitorStatus() {
     totalRuns,
     totalFixturesSeen,
     totalSnapshotsCreated,
+    totalSummariesFetched,
+    totalSummariesFailed,
+    totalRichSnapshots,
+    totalPartialSnapshots,
+    totalPoorSnapshots,
     consecutiveErrors,
     intervalMs: env.LIVE_WORKER_INTERVAL_MS,
+    enrichmentEnabled: env.SUMMARY_ENRICHMENT_ENABLED === 'true',
+    enrichmentMaxFixtures: env.SUMMARY_ENRICHMENT_MAX_FIXTURES,
   }
 }
