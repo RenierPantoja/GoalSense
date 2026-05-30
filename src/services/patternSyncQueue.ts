@@ -7,7 +7,7 @@
  * This module is pure logic — no React hooks, no side effects on import.
  */
 import type { Pattern } from '@/features/command/types/commandTypes'
-import { isBackendEnabled, createBackendPattern, updateBackendPattern, deleteBackendPattern, getBackendHealth } from './commandBackendClient'
+import { isBackendEnabled, createBackendPattern, updateBackendPattern, deleteBackendPattern, getBackendHealth, listBackendPatterns } from './commandBackendClient'
 import { toBackendPayload } from './patternBackendAdapter'
 
 // ─── Sync Metadata Helpers ───────────────────────────────────────────────────
@@ -113,7 +113,6 @@ export async function syncCreatePattern(pattern: Pattern): Promise<SyncResult> {
     // Try to find it by listing and matching
     if (err?.status === 409) {
       try {
-        const { listBackendPatterns } = await import('./commandBackendClient')
         const existing = await listBackendPatterns()
         if (existing) {
           const match = existing.find((bp: any) => bp.name === pattern.name && bp.templateId === (pattern.templateId || null))

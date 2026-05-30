@@ -19,6 +19,19 @@ export async function getAlert(id: string) {
   return prisma.alert.findFirst({ where: { id, userId: DEFAULT_USER } })
 }
 
+export async function findByDuplicateSignature(signature: string) {
+  // Find recent alert (last 30 min) with same signature to prevent duplicates
+  const cutoff = new Date(Date.now() - 30 * 60 * 1000)
+  return prisma.alert.findFirst({
+    where: {
+      userId: DEFAULT_USER,
+      duplicateSignature: signature,
+      createdAt: { gte: cutoff },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
 export async function createAlert(input: CreateAlertInput) {
   return prisma.alert.create({
     data: { ...input, userId: DEFAULT_USER },

@@ -29,7 +29,6 @@ model Pattern {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  alerts          Alert[]
   performance     PatternPerformance?
 }
 
@@ -49,7 +48,6 @@ model Fixture {
   updatedAt         DateTime @updatedAt
 
   snapshots         LiveSnapshot[]
-  alerts            Alert[]
 
   @@unique([provider, providerFixtureId])
   @@index([canonicalKey])
@@ -97,14 +95,13 @@ model Alert {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  pattern               Pattern  @relation(fields: [patternId], references: [id])
-  fixture               Fixture  @relation(fields: [fixtureId], references: [id])
   resolution            AlertResolution?
 
   @@index([patternId])
   @@index([fixtureId])
   @@index([status])
   @@index([createdAt])
+  @@index([duplicateSignature])
 }
 
 // ─── Alert Resolutions ───────────────────────────────────────────────────────

@@ -16,6 +16,7 @@ import { useAlerts } from '@/context/AlertsContext'
 import { useViewMode } from '@/context/ViewModeContext'
 import { useBackendSync } from '@/services/useBackendSync'
 import { usePatternWriteThrough } from '@/services/usePatternWriteThrough'
+import { useAlertWriteThrough } from '@/services/useAlertWriteThrough'
 import { usePatterns } from './contexts/PatternContext'
 import { evaluateAllPatterns } from './intelligence/patternEvaluator'
 import { applyPrecisionChecks } from './intelligence/patternPrecisionEngine'
@@ -63,6 +64,10 @@ export function CommandCenterPage() {
   const backendSync = useBackendSync(patterns)
   const writeThrough = usePatternWriteThrough(
     { createPattern, createFromTemplate, updatePattern, deletePattern, togglePattern, patterns },
+    backendSync.online,
+  )
+  const alertWT = useAlertWriteThrough(
+    { registerCommandAlert, updateCommandAlertStatus, commandAlerts },
     backendSync.online,
   )
 
@@ -220,9 +225,9 @@ export function CommandCenterPage() {
       const recConf = offRecent.length >= 3 ? 85 : offRecent.length >= 1 ? 65 : 35
 
       triggerAlert({ patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, league: fx.league.name, minute: fx.status.elapsed, confidence: precision.adjustedConfidence, reasons: hit.reasons, timestamp: new Date().toISOString(), status: 'pending', scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 } })
-      registerCommandAlert({ source: 'command_center', patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, competition: fx.league.name, minuteAtTrigger: fx.status.elapsed, scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 }, confidence: precision.adjustedConfidence, severity: hit.severity, evidences: [...hit.reasons, ...precision.reasons], status: 'pending', triggerSnapshot: { minute: fx.status.elapsed, homeScore: fx.score.home ?? 0, awayScore: fx.score.away ?? 0, status: fx.status.short, competition: fx.league.name, provider: fx.provider, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, homeLogo: fx.homeTeam.logo, awayLogo: fx.awayTeam.logo, favoriteInvolved: isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name), conditionsMatched: hit.matchedConditions, conditionsTotal: hit.totalConditions, confidenceAtTrigger: precision.adjustedConfidence, ...(fxStats ? { stats: fxStats } : {}) }, temporalEvidence: { momentumSource: momSrc as any, recencyConfidence: recConf, windowMinutes: recentWindow, recentEventsUsed: recentEvts.map(e => ({ minute: e.minute, type: e.type, side: e.side, teamName: e.teamName, playerName: e.playerName })) } })
+      alertWT.registerCommandAlertWT({ source: 'command_center', patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, competition: fx.league.name, minuteAtTrigger: fx.status.elapsed, scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 }, confidence: precision.adjustedConfidence, severity: hit.severity, evidences: [...hit.reasons, ...precision.reasons], status: 'pending', triggerSnapshot: { minute: fx.status.elapsed, homeScore: fx.score.home ?? 0, awayScore: fx.score.away ?? 0, status: fx.status.short, competition: fx.league.name, provider: fx.provider, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, homeLogo: fx.homeTeam.logo, awayLogo: fx.awayTeam.logo, favoriteInvolved: isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name), conditionsMatched: hit.matchedConditions, conditionsTotal: hit.totalConditions, confidenceAtTrigger: precision.adjustedConfidence, ...(fxStats ? { stats: fxStats } : {}) }, temporalEvidence: { momentumSource: momSrc as any, recencyConfidence: recConf, windowMinutes: recentWindow, recentEventsUsed: recentEvts.map(e => ({ minute: e.minute, type: e.type, side: e.side, teamName: e.teamName, playerName: e.playerName })) } })
     }
-  }, [patternHits, hasIntelligence, triggerAlert, patterns, registerCommandAlert, isFavoriteTeam, statsMap, commandAlerts, eventsMap])
+  }, [patternHits, hasIntelligence, triggerAlert, patterns, alertWT, isFavoriteTeam, statsMap, commandAlerts, eventsMap])
 
   // ─── Resolution ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -233,9 +238,9 @@ export function CommandCenterPage() {
     for (const alert of pending) {
       const fx = fxMap.get(alert.fixtureId)
       const result = resolveAlert({ id: alert.id, patternName: alert.patternName, fixtureId: alert.fixtureId, minuteAtTrigger: alert.minuteAtTrigger, scoreAtTrigger: alert.scoreAtTrigger, confidence: alert.confidence, createdAt: alert.createdAt, status: 'pending' }, fx)
-      if (result) { const finalStatus = result.strength === 'partial_confirmation' ? 'confirmed_partial' as const : result.status; updateCommandAlertStatus(alert.id, finalStatus, { score: result.scoreAtResolution, reason: result.reason }) }
+      if (result) { const finalStatus = result.strength === 'partial_confirmation' ? 'confirmed_partial' as const : result.status; alertWT.updateCommandAlertStatusWT(alert.id, finalStatus, { score: result.scoreAtResolution, reason: result.reason }) }
     }
-  }, [fixtures, commandAlerts, updateCommandAlertStatus])
+  }, [fixtures, commandAlerts, alertWT])
 
   // ─── Auto Discovery (ONLY if configured) ──────────────────────────────────
   const discoveries = useMemo(() => {
@@ -305,7 +310,7 @@ export function CommandCenterPage() {
         status: 'pending',
         scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 },
       })
-      registerCommandAlert({
+      alertWT.registerCommandAlertWT({
         source: 'command_center',
         patternId: syntheticPatternId,
         patternName,
@@ -339,7 +344,7 @@ export function CommandCenterPage() {
         temporalEvidence: validation.temporalEvidence,
       })
     }
-  }, [hasAutoDiscovery, discoveryConfig, discoveries, triggerAlert, registerCommandAlert, isFavoriteTeam, statsMap, eventsMap, commandAlerts])
+  }, [hasAutoDiscovery, discoveryConfig, discoveries, triggerAlert, alertWT, isFavoriteTeam, statsMap, eventsMap, commandAlerts])
 
   // ─── Scanner (ONLY signals) — V5 with precision states ──────────────────────
   const scannerEntries = useMemo((): ScannerEntry[] => {
@@ -468,14 +473,16 @@ export function CommandCenterPage() {
                   {backendSync.patternMirror.onlyBackendCount > 0 && <span className="text-cyan-400/50 ml-1.5">{backendSync.patternMirror.onlyBackendCount} apenas backend</span>}
                 </span>
               )}
-              {(() => { const pending = patterns.filter(p => p.syncStatus === 'pending_create' || p.syncStatus === 'pending_update' || p.syncStatus === 'pending_delete'); return pending.length > 0 ? <span className="text-[10px] text-amber-400/60 ml-1.5">· {pending.length} pendente{pending.length > 1 ? 's' : ''}</span> : null })()}
-              {(() => { const errs = patterns.filter(p => p.syncStatus === 'error'); return errs.length > 0 ? <span className="text-[10px] text-rose-400/60 ml-1.5">· {errs.length} erro{errs.length > 1 ? 's' : ''}</span> : null })()}
+              {(() => { const pending = patterns.filter(p => p.syncStatus === 'pending_create' || p.syncStatus === 'pending_update' || p.syncStatus === 'pending_delete'); return pending.length > 0 ? <span className="text-[10px] text-amber-400/60 ml-1.5">· {pending.length} padrão pendente{pending.length > 1 ? 's' : ''}</span> : null })()}
+              {(() => { const errs = patterns.filter(p => p.syncStatus === 'error'); return errs.length > 0 ? <span className="text-[10px] text-rose-400/60 ml-1.5">· {errs.length} padrão erro{errs.length > 1 ? 's' : ''}</span> : null })()}
+              {alertWT.pendingAlertSyncCount > 0 && <span className="text-[10px] text-amber-400/60 ml-1.5">· {alertWT.pendingAlertSyncCount} alerta pendente{alertWT.pendingAlertSyncCount > 1 ? 's' : ''}</span>}
+              {alertWT.errorAlertSyncCount > 0 && <span className="text-[10px] text-rose-400/60 ml-1.5">· {alertWT.errorAlertSyncCount} alerta erro{alertWT.errorAlertSyncCount > 1 ? 's' : ''}</span>}
             </div>
             <div className="flex items-center gap-2">
               {backendSync.patternMirror.error && <span className="text-[10px] text-rose-400/60">{backendSync.patternMirror.error}</span>}
               <button onClick={() => { backendSync.refreshBackendHealth(); backendSync.refreshPatternMirror() }} className="text-[10px] text-white/30 hover:text-white/60 transition-colors" type="button">↻ Mirror</button>
-              {patterns.some(p => p.syncStatus === 'pending_create' || p.syncStatus === 'pending_update' || p.syncStatus === 'pending_delete' || p.syncStatus === 'error') && (
-                <button onClick={() => writeThrough.syncPending()} className="text-[10px] text-cyan-400/40 hover:text-cyan-400/70 transition-colors" type="button">⟳ Sync pendentes</button>
+              {(patterns.some(p => p.syncStatus === 'pending_create' || p.syncStatus === 'pending_update' || p.syncStatus === 'pending_delete' || p.syncStatus === 'error') || alertWT.pendingAlertSyncCount > 0 || alertWT.errorAlertSyncCount > 0) && (
+                <button onClick={() => { writeThrough.syncPending(); alertWT.syncPendingAlertsManual() }} className="text-[10px] text-cyan-400/40 hover:text-cyan-400/70 transition-colors" type="button">⟳ Sync pendentes</button>
               )}
             </div>
           </div>

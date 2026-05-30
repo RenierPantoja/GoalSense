@@ -60,6 +60,8 @@ export interface ResolutionSnapshot {
   timeToResolutionMs: number
 }
 
+export type AlertSyncStatus = 'synced' | 'pending_create' | 'pending_update' | 'pending_resolve' | 'error'
+
 export interface CommandCenterAlert {
   id: string
   source: 'command_center'
@@ -89,6 +91,12 @@ export interface CommandCenterAlert {
   }
   createdAt: string
   resolvedAt?: string
+  // ─── Backend Sync Metadata (Phase B4) ──────────────────────────────────
+  backendId?: string
+  syncStatus?: AlertSyncStatus
+  lastSyncedAt?: string
+  syncError?: string
+  backendResolutionId?: string
 }
 
 interface AlertsContextValue {

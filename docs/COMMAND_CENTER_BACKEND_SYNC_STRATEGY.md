@@ -86,10 +86,49 @@ syncError?: string          // Error message if sync failed
 - Does not overwrite local patterns with backend data
 - Does not delete local patterns because backend doesn't have them
 - Does not resolve divergences automatically
-- Does not sync alerts or performance data
 - Does not block UI on backend latency
 
-### Phase 4: Backend Primary (Future)
+### Phase B4: Alerts Backend Sync + Resolution Persistence ✅ (Current)
+- Every Command Center alert (manual pattern + auto-discovery) is sent to backend on creation
+- Every resolution (confirmed, failed, expired, etc.) is sent to backend
+- localStorage remains primary for alerts
+- Backend receives writes async (non-blocking)
+- Offline alerts are marked `pending_create` / `pending_resolve`
+- When backend comes online, pending alerts are synced automatically
+
+#### Alert Sync Metadata
+```typescript
+backendId?: string              // Backend's cuid for this alert
+syncStatus?: AlertSyncStatus    // synced | pending_create | pending_resolve | error
+lastSyncedAt?: string           // ISO timestamp
+syncError?: string              // Error message
+backendResolutionId?: string    // Backend resolution record ID
+```
+
+#### Alert Write-Through Operations
+| Operation | Local Effect | Backend Effect |
+|-----------|-------------|----------------|
+| Register alert | Immediate add to state | POST /api/alerts (async) |
+| Resolve alert | Immediate status update | POST /api/alerts/:id/resolve (async) |
+
+#### Duplicate Signature
+- Each alert gets a `duplicateSignature`: `patternId:fixtureId:score:minuteWindow`
+- Backend checks signature before creating (returns existing if found)
+- Frontend treats 409 as "already synced"
+
+#### Resolution Persistence
+- Backend stores full resolution: status, type, window, evidence
+- `AlertResolution` table linked to `Alert`
+- Frontend stores `backendResolutionId` for audit trail
+
+#### What Phase B4 Does NOT Do
+- Does not use backend as source of truth for alerts
+- Does not load alerts from backend on mount
+- Does not sync performance analytics
+- Does not send Telegram notifications
+- Does not integrate odds data
+
+### Phase 5: Backend Primary (Future)
 - Backend becomes source of truth
 - localStorage becomes cache/fallback only
 - Patterns loaded from backend on mount
@@ -123,10 +162,10 @@ If not set, all backend functions return null and localStorage continues as sole
 ## What Does NOT Change
 
 - PatternContext API (createPattern, updatePattern, etc.)
+- AlertsContext API (registerCommandAlert, updateCommandAlertStatus)
 - Template system
 - Dry-run
 - Scanner
-- Alerts (still localStorage)
 - Performance analytics (still localStorage)
 - Auto-discovery config
 
@@ -137,28 +176,34 @@ If not set, all backend functions return null and localStorage continues as sole
 - Backend downtime should never block the user
 - Migration must be reversible
 - Delete on backend may fail silently if pattern was never synced
+- Alert fixtureId is ESPN numeric ID stored as string in backend
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `src/services/commandBackendClient.ts` | HTTP client with graceful degradation |
-| `src/services/patternBackendAdapter.ts` | Format conversion (frontend ↔ backend) |
+| `src/services/commandBackendClient.ts` | HTTP client with graceful degradation + strict mode |
+| `src/services/patternBackendAdapter.ts` | Pattern format conversion (frontend ↔ backend) |
+| `src/services/alertBackendAdapter.ts` | Alert format conversion (frontend ↔ backend) |
 | `src/services/useBackendSync.ts` | React hook: health + read mirror + diagnostics |
 | `src/services/patternSyncDiagnostics.ts` | Comparison engine: local vs backend patterns |
-| `src/services/patternSyncQueue.ts` | Write-through sync logic + pending queue |
-| `src/services/usePatternWriteThrough.ts` | React hook: wraps mutations with backend writes |
+| `src/services/patternSyncQueue.ts` | Pattern write-through sync logic + pending queue |
+| `src/services/usePatternWriteThrough.ts` | React hook: wraps pattern mutations with backend writes |
+| `src/services/alertSyncQueue.ts` | Alert write-through sync logic + pending queue |
+| `src/services/useAlertWriteThrough.ts` | React hook: wraps alert mutations with backend writes |
 | `src/features/command/types/commandTypes.ts` | Pattern type with sync metadata fields |
 | `src/features/command/contexts/PatternContext.tsx` | localStorage persistence with sync field normalization |
-| `backend/src/modules/patterns/` | Backend CRUD routes |
+| `src/context/AlertsContext.tsx` | Alert types with sync metadata fields |
+| `backend/src/modules/patterns/` | Backend pattern CRUD routes |
+| `backend/src/modules/alerts/` | Backend alert CRUD + resolve routes |
 | `backend/prisma/schema.prisma` | Database schema |
 
-## Next Steps (Phase 4: Backend Primary)
+## Next Steps (Phase 5: Backend Primary)
 
 1. On mount, load patterns from backend (if online)
 2. Merge with localStorage (backend wins for conflicts by `updatedAt`)
 3. localStorage becomes read cache only
 4. All reads go through backend when online
 5. Offline mode falls back to localStorage cache
-6. Sync alerts and performance data
+6. Load alerts from backend for cross-device visibility
 7. Multi-user support via `userId`
