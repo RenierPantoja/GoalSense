@@ -18,9 +18,20 @@ export interface BackendPatternPayload {
   conditionsJson: string
   scopeFilterJson?: string | null
   templateId?: string | null
+  /** Extended fields stored as JSON to avoid schema migration for every new field */
+  extendedJson?: string | null
 }
 
 export function toBackendPayload(pattern: Omit<Pattern, 'id' | 'createdAt' | 'updatedAt'>): BackendPatternPayload {
+  // Extended fields that don't have dedicated DB columns yet
+  const extended: Record<string, unknown> = {}
+  if (pattern.matches && pattern.matches.length > 0) extended.matches = pattern.matches
+  if (pattern.excludeLeagues && pattern.excludeLeagues.length > 0) extended.excludeLeagues = pattern.excludeLeagues
+  if (pattern.excludeTeams && pattern.excludeTeams.length > 0) extended.excludeTeams = pattern.excludeTeams
+  if (pattern.excludeMatches && pattern.excludeMatches.length > 0) extended.excludeMatches = pattern.excludeMatches
+  if (pattern.maxTriggersPerMatch !== 2) extended.maxTriggersPerMatch = pattern.maxTriggersPerMatch
+  if (pattern.antiDuplicateWindow !== 5) extended.antiDuplicateWindow = pattern.antiDuplicateWindow
+
   return {
     name: pattern.name,
     description: pattern.description || '',
@@ -35,10 +46,13 @@ export function toBackendPayload(pattern: Omit<Pattern, 'id' | 'createdAt' | 'up
     conditionsJson: JSON.stringify(pattern.conditions),
     scopeFilterJson: pattern.scopeFilter ? JSON.stringify(pattern.scopeFilter) : null,
     templateId: pattern.templateId || null,
+    extendedJson: Object.keys(extended).length > 0 ? JSON.stringify(extended) : null,
   }
 }
 
 export function fromBackendPattern(raw: any): Pattern {
+  const extended = safeParseJson(raw.extendedJson, {})
+
   return {
     id: raw.id,
     name: raw.name,
@@ -55,8 +69,13 @@ export function fromBackendPattern(raw: any): Pattern {
     scopeFilter: raw.scopeFilterJson ? safeParseJson(raw.scopeFilterJson, undefined) : undefined,
     templateId: raw.templateId || undefined,
     isTemplate: !!raw.templateId,
-    maxTriggersPerMatch: 2,
-    antiDuplicateWindow: 5,
+    // Restore extended fields
+    matches: Array.isArray(extended.matches) ? extended.matches : undefined,
+    excludeLeagues: Array.isArray(extended.excludeLeagues) ? extended.excludeLeagues : undefined,
+    excludeTeams: Array.isArray(extended.excludeTeams) ? extended.excludeTeams : undefined,
+    excludeMatches: Array.isArray(extended.excludeMatches) ? extended.excludeMatches : undefined,
+    maxTriggersPerMatch: typeof extended.maxTriggersPerMatch === 'number' ? extended.maxTriggersPerMatch : 2,
+    antiDuplicateWindow: typeof extended.antiDuplicateWindow === 'number' ? extended.antiDuplicateWindow : 5,
     createdAt: raw.createdAt || new Date().toISOString(),
     updatedAt: raw.updatedAt || new Date().toISOString(),
   }

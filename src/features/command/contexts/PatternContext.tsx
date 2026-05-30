@@ -25,6 +25,7 @@ const VALID_SCOPES = new Set(['all', 'favorites_only', 'specific_leagues', 'spec
 const VALID_ACTIONS = new Set(['register_alert', 'suggest_only', 'highlight'])
 const VALID_SEVERITIES = new Set(['critical', 'attention', 'info'])
 const VALID_STATUSES = new Set(['active', 'paused', 'archived'])
+const VALID_SYNC_STATUSES = new Set(['synced', 'pending_create', 'pending_update', 'pending_delete', 'error', 'local_only'])
 
 /**
  * Defensively normalize a pattern loaded from localStorage. Old patterns may be
@@ -59,6 +60,11 @@ function safeNormalizePattern(raw: any): Pattern | null {
     antiDuplicateWindow: typeof raw.antiDuplicateWindow === 'number' && raw.antiDuplicateWindow > 0 ? raw.antiDuplicateWindow : 5,
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,
+    // Phase B3.3: Sync metadata (optional, backward-compatible)
+    backendId: typeof raw.backendId === 'string' ? raw.backendId : undefined,
+    syncStatus: VALID_SYNC_STATUSES.has(raw.syncStatus) ? raw.syncStatus : undefined,
+    lastSyncedAt: typeof raw.lastSyncedAt === 'string' ? raw.lastSyncedAt : undefined,
+    syncError: typeof raw.syncError === 'string' ? raw.syncError : undefined,
   }
 }
 

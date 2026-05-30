@@ -27,13 +27,15 @@ export async function patternRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string }
     const parsed = updatePatternSchema.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send(badRequest('Validation failed', parsed.error.flatten()))
-    await service.updatePattern(id, parsed.data)
+    const result = await service.updatePattern(id, parsed.data)
+    if (result.count === 0) return reply.status(404).send(notFound('Pattern not found'))
     return ok({ id, updated: true })
   })
 
-  app.delete('/patterns/:id', async (req) => {
+  app.delete('/patterns/:id', async (req, reply) => {
     const { id } = req.params as { id: string }
-    await service.deletePattern(id)
+    const result = await service.deletePattern(id)
+    if (result.count === 0) return reply.status(404).send(notFound('Pattern not found'))
     return ok({ id, archived: true })
   })
 }

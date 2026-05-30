@@ -15,6 +15,7 @@ import { useFavorites } from '@/context/FavoritesContext'
 import { useAlerts } from '@/context/AlertsContext'
 import { useViewMode } from '@/context/ViewModeContext'
 import { useBackendSync } from '@/services/useBackendSync'
+import { usePatternWriteThrough } from '@/services/usePatternWriteThrough'
 import { usePatterns } from './contexts/PatternContext'
 import { evaluateAllPatterns } from './intelligence/patternEvaluator'
 import { applyPrecisionChecks } from './intelligence/patternPrecisionEngine'
@@ -60,6 +61,10 @@ export function CommandCenterPage() {
   const { isAdvanced } = useViewMode()
   const { patterns, templates, createPattern, createFromTemplate, updatePattern, togglePattern, deletePattern, getActivePatterns, triggeredAlerts, triggerAlert, getRecentTriggered, resolveExpired, discoveryConfig, updateDiscoveryConfig, activePatternCount, triggeredTodayCount } = usePatterns()
   const backendSync = useBackendSync(patterns)
+  const writeThrough = usePatternWriteThrough(
+    { createPattern, createFromTemplate, updatePattern, deletePattern, togglePattern, patterns },
+    backendSync.online,
+  )
 
   // ═══ INTELLIGENCE GATE ═══
   const hasManualPatterns = activePatternCount > 0
@@ -452,7 +457,7 @@ export function CommandCenterPage() {
                   ? 'Backend offline — usando localStorage'
                   : backendSync.patternMirror.loading
                     ? 'Carregando espelho...'
-                    : `Read Mirror ativo — ${backendSync.patternMirror.localCount} local / ${backendSync.patternMirror.backendCount} backend`
+                    : `Write-Through ativo — ${backendSync.patternMirror.localCount} local / ${backendSync.patternMirror.backendCount} backend`
                 }
               </span>
               {backendSync.online && !backendSync.patternMirror.loading && backendSync.patternMirror.diagnostics && (
@@ -463,11 +468,15 @@ export function CommandCenterPage() {
                   {backendSync.patternMirror.onlyBackendCount > 0 && <span className="text-cyan-400/50 ml-1.5">{backendSync.patternMirror.onlyBackendCount} apenas backend</span>}
                 </span>
               )}
+              {(() => { const pending = patterns.filter(p => p.syncStatus === 'pending_create' || p.syncStatus === 'pending_update' || p.syncStatus === 'pending_delete'); return pending.length > 0 ? <span className="text-[10px] text-amber-400/60 ml-1.5">· {pending.length} pendente{pending.length > 1 ? 's' : ''}</span> : null })()}
+              {(() => { const errs = patterns.filter(p => p.syncStatus === 'error'); return errs.length > 0 ? <span className="text-[10px] text-rose-400/60 ml-1.5">· {errs.length} erro{errs.length > 1 ? 's' : ''}</span> : null })()}
             </div>
             <div className="flex items-center gap-2">
               {backendSync.patternMirror.error && <span className="text-[10px] text-rose-400/60">{backendSync.patternMirror.error}</span>}
-              <button onClick={() => { backendSync.refreshBackendHealth(); backendSync.refreshPatternMirror() }} className="text-[10px] text-white/30 hover:text-white/60 transition-colors" type="button">↻ Refresh</button>
-              <span className="text-[10px] text-white/20">Read Mirror — escrita será habilitada na próxima fase</span>
+              <button onClick={() => { backendSync.refreshBackendHealth(); backendSync.refreshPatternMirror() }} className="text-[10px] text-white/30 hover:text-white/60 transition-colors" type="button">↻ Mirror</button>
+              {patterns.some(p => p.syncStatus === 'pending_create' || p.syncStatus === 'pending_update' || p.syncStatus === 'pending_delete' || p.syncStatus === 'error') && (
+                <button onClick={() => writeThrough.syncPending()} className="text-[10px] text-cyan-400/40 hover:text-cyan-400/70 transition-colors" type="button">⟳ Sync pendentes</button>
+              )}
             </div>
           </div>
         </div>
@@ -490,8 +499,8 @@ export function CommandCenterPage() {
       </nav>
 
       {/* ═══ CONTENT ═══ */}
-      {activeTab === 'cockpit' && <CockpitView hasIntelligence={hasIntelligence} decisionMatch={decisionMatch} decisionHit={decisionHit} decisionDiscovery={decisionDiscovery} patternHits={patternHits} discoveries={discoveries} changes={changes} fixtures={fixtures} openMatch={openMatch} isAdvanced={isAdvanced} activePatternCount={activePatternCount} enabledCount={enabledCount} triggeredAlerts={getRecentTriggered(5)} onGoToPatterns={() => setActiveTab('patterns')} navigate={navigate} templates={templates} createFromTemplate={createFromTemplate} />}
-      {activeTab === 'patterns' && <PatternsView patterns={patterns} templates={templates} createFromTemplate={createFromTemplate} createPattern={createPattern} updatePattern={updatePattern} togglePattern={togglePattern} deletePattern={deletePattern} isAdvanced={isAdvanced} showBuilder={showBuilder} setShowBuilder={setShowBuilder} discoveryConfig={discoveryConfig} updateDiscoveryConfig={updateDiscoveryConfig} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} fixtures={fixtures} statsMap={statsMap} eventsMap={eventsMap} isFavoriteTeam={isFavoriteTeam} prefilledDraft={prefilledDraft} clearPrefilledDraft={() => setPrefilledDraft(null)} />}
+      {activeTab === 'cockpit' && <CockpitView hasIntelligence={hasIntelligence} decisionMatch={decisionMatch} decisionHit={decisionHit} decisionDiscovery={decisionDiscovery} patternHits={patternHits} discoveries={discoveries} changes={changes} fixtures={fixtures} openMatch={openMatch} isAdvanced={isAdvanced} activePatternCount={activePatternCount} enabledCount={enabledCount} triggeredAlerts={getRecentTriggered(5)} onGoToPatterns={() => setActiveTab('patterns')} navigate={navigate} templates={templates} createFromTemplate={writeThrough.createFromTemplateWT} />}
+      {activeTab === 'patterns' && <PatternsView patterns={patterns} templates={templates} createFromTemplate={writeThrough.createFromTemplateWT} createPattern={writeThrough.createPatternWT} updatePattern={writeThrough.updatePatternWT} togglePattern={writeThrough.togglePatternWT} deletePattern={writeThrough.deletePatternWT} isAdvanced={isAdvanced} showBuilder={showBuilder} setShowBuilder={setShowBuilder} discoveryConfig={discoveryConfig} updateDiscoveryConfig={updateDiscoveryConfig} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} fixtures={fixtures} statsMap={statsMap} eventsMap={eventsMap} isFavoriteTeam={isFavoriteTeam} prefilledDraft={prefilledDraft} clearPrefilledDraft={() => setPrefilledDraft(null)} />}
       {activeTab === 'scanner' && <ScannerView hasIntelligence={hasIntelligence} entries={scannerEntries} openMatch={openMatch} isAdvanced={isAdvanced} onGoToPatterns={() => setActiveTab('patterns')} patterns={patterns} />}
       {activeTab === 'alerts' && <AlertsView triggeredAlerts={getRecentTriggered(30)} isAdvanced={isAdvanced} openMatch={openMatch} fixtures={fixtures} navigate={navigate} />}
       {activeTab === 'performance' && <PerformanceView patterns={patterns} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} isAdvanced={isAdvanced} />}

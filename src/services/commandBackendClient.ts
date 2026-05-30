@@ -28,6 +28,22 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T | nul
   }
 }
 
+/** Like fetchApi but throws on HTTP errors (preserving status code). Used by write-through. */
+async function fetchApiStrict<T>(path: string, options?: RequestInit): Promise<T | null> {
+  if (!isEnabled()) return null
+  const res = await fetch(`${BACKEND_URL}${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+  })
+  if (!res.ok) {
+    const err = new Error(`Backend responded ${res.status}`) as Error & { status: number }
+    err.status = res.status
+    throw err
+  }
+  const json = await res.json()
+  return json.success ? json.data : null
+}
+
 // --- Health ---
 
 export async function getBackendHealth(): Promise<{ status: string; uptime: number } | null> {
@@ -41,15 +57,15 @@ export async function listBackendPatterns(): Promise<any[] | null> {
 }
 
 export async function createBackendPattern(data: any): Promise<any | null> {
-  return fetchApi('/api/patterns', { method: 'POST', body: JSON.stringify(data) })
+  return fetchApiStrict('/api/patterns', { method: 'POST', body: JSON.stringify(data) })
 }
 
 export async function updateBackendPattern(id: string, data: any): Promise<any | null> {
-  return fetchApi(`/api/patterns/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+  return fetchApiStrict(`/api/patterns/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
 }
 
 export async function deleteBackendPattern(id: string): Promise<any | null> {
-  return fetchApi(`/api/patterns/${id}`, { method: 'DELETE' })
+  return fetchApiStrict(`/api/patterns/${id}`, { method: 'DELETE' })
 }
 
 // --- Alerts ---

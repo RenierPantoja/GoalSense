@@ -47,6 +47,8 @@ export interface PatternCondition {
 export type PatternScope = 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches'
 export type PatternAction = 'register_alert' | 'suggest_only' | 'highlight'
 
+export type PatternSyncStatus = 'synced' | 'pending_create' | 'pending_update' | 'pending_delete' | 'error' | 'local_only'
+
 export interface Pattern {
   id: string
   name: string
@@ -72,6 +74,11 @@ export interface Pattern {
   antiDuplicateWindow: number // minutes
   createdAt: string
   updatedAt: string
+  // ─── Backend Sync Metadata (Phase B3.3) ────────────────────────────────
+  backendId?: string
+  syncStatus?: PatternSyncStatus
+  lastSyncedAt?: string
+  syncError?: string
 }
 
 export interface PatternTemplate {

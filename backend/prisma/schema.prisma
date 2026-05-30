@@ -24,6 +24,7 @@ model Pattern {
   onlyPreMatch    Boolean  @default(false)
   conditionsJson  String   @default("[]") // JSON array of PatternCondition
   scopeFilterJson String?  // JSON array of scope filters
+  extendedJson    String?  // JSON object with extended fields (matches, excludes, etc.)
   templateId      String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

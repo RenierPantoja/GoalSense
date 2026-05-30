@@ -13,6 +13,7 @@ export const createPatternSchema = z.object({
   onlyPreMatch: z.boolean().default(false),
   conditionsJson: z.string().default('[]'),
   scopeFilterJson: z.string().nullable().optional(),
+  extendedJson: z.string().nullable().optional(),
   templateId: z.string().nullable().optional(),
 })
 

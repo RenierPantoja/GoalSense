@@ -7,6 +7,8 @@
 - **patternBackendAdapter** converts between frontend/backend formats
 - **useBackendSync** performs health check + read mirror with diagnostics
 - **patternSyncDiagnostics** compares local vs backend patterns
+- **patternSyncQueue** manages write-through sync state
+- **usePatternWriteThrough** wraps mutations with async backend writes
 
 ## Sync Phases
 
@@ -16,7 +18,7 @@
 - Reports online/offline status
 - No data migration yet
 
-### Phase 2: Read Mirror ✅ (Current)
+### Phase 2: Read Mirror ✅
 - On mount, if backend online, fetch patterns from backend
 - Convert backend patterns to frontend format via `fromBackendPattern`
 - Compare with localStorage patterns using `compareLocalAndBackendPatterns`
@@ -30,13 +32,6 @@
 - Critical fields checked for divergence: `name`, `status`, `severity`, `action`, `minConfidence`, `requireRichData`, `scope`, `templateId`, `conditions`, `scopeFilter`
 - Result categories: matched, divergent, only-local, only-backend
 
-#### What Phase 2 Does NOT Do
-- Does not import backend patterns into localStorage
-- Does not export local patterns to backend
-- Does not resolve conflicts automatically
-- Does not delete any patterns
-- Does not change the source of truth (localStorage remains primary)
-
 #### How to Interpret Diagnostics
 | State | Meaning |
 |-------|---------|
@@ -47,20 +42,61 @@
 | Backend offline | Backend unreachable, localStorage continues as sole source |
 | Backend desativado | `VITE_COMMAND_BACKEND_URL` not set |
 
-### Phase 3: Write-Through (Future)
-- On pattern create/update/delete:
-  - Write to localStorage (immediate, for UI)
-  - Write to backend (async, for persistence)
-  - If backend fails, mark as `pendingSync`
-- On next successful health check, sync pending items
+### Phase 3: Write-Through ✅ (Current)
+- On pattern create/update/delete/toggle:
+  - Write to localStorage **immediately** (for UI responsiveness)
+  - Fire async backend write (non-blocking)
+  - If backend succeeds: mark pattern as `synced`, store `backendId`
+  - If backend fails: mark as `pending_create` / `pending_update` / `error`
+- On backend coming online: auto-sync all pending items
+- Manual "Sync pendentes" button in advanced mode
+
+#### Sync Metadata on Pattern
+```typescript
+backendId?: string          // Backend's cuid for this pattern
+syncStatus?: PatternSyncStatus  // synced | pending_create | pending_update | pending_delete | error | local_only
+lastSyncedAt?: string       // ISO timestamp of last successful sync
+syncError?: string          // Error message if sync failed
+```
+
+#### Write-Through Operations
+| Operation | Local Effect | Backend Effect |
+|-----------|-------------|----------------|
+| Create pattern | Immediate add to state | POST /api/patterns (async) |
+| Create from template | Immediate add to state | POST /api/patterns (async) |
+| Update pattern | Immediate patch in state | PATCH /api/patterns/:backendId (async) |
+| Toggle active/paused | Immediate toggle in state | PATCH /api/patterns/:backendId (async) |
+| Delete pattern | Immediate remove from state | DELETE /api/patterns/:backendId (async) |
+
+#### Offline Behavior
+- All mutations work locally without backend
+- Patterns are marked `pending_create` / `pending_update`
+- When backend comes online, `syncPendingPatterns()` runs automatically
+- Processes: pending_create → pending_update → pending_delete → errors (retry)
+- Sequential processing to avoid conflicts
+
+#### Conflict Handling (Conservative)
+- Local always wins for pending operations
+- Backend does NOT overwrite local automatically
+- Divergences visible in Read Mirror diagnostics
+- Automatic resolution deferred to Phase 4
+
+#### What Phase 3 Does NOT Do
+- Does not use backend as source of truth
+- Does not overwrite local patterns with backend data
+- Does not delete local patterns because backend doesn't have them
+- Does not resolve divergences automatically
+- Does not sync alerts or performance data
+- Does not block UI on backend latency
 
 ### Phase 4: Backend Primary (Future)
 - Backend becomes source of truth
 - localStorage becomes cache/fallback only
 - Patterns loaded from backend on mount
 - localStorage updated as mirror
+- Automatic conflict resolution with `updatedAt` comparison
 
-## Conflict Resolution
+## Conflict Resolution (Phase 4 — Future)
 
 | Scenario | Resolution |
 |----------|-----------|
@@ -100,6 +136,7 @@ If not set, all backend functions return null and localStorage continues as sole
 - Offline edits may conflict with backend state
 - Backend downtime should never block the user
 - Migration must be reversible
+- Delete on backend may fail silently if pattern was never synced
 
 ## Files
 
@@ -109,13 +146,19 @@ If not set, all backend functions return null and localStorage continues as sole
 | `src/services/patternBackendAdapter.ts` | Format conversion (frontend ↔ backend) |
 | `src/services/useBackendSync.ts` | React hook: health + read mirror + diagnostics |
 | `src/services/patternSyncDiagnostics.ts` | Comparison engine: local vs backend patterns |
+| `src/services/patternSyncQueue.ts` | Write-through sync logic + pending queue |
+| `src/services/usePatternWriteThrough.ts` | React hook: wraps mutations with backend writes |
+| `src/features/command/types/commandTypes.ts` | Pattern type with sync metadata fields |
+| `src/features/command/contexts/PatternContext.tsx` | localStorage persistence with sync field normalization |
 | `backend/src/modules/patterns/` | Backend CRUD routes |
 | `backend/prisma/schema.prisma` | Database schema |
 
-## Next Steps (Phase 3: Write-Through)
+## Next Steps (Phase 4: Backend Primary)
 
-1. On pattern create/update/delete → async write to backend
-2. If backend fails → mark pattern as `pendingSync`
-3. On next health check success → retry pending items
-4. UI shows sync status per pattern (synced / pending / failed)
-5. localStorage remains primary until Phase 4
+1. On mount, load patterns from backend (if online)
+2. Merge with localStorage (backend wins for conflicts by `updatedAt`)
+3. localStorage becomes read cache only
+4. All reads go through backend when online
+5. Offline mode falls back to localStorage cache
+6. Sync alerts and performance data
+7. Multi-user support via `userId`
