@@ -119,6 +119,11 @@ function checkHardGates(_hit: PatternHit, pattern: Pattern, fixture: LiveFixture
     gates.push({ passed: false, blocker: 'Partida encerrada ou suspensa' })
   }
 
+  // Gate 8: Penalty shootout — offensive patterns don't apply
+  if (fixture.status.short === 'P') {
+    gates.push({ passed: false, blocker: 'Partida em pênaltis — padrões de jogo corrido pausados' })
+  }
+
   return gates
 }
 

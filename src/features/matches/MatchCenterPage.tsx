@@ -24,6 +24,8 @@ import { normalizeEvents } from '@/features/matches/normalizeMatchEvents'
 import { buildPlayerEventMap, getBadgesForPlayer, getBadgeStyle } from '@/features/matches/buildPlayerEventMap'
 import { MatchStoryline, PlayerImpactPanel, DangerousAttackPanel, StatsInsightHeader } from '@/features/matches/matchSections'
 import { LivePressureGraph } from '@/components/matches/LivePressureGraph'
+import { PenaltyShootoutPanel } from '@/components/matches/PenaltyShootoutPanel'
+import { isPenaltyShootout } from '@/lib/penaltyShootout'
 import type { PressureGraphEvent } from '@/features/matches/pressureGraphEvents'
 import { MatchHighlightsSection } from '@/features/matches/highlights/MatchHighlightsSection'
 import { PreMatchIntelligencePanel } from '@/features/match-detail/PreMatchIntelligencePanel'
@@ -734,6 +736,11 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
 
       {/* DIAGNOSTIC PANEL */}
       {stats.length > 0 && <DiagnosticPanel stats={stats} homeName={home.name} awayName={away.name} homeScore={home.score} awayScore={away.score} elapsed={elapsed} events={events} />}
+
+      {/* PENALTY SHOOTOUT PANEL — only renders during/after penalty shootout */}
+      {fixtureState && isPenaltyShootout(fixtureState.status.short) && (
+        <PenaltyShootoutPanel statusShort={fixtureState.status.short} homeName={home.name} awayName={away.name} penaltyScore={fixtureState.penaltyScore} />
+      )}
 
       {/* 3. LIVE PRESSURE CENTER — hidden for scheduled */}
       {!isMatchScheduled && (

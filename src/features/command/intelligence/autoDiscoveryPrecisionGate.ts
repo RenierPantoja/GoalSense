@@ -155,6 +155,11 @@ export function validateAutoDiscoveryCandidate(
     blockers.push('Partida encerrada ou suspensa')
   }
 
+  // Gate: penalty shootout — offensive discoveries don't apply
+  if (fixture.status.short === 'P') {
+    blockers.push('Partida em pênaltis — descobertas de jogo corrido pausadas')
+  }
+
   // Gate: suggest_only never alerts
   if (candidate.suggestedAction === 'suggest_only') {
     blockers.push('Configurado como sugestão apenas')

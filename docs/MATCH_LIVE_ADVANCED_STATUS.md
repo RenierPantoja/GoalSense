@@ -78,3 +78,27 @@ If no exact match:
 - Status `AET` shows "Encerrado (Prorr.)"
 - Polling is critical-mode fast during extra time
 - Minute display continues past 90' (e.g., 101', 120')
+
+## UI Integration
+
+### PenaltyShootoutPanel Component
+
+Located at `src/components/matches/PenaltyShootoutPanel.tsx`. Renders:
+- Penalty score when available (e.g., "3 - 2")
+- Individual kicks with outcome icons when available
+- Honest fallback when data is missing
+
+Inserted in MatchCenterPage between DiagnosticPanel and LivePressureGraph.
+
+### Command Center During Penalties
+
+- **Precision Engine Gate 8**: blocks all patterns when `fixture.status.short === 'P'`
+- **Auto-Discovery Gate**: blocks all discoveries during penalty shootout
+- Blocker message: "Partida em pênaltis — padrões de jogo corrido pausados"
+- Penalty kicks do NOT count as goal pressure
+
+### Pressure Graph
+
+- Does not render penalty shootout events as pressure
+- Continues showing game flow up to 120' (or whenever penalties started)
+- No special penalty visualization (kicks are in the PenaltyShootoutPanel instead)
