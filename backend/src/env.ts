@@ -15,6 +15,10 @@ const envSchema = z.object({
   // Summary enrichment
   SUMMARY_ENRICHMENT_ENABLED: z.string().default('true'),
   SUMMARY_ENRICHMENT_MAX_FIXTURES: z.coerce.number().default(10),
+  // Pattern evaluation worker
+  PATTERN_WORKER_ENABLED: z.string().default('false'),
+  PATTERN_WORKER_INTERVAL_MS: z.coerce.number().default(15000),
+  PATTERN_WORKER_MAX_FIXTURES: z.coerce.number().default(20),
 })
 
 export const env = envSchema.parse(process.env)
