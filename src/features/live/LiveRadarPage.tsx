@@ -18,7 +18,7 @@ import { sortByAttention, calculateAttention } from './attentionQueue'
 import { sortByFeaturedRanking, scoreLiveMatchForFeature, getClubAnchorExported } from './liveMatchRanking'
 import { isTrulyLiveFixture, filterTrulyLiveFixtures } from '@/lib/liveFixtureGuard'
 import { getAdaptivePollingInterval } from '@/lib/liveFreshness'
-import { feedScoreCacheFromEvents } from '@/lib/liveScoreCache'
+import { feedScoreCacheFromEvents, updatePenaltyScoreCache } from '@/lib/liveScoreCache'
 import { LiveScannerTable, type FixtureStats } from './LiveScannerTable'
 import { QUICK_SCANNERS } from './liveQuickScanners'
 import { useLiveWatchlist } from './useLiveWatchlist'
@@ -129,6 +129,17 @@ export function LiveRadarPage() {
                 minute: ev.clock?.value ? Math.floor(ev.clock.value / 60) : undefined,
                 playerName: ev.athletesInvolved?.[0]?.displayName || '',
               })),
+            // V15: Extract penalty score from ESPN summary
+            penaltyScore: (() => {
+              const comp = json.header?.competitions?.[0]
+              const h = comp?.competitors?.find((c: any) => c.homeAway === 'home')
+              const a = comp?.competitors?.find((c: any) => c.homeAway === 'away')
+              if (h?.shootoutScore !== undefined && a?.shootoutScore !== undefined) {
+                const hp = parseInt(h.shootoutScore), ap = parseInt(a.shootoutScore)
+                if (!isNaN(hp) && !isNaN(ap)) return { home: hp, away: ap }
+              }
+              return null
+            })(),
           }
         })
       )
@@ -142,6 +153,10 @@ export function LiveRadarPage() {
             if (fx) {
               feedScoreCacheFromEvents(fx.id, fx.score.home ?? 0, fx.score.away ?? 0, r.value.goalEvents)
             }
+          }
+          // V15: Feed penalty score cache
+          if (r.value.penaltyScore) {
+            updatePenaltyScoreCache(r.value.id, r.value.penaltyScore.home, r.value.penaltyScore.away)
           }
         }
       }

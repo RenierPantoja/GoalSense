@@ -115,3 +115,50 @@ export function clearExpiredScoreCache(): void {
     if (now - entry.updatedAt > MAX_AGE_MS) cache.delete(id)
   }
 }
+
+// --- Penalty Score Cache --------------------------------------------------
+
+interface PenaltyScoreCacheEntry {
+  home: number
+  away: number
+  updatedAt: number
+}
+
+const penaltyCache = new Map<number, PenaltyScoreCacheEntry>()
+
+/**
+ * Update the penalty score cache. Never regresses.
+ */
+export function updatePenaltyScoreCache(fixtureId: number, home: number, away: number): void {
+  const existing = penaltyCache.get(fixtureId)
+  const newTotal = home + away
+  const existingTotal = existing ? existing.home + existing.away : -1
+  if (newTotal >= existingTotal) {
+    penaltyCache.set(fixtureId, { home, away, updatedAt: Date.now() })
+  }
+}
+
+/**
+ * Reconcile a fixture's penalty score with the cache.
+ * If cache has higher penalty score, apply it.
+ */
+export function reconcileFixturePenaltyScore(fixture: LiveFixture): void {
+  const cached = penaltyCache.get(fixture.id)
+  if (!cached) return
+  if (Date.now() - cached.updatedAt > MAX_AGE_MS) { penaltyCache.delete(fixture.id); return }
+
+  const current = fixture.penaltyScore
+  const currentTotal = current ? (current.home ?? 0) + (current.away ?? 0) : 0
+  const cachedTotal = cached.home + cached.away
+
+  if (cachedTotal > currentTotal) {
+    fixture.penaltyScore = { home: cached.home, away: cached.away }
+  }
+}
+
+/**
+ * Reconcile all fixtures' penalty scores with the cache.
+ */
+export function reconcileAllPenaltyScores(fixtures: LiveFixture[]): void {
+  for (const fx of fixtures) reconcileFixturePenaltyScore(fx)
+}
