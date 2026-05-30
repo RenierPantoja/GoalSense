@@ -11,6 +11,7 @@ import { isLiveStatus } from '@/lib/footballStatus'
 import { translateStage } from '@/lib/competitionLabels'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { ClubLogo } from '@/components/ui/ClubLogo'
+import { ScoreDebugBadge } from '@/components/ui/ScoreDebugBadge'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { sortByAttention, calculateAttention } from './attentionQueue'
 import { sortByFeaturedRanking, scoreLiveMatchForFeature, getClubAnchorExported } from './liveMatchRanking'
@@ -459,6 +460,7 @@ function HeroContent({ fixture, stats, rankingReasons }: { fixture: LiveFixture;
             </span>
           </div>
           <span className="text-[12px] text-white/25">{fixture.league.name}</span>
+          <ScoreDebugBadge fixture={fixture} />
         </div>
         <div className="flex flex-col items-center gap-4 flex-1">
           <ClubLogo src={fixture.awayTeam.logo} name={fixture.awayTeam.name} size={88} />
@@ -525,6 +527,7 @@ function MatchRow({ fixture, selected, onSelect, onOpen }: { fixture: LiveFixtur
         <span className="truncate text-[14px] font-medium text-white/60">{fixture.awayTeam.name}</span>
       </div>
       <div className="hidden lg:flex items-center gap-2 w-40 justify-end shrink-0">
+        <ScoreDebugBadge fixture={fixture} compact />
         <span className="text-[11px] text-white/15 truncate">{fixture.league.name}</span>
         <FavoriteButton active={isFav} onClick={() => toggleFavoriteMatch({ canonicalMatchId: matchId, homeTeam: fixture.homeTeam.name, awayTeam: fixture.awayTeam.name, competition: fixture.league.name, utcDate: fixture.date })} size={13} />
       </div>
