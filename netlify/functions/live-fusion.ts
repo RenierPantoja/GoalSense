@@ -47,7 +47,7 @@ export default async () => {
       footballData: fdFixtures.length,
       apiFootball: afFixtures.length,
     },
-  }, { headers: { 'Cache-Control': 'public, max-age=12' } })
+  }, { headers: { 'Cache-Control': 'public, max-age=5' } })
 }
 
 function dedup(home: string, away: string): string {

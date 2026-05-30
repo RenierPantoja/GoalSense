@@ -15,6 +15,7 @@ import { LoadingState } from '@/components/ui/LoadingState'
 import { sortByAttention, calculateAttention } from './attentionQueue'
 import { sortByFeaturedRanking, scoreLiveMatchForFeature, getClubAnchorExported } from './liveMatchRanking'
 import { isTrulyLiveFixture, filterTrulyLiveFixtures } from '@/lib/liveFixtureGuard'
+import { getAdaptivePollingInterval } from '@/lib/liveFreshness'
 import { LiveScannerTable, type FixtureStats } from './LiveScannerTable'
 import { QUICK_SCANNERS } from './liveQuickScanners'
 import { useLiveWatchlist } from './useLiveWatchlist'
@@ -44,7 +45,8 @@ export function LiveRadarPage() {
 
   const allFixturesRef = useRef<LiveFixture[] | null>(null)
   const fetcher = useCallback(async () => (await getLiveFixtures()).fixtures, [])
-  const { data: allFixtures, loading, error, lastUpdate, refreshing, refresh } = useAutoRefresh(fetcher, { intervalMs: 15_000 })
+  const pollingInterval = allFixturesRef.current ? getAdaptivePollingInterval(allFixturesRef.current) : 15_000
+  const { data: allFixtures, loading, error, lastUpdate, refreshing, refresh } = useAutoRefresh(fetcher, { intervalMs: pollingInterval })
 
   // Keep ref in sync for the navigate helpers + feed scope KB
   useEffect(() => {

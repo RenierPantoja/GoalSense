@@ -10,6 +10,7 @@ import { useViewMode } from '@/context/ViewModeContext'
 import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
 import { isScheduledMatch, isFinishedMatch } from '@/utils/matchStatus'
 import type { LiveFixture } from '@/lib/apiClient'
+import { getMatchDetailPollingInterval } from '@/lib/liveFreshness'
 import { retrieveStoredFixture } from '@/lib/matchNavigation'
 import { isSameMatchStrict } from '@/features/providers/isSameMatchStrict'
 import { calculateMatchIntelligence, type MetricResult } from '@/services/intelligence/matchIntelligence'
@@ -192,7 +193,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       // Use our ESPN function with the fixture's date (default: today).
       const today = new Date().toISOString().split('T')[0].replace(/-/g, '')
       const dk = dateKey || today
-      const res = await fetch(`/api/espn-live?date=${dk}`)
+      const res = await fetch(`/api/espn-live?date=${dk}`, { cache: 'no-store' })
       if (!res.ok) return null
       const json = await res.json()
       const fixtures = json.fixtures || []
@@ -204,7 +205,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
         if (!isSameMatchStrict({ homeName: expectedHome, awayName: expectedAway }, { homeName: eName, awayName: aName })) continue
 
         // Found! Get full ESPN summary for rich data
-        const sumRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${fx.id}`)
+        const sumRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${fx.id}`, { cache: 'no-store' })
         if (!sumRes.ok) continue
         const sumJson = await sumRes.json()
         const sumComp = sumJson.header?.competitions?.[0]
@@ -221,7 +222,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
       // If date-based search failed and we weren't already looking at today, retry today.
       // Catches mismatched timezones (e.g. fixture date Mexico, ESPN scoreboard UTC).
       if (dk !== today) {
-        const retryRes = await fetch(`/api/espn-live?date=${today}`)
+        const retryRes = await fetch(`/api/espn-live?date=${today}`, { cache: 'no-store' })
         if (!retryRes.ok) return null
         const retryJson = await retryRes.json()
         const retryFixtures = retryJson.fixtures || []
@@ -229,7 +230,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
           const eName = fx.homeTeam?.name || ''
           const aName = fx.awayTeam?.name || ''
           if (!isSameMatchStrict({ homeName: expectedHome, awayName: expectedAway }, { homeName: eName, awayName: aName })) continue
-          const sumRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${fx.id}`)
+          const sumRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${fx.id}`, { cache: 'no-store' })
           if (!sumRes.ok) continue
           const sumJson = await sumRes.json()
           const sumComp = sumJson.header?.competitions?.[0]
@@ -486,7 +487,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
 
   useEffect(() => {
     fetchData()
-    const interval = (fixtureState?.status.short === 'LIVE' || fixtureState?.status.short === 'HT') ? 15_000 : 60_000
+    const interval = fixtureState ? getMatchDetailPollingInterval(fixtureState) : 60_000
     const id = setInterval(() => fetchData(true), interval)
     return () => clearInterval(id)
   }, [fetchData])

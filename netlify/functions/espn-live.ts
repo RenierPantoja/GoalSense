@@ -80,7 +80,7 @@ export default async (req: Request) => {
       liveCount: live.length,
       fixtures: all,
       live,
-    }, { headers: { "Cache-Control": "public, max-age=12" } })
+    }, { headers: { "Cache-Control": "public, max-age=5" } })
   } catch (err: any) {
     return Response.json(
       { ok: false, code: "FETCH_ERROR", message: err.message },

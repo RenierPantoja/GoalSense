@@ -24,6 +24,7 @@ import { runAutoDiscovery } from './intelligence/autoDiscoveryEngine'
 import { resolveAlert } from './intelligence/patternResolutionEngine'
 import { recordScopeEntities } from '@/services/intelligence/scopeKnowledgeBase'
 import { isLiveFx, detectChanges, type ChangeEvent } from './commandHelpers'
+import { getCommandCenterPollingInterval } from '@/lib/liveFreshness'
 import type { Pattern, FixtureStatsForPattern, ScannerEntry } from './types/commandTypes'
 import { useCommandAlertNotifications } from '@/features/notifications/useCommandAlertNotifications'
 import { CockpitView } from './components/views/cockpit/CockpitView'
@@ -87,7 +88,7 @@ export function CommandCenterPage() {
     const live = fxList.filter(fx => isLiveFx(fx) && fx.provider === 'espn').slice(0, 15)
     if (live.length === 0) return
     const results = await Promise.allSettled(live.map(async (fx) => {
-      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${fx.id}`)
+      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${fx.id}`, { cache: 'no-store' })
       if (!res.ok) return null
       const json = await res.json()
       const hS = json.boxscore?.teams?.[0]?.statistics || []; const aS = json.boxscore?.teams?.[1]?.statistics || []
@@ -162,9 +163,10 @@ export function CommandCenterPage() {
 
   useEffect(() => {
     if (!autoRefresh) { if (intervalRef.current) clearInterval(intervalRef.current); return }
-    intervalRef.current = setInterval(() => { fetchData(true); resolveExpired() }, liveMatches.length > 0 ? 25000 : 60000)
+    const interval = getCommandCenterPollingInterval(liveMatches, hasManualPatterns)
+    intervalRef.current = setInterval(() => { fetchData(true); resolveExpired() }, interval)
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
-  }, [autoRefresh, fetchData, liveMatches.length, resolveExpired])
+  }, [autoRefresh, fetchData, liveMatches.length, resolveExpired, hasManualPatterns])
 
   const toggleAuto = () => { const n = !autoRefresh; setAutoRefresh(n); try { localStorage.setItem('goalsense_cmd_auto', String(n)) } catch {} }
 
