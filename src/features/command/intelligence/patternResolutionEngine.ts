@@ -58,6 +58,11 @@ export function resolveAlert(
   const alertAge = Date.now() - new Date(alert.createdAt).getTime()
   const score = { home: cH, away: cA }
 
+  // V15: If fixture is in penalty shootout, don't count shootout goals as confirmations
+  // for open-play patterns. Return unknown if window expired during shootout.
+  const isPenaltyPhase = currentFixture.status.short === 'P' || currentFixture.status.short === 'PEN'
+  const effectiveGoalsSince = isPenaltyPhase ? 0 : goalsSince
+
   // V3: Infer resolution type and use type-specific window
   const resType = inferPatternResolutionType({ name: alert.patternName, templateId: alert.templateId, description: '', conditions: [], severity: 'attention', status: 'active', isTemplate: false, scope: 'all', minConfidence: 50, action: 'register_alert', maxTriggersPerMatch: 2, antiDuplicateWindow: 5, id: alert.patternId || '', createdAt: '', updatedAt: '' })
   const typeWindow = getResolutionWindow(resType)
@@ -71,7 +76,7 @@ export function resolveAlert(
   // ─── V3: Type-based resolution ─────────────────────────────────────────
   // Goal-based types: goal_pressure, late_goal, over_trend, open_game, dominance
   if (resType === 'goal_pressure' || resType === 'late_goal' || resType === 'over_trend' || resType === 'open_game' || resType === 'dominance') {
-    if (goalsSince > 0) {
+    if (effectiveGoalsSince > 0) {
       return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Gol confirmado: ${tH}-${tA} → ${cH}-${cA}`, evidence: ['Gol após disparo', `Placar mudou de ${tH}-${tA} para ${cH}-${cA}`], confidence: 95, resolutionType: resType, windowMinutes: typeWindow }
     }
     if (isFinished) {
@@ -85,7 +90,7 @@ export function resolveAlert(
 
   // Corner-based type
   if (resType === 'corner_pressure') {
-    if (goalsSince > 0) {
+    if (effectiveGoalsSince > 0) {
       return { status: 'confirmed', strength: 'partial_confirmation', scoreAtResolution: score, reason: 'Pressão territorial resultou em gol', evidence: ['Gol após pressão de escanteios'], confidence: 60, resolutionType: resType, windowMinutes: typeWindow }
     }
     if (isFinished) {
@@ -116,7 +121,7 @@ export function resolveAlert(
       }
       return { status: 'failed', strength: 'failed', scoreAtResolution: score, reason: `Favorito se recuperou: ${cH}-${cA}`, evidence: ['Favorito virou/venceu'], confidence: 85, resolutionType: resType, windowMinutes: typeWindow }
     }
-    if (goalsSince > 0 && minutesSinceTrigger <= typeWindow) {
+    if (effectiveGoalsSince > 0 && minutesSinceTrigger <= typeWindow) {
       return { status: 'confirmed', strength: 'strong_confirmation', scoreAtResolution: score, reason: `Evento confirmado: gol (${cH}-${cA})`, evidence: ['Gol após disparo'], confidence: 88, resolutionType: resType, windowMinutes: typeWindow }
     }
     return null
@@ -124,7 +129,7 @@ export function resolveAlert(
 
   // Custom/unknown type — conservative
   if (isFinished) {
-    if (goalsSince > 0) {
+    if (effectiveGoalsSince > 0) {
       return { status: 'confirmed', strength: 'partial_confirmation', scoreAtResolution: score, reason: `Evento após disparo: ${cH}-${cA}`, evidence: ['Gol detectado'], confidence: 60, resolutionType: resType, windowMinutes: typeWindow }
     }
     return { status: 'unknown', strength: 'unknown_data', scoreAtResolution: score, reason: 'Sem dados suficientes para confirmar', evidence: [], confidence: 0, resolutionType: resType, windowMinutes: typeWindow }

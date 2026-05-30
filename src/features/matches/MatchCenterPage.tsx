@@ -669,7 +669,15 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
                 <span className="text-[18px] text-white/10">:</span>
                 <span className="text-[48px] font-bold tabular-nums text-white leading-none">{isMatchScheduled ? '-' : away.score}</span>
               </div>
-              {isLive && <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /><span className="text-[12px] font-semibold text-emerald-400">{elapsed ? `${elapsed}'` : 'Ao vivo'}</span></div>}
+              {/* Penalty score line */}
+              {fixtureState?.penaltyScore && fixtureState.penaltyScore.home !== null && fixtureState.penaltyScore.away !== null && (
+                <span className="text-[14px] font-bold tabular-nums text-amber-300/80">Pênaltis {fixtureState.penaltyScore.home} - {fixtureState.penaltyScore.away}</span>
+              )}
+              {fixtureState && isPenaltyShootout(fixtureState.status.short) && !fixtureState.penaltyScore && (
+                <span className="text-[11px] text-amber-300/60 font-medium">Cobrança de pênaltis</span>
+              )}
+              {isLive && !isPenaltyShootout(fixtureState?.status.short || '') && <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /><span className="text-[12px] font-semibold text-emerald-400">{elapsed ? `${elapsed}'` : 'Ao vivo'}</span></div>}
+              {isLive && isPenaltyShootout(fixtureState?.status.short || '') && <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" /><span className="text-[12px] font-semibold text-amber-400">Pênaltis ao vivo</span></div>}
               {!isLive && status && <span className="text-[10px] text-white/25">{status}</span>}
               {fixtureState && <ScoreDebugBadge fixture={fixtureState} />}
               {heroPhrase && <span className="text-[10px] text-cyan-400/60 font-medium mt-0.5">{heroPhrase}</span>}
@@ -746,9 +754,16 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
         <PenaltyShootoutPanel statusShort={fixtureState.status.short} homeName={home.name} awayName={away.name} penaltyScore={fixtureState.penaltyScore} />
       )}
 
-      {/* 3. LIVE PRESSURE CENTER — hidden for scheduled */}
+      {/* 3. LIVE PRESSURE CENTER — hidden for scheduled and during penalty shootout */}
       {!isMatchScheduled && (
       <div id="sec-pressao">
+        {fixtureState && isPenaltyShootout(fixtureState.status.short) && (
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.01] p-4 mb-4">
+            <p className="text-[11px] text-white/45 leading-relaxed">
+              Pressão encerrada após a prorrogação. {fixtureState.status.short === 'P' ? 'A partida está nas cobranças de pênaltis.' : 'Partida decidida nos pênaltis.'}
+            </p>
+          </div>
+        )}
         <LivePressureGraph
           events={events}
           commentary={commentary}
