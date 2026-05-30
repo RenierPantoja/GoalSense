@@ -208,5 +208,13 @@ export function shouldApplyUpdate(
   if (incomingMin > currentMin) return true
 
   // Same minute: apply if incoming is newer fetch
-  return incomingFetchedAt >= currentFetchedAt
+  if (incomingFetchedAt >= currentFetchedAt) {
+    // Preserve penalty score from current if incoming doesn't have it
+    if (current.penaltyScore && !incoming.penaltyScore) {
+      incoming.penaltyScore = current.penaltyScore
+    }
+    return true
+  }
+
+  return false
 }

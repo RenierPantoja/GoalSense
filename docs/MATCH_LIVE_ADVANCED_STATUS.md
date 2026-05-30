@@ -56,18 +56,20 @@ If no exact match:
 - Live fixture guard recognizes `P` as live
 
 ### Limitations (Future Work)
-- No penalty score field in `LiveFixture` type (only regular score)
-- No individual penalty kick tracking
-- No penalty shootout UI component
-- ESPN may return penalty kicks in `keyEvents` but they're not aggregated
-- Pressure graph doesn't have a penalty-specific visualization
+- Individual penalty kick tracking depends on ESPN providing shootout events in keyEvents/plays
+- Pressure graph doesn't have a penalty-specific visualization (stops at 120')
+- No dedicated penalty shootout UI component yet (planned)
 
 ### What Works Now
 - Status badge shows "Pênaltis" during shootout
 - Status badge shows "Encerrado (Pên.)" after shootout
-- Polling is aggressive during penalties
+- Polling is aggressive during penalties (5s Match Detail)
 - Command Center recognizes penalty status (won't trigger offensive patterns)
 - Live Radar shows correct status
+- **Penalty score is extracted from ESPN** when available (shootoutScore/linescores)
+- **Penalty score is preserved during fixture merge** (never regresses)
+- **`penaltyScore` field exists on `LiveFixture`** type for UI consumption
+- **`src/lib/penaltyShootout.ts`** provides full extraction, detection, merge, and display helpers
 
 ## Extra Time Handling
 

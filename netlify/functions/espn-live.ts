@@ -59,6 +59,8 @@ export default async (req: Request) => {
           home: parseInt(home?.score) || 0,
           away: parseInt(away?.score) || 0,
         },
+        // V14: Extract penalty shootout score if available
+        penaltyScore: extractShootoutScore(home, away, event.status?.type?.name),
         statistics: {
           home: homeStats,
           away: awayStats,
@@ -153,4 +155,34 @@ function parseElapsed(displayClock: string | undefined): number | null {
   if (!displayClock) return null
   const match = displayClock.match(/(\d+)/)
   return match ? parseInt(match[1]) : null
+}
+
+// V14: Extract penalty shootout score from ESPN competitor data
+function extractShootoutScore(home: any, away: any, statusName: string | undefined): { home: number; away: number } | undefined {
+  // Only extract if status indicates penalties
+  const s = (statusName || '').toUpperCase()
+  const isPenalty = s.includes('SHOOTOUT') || s.includes('PENALTY') || s.includes('FINAL_PEN')
+  if (!isPenalty) return undefined
+
+  // Try shootoutScore field
+  if (home?.shootoutScore !== undefined && away?.shootoutScore !== undefined) {
+    const h = parseInt(home.shootoutScore)
+    const a = parseInt(away.shootoutScore)
+    if (!isNaN(h) && !isNaN(a)) return { home: h, away: a }
+  }
+
+  // Try linescores (penalty round is typically the last linescore after ET)
+  const homeLS = home?.linescores || []
+  const awayLS = away?.linescores || []
+  if (homeLS.length >= 4 && awayLS.length >= 4) {
+    const lastH = homeLS[homeLS.length - 1]
+    const lastA = awayLS[awayLS.length - 1]
+    if (lastH?.value !== undefined && lastA?.value !== undefined) {
+      const h = parseInt(lastH.value)
+      const a = parseInt(lastA.value)
+      if (!isNaN(h) && !isNaN(a) && (h + a) <= 15) return { home: h, away: a }
+    }
+  }
+
+  return undefined
 }

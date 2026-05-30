@@ -56,6 +56,11 @@ export interface LiveFixture {
     home: number | null
     away: number | null
   }
+  /** V14: Penalty shootout score — only present when provider delivers it. */
+  penaltyScore?: {
+    home: number | null
+    away: number | null
+  }
   venue: string | null
   referee: string | null
   date: string
@@ -92,14 +97,31 @@ function pickBestFixture(a: LiveFixture, b: LiveFixture): LiveFixture {
   const scoreB = getFixtureStatusScore(b)
 
   // More advanced status wins
-  if (scoreA !== scoreB) return scoreA > scoreB ? a : b
+  if (scoreA !== scoreB) {
+    const winner = scoreA > scoreB ? a : b
+    const loser = scoreA > scoreB ? b : a
+    // Preserve penaltyScore from loser if winner doesn't have it
+    if (!winner.penaltyScore && loser.penaltyScore) {
+      winner.penaltyScore = loser.penaltyScore
+    }
+    return winner
+  }
 
   // Same status: higher minute wins
   const minA = a.status.elapsed || 0
   const minB = b.status.elapsed || 0
-  if (minA !== minB) return minA > minB ? a : b
+  if (minA !== minB) {
+    const winner = minA > minB ? a : b
+    const loser = minA > minB ? b : a
+    if (!winner.penaltyScore && loser.penaltyScore) {
+      winner.penaltyScore = loser.penaltyScore
+    }
+    return winner
+  }
 
-  // Same minute: prefer the one with a logo
+  // Same minute: prefer the one with penalty score or logo
+  if (a.penaltyScore && !b.penaltyScore) return a
+  if (b.penaltyScore && !a.penaltyScore) return b
   if (a.homeTeam.logo && !b.homeTeam.logo) return a
   if (b.homeTeam.logo && !a.homeTeam.logo) return b
 
