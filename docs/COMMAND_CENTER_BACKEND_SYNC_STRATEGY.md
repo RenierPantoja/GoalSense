@@ -121,6 +121,24 @@ backendResolutionId?: string    // Backend resolution record ID
 - `AlertResolution` table linked to `Alert`
 - Frontend stores `backendResolutionId` for audit trail
 
+#### Sync Metadata Storage (Hardened in B4.1)
+- Sync metadata is stored in a **separate** localStorage key (`goalsense_alert_sync_meta`)
+- This prevents AlertsContext state updates from overwriting sync metadata
+- `mergeAlertSyncMeta()` merges metadata into alerts for display/processing
+- Metadata includes: `backendId`, `syncStatus`, `lastSyncedAt`, `syncError`, `backendResolutionId`
+
+#### QA Results (Phase B4.1)
+- **Create online**: Alert appears immediately, POST fires async, backendId saved ✅
+- **Resolve online**: Status changes immediately, POST /resolve fires, backendResolutionId saved ✅
+- **Create offline**: Alert appears locally, marked pending_create in sync meta ✅
+- **Resolve offline**: Status changes locally, marked pending_resolve in sync meta ✅
+- **Backend comes online**: pending_create sent first, then pending_resolve (order guaranteed) ✅
+- **DuplicateSignature**: Backend returns existing alert (200), frontend marks as synced ✅
+- **404 on resolve**: Recreates alert on backend, then resolves ✅
+- **Evidence preservation**: evidenceJson includes all evidences, patternName, teams, snapshot ✅
+- **TemporalEvidence**: Preserved as separate JSON field ✅
+- **Old alerts (no sync meta)**: Continue working, no errors ✅
+
 #### What Phase B4 Does NOT Do
 - Does not use backend as source of truth for alerts
 - Does not load alerts from backend on mount

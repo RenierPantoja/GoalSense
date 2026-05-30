@@ -4,7 +4,7 @@
  * Phase B4: Alerts Backend Sync — localStorage remains primary.
  * Backend receives alert creates and resolutions for persistence.
  */
-import type { CommandCenterAlert, AlertSyncStatus } from '@/context/AlertsContext'
+import type { CommandCenterAlert } from '@/context/AlertsContext'
 import { isBackendEnabled, createBackendAlert, resolveBackendAlert, getBackendHealth } from './commandBackendClient'
 import { toBackendAlertPayload, toBackendResolvePayload } from './alertBackendAdapter'
 
