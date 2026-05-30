@@ -27,6 +27,7 @@ import { buildPlayerEventMap, getBadgesForPlayer, getBadgeStyle } from '@/featur
 import { MatchStoryline, PlayerImpactPanel, DangerousAttackPanel, StatsInsightHeader } from '@/features/matches/matchSections'
 import { LivePressureGraph } from '@/components/matches/LivePressureGraph'
 import { PenaltyShootoutPanel } from '@/components/matches/PenaltyShootoutPanel'
+import { ScoreDebugBadge } from '@/components/ui/ScoreDebugBadge'
 import { isPenaltyShootout } from '@/lib/penaltyShootout'
 import type { PressureGraphEvent } from '@/features/matches/pressureGraphEvents'
 import { MatchHighlightsSection } from '@/features/matches/highlights/MatchHighlightsSection'
@@ -670,6 +671,7 @@ export function MatchCenterPage({ inlineFixture, onBack }: MatchCenterProps = {}
               </div>
               {isLive && <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /><span className="text-[12px] font-semibold text-emerald-400">{elapsed ? `${elapsed}'` : 'Ao vivo'}</span></div>}
               {!isLive && status && <span className="text-[10px] text-white/25">{status}</span>}
+              {fixtureState && <ScoreDebugBadge fixture={fixtureState} />}
               {heroPhrase && <span className="text-[10px] text-cyan-400/60 font-medium mt-0.5">{heroPhrase}</span>}
             </div>
             <div className="flex flex-col items-center gap-2">

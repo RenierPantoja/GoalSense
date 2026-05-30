@@ -9,6 +9,7 @@
 import { ChevronRight } from 'lucide-react'
 import type { LiveFixture } from '@/lib/apiClient'
 import { ClubLogo } from '@/components/ui/ClubLogo'
+import { ScoreDebugBadge } from '@/components/ui/ScoreDebugBadge'
 import type { Pattern, ScannerEntry } from '../../../types/commandTypes'
 import { isLiveFx } from '../../../commandHelpers'
 import { describePatternScope } from '../../../utils/patternScopeAudit'
@@ -52,6 +53,7 @@ export function ScannerRow({ entry, openMatch, isAdvanced, isFavoriteTeam, patte
           <span className="text-[14px] text-white font-bold tabular-nums px-2">{fx.score.home ?? '-'}<span className="text-white/25 mx-1">:</span>{fx.score.away ?? '-'}</span>
           <span className="text-[13px] text-white/85 font-semibold truncate">{fx.awayTeam.name}</span>
           <ClubLogo src={fx.awayTeam.logo} name={fx.awayTeam.name} size={22} />
+          {isAdvanced && <ScoreDebugBadge fixture={fx} compact />}
         </div>
 
         {/* Meta + evidence */}
