@@ -258,7 +258,7 @@ function LocalBacktestSection({ reports }: { reports: PatternPerformanceReport[]
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export function PerformanceView({ patterns, triggeredAlerts, commandAlerts, isAdvanced, backendReports, performanceSource }: PerformanceViewProps) {
+export function PerformanceView({ patterns, triggeredAlerts, commandAlerts, isAdvanced, backendReports }: PerformanceViewProps) {
   // Pattern Health engine (for PatternStatRow compatibility)
   const cmdAlertsForHealth = useMemo(
     () => commandAlerts.map(a => ({ patternId: a.patternId, status: a.status, confidence: a.confidence, timestamp: a.createdAt })),
@@ -393,7 +393,8 @@ export function PerformanceView({ patterns, triggeredAlerts, commandAlerts, isAd
           <ul className="text-[11px] text-white/50 leading-relaxed space-y-1">
             <li>· Unknown não é falha; significa que o provider não entregou dados suficientes para confirmar ou negar.</li>
             <li>· Taxas só aparecem com amostra mínima de 5 resoluções (confirmadas + falhadas).</li>
-            <li>· Histórico local depende deste navegador — limpar dados apaga o histórico.</li>
+            {activeSource === 'backend' && <li>· Fonte: Backend. Contém apenas alertas sincronizados a partir da ativação do sync.</li>}
+            {activeSource === 'local' && <li>· Fonte: Local. Histórico depende deste navegador — limpar dados apaga o histórico.</li>}
             <li>· Performance passada não garante resultado futuro.</li>
           </ul>
         </section>

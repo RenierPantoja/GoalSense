@@ -84,6 +84,37 @@ Returns `PerformanceSummary` with aggregate counts and reliability distribution.
 - Performance only as good as alert sync coverage
 - Historical local alerts not retroactively synced to backend
 
+## QA Results (Phase B5.1)
+
+### Mathematical Validation
+- **Scenario A (0 alerts)**: sampleSize=0, all rates null, reliability=insufficient_sample ✅
+- **Scenario B (4 resolved)**: resolvedCount < 5, rates null, reliability=insufficient_sample ✅
+- **Scenario C (5 resolved: 3C+1P+1F)**: usefulRate=4/5=80%, failedRate=1/5=20% ✅
+- **Scenario D (5 total: 2C+1F+2U)**: resolved=3 < 5, rates null, unknownRate=2/5=40% ✅
+- **Scenario E (5 total: 3P+2C)**: resolved=2 < 5, reliability=preliminary, warning about insufficient resolutions ✅
+
+### Denominator Rules
+- `resolved = confirmed + confirmed_partial + failed` (never includes unknown, expired, pending)
+- `usefulRate = (confirmed + partial) / resolved` (only when resolved >= 5)
+- `failedRate = failed / resolved` (only when resolved >= 5)
+- `unknownRate = unknown / total` (only when total >= 5)
+- Pending never enters any rate denominator
+
+### Edge Cases Handled
+- Unknown status values → counted, warning generated, not included in rates
+- Missing temporalEvidence → momentum = 'unknown', no crash
+- Missing triggerSnapshot → dataQuality = 'poor', no crash
+- Missing provider → provider = 'unknown', no crash
+- Empty evidenceJson → safe fallback to {}
+- Malformed JSON → safeParseJson returns fallback
+
+### Hardening Applied
+- `calculateReliability` now receives `resolvedCount` — returns 'preliminary' when resolved < 5 even if total >= 5
+- `buildWarningsAndRecommendations` warns when resolved < 5 but total >= 5
+- Unrecognized statuses tracked and warned about
+- Frontend shows source-specific honest copy (Backend vs Local)
+- Redundant localStorage line removed from honest copy
+
 ## Future (Not This Phase)
 
 - Brier score with calibrated confidence

@@ -101,12 +101,13 @@ function calculateRates(confirmed: number, partial: number, failed: number, unkn
 
 function calculateReliability(
   sampleSize: number,
+  resolvedCount: number,
   usefulRate: number | null,
   failedRate: number | null,
   unknownRate: number | null,
 ): ReliabilityLabel {
   if (sampleSize < MIN_SAMPLE_FOR_RATE) return 'insufficient_sample'
-  if (sampleSize < 30 && usefulRate === null) return 'preliminary'
+  if (resolvedCount < MIN_SAMPLE_FOR_RATE) return 'preliminary'
   if (unknownRate !== null && unknownRate > 0.4) return 'data_limited'
   if (failedRate !== null && failedRate > 0.5) return 'underperforming'
   if (usefulRate !== null && usefulRate < 0.4 && failedRate !== null && failedRate > 0.35) return 'noisy'
@@ -118,6 +119,7 @@ function calculateReliability(
 
 function buildWarningsAndRecommendations(
   sampleSize: number,
+  resolvedCount: number,
   usefulRate: number | null,
   failedRate: number | null,
   unknownRate: number | null,
@@ -128,6 +130,8 @@ function buildWarningsAndRecommendations(
 
   if (sampleSize < MIN_SAMPLE_FOR_RATE) {
     warnings.push('Amostra insuficiente para conclusão.')
+  } else if (resolvedCount < MIN_SAMPLE_FOR_RATE) {
+    warnings.push(`Apenas ${resolvedCount} de ${sampleSize} alertas foram resolvidos. Taxas requerem ${MIN_SAMPLE_FOR_RATE} resoluções.`)
   }
   if (unknownRate !== null && unknownRate > 0.4) {
     warnings.push(`${Math.round(unknownRate * 100)}% dos alertas ficaram sem resolução.`)
@@ -184,6 +188,10 @@ export async function buildPatternPerformance(patternId: string): Promise<Patter
   const rates = calculateRates(confirmedCount, confirmedPartialCount, failedCount, unknownCount, sampleSize)
   const averageConfidence = Math.round(alerts.reduce((s, a) => s + a.confidence, 0) / sampleSize)
 
+  // Track unrecognized statuses for warnings
+  const knownStatuses = new Set(['confirmed', 'confirmed_partial', 'failed', 'unknown', 'expired', 'pending'])
+  const unrecognizedCount = alerts.filter(a => !knownStatuses.has(a.status)).length
+
   // Breakdowns from evidence/temporal JSON
   const byResolutionType: Record<string, number> = {}
   const byDataQuality: Record<string, number> = {}
@@ -223,10 +231,15 @@ export async function buildPatternPerformance(patternId: string): Promise<Patter
     byResolutionType[type] = (byResolutionType[type] || 0) + 1
   }
 
-  const reliability = calculateReliability(sampleSize, rates.usefulRate, rates.failedRate, rates.unknownRate)
+  const reliability = calculateReliability(sampleSize, rates.resolvedCount, rates.usefulRate, rates.failedRate, rates.unknownRate)
   const { warnings, recommendations } = buildWarningsAndRecommendations(
-    sampleSize, rates.usefulRate, rates.failedRate, rates.unknownRate, byMomentumSource,
+    sampleSize, rates.resolvedCount, rates.usefulRate, rates.failedRate, rates.unknownRate, byMomentumSource,
   )
+
+  // Add warning for unrecognized statuses
+  if (unrecognizedCount > 0) {
+    warnings.push(`${unrecognizedCount} alerta(s) com status não reconhecido.`)
+  }
 
   return {
     patternId,
