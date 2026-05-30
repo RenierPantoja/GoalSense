@@ -1,10 +1,12 @@
 /**
  * Live Monitor Service — captures live fixture snapshots into the database.
  * ─────────────────────────────────────────────────────────────────────────────
- * Phase B6: Observation only. No alerts generated.
+ * Phase B6.1: Enriched snapshots with stats + timed events from ESPN summary.
  */
 import { prisma } from '../../db/client.js'
+import { env } from '../../env.js'
 import type { ProviderFixture, ProviderFetchResult } from '../../providers/provider.types.js'
+import { fetchEspnSummary, extractEspnStats, extractEspnTimedEvents, extractEspnShootoutEvents, type LiveMatchStats, type BackendTimedEvent, type ShootoutEvent } from '../../providers/espn.provider.js'
 import { buildCanonicalKey, shouldUpdateStatus } from '../fixtures/fixtureIdentity.service.js'
 
 // ─── Fixture Upsert ──────────────────────────────────────────────────────────
@@ -70,32 +72,51 @@ export interface SnapshotDecision {
 }
 
 export function shouldStoreSnapshot(
-  lastSnapshot: { minute: number | null; scoreHome: number; scoreAway: number; status: string } | null,
+  lastSnapshot: { minute: number | null; scoreHome: number; scoreAway: number; status: string; statsJson?: string | null; eventsJson?: string | null } | null,
   incoming: ProviderFixture,
+  enrichedEvents?: BackendTimedEvent[] | null,
 ): SnapshotDecision {
   if (!lastSnapshot) return { shouldStore: true, reason: 'first_snapshot' }
   if (lastSnapshot.status !== incoming.status) return { shouldStore: true, reason: 'status_changed' }
   if (lastSnapshot.scoreHome !== incoming.scoreHome || lastSnapshot.scoreAway !== incoming.scoreAway) return { shouldStore: true, reason: 'score_changed' }
   if (lastSnapshot.minute !== incoming.minute && incoming.minute !== null) return { shouldStore: true, reason: 'minute_changed' }
+
+  // Check if enriched events added new data
+  if (enrichedEvents && enrichedEvents.length > 0) {
+    const lastEventsCount = lastSnapshot.eventsJson ? (JSON.parse(lastSnapshot.eventsJson) as any[]).length : 0
+    if (enrichedEvents.length > lastEventsCount) return { shouldStore: true, reason: 'new_events' }
+  }
+
   return { shouldStore: false, reason: 'no_change' }
 }
 
-function assessDataQuality(pf: ProviderFixture): 'rich' | 'partial' | 'poor' {
-  if (pf.stats?.shotsOnTarget && pf.stats?.possession) return 'rich'
-  if (pf.stats) return 'partial'
+function assessDataQuality(stats: LiveMatchStats | null, events: BackendTimedEvent[] | null): 'rich' | 'partial' | 'poor' {
+  const hasStats = stats && (stats.shotsOnTargetHome !== undefined || stats.possessionHome !== undefined)
+  const hasEvents = events && events.length > 0
+  if (hasStats && hasEvents) return 'rich'
+  if (hasStats || hasEvents) return 'partial'
   return 'poor'
 }
 
-export async function captureLiveSnapshot(fixtureId: string, pf: ProviderFixture): Promise<boolean> {
+export async function captureLiveSnapshot(
+  fixtureId: string,
+  pf: ProviderFixture,
+  enrichedStats?: LiveMatchStats | null,
+  enrichedEvents?: BackendTimedEvent[] | null,
+): Promise<boolean> {
   // Get last snapshot for this fixture to decide if we should store
   const lastSnapshot = await prisma.liveSnapshot.findFirst({
     where: { fixtureId },
     orderBy: { capturedAt: 'desc' },
-    select: { minute: true, scoreHome: true, scoreAway: true, status: true },
+    select: { minute: true, scoreHome: true, scoreAway: true, status: true, statsJson: true, eventsJson: true },
   })
 
-  const decision = shouldStoreSnapshot(lastSnapshot, pf)
+  const decision = shouldStoreSnapshot(lastSnapshot, pf, enrichedEvents)
   if (!decision.shouldStore) return false
+
+  const stats = enrichedStats || pf.stats
+  const events = enrichedEvents || pf.events
+  const dataQuality = assessDataQuality(enrichedStats || null, enrichedEvents || null)
 
   await prisma.liveSnapshot.create({
     data: {
@@ -106,10 +127,10 @@ export async function captureLiveSnapshot(fixtureId: string, pf: ProviderFixture
       scoreAway: pf.scoreAway,
       penaltyHome: pf.penaltyHome,
       penaltyAway: pf.penaltyAway,
-      dataQuality: assessDataQuality(pf),
+      dataQuality,
       provider: pf.provider,
-      statsJson: pf.stats ? JSON.stringify(pf.stats) : null,
-      eventsJson: pf.events ? JSON.stringify(pf.events) : null,
+      statsJson: stats ? JSON.stringify(stats) : null,
+      eventsJson: events ? JSON.stringify(events) : null,
     },
   })
   return true
@@ -120,24 +141,70 @@ export async function captureLiveSnapshot(fixtureId: string, pf: ProviderFixture
 export interface MonitorRunResult {
   fixturesSeen: number
   snapshotsCreated: number
+  summariesFetched: number
+  summariesFailed: number
+  richSnapshots: number
+  partialSnapshots: number
+  poorSnapshots: number
   errors: string[]
+}
+
+/**
+ * Select fixtures eligible for summary enrichment.
+ * Prioritizes live matches, limits to configured max.
+ */
+function selectFixturesForEnrichment(fixtures: ProviderFixture[]): ProviderFixture[] {
+  if (env.SUMMARY_ENRICHMENT_ENABLED !== 'true') return []
+  const liveStatuses = new Set(['1H', '2H', 'HT', 'ET', 'P', 'BT'])
+  const live = fixtures.filter(f => liveStatuses.has(f.status))
+  return live.slice(0, env.SUMMARY_ENRICHMENT_MAX_FIXTURES)
 }
 
 export async function processLiveFixtures(fixtures: ProviderFixture[]): Promise<MonitorRunResult> {
   let snapshotsCreated = 0
+  let summariesFetched = 0
+  let summariesFailed = 0
+  let richSnapshots = 0
+  let partialSnapshots = 0
+  let poorSnapshots = 0
   const errors: string[] = []
+
+  // Determine which fixtures get enrichment
+  const enrichmentSet = new Set(selectFixturesForEnrichment(fixtures).map(f => f.providerFixtureId))
 
   for (const pf of fixtures) {
     try {
       const fixtureId = await upsertFixture(pf)
-      const stored = await captureLiveSnapshot(fixtureId, pf)
-      if (stored) snapshotsCreated++
+
+      let enrichedStats: LiveMatchStats | null = null
+      let enrichedEvents: BackendTimedEvent[] | null = null
+
+      // Fetch summary for eligible fixtures
+      if (enrichmentSet.has(pf.providerFixtureId) && pf.provider === 'espn') {
+        const summaryResult = await fetchEspnSummary(pf.providerFixtureId)
+        if (summaryResult.success && summaryResult.data) {
+          summariesFetched++
+          enrichedStats = extractEspnStats(summaryResult.data)
+          enrichedEvents = extractEspnTimedEvents(summaryResult.data, pf.homeTeam, pf.awayTeam)
+        } else {
+          summariesFailed++
+        }
+      }
+
+      const stored = await captureLiveSnapshot(fixtureId, pf, enrichedStats, enrichedEvents)
+      if (stored) {
+        snapshotsCreated++
+        const quality = assessDataQuality(enrichedStats, enrichedEvents)
+        if (quality === 'rich') richSnapshots++
+        else if (quality === 'partial') partialSnapshots++
+        else poorSnapshots++
+      }
     } catch (err: any) {
       errors.push(`${pf.homeTeam} vs ${pf.awayTeam}: ${err?.message || 'unknown'}`)
     }
   }
 
-  return { fixturesSeen: fixtures.length, snapshotsCreated, errors }
+  return { fixturesSeen: fixtures.length, snapshotsCreated, summariesFetched, summariesFailed, richSnapshots, partialSnapshots, poorSnapshots, errors }
 }
 
 // ─── Provider Health ─────────────────────────────────────────────────────────

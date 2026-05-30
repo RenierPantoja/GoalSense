@@ -60,7 +60,7 @@ async function runOnce(): Promise<MonitorRunResult | null> {
     totalSnapshotsCreated += result.snapshotsCreated
     consecutiveErrors = 0
 
-    console.log(`[LiveWorker] Run #${totalRuns}: ${result.fixturesSeen} fixtures, ${result.snapshotsCreated} snapshots${result.errors.length > 0 ? `, ${result.errors.length} errors` : ''}`)
+    console.log(`[LiveWorker] Run #${totalRuns}: ${result.fixturesSeen} fixtures, ${result.snapshotsCreated} snapshots (${result.richSnapshots} rich, ${result.partialSnapshots} partial, ${result.poorSnapshots} poor), ${result.summariesFetched} summaries${result.errors.length > 0 ? `, ${result.errors.length} errors` : ''}`)
 
     return result
   } catch (err: any) {

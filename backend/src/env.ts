@@ -12,6 +12,9 @@ const envSchema = z.object({
   LIVE_WORKER_ENABLED: z.string().default('false'),
   LIVE_WORKER_INTERVAL_MS: z.coerce.number().default(30000),
   ESPN_BASE_URL: z.string().default('https://site.api.espn.com/apis/site/v2/sports/soccer'),
+  // Summary enrichment
+  SUMMARY_ENRICHMENT_ENABLED: z.string().default('true'),
+  SUMMARY_ENRICHMENT_MAX_FIXTURES: z.coerce.number().default(10),
 })
 
 export const env = envSchema.parse(process.env)

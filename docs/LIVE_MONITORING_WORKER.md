@@ -96,6 +96,34 @@ Each snapshot gets a quality label:
 - Single-user/default (no multi-tenant)
 - No horizontal scaling (single instance)
 
+## Summary Enrichment (Phase B6.1)
+
+When `SUMMARY_ENRICHMENT_ENABLED=true`, the worker fetches ESPN summary for live matches to capture:
+- **Stats**: possession, shots, shotsOnTarget, corners, yellowCards, redCards, fouls, offsides, saves
+- **Timed Events**: goals, own_goals, penalties, shots, corners, cards, substitutions, VAR, goal_disallowed
+- **Shootout Events**: sequence, side, player, outcome (scored/missed/saved/post)
+
+### Enrichment Config
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SUMMARY_ENRICHMENT_ENABLED` | `true` | Enable/disable summary fetching |
+| `SUMMARY_ENRICHMENT_MAX_FIXTURES` | `10` | Max fixtures to enrich per cycle |
+
+### Data Quality V2
+| Level | Criteria |
+|-------|----------|
+| `rich` | Has stats (shots/possession) AND timed events |
+| `partial` | Has stats OR events (not both) |
+| `poor` | Only scoreboard data (score/status/minute) |
+
+### Snapshot Storage Rules
+A snapshot is stored when:
+- First snapshot for fixture
+- Status changed
+- Score changed
+- Minute changed
+- New events detected (events count increased)
+
 ## Next Steps
 
 1. Add stats fetching via ESPN summary endpoint for live matches
