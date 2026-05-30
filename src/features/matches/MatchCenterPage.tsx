@@ -11,6 +11,7 @@ import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
 import { isScheduledMatch, isFinishedMatch } from '@/utils/matchStatus'
 import type { LiveFixture } from '@/lib/apiClient'
 import { getMatchDetailPollingInterval } from '@/lib/liveFreshness'
+import { buildCanonicalLiveScore } from '@/lib/canonicalLiveScore'
 import { retrieveStoredFixture } from '@/lib/matchNavigation'
 import { isSameMatchStrict } from '@/features/providers/isSameMatchStrict'
 import { calculateMatchIntelligence, type MetricResult } from '@/services/intelligence/matchIntelligence'
@@ -1278,6 +1279,31 @@ function parseEspn(json: any): MatchData {
   result.away.colors = resolved.away
   result.home.color = resolved.home[0]
   result.away.color = resolved.away[0]
+
+  // V14: Reconcile score with goal events to fix provider score lag.
+  // ESPN's competitor.score can lag behind keyEvents — if events show more
+  // goals than the score field, use the event-derived score.
+  const homeName = result.home.name
+  const awayName = result.away.name
+  const goalEvents = (json.keyEvents || [])
+    .filter((ev: any) => {
+      const t = (ev.type?.text || '').toLowerCase()
+      return t.includes('goal') || t.includes('penalty') && !t.includes('missed') && !t.includes('saved')
+    })
+    .map((ev: any) => ({
+      type: (ev.type?.text || '').toLowerCase().includes('own goal') ? 'own_goal'
+        : (ev.type?.text || '').toLowerCase().includes('penalty') ? 'penalty_scored'
+        : 'goal',
+      side: ev.team?.displayName === homeName ? 'home' : 'away',
+      minute: ev.clock?.value ? Math.floor(ev.clock.value / 60) : undefined,
+      playerName: ev.athletesInvolved?.[0]?.displayName || '',
+    }))
+  if (goalEvents.length > 0) {
+    const canonical = buildCanonicalLiveScore(result.home.score, result.away.score, goalEvents)
+    result.home.score = canonical.home
+    result.away.score = canonical.away
+  }
+
   return result
 }
 
