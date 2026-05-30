@@ -12,6 +12,7 @@ import { isScheduledMatch, isFinishedMatch } from '@/utils/matchStatus'
 import type { LiveFixture } from '@/lib/apiClient'
 import { getMatchDetailPollingInterval } from '@/lib/liveFreshness'
 import { buildCanonicalLiveScore } from '@/lib/canonicalLiveScore'
+import { updateScoreCache } from '@/lib/liveScoreCache'
 import { retrieveStoredFixture } from '@/lib/matchNavigation'
 import { isSameMatchStrict } from '@/features/providers/isSameMatchStrict'
 import { calculateMatchIntelligence, type MetricResult } from '@/services/intelligence/matchIntelligence'
@@ -1302,6 +1303,9 @@ function parseEspn(json: any): MatchData {
     const canonical = buildCanonicalLiveScore(result.home.score, result.away.score, goalEvents)
     result.home.score = canonical.home
     result.away.score = canonical.away
+    // Feed global score cache so Live Radar/Matches/Command Center can use it
+    const fxId = parseInt(comp?.id) || parseInt(json.header?.id) || 0
+    if (fxId > 0) updateScoreCache(fxId, canonical)
   }
 
   return result

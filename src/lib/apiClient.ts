@@ -1,5 +1,6 @@
 import { teamsAreSame } from '@/features/providers/teamNameNormalizer'
 import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
+import { reconcileAllFixtureScores } from './liveScoreCache'
 
 // BASE moved to apiPath
 const BASE = ''
@@ -249,6 +250,8 @@ export async function getLiveFixtures(): Promise<LiveResponse> {
     // V13: Final dedup pass — catches any remaining duplicates that slipped through
     // (e.g., same match with slightly different dates across providers)
     const finalDeduped = finalDeduplicateFixtures(merged)
+    // V14: Reconcile scores with canonical score cache (events may be ahead of scoreboard)
+    reconcileAllFixtureScores(finalDeduped)
     return { ok: true, source: 'fusion', fetchedAt: new Date().toISOString(), count: finalDeduped.length, fixtures: finalDeduped }
   }
 

@@ -20,6 +20,7 @@ import { applyPrecisionChecks } from './intelligence/patternPrecisionEngine'
 import { validateAutoDiscoveryCandidate, buildAutoDiscoveryCandidate } from './intelligence/autoDiscoveryPrecisionGate'
 import { isDuplicateAlert } from './intelligence/alertDuplicateGuard'
 import { extractEspnTimedEvents, type CommandTimedEvent } from './intelligence/commandTimedEvents'
+import { feedScoreCacheFromEvents } from '@/lib/liveScoreCache'
 import { runAutoDiscovery } from './intelligence/autoDiscoveryEngine'
 import { resolveAlert } from './intelligence/patternResolutionEngine'
 import { recordScopeEntities } from '@/services/intelligence/scopeKnowledgeBase'
@@ -96,6 +97,11 @@ export function CommandCenterPage() {
       const stats = { possession: { home: g(hS, 'possessionPct') || g(hS, 'POSSESSION'), away: g(aS, 'possessionPct') || g(aS, 'POSSESSION') }, shots: { home: g(hS, 'totalShots') || g(hS, 'SHOTS'), away: g(aS, 'totalShots') || g(aS, 'SHOTS') }, shotsOnTarget: { home: g(hS, 'shotsOnTarget') || g(hS, 'ON GOAL'), away: g(aS, 'shotsOnTarget') || g(aS, 'ON GOAL') }, corners: { home: g(hS, 'wonCorners') || g(hS, 'Corner Kicks'), away: g(aS, 'wonCorners') || g(aS, 'Corner Kicks') }, yellowCards: { home: g(hS, 'yellowCards') || g(hS, 'Yellow Cards'), away: g(aS, 'yellowCards') || g(aS, 'Yellow Cards') } } as FixtureStatsForPattern
       // V5 Phase 6: extract timed events from the same ESPN response
       const timedEvents = extractEspnTimedEvents(json, fx.id, fx.homeTeam.name, fx.awayTeam.name)
+      // V14: Feed score cache from goal events so Live Radar/Matches get fresh score
+      const goalEvts = timedEvents.filter(e => e.type === 'goal' || e.type === 'own_goal' || e.type === 'penalty_scored')
+      if (goalEvts.length > 0) {
+        feedScoreCacheFromEvents(fx.id, fx.score.home ?? 0, fx.score.away ?? 0, goalEvts.map(e => ({ type: e.type, side: e.side, minute: e.minute, playerName: e.playerName })))
+      }
       return { id: fx.id, stats, events: timedEvents }
     }))
     const m = new Map<number, FixtureStatsForPattern>()
