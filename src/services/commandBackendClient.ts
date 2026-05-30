@@ -103,3 +103,9 @@ export async function getBackendPerformancePattern(patternId: string): Promise<a
 export async function getBackendPerformanceSummary(): Promise<any | null> {
   return fetchApi('/api/performance/summary')
 }
+
+// --- Live Monitor ---
+
+export async function getLiveMonitorStatus(): Promise<any | null> {
+  return fetchApi('/api/live-monitor/status')
+}

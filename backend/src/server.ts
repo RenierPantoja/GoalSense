@@ -9,6 +9,8 @@ import { healthRoutes } from './routes/health.routes.js'
 import { patternRoutes } from './modules/patterns/patterns.routes.js'
 import { alertRoutes } from './modules/alerts/alerts.routes.js'
 import { performanceRoutes } from './modules/performance/performance.routes.js'
+import { liveMonitorRoutes } from './modules/live/liveMonitor.routes.js'
+import { startLiveMonitorWorker } from './workers/liveMonitor.worker.js'
 
 const app = Fastify({ logger: true })
 
@@ -22,12 +24,15 @@ app.register(healthRoutes, { prefix: '/api' })
 app.register(patternRoutes, { prefix: '/api' })
 app.register(alertRoutes, { prefix: '/api' })
 app.register(performanceRoutes, { prefix: '/api' })
+app.register(liveMonitorRoutes, { prefix: '/api' })
 
 // Start
 const start = async () => {
   try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' })
     console.log(`[GoalSense Backend] Running on port ${env.PORT} (${env.APP_ENV})`)
+    // Start live monitor worker (only if enabled via env)
+    startLiveMonitorWorker()
   } catch (err) {
     app.log.error(err)
     process.exit(1)

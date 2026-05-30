@@ -153,7 +153,7 @@ backendResolutionId?: string    // Backend resolution record ID
 - localStorage updated as mirror
 - Automatic conflict resolution with `updatedAt` comparison
 
-### Phase B5: Performance Backend Analytics ✅ (Current)
+### Phase B5: Performance Backend Analytics ✅
 - Backend calculates performance from real alerts/resolutions in DB
 - Frontend fetches backend performance when online
 - Falls back to local analytics when backend unavailable
@@ -161,6 +161,15 @@ backendResolutionId?: string    // Backend resolution record ID
 - Same metrics/rules as local engine (unknown ≠ failed, min sample 5)
 - Breakdowns by momentum source, data quality, provider, resolution type
 - Server-side recommendations based on evidence
+
+### Phase B6: Live Monitoring Worker + Snapshot Capture ✅ (Current)
+- Backend worker observes live matches via ESPN provider
+- Captures fixture records and live snapshots into DB
+- Snapshot stored only on change (status, score, minute)
+- Provider health recorded per fetch
+- Worker disabled by default (`LIVE_WORKER_ENABLED=false`)
+- Does NOT generate alerts (observation only)
+- Observability routes: /live-monitor/status, /live-snapshots/recent, /fixtures/live, /provider-health
 
 ## Conflict Resolution (Phase 4 — Future)
 
