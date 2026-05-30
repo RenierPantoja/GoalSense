@@ -58,9 +58,10 @@ function mergeMatchData(prev: MatchData | null, next: MatchData): MatchData {
     // Preserve rosters if new payload is empty
     homeRoster: next.homeRoster.length > 0 ? next.homeRoster : prev.homeRoster,
     awayRoster: next.awayRoster.length > 0 ? next.awayRoster : prev.awayRoster,
-    // Score: use higher (non-regression)
-    home: { ...next.home, score: Math.max(next.home.score, prev.home.score) },
-    away: { ...next.away, score: Math.max(next.away.score, prev.away.score) },
+    // Score: accept provider score if it's equal or higher, OR if events support it
+    // (allows VAR/goal disallowed corrections when provider + events agree on lower score)
+    home: { ...next.home, score: next.events.length >= prev.events.length ? next.home.score : Math.max(next.home.score, prev.home.score) },
+    away: { ...next.away, score: next.events.length >= prev.events.length ? next.away.score : Math.max(next.away.score, prev.away.score) },
   }
 }
 interface Player { jersey: string; name: string; starter: boolean; goal?: boolean; yellowCard?: boolean; redCard?: boolean; subbed?: boolean }
