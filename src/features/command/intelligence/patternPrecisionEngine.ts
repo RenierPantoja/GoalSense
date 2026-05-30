@@ -61,12 +61,11 @@ const CONFIDENCE_CAP_POOR = 55
 
 // --- Data quality assessment ----------------------------------------------
 
-function assessDataQuality(fixture: LiveFixture, stats: FixtureStatsForPattern | undefined): DataQuality {
+function assessDataQuality(_fixture: LiveFixture, stats: FixtureStatsForPattern | undefined): DataQuality {
   if (!stats) return 'poor'
   const hasShots = stats.shots !== undefined && (stats.shots.home > 0 || stats.shots.away > 0)
   const hasShotsOnTarget = stats.shotsOnTarget !== undefined
   const hasPossession = stats.possession !== undefined && (stats.possession.home > 0)
-  const hasCorners = stats.corners !== undefined
 
   if (hasShots && hasShotsOnTarget && hasPossession) return 'rich'
   if (hasShots || hasShotsOnTarget || hasPossession) return 'partial'
@@ -80,7 +79,7 @@ interface GateResult {
   blocker?: string
 }
 
-function checkHardGates(hit: PatternHit, pattern: Pattern, fixture: LiveFixture, dataQuality: DataQuality): GateResult[] {
+function checkHardGates(_hit: PatternHit, pattern: Pattern, fixture: LiveFixture, dataQuality: DataQuality): GateResult[] {
   const gates: GateResult[] = []
   const elapsed = fixture.status.elapsed || 0
   const isLive = ['LIVE', 'HT', '1H', '2H'].includes(fixture.status.short)

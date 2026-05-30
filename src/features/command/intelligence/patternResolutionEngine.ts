@@ -57,7 +57,6 @@ export function resolveAlert(
   const trigMin = alert.minuteAtTrigger || 0
   const alertAge = Date.now() - new Date(alert.createdAt).getTime()
   const score = { home: cH, away: cA }
-  const pn = alert.patternName.toLowerCase()
 
   // V3: Infer resolution type and use type-specific window
   const resType = inferPatternResolutionType({ name: alert.patternName, templateId: alert.templateId, description: '', conditions: [], severity: 'attention', status: 'active', isTemplate: false, scope: 'all', minConfidence: 50, action: 'register_alert', maxTriggersPerMatch: 2, antiDuplicateWindow: 5, id: alert.patternId || '', createdAt: '', updatedAt: '' })

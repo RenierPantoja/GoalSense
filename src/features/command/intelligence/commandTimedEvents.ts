@@ -167,7 +167,7 @@ function classifyCommentaryType(text: string): CommandTimedEvent['type'] {
   return 'unknown'
 }
 
-function resolveSide(teamId: any, json: any, homeName: string, awayName: string): CommandTimedEvent['side'] {
+function resolveSide(teamId: any, json: any, _homeName: string, _awayName: string): CommandTimedEvent['side'] {
   if (!teamId) return 'unknown'
   const competitors = json?.header?.competitions?.[0]?.competitors || json?.boxscore?.teams || []
   for (const c of competitors) {

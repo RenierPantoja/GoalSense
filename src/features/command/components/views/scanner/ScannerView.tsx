@@ -60,7 +60,6 @@ export function ScannerView({ hasIntelligence, entries, openMatch, isAdvanced, o
   const richCount = entries.filter(e => e.fixture.provider === 'espn').length
   // V5 precision counters
   const readyCount = entries.filter(e => e.signalState === 'ready_to_alert').length
-  const candidateCount = entries.filter(e => e.signalState === 'strong_candidate').length
   const blockedCount = entries.filter(e => e.signalState === 'blocked').length
 
   const filteredEntries = entries.filter(e => {

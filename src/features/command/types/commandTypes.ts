@@ -137,6 +137,8 @@ export interface AutoDiscoveryConfig {
   registerAlertAuto: boolean
   maxAlertsPerMatch: number
   antiDuplicateMinutes: number
+  /** V11: Precision rigor level for auto-discovery validation. */
+  rigor: 'conservative' | 'balanced' | 'aggressive'
 }
 
 export const DEFAULT_AUTO_DISCOVERY_CONFIG: AutoDiscoveryConfig = {
@@ -152,6 +154,7 @@ export const DEFAULT_AUTO_DISCOVERY_CONFIG: AutoDiscoveryConfig = {
   registerAlertAuto: false,
   maxAlertsPerMatch: 3,
   antiDuplicateMinutes: 5,
+  rigor: 'balanced',
 }
 
 // ─── Scanner Entry ───────────────────────────────────────────────────────────

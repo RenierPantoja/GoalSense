@@ -17,9 +17,11 @@ import type { LiveFixture } from '@/lib/apiClient'
 import type { CommandCenterAlert } from '@/context/AlertsContext'
 import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
 import { getKnownLeagues, getKnownTeams, getKnownMatches, getKnownLeaguesRich, getKnownTeamsRich, type ScopeKbLeague, type ScopeKbMatch, type ScopeKbTeam } from '@/services/intelligence/scopeKnowledgeBase'
-import type { AutoDiscoveryConfig, Pattern, PatternTemplate, TriggeredAlert } from '../../../types/commandTypes'
+import type { AutoDiscoveryConfig, FixtureStatsForPattern, Pattern, PatternTemplate, TriggeredAlert } from '../../../types/commandTypes'
+import type { CommandTimedEvent } from '../../../intelligence/commandTimedEvents'
 import { CATEGORY_LABELS, categorizeTemplate, type TemplateCategory } from '../../../utils/commandFormatters'
 import { buildPatternHealth, isReviewableHealth, type PatternHealth } from '../../../intelligence/patternHealthEngine'
+import { buildAllPerformanceReports, type PatternPerformanceReport } from '../../../intelligence/patternPerformanceAnalytics'
 import { PremiumToggle } from '../../pattern-studio/shell/PremiumToggle'
 import { CounterCell } from '../shared/CounterCell'
 import { ConfiguredRadarRow } from './ConfiguredRadarRow'
@@ -79,11 +81,17 @@ export interface PatternsViewProps {
   triggeredAlerts: TriggeredAlert[]
   commandAlerts: CommandCenterAlert[]
   fixtures: LiveFixture[]
+  /** V10: stats map for dry-run testing. */
+  statsMap: Map<number, FixtureStatsForPattern>
+  /** V10: events map for dry-run testing. */
+  eventsMap: Map<number, CommandTimedEvent[]>
+  /** V10: favorite team checker for dry-run scope. */
+  isFavoriteTeam: (name: string) => boolean
   prefilledDraft: Pattern | null
   clearPrefilledDraft: () => void
 }
 
-export function PatternsView({ patterns, templates, createFromTemplate: _createFromTemplate, createPattern, updatePattern, togglePattern, deletePattern, isAdvanced, showBuilder, setShowBuilder, discoveryConfig, updateDiscoveryConfig, triggeredAlerts, commandAlerts, fixtures, prefilledDraft, clearPrefilledDraft }: PatternsViewProps) {
+export function PatternsView({ patterns, templates, createFromTemplate: _createFromTemplate, createPattern, updatePattern, togglePattern, deletePattern, isAdvanced, showBuilder, setShowBuilder, discoveryConfig, updateDiscoveryConfig, triggeredAlerts, commandAlerts, fixtures, statsMap, eventsMap, isFavoriteTeam, prefilledDraft, clearPrefilledDraft }: PatternsViewProps) {
   const [showAutoConfig, setShowAutoConfig] = useState(false)
   const [editingPattern, setEditingPattern] = useState<Pattern | null>(null)
   const [templateModal, setTemplateModal] = useState<{ template: PatternTemplate; existing: Pattern | null } | null>(null)
@@ -306,6 +314,17 @@ export function PatternsView({ patterns, templates, createFromTemplate: _createF
     return m
   }, [patterns, triggeredAlerts, cmdAlertsForHealth])
 
+  // V9B — performance reports for badges in Pattern Studio
+  const performanceReports = useMemo(
+    () => buildAllPerformanceReports(patterns, commandAlerts, triggeredAlerts),
+    [patterns, commandAlerts, triggeredAlerts]
+  )
+  const reportByPattern = useMemo(() => {
+    const m = new Map<string, PatternPerformanceReport>()
+    for (const r of performanceReports) m.set(r.patternId, r)
+    return m
+  }, [performanceReports])
+
   const reviewablePatterns = useMemo(() => {
     return patterns
       .map(p => ({ pattern: p, health: healthByPattern.get(p.id)! }))
@@ -330,10 +349,10 @@ export function PatternsView({ patterns, templates, createFromTemplate: _createF
           fetch the first time. After mount they keep working as before. */}
       <Suspense fallback={<ModalLoadingFallback />}>
         {showBuilder && (
-          <CustomPatternModal open={showBuilder} initial={editingPattern} onClose={() => { setShowBuilder(false); setEditingPattern(null); if (prefilledDraft) clearPrefilledDraft() }} onSave={handleCustomSave} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} />
+          <CustomPatternModal open={showBuilder} initial={editingPattern} onClose={() => { setShowBuilder(false); setEditingPattern(null); if (prefilledDraft) clearPrefilledDraft() }} onSave={handleCustomSave} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} fixtures={fixtures} statsMap={statsMap} eventsMap={eventsMap} isFavoriteTeam={isFavoriteTeam} isAdvanced={isAdvanced} commandAlerts={commandAlerts} />
         )}
         {templateModal && (
-          <TemplateConfigModal open={!!templateModal} template={templateModal.template} existingPattern={templateModal.existing} onClose={() => setTemplateModal(null)} onSave={handleTemplateSave} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} />
+          <TemplateConfigModal open={!!templateModal} template={templateModal.template} existingPattern={templateModal.existing} onClose={() => setTemplateModal(null)} onSave={handleTemplateSave} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} fixtures={fixtures} statsMap={statsMap} eventsMap={eventsMap} isFavoriteTeam={isFavoriteTeam} isAdvanced={isAdvanced} commandAlerts={commandAlerts} />
         )}
         {showAutoConfig && (
           <AutoDiscoveryConfigModal open={showAutoConfig} config={discoveryConfig} onClose={() => setShowAutoConfig(false)} onChange={updateDiscoveryConfig} onActivate={handleActivateAuto} onDeactivate={handleDeactivateAuto} />
@@ -426,7 +445,7 @@ export function PatternsView({ patterns, templates, createFromTemplate: _createF
             <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} onMouseEnter={preloadCustomPatternModal} onFocus={preloadCustomPatternModal} type="button" className="text-[11px] font-medium text-white/65 hover:text-white/95 transition-colors flex items-center gap-1"><Plus size={11} />Novo radar</button>
           </div>
           <div className="space-y-2">
-            {patterns.map(p => <ConfiguredRadarRow key={p.id} pattern={p} health={healthByPattern.get(p.id)} triggeredAlerts={triggeredAlerts} onToggle={() => togglePattern(p.id)} onEdit={() => { setEditingPattern(p); setShowBuilder(true) }} onDuplicate={() => { createPattern({ ...p, name: `${p.name} (cópia)`, status: 'paused', isTemplate: false, templateId: undefined }) }} onDelete={() => deletePattern(p.id)} isAdvanced={isAdvanced} onPrefetch={preloadCustomPatternModal} />)}
+            {patterns.map(p => <ConfiguredRadarRow key={p.id} pattern={p} health={healthByPattern.get(p.id)} performanceReport={reportByPattern.get(p.id)} triggeredAlerts={triggeredAlerts} onToggle={() => togglePattern(p.id)} onEdit={() => { setEditingPattern(p); setShowBuilder(true) }} onDuplicate={() => { createPattern({ ...p, name: `${p.name} (cópia)`, status: 'paused', isTemplate: false, templateId: undefined }) }} onDelete={() => deletePattern(p.id)} isAdvanced={isAdvanced} onPrefetch={preloadCustomPatternModal} />)}
           </div>
         </section>
       ) : (
@@ -487,7 +506,8 @@ export function PatternsView({ patterns, templates, createFromTemplate: _createF
               const existing = patterns.find(p => p.templateId === t.id) || null
               const isActiveTpl = !!existing && existing.status === 'active'
               const tplHealth = existing ? healthByPattern.get(existing.id) : undefined
-              return <TemplateCard key={t.id} template={t} existing={existing} isActive={isActiveTpl} health={tplHealth} onToggle={() => handleTemplateToggle(t)} onConfigure={() => handleTemplateConfigure(t)} onPrefetch={preloadTemplateConfigModal} />
+              const tplReport = existing ? reportByPattern.get(existing.id) : undefined
+              return <TemplateCard key={t.id} template={t} existing={existing} isActive={isActiveTpl} health={tplHealth} performanceReport={tplReport} onToggle={() => handleTemplateToggle(t)} onConfigure={() => handleTemplateConfigure(t)} onPrefetch={preloadTemplateConfigModal} />
             })}
           </div>
         )}

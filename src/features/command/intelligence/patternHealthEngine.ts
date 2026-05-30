@@ -5,6 +5,13 @@
  * triggered alerts already stored in PatternContext (and optionally the
  * Command Center alerts that flow through AlertsContext).
  *
+ * V9B alignment: This engine provides the operational health status (no_data,
+ * warming_up, healthy, noisy, underperforming, stale, needs_review) while
+ * patternPerformanceAnalytics provides the reliability label (insufficient_sample,
+ * promising, reliable, noisy, data_limited, underperforming). Both use the same
+ * underlying alert data and share consistent thresholds. The UI shows both
+ * badges side by side — they complement, not contradict.
+ *
  * Hard rules:
  * - No fabricated rates. `hitRate` is null until we have at least
  *   MIN_RESOLVED_FOR_RATE resolutions (confirmed + failed only — partial,

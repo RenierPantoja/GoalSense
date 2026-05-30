@@ -264,7 +264,7 @@ export function buildMomentumWindow(
  * Apply momentum penalty/bonus to a confidence score.
  * Returns the adjustment (positive = bonus, negative = penalty).
  */
-export function getMomentumAdjustment(momentum: MomentumWindowResult, patternName: string): { adjustment: number; reason: string | null } {
+export function getMomentumAdjustment(momentum: MomentumWindowResult, _patternName: string): { adjustment: number; reason: string | null } {
   if (momentum.confidence === 0) {
     return { adjustment: -10, reason: 'Sem dados de momentum' }
   }

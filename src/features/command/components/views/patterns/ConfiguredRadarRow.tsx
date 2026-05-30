@@ -6,6 +6,7 @@
  */
 import type { Pattern, TriggeredAlert } from '../../../types/commandTypes'
 import { HEALTH_TONE, type PatternHealth } from '../../../intelligence/patternHealthEngine'
+import { RELIABILITY_TONE, RELIABILITY_LABEL, type PatternPerformanceReport } from '../../../intelligence/patternPerformanceAnalytics'
 import { describePatternScope, scopeShortLabel } from '../../../utils/patternScopeAudit'
 import { PremiumToggle } from '../../pattern-studio/shell/PremiumToggle'
 import { HealthBreakdownChip } from './HealthBreakdownChip'
@@ -13,6 +14,8 @@ import { HealthBreakdownChip } from './HealthBreakdownChip'
 interface ConfiguredRadarRowProps {
   pattern: Pattern
   health?: PatternHealth
+  /** V9B: performance report from analytics engine. */
+  performanceReport?: PatternPerformanceReport
   triggeredAlerts: TriggeredAlert[]
   onToggle: () => void
   onEdit: () => void
@@ -23,7 +26,7 @@ interface ConfiguredRadarRowProps {
   onPrefetch?: () => void
 }
 
-export function ConfiguredRadarRow({ pattern, health, triggeredAlerts, onToggle, onEdit, onDuplicate, onDelete, isAdvanced, onPrefetch }: ConfiguredRadarRowProps) {
+export function ConfiguredRadarRow({ pattern, health, performanceReport, triggeredAlerts, onToggle, onEdit, onDuplicate, onDelete, isAdvanced, onPrefetch }: ConfiguredRadarRowProps) {
   const isActive = pattern.status === 'active'
   const lastHit = triggeredAlerts.find(t => t.patternId === pattern.id)?.timestamp || null
   const hits = triggeredAlerts.filter(t => t.patternId === pattern.id).length
@@ -46,6 +49,12 @@ export function ConfiguredRadarRow({ pattern, health, triggeredAlerts, onToggle,
               <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md border ${healthTone.bg} ${healthTone.border} ${healthTone.text}`} title={health.reason}>
                 <span className={`h-1.5 w-1.5 rounded-full ${healthTone.dot}`} />
                 {health.label}
+              </span>
+            )}
+            {/* V9B: Reliability badge from analytics engine */}
+            {performanceReport && (
+              <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${RELIABILITY_TONE[performanceReport.reliability].text} ${RELIABILITY_TONE[performanceReport.reliability].bg} ${RELIABILITY_TONE[performanceReport.reliability].border}`} title={`${performanceReport.sampleSize} disparos · ${performanceReport.usefulRate !== null ? `útil ${Math.round(performanceReport.usefulRate * 100)}%` : 'amostra insuficiente'}${performanceReport.recommendations.length > 0 ? ` · ${performanceReport.recommendations[0]}` : ''}`}>
+                {RELIABILITY_LABEL[performanceReport.reliability]}
               </span>
             )}
           </div>

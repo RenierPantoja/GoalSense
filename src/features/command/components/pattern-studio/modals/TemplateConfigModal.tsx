@@ -10,9 +10,13 @@
  * activate action stays unlocked.
  */
 import { useEffect, useState } from 'react'
-import type { Pattern, PatternCondition, PatternTemplate } from '../../../types/commandTypes'
+import type { Pattern, PatternCondition, PatternTemplate, FixtureStatsForPattern } from '../../../types/commandTypes'
+import type { LiveFixture } from '@/lib/apiClient'
+import type { CommandTimedEvent } from '../../../intelligence/commandTimedEvents'
+import type { CommandCenterAlert } from '@/context/AlertsContext'
 import type { ScopeKbLeague, ScopeKbMatch, ScopeKbTeam } from '@/services/intelligence/scopeKnowledgeBase'
 import { CATEGORY_LABELS, categorizeTemplate, formatConditionHuman } from '../../../utils/commandFormatters'
+import { runPatternDryRun, validateDryRunPattern } from '../../../intelligence/patternDryRunEngine'
 import { useScopeLookups } from '../../../utils/patternStudioHelpers'
 import { ModalShell } from '../shell/ModalShell'
 import { Section } from '../shell/Section'
@@ -25,6 +29,7 @@ import { ActionCardPicker } from '../form-controls/ActionCardPicker'
 import { ConfidenceSlider } from '../form-controls/ConfidenceSlider'
 import { RadarInspectorPanel } from '../inspector/RadarInspectorPanel'
 import { RadarPreview } from '../preview/RadarPreview'
+import { PatternDryRunPanel } from '../dryrun/PatternDryRunPanel'
 
 type TemplateStep = 'overview' | 'conditions' | 'scope_action' | 'confidence' | 'review'
 
@@ -39,9 +44,21 @@ export interface TemplateConfigModalProps {
   availableMatches: ScopeKbMatch[]
   availableLeaguesRich: ScopeKbLeague[]
   availableTeamsRich: ScopeKbTeam[]
+  /** V10: fixtures for dry-run testing. */
+  fixtures: LiveFixture[]
+  /** V10: stats map for dry-run testing. */
+  statsMap: Map<number, FixtureStatsForPattern>
+  /** V10: events map for dry-run testing. */
+  eventsMap: Map<number, CommandTimedEvent[]>
+  /** V10: favorite team checker for dry-run scope. */
+  isFavoriteTeam: (name: string) => boolean
+  /** V10: advanced mode for dry-run detail. */
+  isAdvanced?: boolean
+  /** V12: existing alerts for duplicate guard in dry-run. */
+  commandAlerts?: CommandCenterAlert[]
 }
 
-export function TemplateConfigModal({ open, template, existingPattern, onClose, onSave, availableMatches, availableLeaguesRich, availableTeamsRich }: TemplateConfigModalProps) {
+export function TemplateConfigModal({ open, template, existingPattern, onClose, onSave, availableMatches, availableLeaguesRich, availableTeamsRich, fixtures, statsMap, eventsMap, isFavoriteTeam, isAdvanced = false, commandAlerts = [] }: TemplateConfigModalProps) {
   const initial = existingPattern || (template ? {
     name: template.name, description: template.description,
     conditions: [...template.conditions], severity: template.severity,
@@ -86,6 +103,9 @@ export function TemplateConfigModal({ open, template, existingPattern, onClose, 
     setMinConf(initial?.minConfidence ?? 50)
     setStep('overview')
     setVisitedSteps(existingPattern ? new Set(ALL_TEMPLATE_STEPS) : new Set<TemplateStep>(['overview']))
+    // V13: Reset dry-run state on modal reopen
+    setShowDryRun(false)
+    setDryRunResults(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, template?.id, existingPattern?.id])
 
@@ -110,6 +130,25 @@ export function TemplateConfigModal({ open, template, existingPattern, onClose, 
     minConfidence: minConf, action,
     maxTriggersPerMatch: 2, antiDuplicateWindow: 5,
   })
+
+  const [showDryRun, setShowDryRun] = useState(false)
+  const [dryRunResults, setDryRunResults] = useState<ReturnType<typeof runPatternDryRun> | null>(null)
+
+  const handleDryRun = () => {
+    const draft = buildPatternData('active')
+    const validation = validateDryRunPattern(draft)
+    if (!validation.valid) return
+    const results = runPatternDryRun({
+      pattern: draft,
+      fixtures,
+      statsMap,
+      eventsMap,
+      isFavoriteTeam,
+      commandAlerts,
+    })
+    setDryRunResults(results)
+    setShowDryRun(true)
+  }
 
   const handleAdvancedToggle = (key: 'requireRichData' | 'onlyLive' | 'onlyPreMatch', v: boolean) => {
     if (key === 'requireRichData') setRequireRichData(v)
@@ -150,6 +189,8 @@ export function TemplateConfigModal({ open, template, existingPattern, onClose, 
       footer={
         <>
           <button onClick={onClose} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/65 border border-white/[0.07] hover:text-white/95 hover:border-white/[0.12] transition-colors mr-auto">Cancelar</button>
+          {/* V10: Dry-run test button */}
+          <button onClick={handleDryRun} disabled={!canSave} title={!canSave ? 'Adicione ao menos uma condição para testar' : 'Testar template nos jogos ao vivo sem registrar alertas'} type="button" className="px-3.5 py-2.5 rounded-xl text-[11px] font-medium text-cyan-300/80 border border-cyan-400/15 bg-cyan-500/[0.04] hover:bg-cyan-500/[0.08] hover:border-cyan-400/25 disabled:opacity-30 disabled:cursor-not-allowed transition-all">Testar ao vivo</button>
           {stepIndex > 0 && <button onClick={goPrev} type="button" className="px-3.5 py-2.5 rounded-xl text-[12px] font-medium text-white/75 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-all">Voltar</button>}
           {!isLast && (
             <button
@@ -285,6 +326,10 @@ export function TemplateConfigModal({ open, template, existingPattern, onClose, 
           />
         </aside>
       </div>
+      {/* V10: Dry-run results panel */}
+      {showDryRun && dryRunResults && (
+        <PatternDryRunPanel results={dryRunResults} onClose={() => setShowDryRun(false)} isAdvanced={isAdvanced} />
+      )}
     </ModalShell>
   )
 }

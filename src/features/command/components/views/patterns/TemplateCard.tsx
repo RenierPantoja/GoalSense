@@ -5,6 +5,7 @@
 import type { Pattern, PatternTemplate } from '../../../types/commandTypes'
 import { CATEGORY_LABELS, categorizeTemplate, formatConditionHuman } from '../../../utils/commandFormatters'
 import { HEALTH_TONE, type PatternHealth } from '../../../intelligence/patternHealthEngine'
+import { RELIABILITY_TONE, RELIABILITY_LABEL, type PatternPerformanceReport } from '../../../intelligence/patternPerformanceAnalytics'
 import { PremiumToggle } from '../../pattern-studio/shell/PremiumToggle'
 
 interface TemplateCardProps {
@@ -12,6 +13,8 @@ interface TemplateCardProps {
   existing: Pattern | null
   isActive: boolean
   health?: PatternHealth
+  /** V9B: performance report from the instance (if exists). */
+  performanceReport?: PatternPerformanceReport
   onToggle: () => void
   onConfigure: () => void
   /**
@@ -22,7 +25,7 @@ interface TemplateCardProps {
   onPrefetch?: () => void
 }
 
-export function TemplateCard({ template, existing, isActive, health, onToggle, onConfigure, onPrefetch }: TemplateCardProps) {
+export function TemplateCard({ template, existing, isActive, health, performanceReport, onToggle, onConfigure, onPrefetch }: TemplateCardProps) {
   const cat = categorizeTemplate(template)
   const sevDot = template.severity === 'critical' ? 'bg-rose-300/85' : template.severity === 'attention' ? 'bg-amber-300/85' : 'bg-cyan-300/85'
   const sevLabel = template.severity === 'critical' ? 'Crítico' : template.severity === 'attention' ? 'Atenção' : 'Info'
@@ -70,6 +73,18 @@ export function TemplateCard({ template, existing, isActive, health, onToggle, o
         <span className="text-[10.5px] text-white/45">Confiança sugerida: <span className="text-white/75 font-semibold">{template.defaultConfidence}</span></span>
         <button onClick={onConfigure} onFocus={onPrefetch} type="button" className="text-[11px] font-medium text-white/85 hover:text-white transition-colors">Configurar →</button>
       </div>
+      {/* V9B: Performance badge from instance — only shown when instance exists */}
+      {existing && performanceReport && (
+        <div className="mt-2 pt-2 border-t border-white/[0.04] flex items-center gap-2 flex-wrap">
+          <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${RELIABILITY_TONE[performanceReport.reliability].text} ${RELIABILITY_TONE[performanceReport.reliability].bg} ${RELIABILITY_TONE[performanceReport.reliability].border}`} title={`${performanceReport.sampleSize} disparos · ${performanceReport.usefulRate !== null ? `útil ${Math.round(performanceReport.usefulRate * 100)}%` : 'amostra insuficiente'}${performanceReport.unknownRate !== null ? ` · sem dados ${Math.round(performanceReport.unknownRate * 100)}%` : ''}${performanceReport.recommendations.length > 0 ? ` · ${performanceReport.recommendations[0]}` : ''}`}>
+            {RELIABILITY_LABEL[performanceReport.reliability]}
+          </span>
+          <span className="text-[10px] text-white/40 tabular-nums">{performanceReport.sampleSize} disparo{performanceReport.sampleSize !== 1 ? 's' : ''}</span>
+          {performanceReport.warnings.length > 0 && (
+            <span className="text-[10px] text-amber-200/60 truncate max-w-[180px]">⚠ {performanceReport.warnings[0]}</span>
+          )}
+        </div>
+      )}
     </div>
   )
 }

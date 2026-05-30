@@ -111,7 +111,11 @@ const PatternContext = createContext<PatternContextValue | null>(null)
 export function PatternProvider({ children }: { children: ReactNode }) {
   const [patterns, setPatterns] = useState<Pattern[]>(() => loadAndNormalizePatterns())
   const [triggeredAlerts, setTriggeredAlerts] = useState<TriggeredAlert[]>(() => loadAndCapTriggered())
-  const [discoveryConfig, setDiscoveryConfig] = useState<AutoDiscoveryConfig>(() => load(DISCOVERY_CONFIG_KEY, DEFAULT_AUTO_DISCOVERY_CONFIG))
+  const [discoveryConfig, setDiscoveryConfig] = useState<AutoDiscoveryConfig>(() => {
+    const stored = load(DISCOVERY_CONFIG_KEY, DEFAULT_AUTO_DISCOVERY_CONFIG)
+    // V11: merge with defaults to handle new fields (e.g. rigor) for existing users
+    return { ...DEFAULT_AUTO_DISCOVERY_CONFIG, ...stored }
+  })
 
   useEffect(() => { save(PATTERNS_KEY, patterns) }, [patterns])
   useEffect(() => { save(TRIGGERED_KEY, triggeredAlerts) }, [triggeredAlerts])

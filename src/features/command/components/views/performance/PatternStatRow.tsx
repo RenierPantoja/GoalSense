@@ -1,18 +1,25 @@
 /**
  * PatternStatRow — per-pattern row inside the Performance view "Por padrão"
- * section. Behaviour preserved byte-for-byte from CommandCenterPage.tsx
- * (V3.18E). Health tone, sample bands, badges and recommendations are all
- * driven by the `buildPatternHealth` engine output.
+ * section. V9B — now accepts an optional PatternPerformanceReport to display
+ * reliability badge, rates, and main recommendation/warning from the analytics
+ * engine. Falls back gracefully when report is not provided.
+ *
+ * Rules:
+ * - If confirmedRate/usefulRate === null: show "Amostra insuficiente"
+ * - Unknown does NOT appear as failure
+ * - No fake percentages
  */
 import type { Pattern } from '../../../types/commandTypes'
 import { HEALTH_TONE, type PatternHealth } from '../../../intelligence/patternHealthEngine'
+import { RELIABILITY_TONE, RELIABILITY_LABEL, type PatternPerformanceReport } from '../../../intelligence/patternPerformanceAnalytics'
 
 interface PatternStatRowProps {
   stat: { pattern: Pattern; health: PatternHealth; lastHit: string | null }
+  report?: PatternPerformanceReport
   isAdvanced: boolean
 }
 
-export function PatternStatRow({ stat, isAdvanced }: PatternStatRowProps) {
+export function PatternStatRow({ stat, report, isAdvanced }: PatternStatRowProps) {
   const { pattern, health, lastHit } = stat
   const total = Math.max(health.sampleSize, 1)
   const confirmedPct = (health.confirmedCount / total) * 100
@@ -23,6 +30,9 @@ export function PatternStatRow({ stat, isAdvanced }: PatternStatRowProps) {
   const healthTone = HEALTH_TONE[health.status]
   const hitRatePct = health.hitRate !== null ? Math.round(health.hitRate * 100) : null
 
+  // Performance analytics data
+  const reliabilityTone = report ? RELIABILITY_TONE[report.reliability] : null
+
   return (
     <div className="rounded-2xl border border-white/[0.05] bg-gradient-to-r from-white/[0.012] to-white/[0.005] px-5 py-4">
       <div className="flex items-center justify-between gap-3 mb-2.5 flex-wrap">
@@ -32,6 +42,12 @@ export function PatternStatRow({ stat, isAdvanced }: PatternStatRowProps) {
           <span className={`h-1.5 w-1.5 rounded-full ${healthTone.dot}`} />
           {health.label}
         </span>
+        {/* Reliability badge from analytics engine */}
+        {report && reliabilityTone && (
+          <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${reliabilityTone.text} ${reliabilityTone.bg} ${reliabilityTone.border}`} title={report.warnings.length > 0 ? report.warnings[0] : undefined}>
+            {RELIABILITY_LABEL[report.reliability]}
+          </span>
+        )}
         <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-white/[0.04] ${sampleTone} border border-white/[0.06] whitespace-nowrap`}>{sampleStatus}</span>
       </div>
       {health.sampleSize > 0 && (
@@ -54,11 +70,45 @@ export function PatternStatRow({ stat, isAdvanced }: PatternStatRowProps) {
           <span className="ml-auto text-[10px] text-white/45 font-medium">Amostra {health.resolvedCount}/5</span>
         )}
       </div>
+      {/* Analytics rates row */}
+      {report && (
+        <div className="flex items-center gap-3 text-[11px] text-white/50 mt-1 flex-wrap">
+          {report.usefulRate !== null ? (
+            <span>Útil: <span className="text-white/80 font-semibold tabular-nums">{Math.round(report.usefulRate * 100)}%</span></span>
+          ) : (
+            <span className="text-white/35">Útil: amostra insuficiente</span>
+          )}
+          {report.failedRate !== null && (
+            <span>Falha: <span className="text-rose-300/80 font-semibold tabular-nums">{Math.round(report.failedRate * 100)}%</span></span>
+          )}
+          {report.unknownRate !== null && (
+            <span>Sem dados: <span className="text-amber-200/70 font-semibold tabular-nums">{Math.round(report.unknownRate * 100)}%</span></span>
+          )}
+          {report.pendingCount > 0 && (
+            <span>Pendentes: <span className="text-white/65 tabular-nums">{report.pendingCount}</span></span>
+          )}
+          {report.averageConfidence !== null && (
+            <span className="ml-auto">Conf. média: <span className="text-white/75 font-semibold tabular-nums">{report.averageConfidence}%</span></span>
+          )}
+        </div>
+      )}
       <div className="flex items-center gap-3 text-[11px] text-white/45 mt-1.5 flex-wrap">
         {health.avgConfidence !== null && <span>Confiança média: <span className="text-white/75 font-semibold tabular-nums">{health.avgConfidence}%</span></span>}
         {lastHit && <span>Último: {new Date(lastHit).toLocaleDateString('pt-BR')}</span>}
         {health.reason && <span className={`${healthTone.text}`}>· {health.reason}</span>}
       </div>
+      {/* Main warning from analytics */}
+      {report && report.warnings.length > 0 && (
+        <div className="mt-1.5 text-[10.5px] text-amber-200/70 leading-snug">
+          ⚠ {report.warnings[0]}
+        </div>
+      )}
+      {/* Main recommendation from analytics */}
+      {report && report.recommendations.length > 0 && (
+        <div className="mt-1 text-[10.5px] text-cyan-200/70 leading-snug">
+          → {report.recommendations[0]}
+        </div>
+      )}
       {isAdvanced && health.recommendations.length > 0 && (
         <div className="mt-2 pt-2 border-t border-white/[0.04]">
           <span className="text-[9.5px] uppercase tracking-wider text-amber-200/80 font-semibold">Sugestões</span>

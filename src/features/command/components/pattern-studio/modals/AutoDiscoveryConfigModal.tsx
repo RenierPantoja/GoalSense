@@ -123,6 +123,30 @@ export function AutoDiscoveryConfigModal({ open, config, onClose, onChange, onAc
             </div>
           </Section>
 
+          <Section title="Rigor de validação" hint="Controla o nível de exigência do Precision Engine para descobertas automáticas.">
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.008] p-4 space-y-2">
+              {([
+                { key: 'conservative' as const, label: 'Conservador', desc: 'Exige dados ricos e eventos minutados para alertas de atenção. Menos alertas, mais confiáveis.' },
+                { key: 'balanced' as const, label: 'Equilibrado', desc: 'Aceita dados parciais com cap. Bloqueia críticos sem recência confirmada.' },
+                { key: 'aggressive' as const, label: 'Agressivo', desc: 'Mais sugestões, caps mais altos. Alertas ainda exigem gates mínimos.' },
+              ]).map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => onChange({ rigor: opt.key })}
+                  type="button"
+                  className={`w-full text-left rounded-xl border px-4 py-3 transition-colors ${(config.rigor || 'balanced') === opt.key ? 'border-cyan-400/25 bg-cyan-500/[0.04]' : 'border-white/[0.06] bg-white/[0.01] hover:border-white/[0.1]'}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full shrink-0 ${(config.rigor || 'balanced') === opt.key ? 'bg-cyan-400/85' : 'bg-white/20'}`} />
+                    <span className={`text-[12px] font-semibold ${(config.rigor || 'balanced') === opt.key ? 'text-white/95' : 'text-white/65'}`}>{opt.label}</span>
+                  </div>
+                  <p className="text-[10.5px] text-white/50 mt-1 ml-4 leading-snug">{opt.desc}</p>
+                </button>
+              ))}
+              <p className="text-[10px] text-white/35 mt-2 italic">Modo agressivo aumenta quantidade de sinais, não aumenta certeza.</p>
+            </div>
+          </Section>
+
           <Section title="Segurança">
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.008] px-4 py-3.5">
               <p className="text-[11.5px] text-white/75 leading-relaxed">

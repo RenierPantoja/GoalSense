@@ -13,8 +13,12 @@
  * Rules of Hooks are respected in every render.
  */
 import { useEffect, useState } from 'react'
-import type { Pattern, PatternCondition } from '../../../types/commandTypes'
+import type { Pattern, PatternCondition, FixtureStatsForPattern } from '../../../types/commandTypes'
+import type { LiveFixture } from '@/lib/apiClient'
+import type { CommandTimedEvent } from '../../../intelligence/commandTimedEvents'
+import type { CommandCenterAlert } from '@/context/AlertsContext'
 import type { ScopeKbLeague, ScopeKbMatch, ScopeKbTeam } from '@/services/intelligence/scopeKnowledgeBase'
+import { runPatternDryRun, validateDryRunPattern } from '../../../intelligence/patternDryRunEngine'
 import { useScopeLookups } from '../../../utils/patternStudioHelpers'
 import { ModalShell } from '../shell/ModalShell'
 import { WizardProgressRail } from '../shell/WizardProgressRail'
@@ -26,6 +30,7 @@ import { ActionCardPicker } from '../form-controls/ActionCardPicker'
 import { ConfidenceSlider } from '../form-controls/ConfidenceSlider'
 import { RadarInspectorPanel } from '../inspector/RadarInspectorPanel'
 import { RadarPreview } from '../preview/RadarPreview'
+import { PatternDryRunPanel } from '../dryrun/PatternDryRunPanel'
 
 type CustomStep = 'identity' | 'scope' | 'conditions' | 'action' | 'confidence' | 'review'
 
@@ -39,9 +44,21 @@ export interface CustomPatternModalProps {
   availableMatches: ScopeKbMatch[]
   availableLeaguesRich: ScopeKbLeague[]
   availableTeamsRich: ScopeKbTeam[]
+  /** V10: fixtures for dry-run testing. */
+  fixtures: LiveFixture[]
+  /** V10: stats map for dry-run testing. */
+  statsMap: Map<number, FixtureStatsForPattern>
+  /** V10: events map for dry-run testing. */
+  eventsMap: Map<number, CommandTimedEvent[]>
+  /** V10: favorite team checker for dry-run scope. */
+  isFavoriteTeam: (name: string) => boolean
+  /** V10: advanced mode for dry-run detail. */
+  isAdvanced?: boolean
+  /** V12: existing alerts for duplicate guard in dry-run. */
+  commandAlerts?: CommandCenterAlert[]
 }
 
-export function CustomPatternModal({ open, initial, onClose, onSave, availableMatches, availableLeaguesRich, availableTeamsRich }: CustomPatternModalProps) {
+export function CustomPatternModal({ open, initial, onClose, onSave, availableMatches, availableLeaguesRich, availableTeamsRich, fixtures, statsMap, eventsMap, isFavoriteTeam, isAdvanced = false, commandAlerts = [] }: CustomPatternModalProps) {
   const [name, setName] = useState(initial?.name || '')
   const [desc, setDesc] = useState(initial?.description || '')
   const [severity, setSeverity] = useState<'critical' | 'attention' | 'info'>(initial?.severity || 'attention')
@@ -61,6 +78,9 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
   const [visitedSteps, setVisitedSteps] = useState<Set<CustomStep>>(
     () => initial ? new Set(ALL_CUSTOM_STEPS) : new Set<CustomStep>(['identity'])
   )
+  const [showDryRun, setShowDryRun] = useState(false)
+  const [dryRunResults, setDryRunResults] = useState<ReturnType<typeof runPatternDryRun> | null>(null)
+  const [dryRunErrors, setDryRunErrors] = useState<string[]>([])
 
   useEffect(() => {
     if (!open) return
@@ -81,6 +101,10 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
     setConditions(initial?.conditions || [{ type: 'is_live', params: {} }])
     setStep('identity')
     setVisitedSteps(initial ? new Set(ALL_CUSTOM_STEPS) : new Set<CustomStep>(['identity']))
+    // V13: Reset dry-run state on modal reopen to avoid stale results
+    setShowDryRun(false)
+    setDryRunResults(null)
+    setDryRunErrors([])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial])
 
@@ -113,6 +137,26 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
     maxTriggersPerMatch: initial?.maxTriggersPerMatch ?? 2,
     antiDuplicateWindow: initial?.antiDuplicateWindow ?? 5,
   })
+
+  const handleDryRun = () => {
+    const draft = buildData('active')
+    const validation = validateDryRunPattern(draft)
+    if (!validation.valid) {
+      setDryRunErrors(validation.errors)
+      return
+    }
+    setDryRunErrors([])
+    const results = runPatternDryRun({
+      pattern: draft,
+      fixtures,
+      statsMap,
+      eventsMap,
+      isFavoriteTeam,
+      commandAlerts,
+    })
+    setDryRunResults(results)
+    setShowDryRun(true)
+  }
 
   const handleAdvancedToggle = (key: 'requireRichData' | 'onlyLive' | 'onlyPreMatch', v: boolean) => {
     if (key === 'requireRichData') setRequireRichData(v)
@@ -154,6 +198,8 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
       footer={
         <>
           <button onClick={onClose} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/65 border border-white/[0.07] hover:text-white/95 hover:border-white/[0.12] transition-colors mr-auto">Cancelar</button>
+          {/* V10: Dry-run test button */}
+          <button onClick={handleDryRun} disabled={!hasConditions} title={!hasConditions ? 'Adicione ao menos uma condição para testar' : dryRunErrors.length > 0 ? dryRunErrors.join(', ') : 'Testar nos jogos ao vivo sem registrar alertas'} type="button" className="px-3.5 py-2.5 rounded-xl text-[11px] font-medium text-cyan-300/80 border border-cyan-400/15 bg-cyan-500/[0.04] hover:bg-cyan-500/[0.08] hover:border-cyan-400/25 disabled:opacity-30 disabled:cursor-not-allowed transition-all">Testar ao vivo</button>
           {stepIndex > 0 && <button onClick={goPrev} type="button" className="px-3.5 py-2.5 rounded-xl text-[12px] font-medium text-white/75 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-all">Voltar</button>}
           {stepIndex < steps.length - 1 && (
             <button
@@ -295,6 +341,19 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
           />
         </aside>
       </div>
+      {/* V10: Dry-run validation errors */}
+      {dryRunErrors.length > 0 && (
+        <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/[0.05] px-4 py-3">
+          <p className="text-[11px] text-amber-200 font-medium mb-1">Não é possível testar:</p>
+          <ul className="space-y-0.5">
+            {dryRunErrors.map((e, i) => <li key={i} className="text-[11px] text-amber-200/70">· {e}</li>)}
+          </ul>
+        </div>
+      )}
+      {/* V10: Dry-run results panel */}
+      {showDryRun && dryRunResults && (
+        <PatternDryRunPanel results={dryRunResults} onClose={() => setShowDryRun(false)} isAdvanced={isAdvanced} />
+      )}
     </ModalShell>
   )
 }

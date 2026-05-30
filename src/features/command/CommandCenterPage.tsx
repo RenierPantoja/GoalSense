@@ -17,6 +17,8 @@ import { useViewMode } from '@/context/ViewModeContext'
 import { usePatterns } from './contexts/PatternContext'
 import { evaluateAllPatterns } from './intelligence/patternEvaluator'
 import { applyPrecisionChecks } from './intelligence/patternPrecisionEngine'
+import { validateAutoDiscoveryCandidate, buildAutoDiscoveryCandidate } from './intelligence/autoDiscoveryPrecisionGate'
+import { isDuplicateAlert } from './intelligence/alertDuplicateGuard'
 import { extractEspnTimedEvents, type CommandTimedEvent } from './intelligence/commandTimedEvents'
 import { runAutoDiscovery } from './intelligence/autoDiscoveryEngine'
 import { resolveAlert } from './intelligence/patternResolutionEngine'
@@ -185,6 +187,14 @@ export function CommandCenterPage() {
 
       if (!precision.shouldAlert) continue
 
+      // V12: Content-aware duplicate guard
+      const dupCheck = isDuplicateAlert(
+        { fixtureId: fx.id, patternId: hit.patternId, score: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 }, minute: fx.status.elapsed || null, momentumSource: undefined },
+        commandAlerts,
+        { includeResolved: true }
+      )
+      if (dupCheck.duplicate) continue
+
       // Build temporal evidence for audit trail
       const fxEvts = eventsMap.get(fx.id)
       const recentWindow = 10
@@ -197,7 +207,7 @@ export function CommandCenterPage() {
       triggerAlert({ patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, league: fx.league.name, minute: fx.status.elapsed, confidence: precision.adjustedConfidence, reasons: hit.reasons, timestamp: new Date().toISOString(), status: 'pending', scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 } })
       registerCommandAlert({ source: 'command_center', patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, competition: fx.league.name, minuteAtTrigger: fx.status.elapsed, scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 }, confidence: precision.adjustedConfidence, severity: hit.severity, evidences: [...hit.reasons, ...precision.reasons], status: 'pending', triggerSnapshot: { minute: fx.status.elapsed, homeScore: fx.score.home ?? 0, awayScore: fx.score.away ?? 0, status: fx.status.short, competition: fx.league.name, provider: fx.provider, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, homeLogo: fx.homeTeam.logo, awayLogo: fx.awayTeam.logo, favoriteInvolved: isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name), conditionsMatched: hit.matchedConditions, conditionsTotal: hit.totalConditions, confidenceAtTrigger: precision.adjustedConfidence, ...(fxStats ? { stats: fxStats } : {}) }, temporalEvidence: { momentumSource: momSrc as any, recencyConfidence: recConf, windowMinutes: recentWindow, recentEventsUsed: recentEvts.map(e => ({ minute: e.minute, type: e.type, side: e.side, teamName: e.teamName, playerName: e.playerName })) } })
     }
-  }, [patternHits, hasIntelligence, triggerAlert, patterns, registerCommandAlert, isFavoriteTeam, statsMap])
+  }, [patternHits, hasIntelligence, triggerAlert, patterns, registerCommandAlert, isFavoriteTeam, statsMap, commandAlerts, eventsMap])
 
   // ─── Resolution ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -219,23 +229,53 @@ export function CommandCenterPage() {
   }, [hasAutoDiscovery, fixtures, statsMap, isFavoriteTeam, discoveryConfig])
 
   // ─── Auto Discovery → Alert (ONLY when registerAlertAuto is on) ──────────
-  // Honors: hasAutoDiscovery + discoveryConfig.registerAlertAuto + minConfidence threshold.
-  // Anti-duplicate is enforced inside registerCommandAlert (5min window per pattern+fixture).
+  // V11: Auto-discovery now passes through the Precision Gate before alerting.
+  // Honors: hasAutoDiscovery + discoveryConfig.registerAlertAuto + precision validation.
+  // Anti-duplicate is enforced both by the precision gate (manualAlertFixtureIds)
+  // and inside registerCommandAlert (5min window per pattern+fixture).
   useEffect(() => {
     if (!hasAutoDiscovery) return
     if (!discoveryConfig.registerAlertAuto) return
+
+    // Collect fixture ids that already have manual pattern alerts to avoid duplication
+    const manualAlertFixtureIds = new Set(
+      commandAlerts
+        .filter(a => !a.patternId.startsWith('auto_') && a.status === 'pending')
+        .map(a => a.fixtureId)
+    )
+
     for (const d of discoveries) {
       if (d.confidence < discoveryConfig.minConfidence) continue
       const fx = d.fixture
       const fxStats = statsMap.get(fx.id)
-      // Stable synthetic patternId per discovery type so dedup + resolution work consistently.
+      const fxEvents = eventsMap.get(fx.id)
+
+      // V11: Build candidate and validate through precision gate
+      const candidate = buildAutoDiscoveryCandidate(d, discoveryConfig)
+      const validation = validateAutoDiscoveryCandidate(
+        candidate,
+        fx,
+        fxStats,
+        fxEvents,
+        discoveryConfig,
+        manualAlertFixtureIds,
+      )
+
+      // Only register alert if precision gate says ready_to_alert
+      if (!validation.wouldAlert) continue
+
+      // V12: Content-aware duplicate guard
       const syntheticPatternId = `auto_${d.type}`
+      const dupCheck = isDuplicateAlert(
+        { fixtureId: fx.id, patternId: syntheticPatternId, score: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 }, minute: fx.status.elapsed || null, momentumSource: validation.momentumSource, discoveryType: d.type },
+        commandAlerts,
+        { includeResolved: true }
+      )
+      if (dupCheck.duplicate) continue
+
       const patternName = d.insight || 'Descoberta automática'
-      // Severity inferred from discovery type — final phase / favorite risk are higher signal.
-      const inferredSeverity: 'critical' | 'attention' | 'info' =
-        d.type === 'final_phase' || d.type === 'favorite_risk' ? 'attention'
-        : d.type === 'pressure' || d.type === 'dominance' || d.type === 'open_game' ? 'info'
-        : 'info'
+      const inferredSeverity = candidate.syntheticPatternLike.severity
+
       triggerAlert({
         patternId: syntheticPatternId,
         patternName,
@@ -244,8 +284,8 @@ export function CommandCenterPage() {
         awayTeam: fx.awayTeam.name,
         league: fx.league.name,
         minute: fx.status.elapsed,
-        confidence: d.confidence,
-        reasons: [d.evidence].filter(Boolean),
+        confidence: validation.adjustedConfidence,
+        reasons: [...candidate.reasons, ...validation.reasons].filter(Boolean),
         timestamp: new Date().toISOString(),
         status: 'pending',
         scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 },
@@ -260,9 +300,9 @@ export function CommandCenterPage() {
         competition: fx.league.name,
         minuteAtTrigger: fx.status.elapsed,
         scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 },
-        confidence: d.confidence,
+        confidence: validation.adjustedConfidence,
         severity: inferredSeverity,
-        evidences: [d.evidence].filter(Boolean),
+        evidences: [...candidate.reasons, ...validation.reasons].filter(Boolean),
         status: 'pending',
         triggerSnapshot: {
           minute: fx.status.elapsed,
@@ -278,12 +318,13 @@ export function CommandCenterPage() {
           favoriteInvolved: isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name),
           conditionsMatched: 0,
           conditionsTotal: 0,
-          confidenceAtTrigger: d.confidence,
+          confidenceAtTrigger: validation.adjustedConfidence,
           ...(fxStats ? { stats: fxStats } : {}),
         },
+        temporalEvidence: validation.temporalEvidence,
       })
     }
-  }, [hasAutoDiscovery, discoveryConfig.registerAlertAuto, discoveryConfig.minConfidence, discoveries, triggerAlert, registerCommandAlert, isFavoriteTeam, statsMap])
+  }, [hasAutoDiscovery, discoveryConfig, discoveries, triggerAlert, registerCommandAlert, isFavoriteTeam, statsMap, eventsMap, commandAlerts])
 
   // ─── Scanner (ONLY signals) — V5 with precision states ──────────────────────
   const scannerEntries = useMemo((): ScannerEntry[] => {
@@ -408,7 +449,7 @@ export function CommandCenterPage() {
 
       {/* ═══ CONTENT ═══ */}
       {activeTab === 'cockpit' && <CockpitView hasIntelligence={hasIntelligence} decisionMatch={decisionMatch} decisionHit={decisionHit} decisionDiscovery={decisionDiscovery} patternHits={patternHits} discoveries={discoveries} changes={changes} fixtures={fixtures} openMatch={openMatch} isAdvanced={isAdvanced} activePatternCount={activePatternCount} enabledCount={enabledCount} triggeredAlerts={getRecentTriggered(5)} onGoToPatterns={() => setActiveTab('patterns')} navigate={navigate} templates={templates} createFromTemplate={createFromTemplate} />}
-      {activeTab === 'patterns' && <PatternsView patterns={patterns} templates={templates} createFromTemplate={createFromTemplate} createPattern={createPattern} updatePattern={updatePattern} togglePattern={togglePattern} deletePattern={deletePattern} isAdvanced={isAdvanced} showBuilder={showBuilder} setShowBuilder={setShowBuilder} discoveryConfig={discoveryConfig} updateDiscoveryConfig={updateDiscoveryConfig} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} fixtures={fixtures} prefilledDraft={prefilledDraft} clearPrefilledDraft={() => setPrefilledDraft(null)} />}
+      {activeTab === 'patterns' && <PatternsView patterns={patterns} templates={templates} createFromTemplate={createFromTemplate} createPattern={createPattern} updatePattern={updatePattern} togglePattern={togglePattern} deletePattern={deletePattern} isAdvanced={isAdvanced} showBuilder={showBuilder} setShowBuilder={setShowBuilder} discoveryConfig={discoveryConfig} updateDiscoveryConfig={updateDiscoveryConfig} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} fixtures={fixtures} statsMap={statsMap} eventsMap={eventsMap} isFavoriteTeam={isFavoriteTeam} prefilledDraft={prefilledDraft} clearPrefilledDraft={() => setPrefilledDraft(null)} />}
       {activeTab === 'scanner' && <ScannerView hasIntelligence={hasIntelligence} entries={scannerEntries} openMatch={openMatch} isAdvanced={isAdvanced} onGoToPatterns={() => setActiveTab('patterns')} patterns={patterns} />}
       {activeTab === 'alerts' && <AlertsView triggeredAlerts={getRecentTriggered(30)} isAdvanced={isAdvanced} openMatch={openMatch} fixtures={fixtures} navigate={navigate} />}
       {activeTab === 'performance' && <PerformanceView patterns={patterns} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} isAdvanced={isAdvanced} />}
