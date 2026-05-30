@@ -8,12 +8,13 @@
  */
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { RefreshCw, Zap, AlertCircle, Activity, Target, Eye, BarChart3 } from 'lucide-react'
+import { RefreshCw, Zap, AlertCircle, Activity, Target, Eye, BarChart3, Database } from 'lucide-react'
 import { getLiveFixtures, type LiveFixture } from '@/lib/apiClient'
 import { storeFixtureForNavigation } from '@/lib/matchNavigation'
 import { useFavorites } from '@/context/FavoritesContext'
 import { useAlerts } from '@/context/AlertsContext'
 import { useViewMode } from '@/context/ViewModeContext'
+import { useBackendSync } from '@/services/useBackendSync'
 import { usePatterns } from './contexts/PatternContext'
 import { evaluateAllPatterns } from './intelligence/patternEvaluator'
 import { applyPrecisionChecks } from './intelligence/patternPrecisionEngine'
@@ -58,6 +59,7 @@ export function CommandCenterPage() {
   const { enabledCount, registerCommandAlert, updateCommandAlertStatus, commandAlerts } = useAlerts()
   const { isAdvanced } = useViewMode()
   const { patterns, templates, createPattern, createFromTemplate, updatePattern, togglePattern, deletePattern, getActivePatterns, triggeredAlerts, triggerAlert, getRecentTriggered, resolveExpired, discoveryConfig, updateDiscoveryConfig, activePatternCount, triggeredTodayCount } = usePatterns()
+  const backendSync = useBackendSync(patterns)
 
   // ═══ INTELLIGENCE GATE ═══
   const hasManualPatterns = activePatternCount > 0
@@ -424,7 +426,7 @@ export function CommandCenterPage() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <div className="flex items-center gap-3"><h1 className="text-[28px] font-bold text-white/95 tracking-tight">Command Center</h1><span className={`text-[11px] font-bold uppercase tracking-[0.08em] px-3 py-1 rounded-full border ${statusBadge.color}`}>{statusBadge.label}</span></div>
-              <p className="text-[14px] text-white/45 mt-1.5">Motor de decisão em tempo real{timeSince !== null && <span className="text-white/30"> · atualizado {timeSince < 60 ? `${timeSince}s` : `${Math.floor(timeSince / 60)}min`} atrás</span>}{refreshing && <span className="text-cyan-400/50 ml-2 animate-pulse">●</span>}</p>
+              <p className="text-[14px] text-white/45 mt-1.5">Motor de decisão em tempo real{timeSince !== null && <span className="text-white/30"> · atualizado {timeSince < 60 ? `${timeSince}s` : `${Math.floor(timeSince / 60)}min`} atrás</span>}{refreshing && <span className="text-cyan-400/50 ml-2 animate-pulse">●</span>}{isAdvanced && backendSync.enabled && <span className={`ml-2 text-[10px] ${backendSync.online ? 'text-emerald-400/60' : 'text-white/25'}`}>· Backend {backendSync.online ? 'online' : 'offline'}{backendSync.online && backendSync.patternMirror.summary ? ` · ${backendSync.patternMirror.summary}` : ''}</span>}</p>
             </div>
             <div className="flex items-center gap-2.5">
               <button onClick={toggleAuto} className={`h-9 px-4 rounded-xl text-[11px] font-semibold uppercase tracking-wider transition-all ${autoRefresh ? 'bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/15' : 'text-white/30 border border-white/[0.06]'}`} type="button">Auto</button>
@@ -438,6 +440,38 @@ export function CommandCenterPage() {
       </header>
 
       {error && <div className="rounded-xl border border-rose-500/12 bg-rose-500/[0.025] px-6 py-3.5 text-[13px] text-rose-400/80 flex items-center gap-3"><AlertCircle size={15} />{error}</div>}
+
+      {/* ═══ BACKEND SYNC DIAGNOSTICS (Advanced Mode Only) ═══ */}
+      {isAdvanced && backendSync.enabled && (
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.015] px-5 py-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Database size={13} className={backendSync.online ? 'text-emerald-400/70' : 'text-white/25'} />
+              <span className="text-[11px] font-medium text-white/50">
+                {!backendSync.online
+                  ? 'Backend offline — usando localStorage'
+                  : backendSync.patternMirror.loading
+                    ? 'Carregando espelho...'
+                    : `Read Mirror ativo — ${backendSync.patternMirror.localCount} local / ${backendSync.patternMirror.backendCount} backend`
+                }
+              </span>
+              {backendSync.online && !backendSync.patternMirror.loading && backendSync.patternMirror.diagnostics && (
+                <span className="text-[10px] text-white/35 ml-1">
+                  {backendSync.patternMirror.matchedCount > 0 && <span className="text-emerald-400/50">{backendSync.patternMirror.matchedCount} ✓</span>}
+                  {backendSync.patternMirror.divergentCount > 0 && <span className="text-amber-400/60 ml-1.5">{backendSync.patternMirror.divergentCount} divergentes</span>}
+                  {backendSync.patternMirror.onlyLocalCount > 0 && <span className="text-white/30 ml-1.5">{backendSync.patternMirror.onlyLocalCount} apenas local</span>}
+                  {backendSync.patternMirror.onlyBackendCount > 0 && <span className="text-cyan-400/50 ml-1.5">{backendSync.patternMirror.onlyBackendCount} apenas backend</span>}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {backendSync.patternMirror.error && <span className="text-[10px] text-rose-400/60">{backendSync.patternMirror.error}</span>}
+              <button onClick={() => { backendSync.refreshBackendHealth(); backendSync.refreshPatternMirror() }} className="text-[10px] text-white/30 hover:text-white/60 transition-colors" type="button">↻ Refresh</button>
+              <span className="text-[10px] text-white/20">Read Mirror — escrita será habilitada na próxima fase</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ═══ NAV ═══ */}
       <nav className="flex gap-1.5">
