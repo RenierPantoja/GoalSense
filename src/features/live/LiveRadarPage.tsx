@@ -17,6 +17,7 @@ import { sortByAttention, calculateAttention } from './attentionQueue'
 import { sortByFeaturedRanking, scoreLiveMatchForFeature, getClubAnchorExported } from './liveMatchRanking'
 import { isTrulyLiveFixture, filterTrulyLiveFixtures } from '@/lib/liveFixtureGuard'
 import { getAdaptivePollingInterval } from '@/lib/liveFreshness'
+import { feedScoreCacheFromEvents } from '@/lib/liveScoreCache'
 import { LiveScannerTable, type FixtureStats } from './LiveScannerTable'
 import { QUICK_SCANNERS } from './liveQuickScanners'
 import { useLiveWatchlist } from './useLiveWatchlist'
@@ -114,12 +115,34 @@ export function LiveRadarPage() {
               corners: { home: get(homeS, 'wonCorners') || get(homeS, 'Corner Kicks') || 0, away: get(awayS, 'wonCorners') || get(awayS, 'Corner Kicks') || 0 },
               yellowCards: { home: get(homeS, 'yellowCards') || get(homeS, 'Yellow Cards') || 0, away: get(awayS, 'yellowCards') || get(awayS, 'Yellow Cards') || 0 },
             } as FixtureStats,
+            // V15: Extract goal events to feed global score cache
+            goalEvents: (json.keyEvents || [])
+              .filter((ev: any) => {
+                const t = (ev.type?.text || '').toLowerCase()
+                return t.includes('goal') || (t.includes('penalty') && !t.includes('missed') && !t.includes('saved'))
+              })
+              .map((ev: any) => ({
+                type: (ev.type?.text || '').toLowerCase().includes('own goal') ? 'own_goal'
+                  : (ev.type?.text || '').toLowerCase().includes('penalty') ? 'penalty_scored' : 'goal',
+                side: ev.team?.displayName === fx.homeTeam.name ? 'home' : 'away',
+                minute: ev.clock?.value ? Math.floor(ev.clock.value / 60) : undefined,
+                playerName: ev.athletesInvolved?.[0]?.displayName || '',
+              })),
           }
         })
       )
       const newStats = new Map<number, FixtureStats>()
       for (const r of results) {
-        if (r.status === 'fulfilled' && r.value) newStats.set(r.value.id, r.value.stats)
+        if (r.status === 'fulfilled' && r.value) {
+          newStats.set(r.value.id, r.value.stats)
+          // V15: Feed global score cache from goal events
+          if (r.value.goalEvents && r.value.goalEvents.length > 0) {
+            const fx = batch.find(f => f.id === r.value!.id)
+            if (fx) {
+              feedScoreCacheFromEvents(fx.id, fx.score.home ?? 0, fx.score.away ?? 0, r.value.goalEvents)
+            }
+          }
+        }
       }
       setScannerStats(newStats)
     }
