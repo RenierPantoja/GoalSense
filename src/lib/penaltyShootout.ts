@@ -239,6 +239,46 @@ export function formatPenaltyScore(score: PenaltyScore | null | undefined): stri
 }
 
 /**
+ * Build penalty score from individual shootout events.
+ * Only counts 'scored' outcomes. Never invents.
+ */
+export function buildPenaltyScoreFromEvents(events: PenaltyShootoutEvent[]): PenaltyScore | null {
+  if (events.length === 0) return null
+  let home = 0
+  let away = 0
+  for (const ev of events) {
+    if (ev.outcome !== 'scored') continue
+    if (ev.teamSide === 'home') home++
+    else if (ev.teamSide === 'away') away++
+    // Unknown side: skip (never invent)
+  }
+  if (home === 0 && away === 0) return null
+  return { home, away }
+}
+
+/**
+ * Reconcile provider penalty score with event-derived score.
+ * Uses the higher total (same philosophy as regular score).
+ */
+export function reconcilePenaltyScores(
+  providerScore: PenaltyScore | null | undefined,
+  eventScore: PenaltyScore | null,
+  previousScore: PenaltyScore | null | undefined,
+): PenaltyScore | null {
+  const pTotal = providerScore ? (providerScore.home ?? 0) + (providerScore.away ?? 0) : 0
+  const eTotal = eventScore ? (eventScore.home ?? 0) + (eventScore.away ?? 0) : 0
+  const prevTotal = previousScore ? (previousScore.home ?? 0) + (previousScore.away ?? 0) : 0
+
+  // Pick the highest total
+  let best: PenaltyScore | null = null
+  if (pTotal >= eTotal && pTotal >= prevTotal && providerScore) best = providerScore
+  else if (eTotal >= pTotal && eTotal >= prevTotal && eventScore) best = eventScore
+  else if (prevTotal > 0 && previousScore) best = previousScore
+
+  return best
+}
+
+/**
  * Format full score with penalties: "1 (3) - (2) 1"
  */
 export function formatScoreWithPenalties(
