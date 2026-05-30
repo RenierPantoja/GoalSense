@@ -12,7 +12,7 @@ import { translateStage } from '@/lib/competitionLabels'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { ClubLogo } from '@/components/ui/ClubLogo'
 import { ScoreDebugBadge } from '@/components/ui/ScoreDebugBadge'
-import { isPenaltyShootout } from '@/lib/penaltyShootout'
+import { isPenaltyShootout, buildPenaltyScoreFromEvents, reconcilePenaltyScores, extractPenaltyEventsFromEspn } from '@/lib/penaltyShootout'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { sortByAttention, calculateAttention } from './attentionQueue'
 import { sortByFeaturedRanking, scoreLiveMatchForFeature, getClubAnchorExported } from './liveMatchRanking'
@@ -140,6 +140,8 @@ export function LiveRadarPage() {
               }
               return null
             })(),
+            // V15: Extract shootout events for event-derived penalty score
+            shootoutEvents: isPenaltyShootout(fx.status?.short || '') ? extractPenaltyEventsFromEspn(json, fx.id) : [],
           }
         })
       )
@@ -154,9 +156,19 @@ export function LiveRadarPage() {
               feedScoreCacheFromEvents(fx.id, fx.score.home ?? 0, fx.score.away ?? 0, r.value.goalEvents)
             }
           }
-          // V15: Feed penalty score cache
-          if (r.value.penaltyScore) {
-            updatePenaltyScoreCache(r.value.id, r.value.penaltyScore.home, r.value.penaltyScore.away)
+          // V15: Feed penalty score cache (reconcile provider + events)
+          if (r.value.penaltyScore || (r.value.shootoutEvents && r.value.shootoutEvents.length > 0)) {
+            const eventScore = r.value.shootoutEvents && r.value.shootoutEvents.length > 0
+              ? buildPenaltyScoreFromEvents(r.value.shootoutEvents)
+              : null
+            const reconciled = reconcilePenaltyScores(
+              r.value.penaltyScore,
+              eventScore,
+              null // previous comes from cache internally
+            )
+            if (reconciled && reconciled.home !== null && reconciled.away !== null) {
+              updatePenaltyScoreCache(r.value.id, reconciled.home, reconciled.away)
+            }
           }
         }
       }
