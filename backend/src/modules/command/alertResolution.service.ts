@@ -121,6 +121,8 @@ function analyzeSnapshotsInWindow(
   const inShootout = lastSnapshot.status === 'P' || lastSnapshot.status === 'PEN'
 
   // Count events within window from all snapshots
+  // IMPORTANT: Use only the LATEST snapshot's events to avoid double-counting
+  // (each snapshot contains the full event list up to that point)
   let goalsInWindow = 0
   let cornersInWindow = 0
   let cardsInWindow = 0
@@ -131,24 +133,28 @@ function analyzeSnapshotsInWindow(
 
   for (const snap of snapshots) {
     if (snap.statsJson) hasStats = true
-    if (!snap.eventsJson) continue
+  }
 
-    const events = safeParseJson(snap.eventsJson, []) as Array<{ minute: number; type: string }>
-    if (events.length === 0) continue
-    hasTimedEvents = true
+  // Use the last snapshot's events (most complete) to avoid double-counting
+  const lastSnapshotWithEvents = [...snapshots].reverse().find(s => s.eventsJson)
+  if (lastSnapshotWithEvents?.eventsJson) {
+    const events = safeParseJson(lastSnapshotWithEvents.eventsJson, []) as Array<{ minute: number; type: string }>
+    if (events.length > 0) {
+      hasTimedEvents = true
+      for (const evt of events) {
+        // Only count events within the resolution window (after trigger, before window end)
+        if (triggerMinute != null) {
+          if (evt.minute < triggerMinute) continue
+          if (windowEnd != null && evt.minute > windowEnd) continue
+        }
 
-    for (const evt of events) {
-      // Only count events within the resolution window
-      if (triggerMinute != null && windowEnd != null) {
-        if (evt.minute < triggerMinute || evt.minute > windowEnd) continue
-      }
-
-      if (evt.type === 'goal' || evt.type === 'penalty_scored' || evt.type === 'own_goal') {
-        goalsInWindow++
-      } else if (evt.type === 'corner') {
-        cornersInWindow++
-      } else if (evt.type === 'yellow_card' || evt.type === 'red_card') {
-        cardsInWindow++
+        if (evt.type === 'goal' || evt.type === 'penalty_scored' || evt.type === 'own_goal') {
+          goalsInWindow++
+        } else if (evt.type === 'corner') {
+          cornersInWindow++
+        } else if (evt.type === 'yellow_card' || evt.type === 'red_card') {
+          cardsInWindow++
+        }
       }
     }
   }
