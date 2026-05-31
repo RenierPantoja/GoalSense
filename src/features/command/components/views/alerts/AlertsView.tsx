@@ -99,15 +99,29 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
   // Effective source mode (fallback to local if backend unavailable)
   const effectiveMode: AlertSourceMode = (sourceMode === 'hybrid' || sourceMode === 'backend') && !backendOnline ? 'local' : sourceMode
 
-  // Counts from local alerts (always available)
+  // Source-aware alert list for counting
+  const countSource = useMemo(() => {
+    if (effectiveMode === 'hybrid' && hybridAlerts && hybridAlerts.length > 0) {
+      return hybridAlerts.map(a => ({ status: a.status }))
+    }
+    if (effectiveMode === 'backend' && hybridAlerts) {
+      return hybridAlerts.filter(a => a.source === 'backend').map(a => ({ status: a.status }))
+    }
+    return triggeredAlerts.map(t => ({ status: t.status }))
+  }, [effectiveMode, hybridAlerts, triggeredAlerts])
+
+  // Counts reflect the active source mode
   const counts = useMemo(() => ({
-    all: triggeredAlerts.length,
-    pending: triggeredAlerts.filter(t => t.status === 'pending').length,
-    confirmed: triggeredAlerts.filter(t => t.status === 'confirmed').length,
-    partial: triggeredAlerts.filter(t => t.status === 'confirmed_partial').length,
-    failed: triggeredAlerts.filter(t => t.status === 'failed').length,
-    expired: triggeredAlerts.filter(t => t.status === 'expired' || t.status === 'unknown').length,
-  }), [triggeredAlerts])
+    all: countSource.length,
+    pending: countSource.filter(t => t.status === 'pending').length,
+    confirmed: countSource.filter(t => t.status === 'confirmed').length,
+    partial: countSource.filter(t => t.status === 'confirmed_partial').length,
+    failed: countSource.filter(t => t.status === 'failed').length,
+    expired: countSource.filter(t => t.status === 'expired' || t.status === 'unknown').length,
+  }), [countSource])
+
+  // Source label for header
+  const sourceLabel = effectiveMode === 'hybrid' ? 'Híbrido' : effectiveMode === 'backend' ? 'Backend' : 'Local'
 
   // Visible alerts based on source mode and filter
   const visibleLocal = useMemo(() => {
@@ -167,8 +181,9 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
               <h2 className="text-[20px] font-bold text-white/90 tracking-tight">Alertas disparados</h2>
               <p className="text-[12px] text-white/55 mt-1">
                 Eventos registrados pelo Command Center.
+                {isAdvanced && <span className="text-[10px] text-white/30 ml-2">· Fonte: {sourceLabel}{effectiveMode !== sourceMode ? ' (fallback)' : ''}</span>}
                 {isAdvanced && hybridDiagnostics && backendOnline && (
-                  <span className="text-[10px] text-white/30 ml-2">· Híbrido: {hybridDiagnostics.mergedCount} ({hybridDiagnostics.matchedCount} matched, {hybridDiagnostics.onlyBackendCount} backend-only{hybridDiagnostics.divergentStatusCount > 0 ? `, ${hybridDiagnostics.divergentStatusCount} conflitos` : ''})</span>
+                  <span className="text-[10px] text-white/30 ml-1">· {hybridDiagnostics.mergedCount} merged, {hybridDiagnostics.onlyBackendCount} backend-only{hybridDiagnostics.divergentStatusCount > 0 ? `, ${hybridDiagnostics.divergentStatusCount} conflitos` : ''}</span>
                 )}
               </p>
             </div>
