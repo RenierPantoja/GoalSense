@@ -162,3 +162,41 @@ model AuditLog {
   @@index([userId, createdAt])
   @@index([entityType, entityId])
 }
+
+// ─── Telegram Channels ───────────────────────────────────────────────────────
+
+model TelegramChannel {
+  id        String   @id @default(cuid())
+  userId    String   @default("default")
+  name      String
+  chatId    String
+  type      String   @default("group") // group | channel | private
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deliveries SignalDelivery[]
+
+  @@index([userId])
+}
+
+// ─── Signal Delivery ─────────────────────────────────────────────────────────
+
+model SignalDelivery {
+  id           String   @id @default(cuid())
+  userId       String   @default("default")
+  alertId      String
+  channelId    String
+  status       String   @default("pending") // pending | sent | failed | skipped
+  provider     String   @default("telegram")
+  messageText  String?
+  errorMessage String?
+  sentAt       DateTime?
+  createdAt    DateTime @default(now())
+
+  channel      TelegramChannel @relation(fields: [channelId], references: [id])
+
+  @@unique([alertId, channelId])
+  @@index([alertId])
+  @@index([channelId])
+}

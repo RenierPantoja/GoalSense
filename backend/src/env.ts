@@ -23,6 +23,9 @@ const envSchema = z.object({
   RESOLUTION_WORKER_ENABLED: z.string().default('false'),
   RESOLUTION_WORKER_INTERVAL_MS: z.coerce.number().default(30000),
   RESOLUTION_WORKER_MAX_ALERTS: z.coerce.number().default(50),
+  // Telegram
+  TELEGRAM_ENABLED: z.string().default('false'),
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
 })
 
 export const env = envSchema.parse(process.env)

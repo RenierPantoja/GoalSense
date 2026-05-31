@@ -128,3 +128,25 @@ export async function getBackendPatternWorkerStatus(): Promise<any | null> {
 export async function getBackendResolutionWorkerStatus(): Promise<any | null> {
   return fetchApi('/api/resolution-worker/status')
 }
+
+// --- Telegram ---
+
+export async function getTelegramStatus(): Promise<any | null> {
+  return fetchApi('/api/telegram/status')
+}
+
+export async function listTelegramChannels(): Promise<any[] | null> {
+  return fetchApi('/api/telegram/channels')
+}
+
+export async function createTelegramChannel(data: { name: string; chatId: string; type?: string }): Promise<any | null> {
+  return fetchApiStrict('/api/telegram/channels', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export async function deleteTelegramChannel(id: string): Promise<any | null> {
+  return fetchApiStrict(`/api/telegram/channels/${id}`, { method: 'DELETE' })
+}
+
+export async function sendAlertToTelegram(alertId: string, channelId: string): Promise<any | null> {
+  return fetchApiStrict(`/api/telegram/send-alert/${alertId}`, { method: 'POST', body: JSON.stringify({ channelId, confirm: true }) })
+}
