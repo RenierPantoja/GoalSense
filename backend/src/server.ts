@@ -13,6 +13,7 @@ import { liveMonitorRoutes } from './modules/live/liveMonitor.routes.js'
 import { commandWorkerRoutes } from './modules/command/commandWorker.routes.js'
 import { startLiveMonitorWorker } from './workers/liveMonitor.worker.js'
 import { startPatternEvaluationWorker } from './workers/patternEvaluation.worker.js'
+import { startAlertResolutionWorker } from './workers/alertResolution.worker.js'
 
 const app = Fastify({ logger: true })
 
@@ -38,6 +39,8 @@ const start = async () => {
     startLiveMonitorWorker()
     // Start pattern evaluation worker (only if enabled via env)
     startPatternEvaluationWorker()
+    // Start alert resolution worker (only if enabled via env)
+    startAlertResolutionWorker()
   } catch (err) {
     app.log.error(err)
     process.exit(1)

@@ -19,6 +19,10 @@ const envSchema = z.object({
   PATTERN_WORKER_ENABLED: z.string().default('false'),
   PATTERN_WORKER_INTERVAL_MS: z.coerce.number().default(15000),
   PATTERN_WORKER_MAX_FIXTURES: z.coerce.number().default(20),
+  // Alert resolution worker
+  RESOLUTION_WORKER_ENABLED: z.string().default('false'),
+  RESOLUTION_WORKER_INTERVAL_MS: z.coerce.number().default(30000),
+  RESOLUTION_WORKER_MAX_ALERTS: z.coerce.number().default(50),
 })
 
 export const env = envSchema.parse(process.env)
