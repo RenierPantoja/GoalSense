@@ -553,7 +553,7 @@ export function CommandCenterPage() {
 
       {/* ═══ TELEGRAM CONFIG (Advanced Mode Only) ═══ */}
       {isAdvanced && backendSync.enabled && backendSync.online && (
-        <TelegramConfigPanel enabled={telegram.enabled} configured={telegram.configured} channels={telegram.channels} onAddChannel={telegram.addChannel} onRemoveChannel={telegram.removeChannel} />
+        <TelegramConfigPanel enabled={telegram.enabled} configured={telegram.configured} channels={telegram.channels} onAddChannel={telegram.addChannel} onRemoveChannel={telegram.removeChannel} onUpdateRules={telegram.updateRules} />
       )}
 
       {/* ═══ NAV ═══ */}

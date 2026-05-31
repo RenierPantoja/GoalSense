@@ -12,7 +12,9 @@ import {
   deleteTelegramChannel,
   sendAlertToTelegram,
   getTelegramDeliveries,
+  updateTelegramChannelRules,
 } from './commandBackendClient'
+import type { TelegramChannelRules } from './telegramEligibilityPreview'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -22,6 +24,7 @@ export interface TelegramChannelView {
   chatId: string
   type: 'group' | 'channel' | 'private'
   isActive: boolean
+  rules?: TelegramChannelRules | null
   createdAt?: string
 }
 
@@ -108,6 +111,16 @@ export function useTelegramIntegration(backendOnline: boolean) {
       return { success: true }
     } catch (err: any) {
       return { success: false, error: err?.message || 'Failed to delete channel' }
+    }
+  }, [refreshTelegram])
+
+  const updateRules = useCallback(async (channelId: string, rules: TelegramChannelRules) => {
+    try {
+      await updateTelegramChannelRules(channelId, rules)
+      await refreshTelegram()
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to update rules' }
     }
   }, [refreshTelegram])
 
@@ -202,6 +215,7 @@ export function useTelegramIntegration(backendOnline: boolean) {
     refreshTelegram,
     addChannel,
     removeChannel,
+    updateRules,
     sendAlert,
     getAlertTelegramStatus,
     getSentChannelIds,
@@ -214,12 +228,17 @@ export function useTelegramIntegration(backendOnline: boolean) {
 // ─── Adapter ─────────────────────────────────────────────────────────────────
 
 function adaptChannel(raw: any): TelegramChannelView {
+  let rules: TelegramChannelRules | null = null
+  if (raw.rulesJson) {
+    try { rules = typeof raw.rulesJson === 'string' ? JSON.parse(raw.rulesJson) : raw.rulesJson } catch { /* invalid */ }
+  }
   return {
     id: raw.id || '',
     name: raw.name || '',
     chatId: raw.chatId || '',
     type: raw.type || 'group',
     isActive: raw.isActive !== false,
+    rules,
     createdAt: raw.createdAt instanceof Date ? raw.createdAt.toISOString() : raw.createdAt,
   }
 }

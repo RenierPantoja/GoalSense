@@ -5,6 +5,8 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import type { TelegramChannelView } from '@/services/useTelegramIntegration'
+import type { HybridCommandAlert } from '@/services/hybridAlertMerge'
+import { evaluateTelegramEligibilityPreview } from '@/services/telegramEligibilityPreview'
 
 interface Props {
   alertId: string
@@ -15,13 +17,22 @@ interface Props {
   confidence: number
   channels: TelegramChannelView[]
   sentChannelIds?: Set<string>
+  alert?: HybridCommandAlert
   onSend: (alertId: string, channelId: string) => Promise<{ success: boolean; error?: string }>
   onClose: () => void
 }
 
-export function SendTelegramSignalModal({ alertId, patternName, matchLabel, minute, score, confidence, channels, sentChannelIds, onSend, onClose }: Props) {
+export function SendTelegramSignalModal({ alertId, patternName, matchLabel, minute, score, confidence, channels, sentChannelIds, alert: hybridAlert, onSend, onClose }: Props) {
   const activeChannels = channels.filter(c => c.isActive)
-  const availableChannels = activeChannels.filter(c => !sentChannelIds?.has(c.id))
+  const availableChannels = activeChannels.filter(c => {
+    if (sentChannelIds?.has(c.id)) return false
+    // Eligibility preview (if alert available)
+    if (hybridAlert && c.rules) {
+      const preview = evaluateTelegramEligibilityPreview(hybridAlert, c.rules)
+      if (!preview.eligible) return false
+    }
+    return true
+  })
   const [selectedChannel, setSelectedChannel] = useState(availableChannels[0]?.id || '')
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState<{ success: boolean; error?: string } | null>(null)
@@ -73,7 +84,13 @@ export function SendTelegramSignalModal({ alertId, patternName, matchLabel, minu
             >
               {activeChannels.map(ch => {
                 const alreadySent = sentChannelIds?.has(ch.id)
-                return <option key={ch.id} value={ch.id} disabled={alreadySent}>{ch.name} ({ch.type}){alreadySent ? ' — Já enviado' : ''}</option>
+                let blocked = false
+                let blockReason = ''
+                if (!alreadySent && hybridAlert && ch.rules) {
+                  const preview = evaluateTelegramEligibilityPreview(hybridAlert, ch.rules)
+                  if (!preview.eligible) { blocked = true; blockReason = preview.blockedReasons[0] || 'Regra do canal' }
+                }
+                return <option key={ch.id} value={ch.id} disabled={alreadySent || blocked}>{ch.name} ({ch.type}){alreadySent ? ' — Já enviado' : blocked ? ` — ${blockReason}` : ''}</option>
               })}
             </select>
           </div>

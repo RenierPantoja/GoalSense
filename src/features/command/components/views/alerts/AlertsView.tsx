@@ -350,6 +350,7 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
           confidence={telegramModal.confidence}
           channels={telegramChannels}
           sentChannelIds={getSentChannelIds?.(telegramModal.backendAlert?.id || telegramModal.id)}
+          alert={telegramModal}
           onSend={onSendTelegram}
           onClose={() => setTelegramModal(null)}
         />
