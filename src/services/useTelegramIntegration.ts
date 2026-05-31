@@ -11,6 +11,7 @@ import {
   createTelegramChannel,
   deleteTelegramChannel,
   sendAlertToTelegram,
+  getTelegramDeliveries,
 } from './commandBackendClient'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -150,6 +151,36 @@ export function useTelegramIntegration(backendOnline: boolean) {
     }
   }, [state.channels])
 
+  /** Load deliveries from backend for specific alert IDs (persisted after reload) */
+  const loadedAlertIdsRef = useRef(new Set<string>())
+  const loadDeliveriesForAlerts = useCallback(async (alertIds: string[]) => {
+    if (!isBackendEnabled() || !backendOnline) return
+    // Only load for IDs not already loaded
+    const toLoad = alertIds.filter(id => id && !loadedAlertIdsRef.current.has(id))
+    if (toLoad.length === 0) return
+
+    // Batch: load deliveries for each alertId (limit to 20 per call)
+    const batch = toLoad.slice(0, 20)
+    const results: Record<string, SignalDeliveryView[]> = {}
+
+    for (const alertId of batch) {
+      try {
+        const raw = await getTelegramDeliveries({ alertId, limit: 10 })
+        if (raw && raw.length > 0) {
+          results[alertId] = raw.map(adaptDelivery)
+        }
+        loadedAlertIdsRef.current.add(alertId)
+      } catch { /* non-critical */ }
+    }
+
+    if (Object.keys(results).length > 0) {
+      setState(prev => ({
+        ...prev,
+        deliveriesByAlertId: { ...prev.deliveriesByAlertId, ...results },
+      }))
+    }
+  }, [backendOnline])
+
   /** Get delivery status for a specific alert */
   const getAlertTelegramStatus = useCallback((alertId: string): 'not_sent' | 'sent' | 'failed' | 'pending' => {
     const deliveries = state.deliveriesByAlertId[alertId]
@@ -174,8 +205,11 @@ export function useTelegramIntegration(backendOnline: boolean) {
     sendAlert,
     getAlertTelegramStatus,
     getSentChannelIds,
+    loadDeliveriesForAlerts,
   }
 }
+
+// ─── Adapters ────────────────────────────────────────────────────────────────
 
 // ─── Adapter ─────────────────────────────────────────────────────────────────
 
@@ -187,5 +221,18 @@ function adaptChannel(raw: any): TelegramChannelView {
     type: raw.type || 'group',
     isActive: raw.isActive !== false,
     createdAt: raw.createdAt instanceof Date ? raw.createdAt.toISOString() : raw.createdAt,
+  }
+}
+
+function adaptDelivery(raw: any): SignalDeliveryView {
+  return {
+    id: raw.id || '',
+    alertId: raw.alertId || '',
+    channelId: raw.channelId || '',
+    channelName: raw.channel?.name || undefined,
+    status: (['pending', 'sent', 'failed', 'skipped'].includes(raw.status) ? raw.status : 'unknown') as SignalDeliveryView['status'],
+    errorMessage: raw.errorMessage || undefined,
+    sentAt: raw.sentAt instanceof Date ? raw.sentAt.toISOString() : raw.sentAt || undefined,
+    createdAt: raw.createdAt instanceof Date ? raw.createdAt.toISOString() : raw.createdAt || undefined,
   }
 }

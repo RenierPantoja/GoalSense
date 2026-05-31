@@ -150,3 +150,11 @@ export async function deleteTelegramChannel(id: string): Promise<any | null> {
 export async function sendAlertToTelegram(alertId: string, channelId: string): Promise<any | null> {
   return fetchApiStrict(`/api/telegram/send-alert/${alertId}`, { method: 'POST', body: JSON.stringify({ channelId, confirm: true }) })
 }
+
+export async function getTelegramDeliveries(params?: { alertId?: string; limit?: number }): Promise<any[] | null> {
+  const qs = new URLSearchParams()
+  if (params?.alertId) qs.set('alertId', params.alertId)
+  if (params?.limit) qs.set('limit', String(params.limit))
+  const query = qs.toString()
+  return fetchApi(`/api/telegram/deliveries${query ? `?${query}` : ''}`)
+}

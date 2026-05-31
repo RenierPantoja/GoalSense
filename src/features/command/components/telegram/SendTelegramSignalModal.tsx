@@ -14,16 +14,19 @@ interface Props {
   score: { home: number; away: number }
   confidence: number
   channels: TelegramChannelView[]
+  sentChannelIds?: Set<string>
   onSend: (alertId: string, channelId: string) => Promise<{ success: boolean; error?: string }>
   onClose: () => void
 }
 
-export function SendTelegramSignalModal({ alertId, patternName, matchLabel, minute, score, confidence, channels, onSend, onClose }: Props) {
-  const [selectedChannel, setSelectedChannel] = useState(channels[0]?.id || '')
+export function SendTelegramSignalModal({ alertId, patternName, matchLabel, minute, score, confidence, channels, sentChannelIds, onSend, onClose }: Props) {
+  const activeChannels = channels.filter(c => c.isActive)
+  const availableChannels = activeChannels.filter(c => !sentChannelIds?.has(c.id))
+  const [selectedChannel, setSelectedChannel] = useState(availableChannels[0]?.id || '')
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState<{ success: boolean; error?: string } | null>(null)
 
-  const activeChannels = channels.filter(c => c.isActive)
+  const allSent = availableChannels.length === 0 && activeChannels.length > 0
 
   const handleSend = async () => {
     if (!selectedChannel) return
@@ -58,6 +61,8 @@ export function SendTelegramSignalModal({ alertId, patternName, matchLabel, minu
         {/* Channel Selection */}
         {activeChannels.length === 0 ? (
           <div className="text-[12px] text-amber-300/70 mb-4">Nenhum canal ativo configurado.</div>
+        ) : allSent ? (
+          <div className="text-[12px] text-emerald-300/70 mb-4">Este alerta já foi enviado para todos os canais ativos.</div>
         ) : (
           <div className="mb-4">
             <label className="text-[11px] text-white/55 font-medium block mb-1.5">Canal de destino</label>
@@ -66,9 +71,10 @@ export function SendTelegramSignalModal({ alertId, patternName, matchLabel, minu
               onChange={e => setSelectedChannel(e.target.value)}
               className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-[12px] text-white/85 focus:outline-none focus:border-cyan-400/30"
             >
-              {activeChannels.map(ch => (
-                <option key={ch.id} value={ch.id}>{ch.name} ({ch.type})</option>
-              ))}
+              {activeChannels.map(ch => {
+                const alreadySent = sentChannelIds?.has(ch.id)
+                return <option key={ch.id} value={ch.id} disabled={alreadySent}>{ch.name} ({ch.type}){alreadySent ? ' — Já enviado' : ''}</option>
+              })}
             </select>
           </div>
         )}
@@ -93,7 +99,7 @@ export function SendTelegramSignalModal({ alertId, patternName, matchLabel, minu
           {!result?.success && (
             <button
               onClick={handleSend}
-              disabled={sending || !selectedChannel || activeChannels.length === 0}
+              disabled={sending || !selectedChannel || activeChannels.length === 0 || allSent}
               className="px-4 py-2 rounded-xl text-[12px] font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-400/20 hover:bg-cyan-500/25 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               type="button"
             >

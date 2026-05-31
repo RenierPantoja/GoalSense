@@ -5,7 +5,7 @@
  * Hybrid mode merges local + backend alerts by duplicateSignature.
  * localStorage is NEVER altered by this view.
  */
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Zap } from 'lucide-react'
 import type { LiveFixture } from '@/lib/apiClient'
 import type { TriggeredAlert } from '../../../types/commandTypes'
@@ -33,6 +33,7 @@ export interface AlertsViewProps {
   onSendTelegram?: (alertId: string, channelId: string) => Promise<{ success: boolean; error?: string }>
   getAlertTelegramStatus?: (alertId: string) => 'not_sent' | 'sent' | 'failed' | 'pending'
   getSentChannelIds?: (alertId: string) => Set<string>
+  loadDeliveriesForAlerts?: (alertIds: string[]) => Promise<void>
 }
 
 // ─── Source Badge ────────────────────────────────────────────────────────────
@@ -111,10 +112,21 @@ function HybridAlertRow({ alert, isAdvanced, canSendTelegram, onTelegramClick, t
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, navigate, hybridAlerts, hybridDiagnostics, backendOnline, telegramEnabled, telegramChannels, onSendTelegram, getAlertTelegramStatus, getSentChannelIds }: AlertsViewProps) {
+export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, navigate, hybridAlerts, hybridDiagnostics, backendOnline, telegramEnabled, telegramChannels, onSendTelegram, getAlertTelegramStatus, getSentChannelIds, loadDeliveriesForAlerts }: AlertsViewProps) {
   const [filter, setFilter] = useState<AlertFilter>('all')
   const [sourceMode, setSourceMode] = useState<AlertSourceMode>(() => backendOnline && hybridAlerts ? 'hybrid' : 'local')
   const [telegramModal, setTelegramModal] = useState<HybridCommandAlert | null>(null)
+
+  // Load telegram deliveries for visible backend alerts (persists after reload)
+  useEffect(() => {
+    if (!loadDeliveriesForAlerts || !telegramEnabled || !backendOnline) return
+    if (!hybridAlerts || hybridAlerts.length === 0) return
+    const backendAlertIds = hybridAlerts
+      .filter(a => a.backendAlert?.id)
+      .map(a => a.backendAlert!.id)
+      .slice(0, 20)
+    if (backendAlertIds.length > 0) loadDeliveriesForAlerts(backendAlertIds)
+  }, [hybridAlerts, loadDeliveriesForAlerts, telegramEnabled, backendOnline])
 
   // Effective source mode (fallback to local if backend unavailable)
   const effectiveMode: AlertSourceMode = (sourceMode === 'hybrid' || sourceMode === 'backend') && !backendOnline ? 'local' : sourceMode
@@ -337,6 +349,7 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
           score={telegramModal.scoreAtTrigger}
           confidence={telegramModal.confidence}
           channels={telegramChannels}
+          sentChannelIds={getSentChannelIds?.(telegramModal.backendAlert?.id || telegramModal.id)}
           onSend={onSendTelegram}
           onClose={() => setTelegramModal(null)}
         />
