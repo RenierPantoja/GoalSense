@@ -18,6 +18,7 @@ import { useBackendSync } from '@/services/useBackendSync'
 import { usePatternWriteThrough } from '@/services/usePatternWriteThrough'
 import { useAlertWriteThrough } from '@/services/useAlertWriteThrough'
 import { useBackendPerformance } from '@/services/useBackendPerformance'
+import { useBackendAlertsMirror } from '@/services/useBackendAlertsMirror'
 import { usePatterns } from './contexts/PatternContext'
 import { evaluateAllPatterns } from './intelligence/patternEvaluator'
 import { applyPrecisionChecks } from './intelligence/patternPrecisionEngine'
@@ -72,6 +73,7 @@ export function CommandCenterPage() {
     backendSync.online,
   )
   const backendPerf = useBackendPerformance(backendSync.online)
+  const backendAlertsMirror = useBackendAlertsMirror(backendSync.online)
 
   // ═══ INTELLIGENCE GATE ═══
   const hasManualPatterns = activePatternCount > 0
@@ -486,6 +488,41 @@ export function CommandCenterPage() {
               {(patterns.some(p => p.syncStatus === 'pending_create' || p.syncStatus === 'pending_update' || p.syncStatus === 'pending_delete' || p.syncStatus === 'error') || alertWT.pendingAlertSyncCount > 0 || alertWT.errorAlertSyncCount > 0) && (
                 <button onClick={() => { writeThrough.syncPending(); alertWT.syncPendingAlertsManual() }} className="text-[10px] text-cyan-400/40 hover:text-cyan-400/70 transition-colors" type="button">⟳ Sync pendentes</button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ BACKEND WORKER ALERTS (Advanced Mode Only) ═══ */}
+      {isAdvanced && backendSync.enabled && backendSync.online && backendAlertsMirror.totalCount > 0 && (
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.015] px-5 py-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="text-[11px] font-medium text-white/50">Backend Alerts</span>
+              <span className="text-[10px] text-white/35">{backendAlertsMirror.totalCount} total</span>
+              {backendAlertsMirror.workerCreatedCount > 0 && <span className="text-[10px] text-cyan-400/50">· {backendAlertsMirror.workerCreatedCount} worker</span>}
+              {backendAlertsMirror.pendingCount > 0 && <span className="text-[10px] text-amber-400/50">· {backendAlertsMirror.pendingCount} pending</span>}
+              {backendAlertsMirror.confirmedCount > 0 && <span className="text-[10px] text-emerald-400/50">· {backendAlertsMirror.confirmedCount} ✓</span>}
+              {backendAlertsMirror.failedCount > 0 && <span className="text-[10px] text-rose-400/50">· {backendAlertsMirror.failedCount} ✗</span>}
+              {backendAlertsMirror.unknownCount > 0 && <span className="text-[10px] text-white/30">· {backendAlertsMirror.unknownCount} ?</span>}
+            </div>
+            <div className="flex items-center gap-2">
+              {backendAlertsMirror.workerStatuses.patternWorker && (
+                <span className={`text-[9px] ${backendAlertsMirror.workerStatuses.patternWorker.enabled ? 'text-emerald-400/50' : 'text-white/25'}`}>
+                  PW:{backendAlertsMirror.workerStatuses.patternWorker.enabled ? 'on' : 'off'}
+                </span>
+              )}
+              {backendAlertsMirror.workerStatuses.resolutionWorker && (
+                <span className={`text-[9px] ${backendAlertsMirror.workerStatuses.resolutionWorker.enabled ? 'text-emerald-400/50' : 'text-white/25'}`}>
+                  RW:{backendAlertsMirror.workerStatuses.resolutionWorker.enabled ? 'on' : 'off'}
+                </span>
+              )}
+              {backendAlertsMirror.workerStatuses.liveMonitor && (
+                <span className={`text-[9px] ${backendAlertsMirror.workerStatuses.liveMonitor.enabled ? 'text-emerald-400/50' : 'text-white/25'}`}>
+                  LM:{backendAlertsMirror.workerStatuses.liveMonitor.enabled ? 'on' : 'off'}
+                </span>
+              )}
+              <button onClick={() => backendAlertsMirror.refreshBackendAlerts()} className="text-[10px] text-white/30 hover:text-white/60 transition-colors" type="button">↻ Alerts</button>
             </div>
           </div>
         </div>

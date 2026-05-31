@@ -109,3 +109,22 @@ export async function getBackendPerformanceSummary(): Promise<any | null> {
 export async function getLiveMonitorStatus(): Promise<any | null> {
   return fetchApi('/api/live-monitor/status')
 }
+
+// --- Worker Alerts (Read Mirror) ---
+
+export async function getBackendAlerts(params?: { status?: string; source?: string; patternId?: string; limit?: number }): Promise<any[] | null> {
+  const qs = new URLSearchParams()
+  if (params?.status) qs.set('status', params.status)
+  if (params?.patternId) qs.set('patternId', params.patternId)
+  if (params?.limit) qs.set('limit', String(params.limit))
+  const query = qs.toString()
+  return fetchApi(`/api/alerts${query ? `?${query}` : ''}`)
+}
+
+export async function getBackendPatternWorkerStatus(): Promise<any | null> {
+  return fetchApi('/api/pattern-worker/status')
+}
+
+export async function getBackendResolutionWorkerStatus(): Promise<any | null> {
+  return fetchApi('/api/resolution-worker/status')
+}
