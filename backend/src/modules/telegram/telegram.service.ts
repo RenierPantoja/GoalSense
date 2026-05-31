@@ -6,6 +6,7 @@
  */
 import { prisma } from '../../db/client.js'
 import { env } from '../../env.js'
+import { parseChannelRules, extractAlertMetadata, evaluateAlertAgainstChannelRules } from './telegramChannelRules.service.js'
 
 const DEFAULT_USER = 'default'
 
@@ -117,6 +118,16 @@ export async function sendAlertToChannel(alertId: string, channelId: string): Pr
   // Load channel
   const channel = await prisma.telegramChannel.findFirst({ where: { id: channelId, userId: DEFAULT_USER, isActive: true } })
   if (!channel) return { success: false, error: 'Channel not found or inactive' }
+
+  // Evaluate channel rules
+  const rules = parseChannelRules(channel.rulesJson)
+  if (rules) {
+    const alertMeta = extractAlertMetadata(alert)
+    const eligibility = await evaluateAlertAgainstChannelRules(alertMeta, channelId, rules)
+    if (!eligibility.eligible) {
+      return { success: false, error: `Blocked by channel rules: ${eligibility.blockedReasons[0]}` }
+    }
+  }
 
   // Parse evidence
   const evidence = safeParseJson(alert.evidenceJson, {})

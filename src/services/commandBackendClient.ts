@@ -147,6 +147,10 @@ export async function deleteTelegramChannel(id: string): Promise<any | null> {
   return fetchApiStrict(`/api/telegram/channels/${id}`, { method: 'DELETE' })
 }
 
+export async function updateTelegramChannelRules(channelId: string, rules: any): Promise<any | null> {
+  return fetchApiStrict(`/api/telegram/channels/${channelId}/rules`, { method: 'PATCH', body: JSON.stringify({ rules }) })
+}
+
 export async function sendAlertToTelegram(alertId: string, channelId: string): Promise<any | null> {
   return fetchApiStrict(`/api/telegram/send-alert/${alertId}`, { method: 'POST', body: JSON.stringify({ channelId, confirm: true }) })
 }

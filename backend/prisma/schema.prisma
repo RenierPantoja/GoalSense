@@ -172,6 +172,7 @@ model TelegramChannel {
   chatId    String
   type      String   @default("group") // group | channel | private
   isActive  Boolean  @default(true)
+  rulesJson String?  // JSON: TelegramChannelRules (optional, null = accept all)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

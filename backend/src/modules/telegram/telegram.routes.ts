@@ -12,6 +12,22 @@ const createChannelSchema = z.object({
   type: z.enum(['group', 'channel', 'private']).default('group'),
 })
 
+const updateChannelRulesSchema = z.object({
+  rules: z.object({
+    minConfidence: z.number().min(0).max(100).optional(),
+    allowedPatternTypes: z.array(z.string()).optional(),
+    allowedPatternIds: z.array(z.string()).optional(),
+    blockedPatternIds: z.array(z.string()).optional(),
+    allowedSources: z.array(z.string()).optional(),
+    requireRichData: z.boolean().optional(),
+    requireTimedEvents: z.boolean().optional(),
+    blockStatsProxy: z.boolean().optional(),
+    blockUnknownDataQuality: z.boolean().optional(),
+    maxSignalsPerMatch: z.number().min(1).max(50).optional(),
+    cooldownMinutes: z.number().min(0).max(1440).optional(),
+  }),
+})
+
 const sendAlertSchema = z.object({
   channelId: z.string().min(1),
   confirm: z.literal(true),
@@ -46,6 +62,23 @@ export async function telegramRoutes(app: FastifyInstance) {
     } catch {
       return reply.status(404).send(notFound('Channel not found'))
     }
+  })
+
+  // Update channel rules
+  app.patch('/telegram/channels/:id/rules', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const parsed = updateChannelRulesSchema.safeParse(req.body)
+    if (!parsed.success) return reply.status(400).send(badRequest('Validation failed', parsed.error.flatten()))
+
+    const { prisma } = await import('../../db/client.js')
+    const channel = await prisma.telegramChannel.findFirst({ where: { id } })
+    if (!channel) return reply.status(404).send(notFound('Channel not found'))
+
+    await prisma.telegramChannel.update({
+      where: { id },
+      data: { rulesJson: JSON.stringify(parsed.data.rules) },
+    })
+    return ok({ id, rulesUpdated: true })
   })
 
   // Send alert (manual, requires confirm: true)
