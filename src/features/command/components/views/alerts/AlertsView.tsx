@@ -1,21 +1,21 @@
 /**
  * AlertsView — Command Center "Alertas" tab.
  * ─────────────────────────────────────────────────────────────────────────────
- * Renders the alert log with status filters, counters and the sidebar
- * summarising counts plus the "Como ler" legend. Behaviour preserved
- * byte-for-byte from CommandCenterPage.tsx (V3.18E). Receives the
- * `triggeredAlerts` slice already filtered by the page (e.g. last 30 events)
- * and a `navigate` callback to send the user to /app/alerts.
+ * Phase B10.1: Supports Local / Backend / Hybrid source modes.
+ * Hybrid mode merges local + backend alerts by duplicateSignature.
+ * localStorage is NEVER altered by this view.
  */
 import { useMemo, useState } from 'react'
 import { Zap } from 'lucide-react'
 import type { LiveFixture } from '@/lib/apiClient'
 import type { TriggeredAlert } from '../../../types/commandTypes'
+import type { HybridCommandAlert, HybridMergeDiagnostics } from '@/services/hybridAlertMerge'
 import { CounterCell } from '../shared/CounterCell'
 import { SidebarRow } from '../shared/SidebarRow'
 import { AlertRow } from './AlertRow'
 
 type AlertFilter = 'all' | 'pending' | 'confirmed' | 'partial' | 'failed' | 'expired'
+type AlertSourceMode = 'local' | 'backend' | 'hybrid'
 
 export interface AlertsViewProps {
   triggeredAlerts: TriggeredAlert[]
@@ -23,16 +23,83 @@ export interface AlertsViewProps {
   openMatch: (fx: LiveFixture) => void
   fixtures: LiveFixture[]
   navigate: (path: string) => void
-  /** Phase B10: Hybrid alerts from merge engine */
-  hybridAlerts?: import('@/services/hybridAlertMerge').HybridCommandAlert[]
-  hybridDiagnostics?: import('@/services/hybridAlertMerge').HybridMergeDiagnostics
+  hybridAlerts?: HybridCommandAlert[]
+  hybridDiagnostics?: HybridMergeDiagnostics
   backendOnline?: boolean
 }
 
+// ─── Source Badge ────────────────────────────────────────────────────────────
+
+const SOURCE_BADGE_STYLE: Record<string, string> = {
+  local: 'bg-white/[0.05] text-white/50 border-white/[0.08]',
+  backend: 'bg-cyan-500/10 text-cyan-300/70 border-cyan-400/15',
+  merged: 'bg-emerald-500/10 text-emerald-300/70 border-emerald-400/15',
+  conflict: 'bg-amber-500/10 text-amber-300/70 border-amber-400/15',
+}
+
+function SourceBadge({ source }: { source: string }) {
+  const style = SOURCE_BADGE_STYLE[source] || SOURCE_BADGE_STYLE.local
+  const label = source === 'merged' ? 'Merged' : source === 'conflict' ? 'Conflito' : source === 'backend' ? 'Backend' : 'Local'
+  return <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${style}`}>{label}</span>
+}
+
+// ─── Hybrid Alert Row ────────────────────────────────────────────────────────
+
+function HybridAlertRow({ alert, isAdvanced }: { alert: HybridCommandAlert; isAdvanced: boolean }) {
+  const statusColor: Record<string, string> = {
+    pending: 'text-amber-300 bg-amber-500/10 border-amber-400/15',
+    confirmed: 'text-emerald-300 bg-emerald-500/10 border-emerald-400/15',
+    confirmed_partial: 'text-cyan-300 bg-cyan-500/10 border-cyan-400/15',
+    failed: 'text-rose-300 bg-rose-500/10 border-rose-400/15',
+    unknown: 'text-white/50 bg-white/[0.04] border-white/[0.08]',
+    expired: 'text-white/45 bg-white/[0.03] border-white/[0.06]',
+  }
+  const statusLabel: Record<string, string> = {
+    pending: 'Pendente', confirmed: 'Confirmado', confirmed_partial: 'Parcial',
+    failed: 'Falhado', unknown: 'Desconhecido', expired: 'Expirado',
+  }
+
+  return (
+    <div className="rounded-xl border border-white/[0.06] bg-white/[0.012] px-4 py-3">
+      <div className="flex items-center justify-between gap-3 mb-1.5">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="text-[12px] font-semibold text-white/85 truncate">{alert.patternName}</span>
+          {isAdvanced && <SourceBadge source={alert.source} />}
+        </div>
+        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border shrink-0 ${statusColor[alert.status] || statusColor.unknown}`}>
+          {statusLabel[alert.status] || alert.status}
+        </span>
+      </div>
+      <div className="flex items-center gap-3 text-[11px] text-white/55 flex-wrap">
+        {alert.homeTeam && alert.awayTeam && <span>{alert.homeTeam} vs {alert.awayTeam}</span>}
+        {alert.minuteAtTrigger != null && <span>· {alert.minuteAtTrigger}'</span>}
+        <span>· {alert.scoreAtTrigger.home}-{alert.scoreAtTrigger.away}</span>
+        <span>· {alert.confidence}%</span>
+        {alert.competition && <span className="text-white/35">· {alert.competition}</span>}
+      </div>
+      {alert.evidences.length > 0 && (
+        <div className="mt-1.5 text-[10px] text-white/40 truncate">{alert.evidences[0]}</div>
+      )}
+      {isAdvanced && alert.hasConflict && alert.conflictFields && (
+        <div className="mt-1.5 text-[10px] text-amber-300/60">⚠ Conflito: {alert.conflictFields.join(', ')}</div>
+      )}
+      {isAdvanced && alert.resolvedAt && (
+        <div className="mt-1 text-[10px] text-white/30">Resolvido: {new Date(alert.resolvedAt).toLocaleString('pt-BR')}{alert.resolutionReason ? ` — ${alert.resolutionReason}` : ''}</div>
+      )}
+    </div>
+  )
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────────
+
 export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, navigate, hybridAlerts, hybridDiagnostics, backendOnline }: AlertsViewProps) {
   const [filter, setFilter] = useState<AlertFilter>('all')
-  const [sourceMode, setSourceMode] = useState<'local' | 'hybrid'>('hybrid')
+  const [sourceMode, setSourceMode] = useState<AlertSourceMode>(() => backendOnline && hybridAlerts ? 'hybrid' : 'local')
 
+  // Effective source mode (fallback to local if backend unavailable)
+  const effectiveMode: AlertSourceMode = (sourceMode === 'hybrid' || sourceMode === 'backend') && !backendOnline ? 'local' : sourceMode
+
+  // Counts from local alerts (always available)
   const counts = useMemo(() => ({
     all: triggeredAlerts.length,
     pending: triggeredAlerts.filter(t => t.status === 'pending').length,
@@ -42,17 +109,44 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
     expired: triggeredAlerts.filter(t => t.status === 'expired' || t.status === 'unknown').length,
   }), [triggeredAlerts])
 
-  const visible = useMemo(() => {
-    if (filter === 'all') return triggeredAlerts
-    if (filter === 'pending') return triggeredAlerts.filter(t => t.status === 'pending')
-    if (filter === 'confirmed') return triggeredAlerts.filter(t => t.status === 'confirmed')
-    if (filter === 'partial') return triggeredAlerts.filter(t => t.status === 'confirmed_partial')
-    if (filter === 'failed') return triggeredAlerts.filter(t => t.status === 'failed')
-    if (filter === 'expired') return triggeredAlerts.filter(t => t.status === 'expired' || t.status === 'unknown')
-    return triggeredAlerts
+  // Visible alerts based on source mode and filter
+  const visibleLocal = useMemo(() => {
+    const base = triggeredAlerts
+    if (filter === 'all') return base
+    if (filter === 'pending') return base.filter(t => t.status === 'pending')
+    if (filter === 'confirmed') return base.filter(t => t.status === 'confirmed')
+    if (filter === 'partial') return base.filter(t => t.status === 'confirmed_partial')
+    if (filter === 'failed') return base.filter(t => t.status === 'failed')
+    if (filter === 'expired') return base.filter(t => t.status === 'expired' || t.status === 'unknown')
+    return base
   }, [filter, triggeredAlerts])
 
-  if (triggeredAlerts.length === 0) {
+  const visibleHybrid = useMemo(() => {
+    if (!hybridAlerts) return []
+    const base = hybridAlerts
+    if (filter === 'all') return base
+    if (filter === 'pending') return base.filter(a => a.status === 'pending')
+    if (filter === 'confirmed') return base.filter(a => a.status === 'confirmed')
+    if (filter === 'partial') return base.filter(a => a.status === 'confirmed_partial')
+    if (filter === 'failed') return base.filter(a => a.status === 'failed')
+    if (filter === 'expired') return base.filter(a => a.status === 'expired' || a.status === 'unknown')
+    return base
+  }, [filter, hybridAlerts])
+
+  const visibleBackendOnly = useMemo(() => {
+    if (!hybridAlerts) return []
+    const base = hybridAlerts.filter(a => a.source === 'backend')
+    if (filter === 'all') return base
+    if (filter === 'pending') return base.filter(a => a.status === 'pending')
+    if (filter === 'confirmed') return base.filter(a => a.status === 'confirmed')
+    if (filter === 'partial') return base.filter(a => a.status === 'confirmed_partial')
+    if (filter === 'failed') return base.filter(a => a.status === 'failed')
+    if (filter === 'expired') return base.filter(a => a.status === 'expired' || a.status === 'unknown')
+    return base
+  }, [filter, hybridAlerts])
+
+  // Empty state
+  if (triggeredAlerts.length === 0 && (!hybridAlerts || hybridAlerts.length === 0)) {
     return (
       <div className="rounded-[20px] border border-white/[0.06] bg-gradient-to-br from-white/[0.02] via-white/[0.008] to-transparent p-10 text-center">
         <div className="inline-flex items-center justify-center h-12 w-12 rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-4"><Zap size={20} className="text-white/40" /></div>
@@ -71,9 +165,25 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
               <h2 className="text-[20px] font-bold text-white/90 tracking-tight">Alertas disparados</h2>
-              <p className="text-[12px] text-white/55 mt-1">Eventos registrados pelo Command Center e enviados para <span className="text-cyan-300/80 font-semibold">/app/alerts</span>.{isAdvanced && hybridDiagnostics && backendOnline && <span className="text-[10px] text-white/30 ml-2">· Híbrido: {hybridDiagnostics.mergedCount} alertas ({hybridDiagnostics.matchedCount} matched, {hybridDiagnostics.onlyBackendCount} backend-only{hybridDiagnostics.divergentStatusCount > 0 ? `, ${hybridDiagnostics.divergentStatusCount} conflitos` : ''})</span>}</p>
+              <p className="text-[12px] text-white/55 mt-1">
+                Eventos registrados pelo Command Center.
+                {isAdvanced && hybridDiagnostics && backendOnline && (
+                  <span className="text-[10px] text-white/30 ml-2">· Híbrido: {hybridDiagnostics.mergedCount} ({hybridDiagnostics.matchedCount} matched, {hybridDiagnostics.onlyBackendCount} backend-only{hybridDiagnostics.divergentStatusCount > 0 ? `, ${hybridDiagnostics.divergentStatusCount} conflitos` : ''})</span>
+                )}
+              </p>
             </div>
-            <button onClick={() => navigate('/app/alerts')} className="px-3.5 py-2 rounded-xl text-[11px] font-semibold text-cyan-300 bg-cyan-500/10 border border-cyan-400/20 hover:bg-cyan-500/15 transition-colors whitespace-nowrap" type="button">Ver em /app/alerts</button>
+            <div className="flex items-center gap-2">
+              {isAdvanced && backendOnline && hybridAlerts && (
+                <div className="flex gap-0.5 rounded-lg border border-white/[0.06] overflow-hidden">
+                  {(['local', 'hybrid', 'backend'] as AlertSourceMode[]).map(mode => (
+                    <button key={mode} onClick={() => setSourceMode(mode)} type="button" className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${effectiveMode === mode ? 'bg-white/[0.08] text-white/85' : 'text-white/40 hover:text-white/65'}`}>
+                      {mode === 'local' ? 'Local' : mode === 'hybrid' ? 'Híbrido' : 'Backend'}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button onClick={() => navigate('/app/alerts')} className="px-3.5 py-2 rounded-xl text-[11px] font-semibold text-cyan-300 bg-cyan-500/10 border border-cyan-400/20 hover:bg-cyan-500/15 transition-colors whitespace-nowrap" type="button">Ver em /app/alerts</button>
+            </div>
           </div>
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-px rounded-xl overflow-hidden border border-white/[0.05] bg-white/[0.01]">
             <CounterCell label="Total" value={counts.all} tone="white" />
@@ -105,15 +215,41 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
           })}
         </div>
 
-        {/* Alert log */}
-        {visible.length === 0 ? (
-          <div className="rounded-2xl border border-white/[0.05] bg-white/[0.008] p-8 text-center">
-            <p className="text-[12px] text-white/55">Nenhum alerta nesta categoria.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {visible.map(t => <AlertRow key={t.id} t={t} fx={fixtures.find(f => f.id === t.fixtureId)} openMatch={openMatch} isAdvanced={isAdvanced} />)}
-          </div>
+        {/* Alert list — source-dependent */}
+        {effectiveMode === 'local' && (
+          visibleLocal.length === 0 ? (
+            <div className="rounded-2xl border border-white/[0.05] bg-white/[0.008] p-8 text-center">
+              <p className="text-[12px] text-white/55">Nenhum alerta local nesta categoria.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {visibleLocal.map(t => <AlertRow key={t.id} t={t} fx={fixtures.find(f => f.id === t.fixtureId)} openMatch={openMatch} isAdvanced={isAdvanced} />)}
+            </div>
+          )
+        )}
+
+        {effectiveMode === 'hybrid' && (
+          visibleHybrid.length === 0 ? (
+            <div className="rounded-2xl border border-white/[0.05] bg-white/[0.008] p-8 text-center">
+              <p className="text-[12px] text-white/55">{!backendOnline ? 'Backend offline — exibindo alertas locais.' : 'Nenhum alerta nesta categoria.'}</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {visibleHybrid.map(a => <HybridAlertRow key={a.id} alert={a} isAdvanced={isAdvanced} />)}
+            </div>
+          )
+        )}
+
+        {effectiveMode === 'backend' && (
+          visibleBackendOnly.length === 0 ? (
+            <div className="rounded-2xl border border-white/[0.05] bg-white/[0.008] p-8 text-center">
+              <p className="text-[12px] text-white/55">{!backendOnline ? 'Backend offline.' : 'Nenhum alerta backend-only nesta categoria.'}</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {visibleBackendOnly.map(a => <HybridAlertRow key={a.id} alert={a} isAdvanced={isAdvanced} />)}
+            </div>
+          )
         )}
       </div>
 
@@ -128,6 +264,19 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
             <SidebarRow label="Expirados" value={counts.expired} />
           </div>
         </div>
+        {isAdvanced && hybridDiagnostics && (
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.012] p-4">
+            <h4 className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/55 mb-3">Diagnóstico híbrido</h4>
+            <div className="space-y-2">
+              <SidebarRow label="Local" value={hybridDiagnostics.localCount} />
+              <SidebarRow label="Backend" value={hybridDiagnostics.backendCount} tone="cyan" />
+              <SidebarRow label="Matched" value={hybridDiagnostics.matchedCount} tone="emerald" />
+              <SidebarRow label="Backend-only" value={hybridDiagnostics.onlyBackendCount} tone="cyan" />
+              <SidebarRow label="Local-only" value={hybridDiagnostics.onlyLocalCount} />
+              {hybridDiagnostics.divergentStatusCount > 0 && <SidebarRow label="Conflitos" value={hybridDiagnostics.divergentStatusCount} tone="amber" />}
+            </div>
+          </div>
+        )}
         <div className="rounded-2xl border border-white/[0.06] bg-gradient-to-br from-cyan-500/[0.03] via-transparent to-transparent p-4">
           <h4 className="text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-300/80 mb-2">Como ler</h4>
           <p className="text-[11px] text-white/55 leading-relaxed">
