@@ -18,7 +18,7 @@ import { useBackendSync } from '@/services/useBackendSync'
 import { usePatternWriteThrough } from '@/services/usePatternWriteThrough'
 import { useAlertWriteThrough } from '@/services/useAlertWriteThrough'
 import { useBackendPerformance } from '@/services/useBackendPerformance'
-import { useBackendAlertsMirror } from '@/services/useBackendAlertsMirror'
+import { useBackendAlertsMirror, compareLocalAndBackendAlerts } from '@/services/useBackendAlertsMirror'
 import { usePatterns } from './contexts/PatternContext'
 import { evaluateAllPatterns } from './intelligence/patternEvaluator'
 import { applyPrecisionChecks } from './intelligence/patternPrecisionEngine'
@@ -494,17 +494,30 @@ export function CommandCenterPage() {
       )}
 
       {/* ═══ BACKEND WORKER ALERTS (Advanced Mode Only) ═══ */}
-      {isAdvanced && backendSync.enabled && backendSync.online && backendAlertsMirror.totalCount > 0 && (
+      {isAdvanced && backendSync.enabled && backendSync.online && (backendAlertsMirror.totalCount > 0 || backendAlertsMirror.workerStatuses.patternWorker) && (
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.015] px-5 py-3.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5 flex-wrap">
               <span className="text-[11px] font-medium text-white/50">Backend Alerts</span>
-              <span className="text-[10px] text-white/35">{backendAlertsMirror.totalCount} total</span>
-              {backendAlertsMirror.workerCreatedCount > 0 && <span className="text-[10px] text-cyan-400/50">· {backendAlertsMirror.workerCreatedCount} worker</span>}
-              {backendAlertsMirror.pendingCount > 0 && <span className="text-[10px] text-amber-400/50">· {backendAlertsMirror.pendingCount} pending</span>}
-              {backendAlertsMirror.confirmedCount > 0 && <span className="text-[10px] text-emerald-400/50">· {backendAlertsMirror.confirmedCount} ✓</span>}
-              {backendAlertsMirror.failedCount > 0 && <span className="text-[10px] text-rose-400/50">· {backendAlertsMirror.failedCount} ✗</span>}
-              {backendAlertsMirror.unknownCount > 0 && <span className="text-[10px] text-white/30">· {backendAlertsMirror.unknownCount} ?</span>}
+              {backendAlertsMirror.totalCount > 0 ? (
+                <>
+                  <span className="text-[10px] text-white/35">{backendAlertsMirror.totalCount} total</span>
+                  {backendAlertsMirror.workerCreatedCount > 0 && <span className="text-[10px] text-cyan-400/50">· {backendAlertsMirror.workerCreatedCount} worker</span>}
+                  {backendAlertsMirror.pendingCount > 0 && <span className="text-[10px] text-amber-400/50">· {backendAlertsMirror.pendingCount} pending</span>}
+                  {backendAlertsMirror.confirmedCount > 0 && <span className="text-[10px] text-emerald-400/50">· {backendAlertsMirror.confirmedCount} ✓</span>}
+                  {backendAlertsMirror.failedCount > 0 && <span className="text-[10px] text-rose-400/50">· {backendAlertsMirror.failedCount} ✗</span>}
+                  {backendAlertsMirror.unknownCount > 0 && <span className="text-[10px] text-white/30">· {backendAlertsMirror.unknownCount} ?</span>}
+                  {(() => {
+                    const diag = compareLocalAndBackendAlerts(commandAlerts, backendAlertsMirror.alerts)
+                    if (diag.matchedCount > 0 || diag.onlyBackendCount > 0) {
+                      return <span className="text-[10px] text-white/25 ml-1">· {diag.matchedCount} matched{diag.divergentStatusCount > 0 ? `, ${diag.divergentStatusCount} divergent` : ''}{diag.onlyBackendCount > 0 ? `, ${diag.onlyBackendCount} backend-only` : ''}</span>
+                    }
+                    return null
+                  })()}
+                </>
+              ) : (
+                <span className="text-[10px] text-white/30">0 alertas no backend</span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {backendAlertsMirror.workerStatuses.patternWorker && (
@@ -522,7 +535,7 @@ export function CommandCenterPage() {
                   LM:{backendAlertsMirror.workerStatuses.liveMonitor.enabled ? 'on' : 'off'}
                 </span>
               )}
-              <button onClick={() => backendAlertsMirror.refreshBackendAlerts()} className="text-[10px] text-white/30 hover:text-white/60 transition-colors" type="button">↻ Alerts</button>
+              <button onClick={() => backendAlertsMirror.refreshBackendAlerts()} disabled={backendAlertsMirror.loading} className="text-[10px] text-white/30 hover:text-white/60 transition-colors disabled:opacity-30" type="button">{backendAlertsMirror.loading ? '...' : '↻ Alerts'}</button>
             </div>
           </div>
         </div>

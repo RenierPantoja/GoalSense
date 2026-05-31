@@ -59,24 +59,26 @@ export interface BackendAlertsMirrorState {
 // ─── Adapter ─────────────────────────────────────────────────────────────────
 
 function adaptBackendAlert(raw: any): BackendAlertView {
-  const evidence = safeParseJson(raw.evidenceJson, {})
+  const evidence = typeof raw.evidenceJson === 'string'
+    ? safeParseJson(raw.evidenceJson, {})
+    : (raw.evidenceJson || {})
   return {
-    id: raw.id,
-    patternId: raw.patternId,
-    patternName: evidence.patternName || raw.patternId,
-    fixtureId: raw.fixtureId,
+    id: raw.id || '',
+    patternId: raw.patternId || '',
+    patternName: evidence.patternName || raw.patternId || 'Unknown',
+    fixtureId: raw.fixtureId || '',
     homeTeam: evidence.homeTeam || '',
     awayTeam: evidence.awayTeam || '',
     competition: evidence.competition || '',
-    status: raw.status,
-    confidence: raw.confidence,
+    status: raw.status || 'unknown',
+    confidence: typeof raw.confidence === 'number' ? raw.confidence : 0,
     signalState: raw.signalState || 'unknown',
-    triggerMinute: raw.triggerMinute,
+    triggerMinute: raw.triggerMinute ?? null,
     triggerScoreHome: raw.triggerScoreHome || 0,
     triggerScoreAway: raw.triggerScoreAway || 0,
     source: evidence.source || 'unknown',
     duplicateSignature: raw.duplicateSignature || null,
-    createdAt: raw.createdAt,
+    createdAt: raw.createdAt instanceof Date ? raw.createdAt.toISOString() : (raw.createdAt || ''),
     hasResolution: raw.status !== 'pending',
   }
 }
@@ -160,4 +162,58 @@ export function useBackendAlertsMirror(backendOnline: boolean): BackendAlertsMir
   }, [backendOnline, refreshBackendAlerts])
 
   return { ...state, refreshBackendAlerts }
+}
+
+// ─── Local vs Backend Comparison ─────────────────────────────────────────────
+
+export interface AlertsMirrorDiagnostics {
+  localCount: number
+  backendCount: number
+  matchedCount: number
+  onlyLocalCount: number
+  onlyBackendCount: number
+  divergentStatusCount: number
+}
+
+/**
+ * Compare local alerts with backend alerts by duplicateSignature.
+ * Does NOT merge or alter either source.
+ */
+export function compareLocalAndBackendAlerts(
+  localAlerts: Array<{ id: string; patternId: string; fixtureId: number; status: string; scoreAtTrigger?: { home: number; away: number }; minuteAtTrigger?: number | null }>,
+  backendAlerts: BackendAlertView[],
+): AlertsMirrorDiagnostics {
+  // Build signature for local alerts (same format as backend)
+  const localSigs = new Map<string, { id: string; status: string }>()
+  for (const a of localAlerts) {
+    const minuteBucket = a.minuteAtTrigger != null ? Math.floor(a.minuteAtTrigger / 5) * 5 : 0
+    const sig = `${a.patternId}:${a.fixtureId}:${a.scoreAtTrigger?.home ?? 0}-${a.scoreAtTrigger?.away ?? 0}:${minuteBucket}`
+    localSigs.set(sig, { id: a.id, status: a.status })
+  }
+
+  let matchedCount = 0
+  let divergentStatusCount = 0
+  const matchedBackendIds = new Set<string>()
+
+  for (const ba of backendAlerts) {
+    if (!ba.duplicateSignature) continue
+    const local = localSigs.get(ba.duplicateSignature)
+    if (local) {
+      matchedCount++
+      matchedBackendIds.add(ba.id)
+      if (local.status !== ba.status) divergentStatusCount++
+    }
+  }
+
+  const onlyLocalCount = localAlerts.length - matchedCount
+  const onlyBackendCount = backendAlerts.length - matchedBackendIds.size
+
+  return {
+    localCount: localAlerts.length,
+    backendCount: backendAlerts.length,
+    matchedCount,
+    onlyLocalCount,
+    onlyBackendCount,
+    divergentStatusCount,
+  }
 }
