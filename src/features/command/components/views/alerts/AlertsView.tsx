@@ -10,9 +10,11 @@ import { Zap } from 'lucide-react'
 import type { LiveFixture } from '@/lib/apiClient'
 import type { TriggeredAlert } from '../../../types/commandTypes'
 import type { HybridCommandAlert, HybridMergeDiagnostics } from '@/services/hybridAlertMerge'
+import type { TelegramChannelView } from '@/services/useTelegramIntegration'
 import { CounterCell } from '../shared/CounterCell'
 import { SidebarRow } from '../shared/SidebarRow'
 import { AlertRow } from './AlertRow'
+import { SendTelegramSignalModal } from '../../telegram/SendTelegramSignalModal'
 
 type AlertFilter = 'all' | 'pending' | 'confirmed' | 'partial' | 'failed' | 'expired'
 type AlertSourceMode = 'local' | 'backend' | 'hybrid'
@@ -26,6 +28,9 @@ export interface AlertsViewProps {
   hybridAlerts?: HybridCommandAlert[]
   hybridDiagnostics?: HybridMergeDiagnostics
   backendOnline?: boolean
+  telegramEnabled?: boolean
+  telegramChannels?: TelegramChannelView[]
+  onSendTelegram?: (alertId: string, channelId: string) => Promise<{ success: boolean; error?: string }>
 }
 
 // ─── Source Badge ────────────────────────────────────────────────────────────
@@ -45,7 +50,7 @@ function SourceBadge({ source }: { source: string }) {
 
 // ─── Hybrid Alert Row ────────────────────────────────────────────────────────
 
-function HybridAlertRow({ alert, isAdvanced }: { alert: HybridCommandAlert; isAdvanced: boolean }) {
+function HybridAlertRow({ alert, isAdvanced, canSendTelegram, onTelegramClick }: { alert: HybridCommandAlert; isAdvanced: boolean; canSendTelegram?: boolean; onTelegramClick?: () => void }) {
   const statusColor: Record<string, string> = {
     pending: 'text-amber-300 bg-amber-500/10 border-amber-400/15',
     confirmed: 'text-emerald-300 bg-emerald-500/10 border-emerald-400/15',
@@ -86,15 +91,19 @@ function HybridAlertRow({ alert, isAdvanced }: { alert: HybridCommandAlert; isAd
       {isAdvanced && alert.resolvedAt && (
         <div className="mt-1 text-[10px] text-white/30">Resolvido: {new Date(alert.resolvedAt).toLocaleString('pt-BR')}{alert.resolutionReason ? ` — ${alert.resolutionReason}` : ''}</div>
       )}
+      {canSendTelegram && onTelegramClick && (alert.source === 'backend' || alert.source === 'merged') && (
+        <button onClick={onTelegramClick} className="mt-2 text-[10px] text-cyan-400/60 hover:text-cyan-400/90 transition-colors" type="button">📨 Enviar Telegram</button>
+      )}
     </div>
   )
 }
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, navigate, hybridAlerts, hybridDiagnostics, backendOnline }: AlertsViewProps) {
+export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, navigate, hybridAlerts, hybridDiagnostics, backendOnline, telegramEnabled, telegramChannels, onSendTelegram }: AlertsViewProps) {
   const [filter, setFilter] = useState<AlertFilter>('all')
   const [sourceMode, setSourceMode] = useState<AlertSourceMode>(() => backendOnline && hybridAlerts ? 'hybrid' : 'local')
+  const [telegramModal, setTelegramModal] = useState<HybridCommandAlert | null>(null)
 
   // Effective source mode (fallback to local if backend unavailable)
   const effectiveMode: AlertSourceMode = (sourceMode === 'hybrid' || sourceMode === 'backend') && !backendOnline ? 'local' : sourceMode
@@ -250,7 +259,7 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
             </div>
           ) : (
             <div className="space-y-2">
-              {visibleHybrid.map(a => <HybridAlertRow key={a.id} alert={a} isAdvanced={isAdvanced} />)}
+              {visibleHybrid.map(a => <HybridAlertRow key={a.id} alert={a} isAdvanced={isAdvanced} canSendTelegram={telegramEnabled && !!onSendTelegram} onTelegramClick={() => setTelegramModal(a)} />)}
             </div>
           )
         )}
@@ -262,7 +271,7 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
             </div>
           ) : (
             <div className="space-y-2">
-              {visibleBackendOnly.map(a => <HybridAlertRow key={a.id} alert={a} isAdvanced={isAdvanced} />)}
+              {visibleBackendOnly.map(a => <HybridAlertRow key={a.id} alert={a} isAdvanced={isAdvanced} canSendTelegram={telegramEnabled && !!onSendTelegram} onTelegramClick={() => setTelegramModal(a)} />)}
             </div>
           )
         )}
@@ -300,6 +309,21 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
         </div>
         <button onClick={() => navigate('/app/alerts')} className="w-full px-3 py-2.5 rounded-xl text-[12px] font-medium text-white/65 border border-white/[0.07] hover:text-white/90 hover:border-white/[0.12] transition-colors" type="button">Abrir gerenciador →</button>
       </aside>
+
+      {/* Telegram Send Modal */}
+      {telegramModal && onSendTelegram && telegramChannels && (
+        <SendTelegramSignalModal
+          alertId={telegramModal.backendAlert?.id || telegramModal.id}
+          patternName={telegramModal.patternName}
+          matchLabel={`${telegramModal.homeTeam} vs ${telegramModal.awayTeam}`}
+          minute={telegramModal.minuteAtTrigger}
+          score={telegramModal.scoreAtTrigger}
+          confidence={telegramModal.confidence}
+          channels={telegramChannels}
+          onSend={onSendTelegram}
+          onClose={() => setTelegramModal(null)}
+        />
+      )}
     </div>
   )
 }

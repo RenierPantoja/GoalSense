@@ -20,6 +20,7 @@ import { useAlertWriteThrough } from '@/services/useAlertWriteThrough'
 import { useBackendPerformance } from '@/services/useBackendPerformance'
 import { useBackendAlertsMirror, compareLocalAndBackendAlerts } from '@/services/useBackendAlertsMirror'
 import { mergeLocalAndBackendAlerts } from '@/services/hybridAlertMerge'
+import { useTelegramIntegration } from '@/services/useTelegramIntegration'
 import { usePatterns } from './contexts/PatternContext'
 import { evaluateAllPatterns } from './intelligence/patternEvaluator'
 import { applyPrecisionChecks } from './intelligence/patternPrecisionEngine'
@@ -39,6 +40,7 @@ import { PatternsView } from './components/views/patterns/PatternsView'
 import { ScannerView } from './components/views/scanner/ScannerView'
 import { AlertsView } from './components/views/alerts/AlertsView'
 import { PerformanceView } from './components/views/performance/PerformanceView'
+import { TelegramConfigPanel } from './components/telegram/TelegramConfigPanel'
 
 type Tab = 'cockpit' | 'patterns' | 'scanner' | 'alerts' | 'performance'
 
@@ -75,6 +77,7 @@ export function CommandCenterPage() {
   )
   const backendPerf = useBackendPerformance(backendSync.online)
   const backendAlertsMirror = useBackendAlertsMirror(backendSync.online)
+  const telegram = useTelegramIntegration(backendSync.online)
 
   // ═══ INTELLIGENCE GATE ═══
   const hasManualPatterns = activePatternCount > 0
@@ -548,6 +551,11 @@ export function CommandCenterPage() {
         </div>
       )}
 
+      {/* ═══ TELEGRAM CONFIG (Advanced Mode Only) ═══ */}
+      {isAdvanced && backendSync.enabled && backendSync.online && (
+        <TelegramConfigPanel enabled={telegram.enabled} configured={telegram.configured} channels={telegram.channels} onAddChannel={telegram.addChannel} onRemoveChannel={telegram.removeChannel} />
+      )}
+
       {/* ═══ NAV ═══ */}
       <nav className="flex gap-1.5">
         {([
@@ -568,7 +576,7 @@ export function CommandCenterPage() {
       {activeTab === 'cockpit' && <CockpitView hasIntelligence={hasIntelligence} decisionMatch={decisionMatch} decisionHit={decisionHit} decisionDiscovery={decisionDiscovery} patternHits={patternHits} discoveries={discoveries} changes={changes} fixtures={fixtures} openMatch={openMatch} isAdvanced={isAdvanced} activePatternCount={activePatternCount} enabledCount={enabledCount} triggeredAlerts={getRecentTriggered(5)} onGoToPatterns={() => setActiveTab('patterns')} navigate={navigate} templates={templates} createFromTemplate={writeThrough.createFromTemplateWT} />}
       {activeTab === 'patterns' && <PatternsView patterns={patterns} templates={templates} createFromTemplate={writeThrough.createFromTemplateWT} createPattern={writeThrough.createPatternWT} updatePattern={writeThrough.updatePatternWT} togglePattern={writeThrough.togglePatternWT} deletePattern={writeThrough.deletePatternWT} isAdvanced={isAdvanced} showBuilder={showBuilder} setShowBuilder={setShowBuilder} discoveryConfig={discoveryConfig} updateDiscoveryConfig={updateDiscoveryConfig} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} fixtures={fixtures} statsMap={statsMap} eventsMap={eventsMap} isFavoriteTeam={isFavoriteTeam} prefilledDraft={prefilledDraft} clearPrefilledDraft={() => setPrefilledDraft(null)} />}
       {activeTab === 'scanner' && <ScannerView hasIntelligence={hasIntelligence} entries={scannerEntries} openMatch={openMatch} isAdvanced={isAdvanced} onGoToPatterns={() => setActiveTab('patterns')} patterns={patterns} />}
-      {activeTab === 'alerts' && <AlertsView triggeredAlerts={getRecentTriggered(30)} isAdvanced={isAdvanced} openMatch={openMatch} fixtures={fixtures} navigate={navigate} hybridAlerts={hybridMerge?.alerts} hybridDiagnostics={hybridMerge?.diagnostics} backendOnline={backendSync.online} />}
+      {activeTab === 'alerts' && <AlertsView triggeredAlerts={getRecentTriggered(30)} isAdvanced={isAdvanced} openMatch={openMatch} fixtures={fixtures} navigate={navigate} hybridAlerts={hybridMerge?.alerts} hybridDiagnostics={hybridMerge?.diagnostics} backendOnline={backendSync.online} telegramEnabled={telegram.enabled && telegram.configured} telegramChannels={telegram.channels} onSendTelegram={telegram.sendAlert} />}
       {activeTab === 'performance' && <PerformanceView patterns={patterns} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} isAdvanced={isAdvanced} backendReports={backendPerf.reports} performanceSource={backendPerf.source} />}
     </div>
   )
