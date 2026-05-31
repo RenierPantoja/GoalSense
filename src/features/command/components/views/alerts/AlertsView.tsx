@@ -23,10 +23,15 @@ export interface AlertsViewProps {
   openMatch: (fx: LiveFixture) => void
   fixtures: LiveFixture[]
   navigate: (path: string) => void
+  /** Phase B10: Hybrid alerts from merge engine */
+  hybridAlerts?: import('@/services/hybridAlertMerge').HybridCommandAlert[]
+  hybridDiagnostics?: import('@/services/hybridAlertMerge').HybridMergeDiagnostics
+  backendOnline?: boolean
 }
 
-export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, navigate }: AlertsViewProps) {
+export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, navigate, hybridAlerts, hybridDiagnostics, backendOnline }: AlertsViewProps) {
   const [filter, setFilter] = useState<AlertFilter>('all')
+  const [sourceMode, setSourceMode] = useState<'local' | 'hybrid'>('hybrid')
 
   const counts = useMemo(() => ({
     all: triggeredAlerts.length,
@@ -66,7 +71,7 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
               <h2 className="text-[20px] font-bold text-white/90 tracking-tight">Alertas disparados</h2>
-              <p className="text-[12px] text-white/55 mt-1">Eventos registrados pelo Command Center e enviados para <span className="text-cyan-300/80 font-semibold">/app/alerts</span>.</p>
+              <p className="text-[12px] text-white/55 mt-1">Eventos registrados pelo Command Center e enviados para <span className="text-cyan-300/80 font-semibold">/app/alerts</span>.{isAdvanced && hybridDiagnostics && backendOnline && <span className="text-[10px] text-white/30 ml-2">· Híbrido: {hybridDiagnostics.mergedCount} alertas ({hybridDiagnostics.matchedCount} matched, {hybridDiagnostics.onlyBackendCount} backend-only{hybridDiagnostics.divergentStatusCount > 0 ? `, ${hybridDiagnostics.divergentStatusCount} conflitos` : ''})</span>}</p>
             </div>
             <button onClick={() => navigate('/app/alerts')} className="px-3.5 py-2 rounded-xl text-[11px] font-semibold text-cyan-300 bg-cyan-500/10 border border-cyan-400/20 hover:bg-cyan-500/15 transition-colors whitespace-nowrap" type="button">Ver em /app/alerts</button>
           </div>

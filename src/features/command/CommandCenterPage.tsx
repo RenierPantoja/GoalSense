@@ -19,6 +19,7 @@ import { usePatternWriteThrough } from '@/services/usePatternWriteThrough'
 import { useAlertWriteThrough } from '@/services/useAlertWriteThrough'
 import { useBackendPerformance } from '@/services/useBackendPerformance'
 import { useBackendAlertsMirror, compareLocalAndBackendAlerts } from '@/services/useBackendAlertsMirror'
+import { mergeLocalAndBackendAlerts } from '@/services/hybridAlertMerge'
 import { usePatterns } from './contexts/PatternContext'
 import { evaluateAllPatterns } from './intelligence/patternEvaluator'
 import { applyPrecisionChecks } from './intelligence/patternPrecisionEngine'
@@ -416,6 +417,12 @@ export function CommandCenterPage() {
   // ─── Status badge ──────────────────────────────────────────────────────────
   const statusBadge = !hasIntelligence ? { label: 'Sem configuração', color: 'text-white/55 bg-white/[0.04] border-white/[0.08]' } : patternHits.length > 0 ? { label: 'Sinais ativos', color: 'text-amber-300 bg-amber-500/10 border-amber-500/15' } : liveMatches.length > 0 ? { label: 'Monitorando', color: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/15' } : { label: 'Online', color: 'text-emerald-400/80 bg-emerald-500/8 border-emerald-500/12' }
 
+  // ─── Hybrid Alert Merge (Phase B10) ────────────────────────────────────────
+  const hybridMerge = useMemo(() => {
+    if (!backendAlertsMirror.alerts.length && !commandAlerts.length) return null
+    return mergeLocalAndBackendAlerts(commandAlerts, backendAlertsMirror.alerts)
+  }, [commandAlerts, backendAlertsMirror.alerts])
+
   const metrics = [
     { label: 'Analisados', value: fixtures.length },
     { label: 'Padrões ativos', value: activePatternCount },
@@ -561,7 +568,7 @@ export function CommandCenterPage() {
       {activeTab === 'cockpit' && <CockpitView hasIntelligence={hasIntelligence} decisionMatch={decisionMatch} decisionHit={decisionHit} decisionDiscovery={decisionDiscovery} patternHits={patternHits} discoveries={discoveries} changes={changes} fixtures={fixtures} openMatch={openMatch} isAdvanced={isAdvanced} activePatternCount={activePatternCount} enabledCount={enabledCount} triggeredAlerts={getRecentTriggered(5)} onGoToPatterns={() => setActiveTab('patterns')} navigate={navigate} templates={templates} createFromTemplate={writeThrough.createFromTemplateWT} />}
       {activeTab === 'patterns' && <PatternsView patterns={patterns} templates={templates} createFromTemplate={writeThrough.createFromTemplateWT} createPattern={writeThrough.createPatternWT} updatePattern={writeThrough.updatePatternWT} togglePattern={writeThrough.togglePatternWT} deletePattern={writeThrough.deletePatternWT} isAdvanced={isAdvanced} showBuilder={showBuilder} setShowBuilder={setShowBuilder} discoveryConfig={discoveryConfig} updateDiscoveryConfig={updateDiscoveryConfig} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} fixtures={fixtures} statsMap={statsMap} eventsMap={eventsMap} isFavoriteTeam={isFavoriteTeam} prefilledDraft={prefilledDraft} clearPrefilledDraft={() => setPrefilledDraft(null)} />}
       {activeTab === 'scanner' && <ScannerView hasIntelligence={hasIntelligence} entries={scannerEntries} openMatch={openMatch} isAdvanced={isAdvanced} onGoToPatterns={() => setActiveTab('patterns')} patterns={patterns} />}
-      {activeTab === 'alerts' && <AlertsView triggeredAlerts={getRecentTriggered(30)} isAdvanced={isAdvanced} openMatch={openMatch} fixtures={fixtures} navigate={navigate} />}
+      {activeTab === 'alerts' && <AlertsView triggeredAlerts={getRecentTriggered(30)} isAdvanced={isAdvanced} openMatch={openMatch} fixtures={fixtures} navigate={navigate} hybridAlerts={hybridMerge?.alerts} hybridDiagnostics={hybridMerge?.diagnostics} backendOnline={backendSync.online} />}
       {activeTab === 'performance' && <PerformanceView patterns={patterns} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} isAdvanced={isAdvanced} backendReports={backendPerf.reports} performanceSource={backendPerf.source} />}
     </div>
   )
