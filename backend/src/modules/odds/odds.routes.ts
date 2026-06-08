@@ -58,4 +58,24 @@ export async function oddsRoutes(app: FastifyInstance) {
     const summary = auditService.summarizeCoverageReports(reports)
     return ok({ summary, reports })
   })
+
+  // Live odds endpoint feasibility probe (Phase D2.2) — does NOT plug into main flow
+  app.get('/odds/audit/live-feasibility', async (req, reply) => {
+    const status = await getOddsStatus()
+    if (!status.enabled) return reply.status(400).send(badRequest('Odds disabled'))
+    if (status.provider !== 'api_football') return reply.status(400).send(badRequest('Live feasibility probe only supports api_football'))
+
+    const { fixtureId } = req.query as { fixtureId?: string }
+    let providerFixtureId: string | undefined
+    if (fixtureId) {
+      const { prisma } = await import('../../db/client.js')
+      const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId } })
+      providerFixtureId = fixture?.providerFixtureId
+    }
+
+    const { ApiFootballOddsProvider } = await import('../../providers/odds/apiFootballOdds.provider.js')
+    const provider = new ApiFootballOddsProvider()
+    const probe = await provider.probeLiveOddsEndpoint(providerFixtureId)
+    return ok({ endpoint: '/odds/live', probe })
+  })
 }

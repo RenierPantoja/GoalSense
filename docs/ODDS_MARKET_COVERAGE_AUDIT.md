@@ -107,3 +107,64 @@ interface OddsSnapshotQuality {
 2. Consider `/odds/live` endpoint if live odds needed (check plan)
 3. Focus odds intelligence on match_winner + over_under_goals (best coverage)
 4. Treat corner/card odds as best-effort, not guaranteed
+
+## Runtime Validation (Phase D2.2)
+
+### How to run the runtime audit locally
+
+1. Configure `.env`:
+   ```
+   ODDS_ENABLED=true
+   ODDS_PROVIDER=api_football
+   ODDS_API_KEY=your_key   # or API_FOOTBALL_KEY
+   DATABASE_URL=postgresql://...
+   ```
+2. Start backend: `npm run dev`
+3. Ensure DB has fixtures (run live monitor or seed)
+4. Run the audit script:
+   ```
+   node scripts/runOddsAudit.mjs --limit 15
+   ```
+
+The script hits:
+- `GET /api/odds/status`
+- `GET /api/odds/audit/live?limit=N`
+- `GET /api/odds/audit/live-feasibility`
+
+And prints per-fixture coverage + a D3 recommendation.
+
+### Coverage Summary structure
+```typescript
+{
+  fixturesTested, fixturesWithOdds, fixturesWithoutOdds,
+  marketCoveragePercent, bookmakerAverage,
+  coverageByMarket: { match_winner, over_under_goals, both_teams_score, corners, cards, asian_handicap },
+  strongSupportedAlertTypes, weakSupportedAlertTypes, unsupportedAlertTypes,
+  recommendationForD3,
+}
+```
+
+### D3 Decision Framework
+| Coverage condition | Recommendation |
+|--------------------|----------------|
+| ≥60% with corners/cards | D3 — Pre-Match Odds Context Only (full markets) |
+| ≥60% match_winner+O/U only | D3 — Pre-Match Odds Context Only (limited niche) |
+| <30% coverage | D3 — Add Secondary Odds Provider |
+| Otherwise | D3 — Odds UI Refinement Only |
+
+### /odds/live Feasibility Probe
+`GET /api/odds/audit/live-feasibility?fixtureId=...` runs `probeLiveOddsEndpoint()`:
+- Returns `available`, `httpStatus`, `requiresUpgrade`, `marketsReturned`, `bookmakersReturned`, `latencyMs`
+- `requiresUpgrade=true` (403 or plan error) → /odds/live needs higher plan → D3 stays pre-match
+- `available=true` → D3 Live Odds Integration is feasible
+- Does NOT plug into main flow — diagnostic only
+
+### Runtime Results
+
+> **PENDING USER RUN** — The runtime tables below must be filled by running
+> `node scripts/runOddsAudit.mjs` locally with a valid key and populated DB.
+> Code and routes are ready; actual coverage data requires a live API key.
+
+| Fixture | Liga | Status | Odds? | Bookmakers | MW | O/U | BTTS | Corners | Cards | AH | Timing | Warnings |
+|---------|------|--------|-------|------------|----|----|------|---------|-------|----|----|----------|
+| _(run script to populate)_ | | | | | | | | | | | | |

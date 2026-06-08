@@ -211,9 +211,46 @@ export function summarizeCoverageReports(reports: MarketCoverageReport[]) {
   const withCards = reports.filter(r => r.hasCards).length
   const withAsianHandicap = reports.filter(r => r.hasAsianHandicap).length
 
+  // Aggregate alert-type support across all reports
+  const supportTally: Record<string, { supported: number; partial: number; unsupported: number }> = {}
+  for (const r of reports) {
+    const compat = auditAlertMarketCompatibility(r)
+    for (const c of compat) {
+      if (!supportTally[c.patternType]) supportTally[c.patternType] = { supported: 0, partial: 0, unsupported: 0 }
+      if (c.support === 'supported') supportTally[c.patternType].supported++
+      else if (c.support === 'partially_supported') supportTally[c.patternType].partial++
+      else supportTally[c.patternType].unsupported++
+    }
+  }
+
+  const strongSupportedAlertTypes: string[] = []
+  const weakSupportedAlertTypes: string[] = []
+  const unsupportedAlertTypes: string[] = []
+  for (const [type, tally] of Object.entries(supportTally)) {
+    const okCount = tally.supported + tally.partial
+    if (withOdds > 0 && okCount / Math.max(withOdds, 1) >= 0.6) strongSupportedAlertTypes.push(type)
+    else if (okCount > 0) weakSupportedAlertTypes.push(type)
+    else unsupportedAlertTypes.push(type)
+  }
+
+  // D3 recommendation based on coverage
+  const bookmakerAvg = total > 0 ? reports.reduce((s, r) => s + r.bookmakersFound.length, 0) / total : 0
+  const marketCoveragePercent = total > 0 ? Math.round((withOdds / total) * 100) : 0
+  let recommendationForD3 = 'D3 — Odds UI Refinement Only'
+  if (marketCoveragePercent >= 60 && (withCorners > 0 || withCards > 0)) {
+    recommendationForD3 = 'D3 — Pre-Match Odds Context Only (good coverage including niche markets)'
+  } else if (marketCoveragePercent >= 60) {
+    recommendationForD3 = 'D3 — Pre-Match Odds Context Only (match_winner + over_under well covered, niche markets limited)'
+  } else if (marketCoveragePercent < 30) {
+    recommendationForD3 = 'D3 — Add Secondary Odds Provider (API-Football coverage insufficient)'
+  }
+
   return {
-    totalFixtures: total,
+    fixturesTested: total,
     fixturesWithOdds: withOdds,
+    fixturesWithoutOdds: total - withOdds,
+    marketCoveragePercent,
+    bookmakerAverage: Math.round(bookmakerAvg * 10) / 10,
     coverageByMarket: {
       match_winner: withMatchWinner,
       over_under_goals: withOverUnder,
@@ -222,5 +259,9 @@ export function summarizeCoverageReports(reports: MarketCoverageReport[]) {
       cards: withCards,
       asian_handicap: withAsianHandicap,
     },
+    strongSupportedAlertTypes,
+    weakSupportedAlertTypes,
+    unsupportedAlertTypes,
+    recommendationForD3,
   }
 }
