@@ -162,3 +162,45 @@ export async function getTelegramDeliveries(params?: { alertId?: string; limit?:
   const query = qs.toString()
   return fetchApi(`/api/telegram/deliveries${query ? `?${query}` : ''}`)
 }
+
+export async function getTelegramEligibility(alertId: string): Promise<any | null> {
+  return fetchApi(`/api/telegram/eligibility/${alertId}`)
+}
+
+export async function getTelegramApprovalQueue(params?: { limit?: number; minConfidence?: number; status?: string; channelId?: string; onlyEligible?: boolean; source?: string }): Promise<any[] | null> {
+  const qs = new URLSearchParams()
+  if (params?.limit) qs.set('limit', String(params.limit))
+  if (params?.minConfidence) qs.set('minConfidence', String(params.minConfidence))
+  if (params?.status) qs.set('status', params.status)
+  if (params?.channelId) qs.set('channelId', params.channelId)
+  if (params?.onlyEligible) qs.set('onlyEligible', 'true')
+  if (params?.source) qs.set('source', params.source)
+  const query = qs.toString()
+  return fetchApi(`/api/telegram/approval-queue${query ? `?${query}` : ''}`)
+}
+
+export async function approveTelegramQueueItem(alertId: string, channelId: string): Promise<any | null> {
+  return fetchApiStrict(`/api/telegram/approval-queue/${alertId}/approve`, { method: 'POST', body: JSON.stringify({ channelId, confirm: true }) })
+}
+
+export async function ignoreTelegramQueueItem(alertId: string, channelId?: string, reason?: string): Promise<any | null> {
+  return fetchApiStrict(`/api/telegram/approval-queue/${alertId}/ignore`, { method: 'POST', body: JSON.stringify({ channelId, reason }) })
+}
+
+// --- Odds Intelligence ---
+
+export async function getOddsStatus(): Promise<any | null> {
+  return fetchApi('/api/odds/status')
+}
+
+export async function getOddsForFixture(fixtureId: string): Promise<any | null> {
+  return fetchApi(`/api/odds/fixture/${fixtureId}`)
+}
+
+export async function getOddsForAlert(alertId: string): Promise<any | null> {
+  return fetchApi(`/api/odds/alert/${alertId}`)
+}
+
+export async function refreshOddsForAlert(alertId: string): Promise<any | null> {
+  return fetchApiStrict(`/api/odds/alert/${alertId}/refresh`, { method: 'POST' })
+}

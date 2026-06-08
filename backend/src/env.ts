@@ -26,6 +26,12 @@ const envSchema = z.object({
   // Telegram
   TELEGRAM_ENABLED: z.string().default('false'),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
+  // Odds Intelligence
+  ODDS_ENABLED: z.string().default('false'),
+  ODDS_PROVIDER: z.string().default('none'),
+  ODDS_API_KEY: z.string().optional(),
+  ODDS_FETCH_TIMEOUT_MS: z.coerce.number().default(8000),
+  ODDS_CACHE_TTL_SECONDS: z.coerce.number().default(30),
 })
 
 export const env = envSchema.parse(process.env)

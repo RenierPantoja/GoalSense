@@ -6,7 +6,7 @@
  * localStorage is NEVER altered by this view.
  */
 import { useMemo, useState, useEffect } from 'react'
-import { Zap } from 'lucide-react'
+import { Zap, AlertTriangle } from 'lucide-react'
 import type { LiveFixture } from '@/lib/apiClient'
 import type { TriggeredAlert } from '../../../types/commandTypes'
 import type { HybridCommandAlert, HybridMergeDiagnostics } from '@/services/hybridAlertMerge'
@@ -15,6 +15,9 @@ import { CounterCell } from '../shared/CounterCell'
 import { SidebarRow } from '../shared/SidebarRow'
 import { AlertRow } from './AlertRow'
 import { SendTelegramSignalModal } from '../../telegram/SendTelegramSignalModal'
+import { useTelegramApprovalQueue } from '@/services/useTelegramApprovalQueue'
+import { TelegramApprovalQueuePanel } from '../../telegram/TelegramApprovalQueuePanel'
+import { useAlertOdds, type AlertOddsResponse } from '@/services/useAlertOdds'
 
 type AlertFilter = 'all' | 'pending' | 'confirmed' | 'partial' | 'failed' | 'expired'
 type AlertSourceMode = 'local' | 'backend' | 'hybrid'
@@ -34,6 +37,8 @@ export interface AlertsViewProps {
   getAlertTelegramStatus?: (alertId: string) => 'not_sent' | 'sent' | 'failed' | 'pending'
   getSentChannelIds?: (alertId: string) => Set<string>
   loadDeliveriesForAlerts?: (alertIds: string[]) => Promise<void>
+  getEligibilityForAlert?: (alertId: string) => Promise<any>
+  eligibilityByAlertId?: Record<string, any[]>
 }
 
 // ─── Source Badge ────────────────────────────────────────────────────────────
@@ -53,7 +58,7 @@ function SourceBadge({ source }: { source: string }) {
 
 // ─── Hybrid Alert Row ────────────────────────────────────────────────────────
 
-function HybridAlertRow({ alert, isAdvanced, canSendTelegram, onTelegramClick, telegramStatus }: { alert: HybridCommandAlert; isAdvanced: boolean; canSendTelegram?: boolean; onTelegramClick?: () => void; telegramStatus?: 'not_sent' | 'sent' | 'failed' | 'pending' }) {
+function HybridAlertRow({ alert, isAdvanced, canSendTelegram, onTelegramClick, telegramStatus, oddsData, onLoadOdds, onRefreshOdds }: { alert: HybridCommandAlert; isAdvanced: boolean; canSendTelegram?: boolean; onTelegramClick?: () => void; telegramStatus?: 'not_sent' | 'sent' | 'failed' | 'pending'; oddsData?: AlertOddsResponse; onLoadOdds?: () => void; onRefreshOdds?: () => void }) {
   const statusColor: Record<string, string> = {
     pending: 'text-amber-300 bg-amber-500/10 border-amber-400/15',
     confirmed: 'text-emerald-300 bg-emerald-500/10 border-emerald-400/15',
@@ -106,16 +111,67 @@ function HybridAlertRow({ alert, isAdvanced, canSendTelegram, onTelegramClick, t
       {isAdvanced && telegramStatus === 'pending' && (
         <div className="mt-1.5 text-[10px] text-amber-400/60">📨 Telegram: pendente</div>
       )}
+
+      {/* Odds Block (Advanced Mode only) */}
+      {isAdvanced && (
+        <div className="mt-3 pt-3 border-t border-white/[0.04]">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] font-semibold text-white/70">Mercado relacionado</span>
+            {!oddsData ? (
+              <button onClick={onLoadOdds} className="text-[10px] text-cyan-400 hover:text-cyan-300">Carregar Odds</button>
+            ) : (
+              <button onClick={onRefreshOdds} className="text-[10px] text-cyan-400 hover:text-cyan-300">Atualizar Odds</button>
+            )}
+          </div>
+          
+          {oddsData && (
+            <div className="bg-white/[0.02] border border-white/[0.04] rounded-lg p-2.5 space-y-1.5 text-[10px]">
+              {!oddsData.enabled ? (
+                <div className="text-white/40">Inteligência de odds desativada.</div>
+              ) : !oddsData.available ? (
+                <div className="text-white/40">Nenhuma odd disponível para este jogo no provedor atual.</div>
+              ) : (
+                <>
+                  <div className="text-white/55">
+                    Mercados sugeridos: <span className="text-white/80">{oddsData.candidateMarkets.join(', ')}</span>
+                    <span className="text-white/30 ml-2">· {oddsData.markets.length} cotações</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    {Object.values(oddsData.bestByMarket).map((m, idx) => (
+                      <div key={idx} className="bg-[#0c1220]/50 rounded border border-white/[0.05] p-1.5">
+                        <div className="text-white/40">{m.marketType} &gt; {m.selection} {m.line != null ? `(${m.line})` : ''}</div>
+                        <div className="text-emerald-400 font-bold tabular-nums">@ {m.odds.toFixed(2)}</div>
+                        <div className="text-[9px] text-white/30 mt-0.5">{m.bookmaker}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/[0.04]">
+                    <span className="text-white/30">Atualizado: {oddsData.capturedAt ? new Date(oddsData.capturedAt).toLocaleTimeString('pt-BR') : 'N/A'}</span>
+                    {oddsData.stale && <span className="text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase">Stale / Desatualizado</span>}
+                  </div>
+                  {oddsData.warnings?.length > 0 && (
+                    <div className="text-amber-400/80 text-[9px] mt-1">{oddsData.warnings.join(', ')}</div>
+                  )}
+                  <div className="text-[9px] text-white/25 mt-1 italic">Odds informativas. As cotações podem mudar rapidamente.</div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, navigate, hybridAlerts, hybridDiagnostics, backendOnline, telegramEnabled, telegramChannels, onSendTelegram, getAlertTelegramStatus, getSentChannelIds, loadDeliveriesForAlerts }: AlertsViewProps) {
+export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, navigate, hybridAlerts, hybridDiagnostics, backendOnline = false, telegramEnabled = false, telegramChannels, onSendTelegram, getAlertTelegramStatus, getSentChannelIds, loadDeliveriesForAlerts, getEligibilityForAlert, eligibilityByAlertId }: AlertsViewProps) {
   const [filter, setFilter] = useState<AlertFilter>('all')
   const [sourceMode, setSourceMode] = useState<AlertSourceMode>(() => backendOnline && hybridAlerts ? 'hybrid' : 'local')
   const [telegramModal, setTelegramModal] = useState<HybridCommandAlert | null>(null)
+
+  const approvalQueue = useTelegramApprovalQueue(backendOnline, telegramEnabled)
+  const oddsHook = useAlertOdds()
 
   // Load telegram deliveries for visible backend alerts (persists after reload)
   useEffect(() => {
@@ -242,6 +298,19 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
           </div>
         </header>
 
+        {/* Telegram Approval Queue */}
+        {telegramEnabled && backendOnline && isAdvanced && (
+          <TelegramApprovalQueuePanel
+            loading={approvalQueue.loading}
+            items={approvalQueue.items}
+            approvingIds={approvalQueue.approvingIds}
+            ignoringIds={approvalQueue.ignoringIds}
+            onApprove={approvalQueue.approve}
+            onIgnore={approvalQueue.ignore}
+            onRefresh={approvalQueue.refreshQueue}
+          />
+        )}
+
         {/* Filter pills */}
         <div className="flex flex-wrap gap-1.5">
           {([
@@ -284,7 +353,7 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
             <div className="space-y-2">
               {visibleHybrid.map(a => {
                 const alertBackendId = a.backendAlert?.id || a.id
-                return <HybridAlertRow key={a.id} alert={a} isAdvanced={isAdvanced} canSendTelegram={telegramEnabled && !!onSendTelegram} onTelegramClick={() => setTelegramModal(a)} telegramStatus={getAlertTelegramStatus?.(alertBackendId)} />
+                return <HybridAlertRow key={a.id} alert={a} isAdvanced={isAdvanced} canSendTelegram={telegramEnabled && !!onSendTelegram} onTelegramClick={() => setTelegramModal(a)} telegramStatus={getAlertTelegramStatus?.(alertBackendId)} oddsData={oddsHook.oddsByAlertId[alertBackendId]} onLoadOdds={() => oddsHook.loadOdds(alertBackendId)} onRefreshOdds={() => oddsHook.refreshOdds(alertBackendId)} />
               })}
             </div>
           )
@@ -299,7 +368,7 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
             <div className="space-y-2">
               {visibleBackendOnly.map(a => {
                 const alertBackendId = a.backendAlert?.id || a.id
-                return <HybridAlertRow key={a.id} alert={a} isAdvanced={isAdvanced} canSendTelegram={telegramEnabled && !!onSendTelegram} onTelegramClick={() => setTelegramModal(a)} telegramStatus={getAlertTelegramStatus?.(alertBackendId)} />
+                return <HybridAlertRow key={a.id} alert={a} isAdvanced={isAdvanced} canSendTelegram={telegramEnabled && !!onSendTelegram} onTelegramClick={() => setTelegramModal(a)} telegramStatus={getAlertTelegramStatus?.(alertBackendId)} oddsData={oddsHook.oddsByAlertId[alertBackendId]} onLoadOdds={() => oddsHook.loadOdds(alertBackendId)} onRefreshOdds={() => oddsHook.refreshOdds(alertBackendId)} />
               })}
             </div>
           )
@@ -351,6 +420,8 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
           channels={telegramChannels}
           sentChannelIds={getSentChannelIds?.(telegramModal.backendAlert?.id || telegramModal.id)}
           alert={telegramModal}
+          serverEligibility={eligibilityByAlertId?.[telegramModal.backendAlert?.id || telegramModal.id] || null}
+          getEligibilityForAlert={getEligibilityForAlert}
           onSend={onSendTelegram}
           onClose={() => setTelegramModal(null)}
         />

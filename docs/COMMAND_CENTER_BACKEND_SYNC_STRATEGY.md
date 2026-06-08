@@ -115,8 +115,11 @@ backendResolutionId?: string    // Backend resolution record ID
 - Each alert gets a `duplicateSignature`: `patternId:fixtureId:score:minuteWindow`
 - Backend checks signature before creating (returns existing if found)
 - Frontend treats 409 as "already synced"
+- 3. `CommandWorker` detects the signal, evaluates its confidence, and persists it to Postgres (`Alert`).
+- 4. The Advanced View user sees the alert pop in real-time.
+- 5. In Phase D1, the user can manually click "Carregar Odds" to fetch contextual betting markets for the alert. **Note:** Odds are strictly read-only and not sent to Telegram.
 
-#### Resolution Persistence
+### 2. Cross-Device Persistence
 - Backend stores full resolution: status, type, window, evidence
 - `AlertResolution` table linked to `Alert`
 - Frontend stores `backendResolutionId` for audit trail
@@ -170,6 +173,27 @@ backendResolutionId?: string    // Backend resolution record ID
 - Worker disabled by default (`LIVE_WORKER_ENABLED=false`)
 - Does NOT generate alerts (observation only)
 - Observability routes: /live-monitor/status, /live-snapshots/recent, /fixtures/live, /provider-health
+
+### Phase C2: Telegram Channel Rules + Server Eligibility Preview ✅
+- Per-channel rules control which alerts are eligible for delivery
+- Rules stored as JSON in `TelegramChannel.rulesJson`
+- `evaluateAlertAgainstChannelRules()` is the shared evaluation function
+- Both `send-alert` and `eligibility` endpoints use the same function — no logic duplication
+- Server eligibility preview: `GET /api/telegram/eligibility/:alertId`
+  - Returns per-channel eligibility including cooldown, maxSignalsPerMatch, alreadySent
+  - No side effects (no delivery created, no message sent, no DB writes)
+- Frontend uses server preview when available, falls back to local preview
+- Local preview cannot check cooldown/maxSignalsPerMatch (requires DB)
+- Labels in modal: "✅ Prévia do servidor" vs "⚠️ Prévia local"
+
+### Phase C3: Telegram Semi-Automatic Approval Queue ✅
+- Centralized queue of eligible alerts for Telegram delivery
+- Evaluates channel rules, duplicate deliveries, and cooldowns
+- Human operator MUST explicitly approve each send (NO automatic delivery)
+- Actions:
+  - Approve: Sends the alert and creates a `sent` delivery record
+  - Ignore: Skips the alert and creates a `skipped` delivery record
+- `GET /api/telegram/approval-queue` returns only alerts that are eligible for at least one channel
 
 ## Conflict Resolution (Phase 4 — Future)
 
@@ -233,6 +257,13 @@ If not set, all backend functions return null and localStorage continues as sole
 | `backend/src/modules/patterns/` | Backend pattern CRUD routes |
 | `backend/src/modules/alerts/` | Backend alert CRUD + resolve routes |
 | `backend/prisma/schema.prisma` | Database schema |
+| `src/services/useTelegramIntegration.ts` | React hook: Telegram channels, delivery, eligibility |
+| `src/services/useTelegramApprovalQueue.ts` | React hook: Telegram approval queue management |
+| `src/services/telegramEligibilityPreview.ts` | Local-only eligibility preview (fallback) |
+| `src/features/command/components/telegram/SendTelegramSignalModal.tsx` | Manual send modal with server/local preview |
+| `src/features/command/components/telegram/TelegramApprovalQueuePanel.tsx` | UI Panel for the Telegram Approval Queue |
+| `backend/src/modules/telegram/telegram.routes.ts` | Telegram API routes (channels, send, eligibility, queue) |
+| `backend/src/modules/telegram/telegramChannelRules.service.ts` | Shared rule evaluation (cooldown, maxPerMatch) |
 
 ## Next Steps (Phase 5: Backend Primary)
 

@@ -2,8 +2,8 @@
  * SendTelegramSignalModal — confirmation modal for manual Telegram signal delivery.
  * Phase C1.1: User must explicitly confirm before sending.
  */
-import { useState } from 'react'
-import { X } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { X, Loader2 } from 'lucide-react'
 import type { TelegramChannelView } from '@/services/useTelegramIntegration'
 import type { HybridCommandAlert } from '@/services/hybridAlertMerge'
 import { evaluateTelegramEligibilityPreview } from '@/services/telegramEligibilityPreview'
@@ -18,21 +18,49 @@ interface Props {
   channels: TelegramChannelView[]
   sentChannelIds?: Set<string>
   alert?: HybridCommandAlert
+  serverEligibility?: any[] | null
+  getEligibilityForAlert?: (alertId: string) => Promise<any>
   onSend: (alertId: string, channelId: string) => Promise<{ success: boolean; error?: string }>
   onClose: () => void
 }
 
-export function SendTelegramSignalModal({ alertId, patternName, matchLabel, minute, score, confidence, channels, sentChannelIds, alert: hybridAlert, onSend, onClose }: Props) {
-  const activeChannels = channels.filter(c => c.isActive)
-  const availableChannels = activeChannels.filter(c => {
-    if (sentChannelIds?.has(c.id)) return false
-    // Eligibility preview (if alert available)
-    if (hybridAlert && c.rules) {
-      const preview = evaluateTelegramEligibilityPreview(hybridAlert, c.rules)
-      if (!preview.eligible) return false
+export function SendTelegramSignalModal({ alertId, patternName, matchLabel, minute, score, confidence, channels, sentChannelIds, alert: hybridAlert, serverEligibility: initialServerEligibility, getEligibilityForAlert, onSend, onClose }: Props) {
+  const [serverEligibility, setServerEligibility] = useState<any[] | null>(initialServerEligibility || null)
+  const [fetchingEligibility, setFetchingEligibility] = useState(!initialServerEligibility && !!getEligibilityForAlert)
+
+  useEffect(() => {
+    if (!initialServerEligibility && getEligibilityForAlert) {
+      let isMounted = true
+      getEligibilityForAlert(alertId).then(res => {
+        if (isMounted) {
+          setServerEligibility(res || null)
+          setFetchingEligibility(false)
+        }
+      }).catch(() => {
+        if (isMounted) setFetchingEligibility(false)
+      })
+      return () => { isMounted = false }
+    } else {
+      setFetchingEligibility(false)
     }
-    return true
-  })
+  }, [alertId, initialServerEligibility, getEligibilityForAlert])
+
+  const activeChannels = channels.filter(c => c.isActive)
+  const availableChannels = useMemo(() => activeChannels.filter(c => {
+    let alreadySent = sentChannelIds?.has(c.id)
+    if (serverEligibility) {
+      const s = serverEligibility.find(x => x.channelId === c.id)
+      if (s && s.alreadySent) alreadySent = true
+      if (s && !s.eligible) return false
+    } else {
+      if (alreadySent) return false
+      if (hybridAlert && c.rules) {
+        const preview = evaluateTelegramEligibilityPreview(hybridAlert, c.rules)
+        if (!preview.eligible) return false
+      }
+    }
+    return !alreadySent
+  }), [activeChannels, sentChannelIds, serverEligibility, hybridAlert])
   const [selectedChannel, setSelectedChannel] = useState(availableChannels[0]?.id || '')
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState<{ success: boolean; error?: string } | null>(null)
@@ -76,20 +104,31 @@ export function SendTelegramSignalModal({ alertId, patternName, matchLabel, minu
           <div className="text-[12px] text-emerald-300/70 mb-4">Este alerta já foi enviado para todos os canais ativos.</div>
         ) : (
           <div className="mb-4">
-            <label className="text-[11px] text-white/55 font-medium block mb-1.5">Canal de destino</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] text-white/55 font-medium block">Canal de destino</label>
+              <span className="text-[10px] text-white/30">{fetchingEligibility ? <span className="flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Verificando regras...</span> : serverEligibility ? '✅ Prévia do servidor' : '⚠️ Prévia local'}</span>
+            </div>
             <select
               value={selectedChannel}
               onChange={e => setSelectedChannel(e.target.value)}
               className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-[12px] text-white/85 focus:outline-none focus:border-cyan-400/30"
             >
               {activeChannels.map(ch => {
-                const alreadySent = sentChannelIds?.has(ch.id)
+                let alreadySent = sentChannelIds?.has(ch.id)
                 let blocked = false
                 let blockReason = ''
-                if (!alreadySent && hybridAlert && ch.rules) {
+
+                if (serverEligibility) {
+                  const s = serverEligibility.find(x => x.channelId === ch.id)
+                  if (s) {
+                    if (s.alreadySent) alreadySent = true
+                    if (!s.eligible) { blocked = true; blockReason = s.blockedReasons[0] || 'Bloqueado pelo servidor' }
+                  }
+                } else if (!alreadySent && hybridAlert && ch.rules) {
                   const preview = evaluateTelegramEligibilityPreview(hybridAlert, ch.rules)
                   if (!preview.eligible) { blocked = true; blockReason = preview.blockedReasons[0] || 'Regra do canal' }
                 }
+
                 return <option key={ch.id} value={ch.id} disabled={alreadySent || blocked}>{ch.name} ({ch.type}){alreadySent ? ' — Já enviado' : blocked ? ` — ${blockReason}` : ''}</option>
               })}
             </select>

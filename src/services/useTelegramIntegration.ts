@@ -13,6 +13,7 @@ import {
   sendAlertToTelegram,
   getTelegramDeliveries,
   updateTelegramChannelRules,
+  getTelegramEligibility,
 } from './commandBackendClient'
 import type { TelegramChannelRules } from './telegramEligibilityPreview'
 
@@ -39,12 +40,23 @@ export interface SignalDeliveryView {
   createdAt?: string
 }
 
+export interface TelegramChannelEligibilityView {
+  channelId: string
+  channelName: string
+  eligible: boolean
+  blockedReasons: string[]
+  warnings: string[]
+  alreadySent: boolean
+  lastSentAt?: string
+}
+
 export interface TelegramIntegrationState {
   enabled: boolean
   configured: boolean
   loading: boolean
   channels: TelegramChannelView[]
   deliveriesByAlertId: Record<string, SignalDeliveryView[]>
+  telegramEligibilityByAlertId: Record<string, TelegramChannelEligibilityView[]>
   error: string | null
   lastFetchedAt: string | null
 }
@@ -58,6 +70,7 @@ export function useTelegramIntegration(backendOnline: boolean) {
     loading: false,
     channels: [],
     deliveriesByAlertId: {},
+    telegramEligibilityByAlertId: {},
     error: null,
     lastFetchedAt: null,
   })
@@ -210,6 +223,25 @@ export function useTelegramIntegration(backendOnline: boolean) {
     return new Set(deliveries.filter(d => d.status === 'sent').map(d => d.channelId))
   }, [state.deliveriesByAlertId])
 
+  /** Get server-side eligibility for an alert (includes cooldown, maxPerMatch, alreadySent) */
+  const getEligibilityForAlert = useCallback(async (alertId: string) => {
+    if (!isBackendEnabled() || !backendOnline) return null
+    try {
+      const result = await getTelegramEligibility(alertId)
+      if (result?.channels) {
+        setState(prev => ({
+          ...prev,
+          telegramEligibilityByAlertId: {
+            ...prev.telegramEligibilityByAlertId,
+            [alertId]: result.channels
+          }
+        }))
+        return result.channels
+      }
+      return null
+    } catch { return null }
+  }, [backendOnline])
+
   return {
     ...state,
     refreshTelegram,
@@ -220,6 +252,8 @@ export function useTelegramIntegration(backendOnline: boolean) {
     getAlertTelegramStatus,
     getSentChannelIds,
     loadDeliveriesForAlerts,
+    getEligibilityForAlert,
+    eligibilityByAlertId: state.telegramEligibilityByAlertId,
   }
 }
 

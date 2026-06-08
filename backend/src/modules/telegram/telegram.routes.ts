@@ -33,6 +33,11 @@ const sendAlertSchema = z.object({
   confirm: z.literal(true),
 })
 
+const ignoreQueueItemSchema = z.object({
+  channelId: z.string().optional(),
+  reason: z.string().optional(),
+})
+
 export async function telegramRoutes(app: FastifyInstance) {
   // Status
   app.get('/telegram/status', async () => {
@@ -94,10 +99,89 @@ export async function telegramRoutes(app: FastifyInstance) {
     return ok({ sent: true, deliveryId: result.deliveryId })
   })
 
+  // Eligibility preview (no side effects)
+  app.get('/telegram/eligibility/:alertId', async (req, reply) => {
+    const { alertId } = req.params as { alertId: string }
+    const { channelId, includeInactive } = req.query as { channelId?: string, includeInactive?: string }
+    const { prisma } = await import('../../db/client.js')
+    const { parseChannelRules, extractAlertMetadata, evaluateAlertAgainstChannelRules } = await import('./telegramChannelRules.service.js')
+
+    const alert = await prisma.alert.findFirst({ where: { id: alertId, userId: 'default' } })
+    if (!alert) return reply.status(404).send(notFound('Alert not found'))
+
+    const whereClause: any = { userId: 'default' }
+    if (includeInactive !== 'true') whereClause.isActive = true
+    if (channelId) whereClause.id = channelId
+
+    const channels = await prisma.telegramChannel.findMany({ where: whereClause })
+    const alertMeta = extractAlertMetadata(alert)
+
+    const results = []
+    for (const ch of channels) {
+      const rules = parseChannelRules(ch.rulesJson)
+      const eligibility = await evaluateAlertAgainstChannelRules(alertMeta, ch.id, rules)
+
+      // Check if already sent
+      const existingDelivery = await prisma.signalDelivery.findFirst({
+        where: { alertId, channelId: ch.id, status: 'sent' },
+        select: { sentAt: true },
+      })
+
+      results.push({
+        channelId: ch.id,
+        channelName: ch.name,
+        eligible: eligibility.eligible,
+        blockedReasons: eligibility.blockedReasons,
+        warnings: eligibility.warnings,
+        alreadySent: !!existingDelivery,
+        lastSentAt: existingDelivery?.sentAt?.toISOString() || null,
+      })
+    }
+
+    return ok({ alertId, channels: results })
+  })
+
   // Deliveries
   app.get('/telegram/deliveries', async (req) => {
     const { alertId } = req.query as { alertId?: string }
     const deliveries = await service.listDeliveries(alertId)
     return ok(deliveries)
+  })
+
+  // ─── Approval Queue ────────────────────────────────────────────────────────
+  
+  app.get('/telegram/approval-queue', async (req) => {
+    const query = req.query as any
+    const filters = {
+      limit: query.limit ? parseInt(query.limit) : 50,
+      minConfidence: query.minConfidence ? parseInt(query.minConfidence) : undefined,
+      status: query.status,
+      channelId: query.channelId,
+      onlyEligible: query.onlyEligible === 'true',
+      source: query.source
+    }
+    const queue = await service.getApprovalQueue(filters)
+    return ok(queue)
+  })
+
+  app.post('/telegram/approval-queue/:alertId/ignore', async (req, reply) => {
+    const { alertId } = req.params as { alertId: string }
+    const parsed = ignoreQueueItemSchema.safeParse(req.body)
+    if (!parsed.success) return reply.status(400).send(badRequest('Validation failed', parsed.error.flatten()))
+    
+    const result = await service.ignoreAlertInQueue(alertId, parsed.data.channelId, parsed.data.reason)
+    return ok(result)
+  })
+
+  app.post('/telegram/approval-queue/:alertId/approve', async (req, reply) => {
+    const { alertId } = req.params as { alertId: string }
+    const parsed = sendAlertSchema.safeParse(req.body)
+    if (!parsed.success) return reply.status(400).send(badRequest('Confirmation required', parsed.error.flatten()))
+
+    const result = await service.sendAlertToChannel(alertId, parsed.data.channelId)
+    if (!result.success) {
+      return reply.status(result.error === 'Alert not found' ? 404 : 400).send(badRequest(result.error || 'Send failed'))
+    }
+    return ok({ sent: true, deliveryId: result.deliveryId })
   })
 }

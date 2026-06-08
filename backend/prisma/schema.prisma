@@ -201,3 +201,42 @@ model SignalDelivery {
   @@index([alertId])
   @@index([channelId])
 }
+
+// ─── Odds Intelligence ───────────────────────────────────────────────────────
+
+model OddsSnapshot {
+  id          String   @id @default(cuid())
+  fixtureId   String
+  provider    String
+  bookmaker   String
+  marketType  String
+  selection   String
+  line        Float?
+  odds        Float
+  currency    String?
+  capturedAt  DateTime
+  rawJson     String?
+  createdAt   DateTime @default(now())
+
+  @@index([fixtureId])
+  @@index([capturedAt])
+  @@index([marketType])
+}
+
+model AlertOddsContext {
+  id              String   @id @default(cuid())
+  alertId         String
+  fixtureId       String
+  marketType      String
+  selectedLine    Float?
+  bestOdds        Float
+  bookmaker       String
+  provider        String
+  oddsSnapshotId  String?
+  capturedAt      DateTime
+  createdAt       DateTime @default(now())
+
+  @@index([alertId])
+  @@index([fixtureId])
+  @@index([marketType])
+}

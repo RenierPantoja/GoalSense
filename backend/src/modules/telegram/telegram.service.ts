@@ -106,10 +106,10 @@ export async function sendAlertToChannel(alertId: string, channelId: string): Pr
   if (!isTelegramEnabled()) return { success: false, error: 'Telegram not enabled' }
 
   // Check duplicate delivery
-  const existing = await prisma.signalDelivery.findFirst({
-    where: { alertId, channelId, status: 'sent' },
+  let delivery = await prisma.signalDelivery.findFirst({
+    where: { alertId, channelId },
   })
-  if (existing) return { success: false, error: 'Already sent to this channel' }
+  if (delivery?.status === 'sent') return { success: false, error: 'Already sent to this channel' }
 
   // Load alert
   const alert = await prisma.alert.findFirst({ where: { id: alertId, userId: DEFAULT_USER } })
@@ -152,10 +152,17 @@ export async function sendAlertToChannel(alertId: string, channelId: string): Pr
     dataQuality: evidence.triggerSnapshot?.dataQuality,
   })
 
-  // Create delivery record
-  const delivery = await prisma.signalDelivery.create({
-    data: { userId: DEFAULT_USER, alertId, channelId, status: 'pending', provider: 'telegram', messageText },
-  })
+  // Create or update delivery record
+  if (delivery) {
+    delivery = await prisma.signalDelivery.update({
+      where: { id: delivery.id },
+      data: { status: 'pending', messageText, errorMessage: null },
+    })
+  } else {
+    delivery = await prisma.signalDelivery.create({
+      data: { userId: DEFAULT_USER, alertId, channelId, status: 'pending', provider: 'telegram', messageText },
+    })
+  }
 
   // Send
   const result = await sendTelegramMessage(channel.chatId, messageText)
@@ -175,6 +182,165 @@ export async function listDeliveries(alertId?: string) {
     orderBy: { createdAt: 'desc' },
     take: 50,
   })
+}
+
+// ─── Approval Queue ────────────────────────────────────────────────────────────
+
+export async function getApprovalQueue(filters?: { limit?: number; minConfidence?: number; status?: string; channelId?: string; onlyEligible?: boolean; source?: string }) {
+  if (!isTelegramEnabled()) return []
+
+  // Load all active channels
+  const channels = await prisma.telegramChannel.findMany({ where: { userId: DEFAULT_USER, isActive: true } })
+  if (channels.length === 0) return []
+
+  // Base alert query
+  const alertWhere: any = { userId: DEFAULT_USER }
+  if (filters?.minConfidence != null) alertWhere.confidence = { gte: filters.minConfidence }
+  if (filters?.status) alertWhere.status = filters.status
+  // We want recent alerts, maybe last 24 hours, to avoid processing ancient ones
+  alertWhere.createdAt = { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+
+  // Load alerts (we need their evidence to evaluate channel rules)
+  let alerts = await prisma.alert.findMany({
+    where: alertWhere,
+    orderBy: { createdAt: 'desc' },
+    take: 200 // hard limit for performance
+  })
+
+  // Filter alerts by source if requested
+  if (filters?.source) {
+    alerts = alerts.filter(a => {
+      const ev = safeParseJson(a.evidenceJson, {})
+      return ev.source === filters.source
+    })
+  }
+
+  const queue = []
+
+  for (const alert of alerts) {
+    const alertMeta = extractAlertMetadata(alert)
+    if (!alertMeta) continue
+    
+    const ev = safeParseJson(alert.evidenceJson, {})
+    if (!ev.evidences || ev.evidences.length === 0) continue
+
+    const eligibleChannels = []
+    const blockedChannels = []
+    const alreadySentChannels = []
+    const skippedChannels = []
+
+    let isEligibleForAny = false
+
+    for (const channel of channels) {
+      if (filters?.channelId && channel.id !== filters.channelId) continue
+
+      // Check deliveries (sent or skipped)
+      const delivery = await prisma.signalDelivery.findFirst({
+        where: { alertId: alert.id, channelId: channel.id },
+        orderBy: { createdAt: 'desc' }
+      })
+
+      if (delivery) {
+        if (delivery.status === 'sent') {
+          alreadySentChannels.push(channel.id)
+          continue
+        }
+        if (delivery.status === 'skipped') {
+          skippedChannels.push(channel.id)
+          continue
+        }
+      }
+
+      // Evaluate channel rules
+      const rules = parseChannelRules(channel.rulesJson)
+      const eligibility = await evaluateAlertAgainstChannelRules(alertMeta, channel.id, rules)
+
+      if (eligibility.eligible) {
+        eligibleChannels.push({
+          channelId: channel.id,
+          channelName: channel.name,
+          reasons: [],
+          warnings: eligibility.warnings
+        })
+        isEligibleForAny = true
+      } else {
+        blockedChannels.push({
+          channelId: channel.id,
+          channelName: channel.name,
+          blockedReasons: eligibility.blockedReasons
+        })
+      }
+    }
+
+    if (!isEligibleForAny) continue
+    if (filters?.channelId && eligibleChannels.length === 0) continue
+
+    queue.push({
+      alertId: alert.id,
+      alert: {
+        id: alert.id,
+        patternId: alert.patternId,
+        fixtureId: alert.fixtureId,
+        status: alert.status,
+        confidence: alert.confidence,
+        triggerMinute: alert.triggerMinute,
+        triggerScoreHome: alert.triggerScoreHome,
+        triggerScoreAway: alert.triggerScoreAway,
+        createdAt: alert.createdAt,
+        evidenceJson: alert.evidenceJson,
+        temporalEvidenceJson: alert.temporalEvidenceJson
+      },
+      eligibleChannels,
+      blockedChannels,
+      alreadySentChannels,
+      skippedChannels,
+      recommended: true,
+      warnings: [],
+      createdAt: alert.createdAt
+    })
+    
+    if (filters?.limit && queue.length >= filters.limit) break
+  }
+
+  return queue
+}
+
+export async function ignoreAlertInQueue(alertId: string, channelId?: string, reason?: string) {
+  let channelsToSkip: { id: string }[] = []
+  if (channelId) {
+    channelsToSkip = [{ id: channelId }]
+  } else {
+    channelsToSkip = await prisma.telegramChannel.findMany({ where: { userId: DEFAULT_USER, isActive: true }, select: { id: true } })
+  }
+
+  const results = []
+  for (const ch of channelsToSkip) {
+    const existing = await prisma.signalDelivery.findFirst({
+      where: { alertId, channelId: ch.id }
+    })
+    
+    if (!existing) {
+      const delivery = await prisma.signalDelivery.create({
+        data: {
+          userId: DEFAULT_USER,
+          alertId,
+          channelId: ch.id,
+          status: 'skipped',
+          provider: 'telegram',
+          errorMessage: reason || 'Skipped by user'
+        }
+      })
+      results.push(delivery)
+    } else if (existing.status !== 'sent' && existing.status !== 'skipped') {
+       const delivery = await prisma.signalDelivery.update({
+         where: { id: existing.id },
+         data: { status: 'skipped', errorMessage: reason || 'Skipped by user' }
+       })
+       results.push(delivery)
+    }
+  }
+  
+  return { success: true, skippedCount: results.length }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
