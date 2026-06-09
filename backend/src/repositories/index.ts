@@ -23,10 +23,7 @@ import { FirebaseAlertRepository } from './firebase/firebaseAlert.repository.js'
 import { FirebaseAlertResolutionRepository } from './firebase/firebaseAlertResolution.repository.js'
 import { FirebaseFixtureRepository } from './firebase/firebaseFixture.repository.js'
 import { FirebaseLiveSnapshotRepository } from './firebase/firebaseLiveSnapshot.repository.js'
-
-function notImplemented(name: string): never {
-  throw new Error(`Firebase adapter for ${name} not implemented yet. Use PERSISTENCE_PROVIDER=prisma or implement the adapter.`)
-}
+import { FirebaseOddsRepository } from './firebase/firebaseOdds.repository.js'
 
 let cached: Repositories | null = null
 
@@ -34,10 +31,10 @@ export function createRepositories(): Repositories {
   if (cached) return cached
 
   if (env.PERSISTENCE_PROVIDER === 'firebase') {
-    // E2: ProviderHealth + Telegram migrated to Firestore.
-    // E3: Patterns + Alerts + AlertResolutions migrated to Firestore.
-    // E4: Fixtures + LiveSnapshots migrated to Firestore.
-    // Odds throws a clear error until migrated (E5+).
+    // E2: ProviderHealth + Telegram. E3: Patterns + Alerts + AlertResolutions.
+    // E4: Fixtures + LiveSnapshots. E5: Odds + workers (commandEvaluation,
+    // alertResolution) run repository-backed. Performance analytics still uses
+    // Prisma aggregations (E6).
     cached = {
       providerHealth: new FirebaseProviderHealthRepository(),
       telegram: new FirebaseTelegramRepository(),
@@ -46,7 +43,7 @@ export function createRepositories(): Repositories {
       alertResolutions: new FirebaseAlertResolutionRepository(),
       fixtures: new FirebaseFixtureRepository(),
       liveSnapshots: new FirebaseLiveSnapshotRepository(),
-      odds: new Proxy({} as any, { get: () => () => notImplemented('OddsRepository') }),
+      odds: new FirebaseOddsRepository(),
     }
     return cached
   }

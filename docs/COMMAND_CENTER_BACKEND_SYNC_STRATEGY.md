@@ -278,12 +278,12 @@ The Command Center HTTP contract is **unchanged** by this work: `/api/patterns`
 return identical payloads in both modes. The frontend (localStorage primary +
 write-through) is untouched.
 
-As of **E4**, `patterns.service`, `alerts.service`, and the **Live Monitor**
-(`liveMonitor.service` + `liveMonitor.routes` + worker) route through the
-repository layer, so Patterns, Alerts, AlertResolutions, Fixtures, and
-LiveSnapshots persist to Firestore in firebase mode. The pattern-evaluation and
-resolution workers, Odds, and Performance analytics still require prisma mode
-(E5/E6). See `FIREBASE_FIXTURES_SNAPSHOTS_MIGRATION.md`,
+As of **E5**, `patterns.service`, `alerts.service`, the **Live Monitor**, the
+**Pattern Evaluation** and **Alert Resolution** workers, and the **Odds** module
+all route through the repository layer, so the full Command Center pipeline runs
+in firebase mode without Postgres. Only **Performance analytics** still requires
+prisma mode (E6). See `FIREBASE_WORKER_RUNTIME_MIGRATION.md`,
+`FIREBASE_FIXTURES_SNAPSHOTS_MIGRATION.md`,
 `FIREBASE_PATTERNS_ALERTS_MIGRATION.md`, and `BACKEND_PERSISTENCE_STRATEGY.md`.
 
 ## Next Steps (Phase 5: Backend Primary)

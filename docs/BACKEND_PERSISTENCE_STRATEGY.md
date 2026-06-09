@@ -50,7 +50,7 @@ Rationale: the project is already Firebase-first; running a second database (Pos
 2. ✅ E2 — Migrate simple modules (Telegram channels + deliveries, ProviderHealth) to Firestore behind the factory
 3. ✅ E3 — Migrate Patterns + Alerts + AlertResolutions to Firestore; unlock Telegram alert-dependent flows in firebase mode
 4. ✅ E4 — Migrate Fixtures + LiveSnapshots to Firestore; Live Monitor (service + routes + worker) runs without Postgres
-5. E5 — Migrate Odds persistence to Firestore; migrate pattern evaluation + resolution workers
+5. ✅ E5 — Migrate Odds + Command Center workers (pattern evaluation + resolution) to repositories; both workers run in firebase mode
 6. E6 — Re-model Performance analytics for Firestore (denormalized counters), then remove Prisma
 
 ## Repository Layer (E1)
@@ -69,6 +69,7 @@ backend/src/repositories/
     firebaseAlertResolution.repository.ts # Alert resolutions (E3)
     firebaseFixture.repository.ts         # Fixtures (E4)
     firebaseLiveSnapshot.repository.ts    # Live snapshots (E4)
+    firebaseOdds.repository.ts            # Odds snapshots + alert contexts (E5)
 ```
 
 `PERSISTENCE_PROVIDER` env selects the implementation:
@@ -110,8 +111,8 @@ Firestore adapter (`firebaseTelegram.repository.ts`):
 | ProviderHealth | providerHealth | ✅ migrated in E1 |
 | TelegramChannel | telegramChannels | ✅ migrated in E2 |
 | SignalDelivery | signalDeliveries | ✅ migrated in E2; deterministic id `${alertId}__${channelId}` |
-| OddsSnapshot | fixtures/{id}/oddsSnapshots | subcollection |
-| AlertOddsContext | alerts/{id}/oddsContext | subcollection |
+| OddsSnapshot | oddsSnapshots | ✅ migrated in E5; auto id, point-in-time history |
+| AlertOddsContext | alertOddsContexts | ✅ migrated in E5; deterministic id `alertId__marketType` |
 
 ## Limitations
 

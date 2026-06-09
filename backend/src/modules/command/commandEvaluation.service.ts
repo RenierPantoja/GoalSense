@@ -3,7 +3,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * Phase B7: Backend pattern evaluation. Conservative, auditable, no false positives.
  */
-import { prisma } from '../../db/client.js'
+import { createRepositories } from '../../repositories/index.js'
 import { buildPatternInput, type PatternEvaluationInput } from './snapshotToPatternInput.js'
 import { evaluateMomentum, type MomentumResult } from './backendMomentum.service.js'
 import { checkDuplicate, buildDuplicateSignature } from './backendDuplicateGuard.service.js'
@@ -194,37 +194,29 @@ export function evaluatePatternAgainstInput(
 
 export async function runPatternEvaluation(maxFixtures: number): Promise<WorkerRunResult> {
   const result: WorkerRunResult = { patternsChecked: 0, fixturesChecked: 0, evaluations: 0, blocked: 0, candidates: 0, alertsCreated: 0, duplicatesBlocked: 0, errors: [] }
+  const repos = createRepositories()
 
   // Load active patterns
-  const patterns = await prisma.pattern.findMany({
-    where: { userId: DEFAULT_USER, status: 'active' },
-  })
+  const patterns = await repos.patterns.listActive(DEFAULT_USER)
   result.patternsChecked = patterns.length
   if (patterns.length === 0) return result
 
   // Load live fixtures with recent snapshots
   const liveStatuses = ['1H', '2H', 'HT', 'ET', 'BT']
-  const fixtures = await prisma.fixture.findMany({
-    where: { status: { in: liveStatuses } },
-    take: maxFixtures,
-    orderBy: { updatedAt: 'desc' },
-  })
+  const fixtures = await repos.fixtures.listLive(liveStatuses, maxFixtures)
   result.fixturesChecked = fixtures.length
   if (fixtures.length === 0) return result
 
   // Load latest snapshot for each fixture
   for (const fixture of fixtures) {
-    const snapshot = await prisma.liveSnapshot.findFirst({
-      where: { fixtureId: fixture.id },
-      orderBy: { capturedAt: 'desc' },
-    })
+    const snapshot = await repos.liveSnapshots.findLatestByFixture(fixture.id)
     if (!snapshot) continue
 
-    // Check snapshot freshness (max 5 min old)
-    const snapshotAge = Date.now() - snapshot.capturedAt.getTime()
+    // Check snapshot freshness (max 5 min old). capturedAt may be Date or ISO string.
+    const snapshotAge = Date.now() - toDate(snapshot.capturedAt).getTime()
     if (snapshotAge > 5 * 60 * 1000) continue // Stale snapshot
 
-    const input = buildPatternInput(fixture, snapshot)
+    const input = buildPatternInput(fixture as any, snapshot as any)
 
     // Evaluate each pattern
     for (const pattern of patterns) {
@@ -275,22 +267,19 @@ export async function runPatternEvaluation(maxFixtures: number): Promise<WorkerR
           recentEventsUsed: evalResult.momentum.recentEventsUsed.map(e => ({ minute: e.minute, type: e.type, side: e.side, teamName: e.teamName, playerName: e.playerName })),
         } : null
 
-        await prisma.alert.create({
-          data: {
-            userId: DEFAULT_USER,
-            patternId: pattern.id,
-            fixtureId: fixture.id,
-            status: 'pending',
-            confidence: evalResult.confidence,
-            signalState: 'ready_to_alert',
-            triggerMinute: input.minute,
-            triggerScoreHome: input.score.home,
-            triggerScoreAway: input.score.away,
-            evidenceJson: JSON.stringify(evidenceData),
-            temporalEvidenceJson: temporalData ? JSON.stringify(temporalData) : null,
-            duplicateSignature: signature,
-          },
-        })
+        await repos.alerts.create({
+          patternId: pattern.id,
+          fixtureId: fixture.id,
+          status: 'pending',
+          confidence: evalResult.confidence,
+          signalState: 'ready_to_alert',
+          triggerMinute: input.minute,
+          triggerScoreHome: input.score.home,
+          triggerScoreAway: input.score.away,
+          evidenceJson: JSON.stringify(evidenceData),
+          temporalEvidenceJson: temporalData ? JSON.stringify(temporalData) : null,
+          duplicateSignature: signature,
+        }, DEFAULT_USER)
         result.alertsCreated++
       } catch (err: any) {
         result.errors.push(`Alert creation failed for ${pattern.name} on ${fixture.homeName} vs ${fixture.awayName}: ${err?.message}`)
@@ -303,4 +292,9 @@ export async function runPatternEvaluation(maxFixtures: number): Promise<WorkerR
 
 function safeParseConditions(json: string): any[] {
   try { return JSON.parse(json) } catch { return [] }
+}
+
+/** Coerce a Date (Prisma) or ISO string (Firebase) to a Date. */
+function toDate(v: Date | string): Date {
+  return v instanceof Date ? v : new Date(v)
 }

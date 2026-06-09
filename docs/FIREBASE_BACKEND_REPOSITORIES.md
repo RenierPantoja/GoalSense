@@ -103,31 +103,39 @@ migrated concerns:
   `prisma` import remains (E4)
 - `backend/src/modules/live/liveMonitor.routes.ts` — `/live-snapshots/recent`,
   `/fixtures/live`, `/provider-health` use the repository layer (E4)
+- `backend/src/modules/command/backendDuplicateGuard.service.ts` — duplicate guard
+  via `alerts.findByDuplicateSignature` / `findRecentByPatternFixture` (E5)
+- `backend/src/modules/command/commandEvaluation.service.ts` — pattern evaluation
+  worker logic, repo-backed; no `prisma` import (E5)
+- `backend/src/modules/command/alertResolution.service.ts` — resolution worker
+  logic, repo-backed; atomic resolve via `alertResolutions.resolveAlert` (E5)
+- `backend/src/modules/odds/odds.service.ts` + `oddsCoverageAudit.service.ts` +
+  `odds.routes.ts` — repo-backed (E5)
+- `backend/src/modules/telegram/telegram.routes.ts` — rules PATCH + eligibility
+  GET use the repository layer (E5)
 
-## E2 / E3 / E4 status
+## E2 / E3 / E4 / E5 status
 
 - ✅ **E2** — ProviderHealth + Telegram (channels + deliveries) on Firestore.
 - ✅ **E3** — Patterns + Alerts + AlertResolutions on Firestore. Alert-dependent
-  Telegram flows (`sendAlertToChannel`, `getApprovalQueue`) now work in firebase
-  mode. See `FIREBASE_PATTERNS_ALERTS_MIGRATION.md`.
+  Telegram flows (`sendAlertToChannel`, `getApprovalQueue`) work in firebase mode.
 - ✅ **E4** — Fixtures + LiveSnapshots on Firestore. The Live Monitor
-  (service + routes + worker) runs in firebase mode without Postgres. See
-  `FIREBASE_FIXTURES_SNAPSHOTS_MIGRATION.md`.
+  (service + routes + worker) runs in firebase mode without Postgres.
+- ✅ **E5** — Odds on Firestore; Command Center workers (pattern evaluation +
+  resolution) and the odds/telegram routes are repository-backed and run in
+  firebase mode. See `FIREBASE_WORKER_RUNTIME_MIGRATION.md`.
 
-## Limitations (still open after E4)
+## Limitations (still open after E5)
 
-- **In-memory filtering / sorting** in several adapters (deliveries, alerts,
-  patterns, fixtures listLive, snapshot per-fixture queries). Fine at current
+- **Performance analytics** (`performance.service.ts`) still uses Prisma
+  aggregations and requires `PERSISTENCE_PROVIDER=prisma` (E6).
+- **In-memory filtering / sorting** in several adapters. Fine at current
   single-user volume; switch to Firestore composite indexes + server-side
   `orderBy/limit` as volume grows (indexes listed in the per-phase migration docs).
-- **Pattern evaluation + resolution workers** (`commandEvaluation.service`,
-  `alertResolution.service`) still use Prisma directly and require
-  `PERSISTENCE_PROVIDER=prisma` (E5).
-- **Odds** persistence is not yet migrated — throws a clear "not implemented yet"
-  error in firebase mode (E5).
-- **Performance analytics** still uses Prisma aggregations (E6).
 - **No data migration** has been performed. Switching providers starts from empty
   Firestore collections.
+- **Full firebase runtime** depends on real credentials and populated collections;
+  E5 validates typecheck/build + repository wiring.
 
 ## How to run
 
@@ -147,21 +155,19 @@ npm run typecheck
 npm run build
 ```
 
-### Firebase mode (Patterns, Alerts, Resolutions, Fixtures, LiveSnapshots, ProviderHealth, Telegram)
+### Firebase mode (everything except Performance analytics)
 
 ```
 PERSISTENCE_PROVIDER=firebase
 FIREBASE_SERVICE_ACCOUNT_JSON={...}        # or the 3 separate vars
 ```
 
-No `DATABASE_URL` required. The Live Monitor worker can capture fixtures +
-snapshots in firebase mode. Odds and the pattern-evaluation / resolution workers
-still require prisma mode and return clear errors until E5+.
+No `DATABASE_URL` required. Live Monitor, Pattern Evaluation, and Alert
+Resolution workers all run in firebase mode, plus Odds and Telegram flows. Only
+Performance analytics still requires prisma mode until E6.
 
-## Next steps (E5+)
+## Next steps (E6)
 
-- **E5** — `FirebaseOddsRepository`; migrate the pattern evaluation
-  (`commandEvaluation.service`) and resolution (`alertResolution.service`) workers
-  off Prisma (contracts already cover their needs).
-- **E6** — Performance analytics re-modeled with denormalized counters; remove
-  Prisma once all adapters exist and are validated.
+- **E6** — Re-model Performance analytics for Firestore (denormalized counters /
+  scheduled rollups instead of live `count`/`groupBy`), migrate
+  `performance.service`, then remove Prisma once all adapters are validated.

@@ -2,10 +2,16 @@
  * Alert Resolution Service — resolves pending alerts using post-trigger snapshots.
  * ─────────────────────────────────────────────────────────────────────────────
  * Phase B8: Conservative, honest. Unknown ≠ failed. Shootout ≠ goal.
+ * Phase E5: Repository-backed (Prisma or Firebase). No direct Prisma import.
  */
-import { prisma } from '../../db/client.js'
+import { createRepositories } from '../../repositories/index.js'
 
 const DEFAULT_USER = 'default'
+
+/** Coerce a Date (Prisma) or ISO string (Firebase) to a Date. */
+function toDate(v: Date | string): Date {
+  return v instanceof Date ? v : new Date(v)
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -289,23 +295,19 @@ function resolveCardType(analysis: WindowAnalysis, windowMinutes: number): Resol
 
 async function resolveSingleAlert(alert: {
   id: string; patternId: string; fixtureId: string; triggerMinute: number | null;
-  triggerScoreHome: number; triggerScoreAway: number; evidenceJson: string; createdAt: Date;
+  triggerScoreHome: number; triggerScoreAway: number; evidenceJson: string; createdAt: Date | string;
 }): Promise<ResolutionResult | null> {
+  const repos = createRepositories()
   const resolutionType = inferResolutionType(alert)
   const windowMinutes = getResolutionWindow(resolutionType)
 
-  // Get snapshots after alert creation
-  const snapshots = await prisma.liveSnapshot.findMany({
-    where: {
-      fixtureId: alert.fixtureId,
-      capturedAt: { gt: alert.createdAt },
-    },
-    orderBy: { capturedAt: 'asc' },
-    take: 50,
-  })
+  const createdAt = toDate(alert.createdAt)
+
+  // Get snapshots after alert creation (never count snapshots before the trigger)
+  const snapshots = await repos.liveSnapshots.findAfter(alert.fixtureId, createdAt, 50)
 
   // Check if enough time has passed for resolution
-  const alertAge = Date.now() - alert.createdAt.getTime()
+  const alertAge = Date.now() - createdAt.getTime()
   const windowMs = windowMinutes * 60 * 1000
   const maxWaitMs = windowMs * 3 // Wait up to 3x window before forcing resolution
 
@@ -316,7 +318,7 @@ async function resolveSingleAlert(alert: {
 
   const analysis = analyzeSnapshotsInWindow(
     alert.triggerMinute, alert.triggerScoreHome, alert.triggerScoreAway,
-    snapshots, windowMinutes,
+    snapshots as any, windowMinutes,
   )
 
   // Route to type-specific resolver
@@ -354,12 +356,9 @@ async function resolveSingleAlert(alert: {
 
 export async function resolvePendingAlerts(maxAlerts: number): Promise<ResolutionWorkerResult> {
   const result: ResolutionWorkerResult = { pendingChecked: 0, resolved: 0, confirmed: 0, partial: 0, failed: 0, unknown: 0, expired: 0, skipped: 0, errors: [] }
+  const repos = createRepositories()
 
-  const pendingAlerts = await prisma.alert.findMany({
-    where: { userId: DEFAULT_USER, status: 'pending' },
-    orderBy: { createdAt: 'asc' },
-    take: maxAlerts,
-  })
+  const pendingAlerts = await repos.alerts.listPending(DEFAULT_USER, maxAlerts)
 
   result.pendingChecked = pendingAlerts.length
   if (pendingAlerts.length === 0) return result
@@ -367,25 +366,20 @@ export async function resolvePendingAlerts(maxAlerts: number): Promise<Resolutio
   for (const alert of pendingAlerts) {
     try {
       // Check if already resolved (race condition guard)
-      const existing = await prisma.alertResolution.findFirst({ where: { alertId: alert.id } })
+      const existing = await repos.alertResolutions.findByAlertId(alert.id)
       if (existing) { result.skipped++; continue }
 
-      const resolution = await resolveSingleAlert(alert)
+      const resolution = await resolveSingleAlert(alert as any)
       if (!resolution) { result.skipped++; continue }
 
-      // Create resolution and update alert status
-      await prisma.$transaction([
-        prisma.alert.update({ where: { id: alert.id }, data: { status: resolution.outcome } }),
-        prisma.alertResolution.create({
-          data: {
-            alertId: alert.id,
-            resolutionStatus: resolution.outcome,
-            resolutionType: resolution.resolutionType,
-            windowMinutes: resolution.windowMinutes,
-            evidenceJson: JSON.stringify(resolution.evidence),
-          },
-        }),
-      ])
+      // Atomic: update alert.status + create resolution (Firestore batch / Prisma transaction).
+      // 'unknown' stays 'unknown' — never coerced to 'failed'.
+      await repos.alertResolutions.resolveAlert(alert.id, resolution.outcome, {
+        resolutionStatus: resolution.outcome,
+        resolutionType: resolution.resolutionType,
+        windowMinutes: resolution.windowMinutes,
+        evidenceJson: JSON.stringify(resolution.evidence),
+      })
 
       result.resolved++
       switch (resolution.outcome) {

@@ -4,6 +4,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import * as service from './telegram.service.js'
+import { createRepositories } from '../../repositories/index.js'
 import { ok, created, badRequest, notFound } from '../../utils/apiResponse.js'
 
 const createChannelSchema = z.object({
@@ -75,14 +76,11 @@ export async function telegramRoutes(app: FastifyInstance) {
     const parsed = updateChannelRulesSchema.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send(badRequest('Validation failed', parsed.error.flatten()))
 
-    const { prisma } = await import('../../db/client.js')
-    const channel = await prisma.telegramChannel.findFirst({ where: { id } })
+    const repos = createRepositories()
+    const channel = await repos.telegram.findChannel(id, 'default')
     if (!channel) return reply.status(404).send(notFound('Channel not found'))
 
-    await prisma.telegramChannel.update({
-      where: { id },
-      data: { rulesJson: JSON.stringify(parsed.data.rules) },
-    })
+    await repos.telegram.updateChannelRules(id, JSON.stringify(parsed.data.rules))
     return ok({ id, rulesUpdated: true })
   })
 
@@ -103,18 +101,16 @@ export async function telegramRoutes(app: FastifyInstance) {
   app.get('/telegram/eligibility/:alertId', async (req, reply) => {
     const { alertId } = req.params as { alertId: string }
     const { channelId, includeInactive } = req.query as { channelId?: string, includeInactive?: string }
-    const { prisma } = await import('../../db/client.js')
+    const repos = createRepositories()
     const { parseChannelRules, extractAlertMetadata, evaluateAlertAgainstChannelRules } = await import('./telegramChannelRules.service.js')
 
-    const alert = await prisma.alert.findFirst({ where: { id: alertId, userId: 'default' } })
+    const alert = await repos.alerts.findById(alertId, 'default')
     if (!alert) return reply.status(404).send(notFound('Alert not found'))
 
-    const whereClause: any = { userId: 'default' }
-    if (includeInactive !== 'true') whereClause.isActive = true
-    if (channelId) whereClause.id = channelId
-
-    const channels = await prisma.telegramChannel.findMany({ where: whereClause })
-    const alertMeta = extractAlertMetadata(alert)
+    let channels = await repos.telegram.listChannels('default')
+    if (includeInactive !== 'true') channels = channels.filter((c: any) => c.isActive !== false)
+    if (channelId) channels = channels.filter((c: any) => c.id === channelId)
+    const alertMeta = extractAlertMetadata(alert as any)
 
     const results = []
     for (const ch of channels) {
@@ -122,10 +118,10 @@ export async function telegramRoutes(app: FastifyInstance) {
       const eligibility = await evaluateAlertAgainstChannelRules(alertMeta, ch.id, rules)
 
       // Check if already sent
-      const existingDelivery = await prisma.signalDelivery.findFirst({
-        where: { alertId, channelId: ch.id, status: 'sent' },
-        select: { sentAt: true },
-      })
+      const existingDelivery = await repos.telegram.findDelivery(alertId, ch.id, 'sent')
+      const sentAt = existingDelivery?.sentAt
+        ? (typeof existingDelivery.sentAt === 'string' ? existingDelivery.sentAt : existingDelivery.sentAt.toISOString())
+        : null
 
       results.push({
         channelId: ch.id,
@@ -134,7 +130,7 @@ export async function telegramRoutes(app: FastifyInstance) {
         blockedReasons: eligibility.blockedReasons,
         warnings: eligibility.warnings,
         alreadySent: !!existingDelivery,
-        lastSentAt: existingDelivery?.sentAt?.toISOString() || null,
+        lastSentAt: sentAt,
       })
     }
 

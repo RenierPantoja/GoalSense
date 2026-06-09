@@ -1,8 +1,24 @@
-import { prisma } from '../../db/client.js'
+/**
+ * Odds Service — repository-backed (Phase E5). No direct Prisma import.
+ * Odds are read-only context. No Telegram odds, no EV/ROI, no betting links.
+ */
 import { env } from '../../env.js'
+import { createRepositories } from '../../repositories/index.js'
 import { getConfiguredProvider, getResolvedApiKey, fetchLiveOdds } from '../../providers/odds/oddsProvider.service.js'
 import { getCandidateMarketsForAlert } from '../../providers/odds/oddsMarketMapper.js'
 import type { NormalizedOddsMarket } from '../../providers/odds/oddsProvider.types.js'
+
+const DEFAULT_USER = 'default'
+
+/** Coerce a Date (Prisma) or ISO string (Firebase) to a Date. */
+function toDate(v: Date | string): Date {
+  return v instanceof Date ? v : new Date(v)
+}
+
+/** Coerce a Date (Prisma) or ISO string (Firebase) to an ISO string. */
+function toIso(v: Date | string): string {
+  return v instanceof Date ? v.toISOString() : String(v)
+}
 
 export async function getOddsStatus() {
   const enabled = env.ODDS_ENABLED === 'true'
@@ -20,28 +36,27 @@ export async function fetchOddsForFixture(fixtureId: string) {
   const status = await getOddsStatus()
   if (!status.enabled) return { success: false, error: 'Odds disabled' }
 
-  const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId } })
+  const repos = createRepositories()
+  const fixture = await repos.fixtures.findById(fixtureId)
   if (!fixture) return { success: false, error: 'Fixture not found' }
 
   const res = await fetchLiveOdds(fixture.id, fixture.providerFixtureId)
   if (!res.success) return res
 
-  // Save to db
+  // Save point-in-time snapshots (history is never overwritten)
   const snapshots = await Promise.all(
-    res.markets.map(m => 
-      prisma.oddsSnapshot.create({
-        data: {
-          fixtureId,
-          provider: m.provider,
-          bookmaker: m.bookmaker || 'unknown',
-          marketType: m.marketType,
-          selection: m.selection,
-          line: m.line,
-          odds: m.odds,
-          currency: m.currency,
-          capturedAt: new Date(m.capturedAt),
-          rawJson: m.raw ? JSON.stringify(m.raw) : null
-        }
+    res.markets.map(m =>
+      repos.odds.createSnapshot({
+        fixtureId,
+        provider: m.provider,
+        bookmaker: m.bookmaker || 'unknown',
+        marketType: m.marketType,
+        selection: m.selection,
+        line: m.line,
+        odds: m.odds,
+        currency: m.currency,
+        capturedAt: new Date(m.capturedAt),
+        rawJson: m.raw ? JSON.stringify(m.raw) : null
       })
     )
   )
@@ -53,7 +68,8 @@ export async function getOddsForAlert(alertId: string) {
   const status = await getOddsStatus()
   if (!status.enabled) return { enabled: false, available: false, alertId, candidateMarkets: [], markets: [], bestByMarket: {}, stale: false, warnings: [] }
 
-  const alert = await prisma.alert.findUnique({ where: { id: alertId } })
+  const repos = createRepositories()
+  const alert = await repos.alerts.findById(alertId, DEFAULT_USER)
   if (!alert) throw new Error('Alert not found')
 
   const evidence = alert.evidenceJson ? JSON.parse(alert.evidenceJson) : {}
@@ -64,25 +80,21 @@ export async function getOddsForAlert(alertId: string) {
 
   // Get latest snapshots for the fixture
   const cutoff = new Date(Date.now() - env.ODDS_CACHE_TTL_SECONDS * 1000)
-  
-  const recentSnapshots = await prisma.oddsSnapshot.findMany({
-    where: { fixtureId: alert.fixtureId },
-    orderBy: { capturedAt: 'desc' },
-    take: 100
-  })
+
+  const recentSnapshots = await repos.odds.listRecentSnapshots(alert.fixtureId, 100)
 
   if (recentSnapshots.length === 0) {
     return { enabled: true, available: false, alertId, fixtureId: alert.fixtureId, candidateMarkets, markets: [], bestByMarket: {}, stale: false, warnings: [] }
   }
 
-  // Check if they are stale
-  const latestCapture = recentSnapshots[0].capturedAt
+  // Check if they are stale (capturedAt may be a Date or ISO string)
+  const latestCapture = toDate(recentSnapshots[0].capturedAt)
   const stale = latestCapture < cutoff
 
   // Filter to candidate markets
   const markets: NormalizedOddsMarket[] = recentSnapshots
-    .filter(s => candidateMarkets.includes(s.marketType as any))
-    .map(s => ({
+    .filter((s: any) => candidateMarkets.includes(s.marketType as any))
+    .map((s: any) => ({
       provider: s.provider,
       bookmaker: s.bookmaker,
       marketType: s.marketType as any,
@@ -90,7 +102,7 @@ export async function getOddsForAlert(alertId: string) {
       line: s.line ?? undefined,
       odds: s.odds,
       currency: s.currency ?? undefined,
-      capturedAt: s.capturedAt.toISOString()
+      capturedAt: toIso(s.capturedAt)
     }))
 
   // Calculate best by market
@@ -101,24 +113,20 @@ export async function getOddsForAlert(alertId: string) {
     }
   }
 
-  // Save to AlertOddsContext if not stale and we have best odds, only once per alert
+  // Save to AlertOddsContext if not stale and we have best odds, only once per alert+market
   if (!stale && markets.length > 0) {
     for (const [marketType, best] of Object.entries(bestByMarket)) {
-      const existing = await prisma.alertOddsContext.findFirst({
-        where: { alertId, marketType }
-      })
+      const existing = await repos.odds.findAlertOddsContext(alertId, marketType)
       if (!existing) {
-        await prisma.alertOddsContext.create({
-          data: {
-            alertId,
-            fixtureId: alert.fixtureId,
-            marketType,
-            selectedLine: best.line,
-            bestOdds: best.odds,
-            bookmaker: best.bookmaker || 'unknown',
-            provider: best.provider,
-            capturedAt: new Date(best.capturedAt)
-          }
+        await repos.odds.createAlertOddsContext({
+          alertId,
+          fixtureId: alert.fixtureId,
+          marketType,
+          selectedLine: best.line,
+          bestOdds: best.odds,
+          bookmaker: best.bookmaker || 'unknown',
+          provider: best.provider,
+          capturedAt: new Date(best.capturedAt)
         })
       }
     }
@@ -139,7 +147,8 @@ export async function getOddsForAlert(alertId: string) {
 }
 
 export async function refreshOddsForAlert(alertId: string) {
-  const alert = await prisma.alert.findUnique({ where: { id: alertId } })
+  const repos = createRepositories()
+  const alert = await repos.alerts.findById(alertId, DEFAULT_USER)
   if (!alert) throw new Error('Alert not found')
 
   const fetchRes = await fetchOddsForFixture(alert.fixtureId)

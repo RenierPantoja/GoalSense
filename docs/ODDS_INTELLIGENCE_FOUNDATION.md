@@ -25,6 +25,14 @@ GoalSense now includes a foundational abstraction for Odds Intelligence. The pur
 3. **Database Schema (`schema.prisma`)**:
    - `OddsSnapshot`: Stores raw point-in-time snapshots to ensure historical auditing. Never overwritten.
    - `AlertOddsContext`: Associates a specific alert with the best available odds at the moment it was evaluated.
+   - **Phase E5**: odds persistence is now provider-agnostic via the repository
+     layer. `odds.service`, `oddsCoverageAudit.service`, and the odds routes use
+     `repos.odds` / `repos.fixtures` / `repos.alerts` instead of Prisma directly,
+     so odds work in both `PERSISTENCE_PROVIDER=prisma` and `=firebase`. In
+     Firestore: `oddsSnapshots/{autoId}` (point-in-time, history preserved) and
+     `alertOddsContexts/{alertId}__{marketType}` (deterministic id, one per
+     alert+market). No fabricated odds are ever written. See
+     `FIREBASE_WORKER_RUNTIME_MIGRATION.md`.
 
 4. **Stale Policy**:
    - Real-time odds fluctuate rapidly. 

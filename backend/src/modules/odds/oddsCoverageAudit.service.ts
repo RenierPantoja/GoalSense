@@ -4,7 +4,7 @@
  * Phase D2.1: QA + market coverage. No EV, no ROI, no betting recommendations.
  * Read-only analysis. Does NOT create deliveries or place bets.
  */
-import { prisma } from '../../db/client.js'
+import { createRepositories } from '../../repositories/index.js'
 import { fetchLiveOdds } from '../../providers/odds/oddsProvider.service.js'
 import { inferMarketFromPatternType } from '../../providers/odds/oddsMarketMapper.js'
 import type { NormalizedOddsMarket, OddsMarketType } from '../../providers/odds/oddsProvider.types.js'
@@ -165,13 +165,14 @@ export function auditAlertMarketCompatibility(report: MarketCoverageReport): Ale
 // ─── Audit Functions ─────────────────────────────────────────────────────────
 
 export async function auditFixtureOddsCoverage(fixtureId: string): Promise<{ report: MarketCoverageReport; compatibility: AlertMarketCompatibility[] } | null> {
-  const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId } })
+  const repos = createRepositories()
+  const fixture = await repos.fixtures.findById(fixtureId)
   if (!fixture) return null
 
   const res = await fetchLiveOdds(fixture.id, fixture.providerFixtureId)
   const markets = res.success ? res.markets : []
 
-  const report = buildCoverageReport(fixture, markets)
+  const report = buildCoverageReport(fixture as any, markets)
   if (!res.success && res.error) report.warnings.push(res.error)
 
   const compatibility = auditAlertMarketCompatibility(report)
@@ -180,22 +181,19 @@ export async function auditFixtureOddsCoverage(fixtureId: string): Promise<{ rep
 
 export async function auditRecentLiveFixturesOddsCoverage(limit: number): Promise<MarketCoverageReport[]> {
   const liveStatuses = ['1H', '2H', 'HT', 'ET', 'BT', 'NS']
-  const fixtures = await prisma.fixture.findMany({
-    where: { status: { in: liveStatuses } },
-    orderBy: { updatedAt: 'desc' },
-    take: Math.min(limit, 20),
-  })
+  const repos = createRepositories()
+  const fixtures = await repos.fixtures.listLive(liveStatuses, Math.min(limit, 20))
 
   const reports: MarketCoverageReport[] = []
   for (const fixture of fixtures) {
     try {
       const res = await fetchLiveOdds(fixture.id, fixture.providerFixtureId)
       const markets = res.success ? res.markets : []
-      const report = buildCoverageReport(fixture, markets)
+      const report = buildCoverageReport(fixture as any, markets)
       if (!res.success && res.error) report.warnings.push(res.error)
       reports.push(report)
     } catch (err: any) {
-      reports.push(buildCoverageReport(fixture, []))
+      reports.push(buildCoverageReport(fixture as any, []))
     }
   }
   return reports

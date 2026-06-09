@@ -27,7 +27,7 @@ function safeParseJson<T>(str: string | null | undefined, fallback: T): T {
 
 export function buildPatternInput(
   fixture: { id: string; canonicalKey: string; homeName: string; awayName: string; competition: string; status: string },
-  snapshot: { minute: number | null; scoreHome: number; scoreAway: number; penaltyHome: number | null; penaltyAway: number | null; statsJson: string | null; eventsJson: string | null; dataQuality: string; provider: string; capturedAt: Date },
+  snapshot: { minute: number | null; scoreHome: number; scoreAway: number; penaltyHome: number | null; penaltyAway: number | null; statsJson: string | null; eventsJson: string | null; dataQuality: string; provider: string; capturedAt: Date | string },
 ): PatternEvaluationInput {
   return {
     fixtureId: fixture.id,
@@ -42,6 +42,7 @@ export function buildPatternInput(
     events: safeParseJson<BackendTimedEvent[]>(snapshot.eventsJson, []),
     dataQuality: (snapshot.dataQuality as 'rich' | 'partial' | 'poor') || 'poor',
     provider: snapshot.provider,
-    capturedAt: snapshot.capturedAt.toISOString(),
+    // capturedAt may be a Date (Prisma) or an ISO string (Firebase).
+    capturedAt: typeof snapshot.capturedAt === 'string' ? snapshot.capturedAt : snapshot.capturedAt.toISOString(),
   }
 }

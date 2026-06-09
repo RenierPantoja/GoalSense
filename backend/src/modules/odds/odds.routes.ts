@@ -68,8 +68,8 @@ export async function oddsRoutes(app: FastifyInstance) {
     const { fixtureId } = req.query as { fixtureId?: string }
     let providerFixtureId: string | undefined
     if (fixtureId) {
-      const { prisma } = await import('../../db/client.js')
-      const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId } })
+      const { createRepositories } = await import('../../repositories/index.js')
+      const fixture = await createRepositories().fixtures.findById(fixtureId)
       providerFixtureId = fixture?.providerFixtureId
     }
 
