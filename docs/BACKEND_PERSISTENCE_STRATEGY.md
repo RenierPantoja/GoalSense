@@ -48,8 +48,8 @@ Rationale: the project is already Firebase-first; running a second database (Pos
 **Migration approach:** Strangler pattern via repositories.
 1. ✅ E1 — Repository contracts + Prisma adapters + Firebase Admin + factory + 1 Firebase adapter (ProviderHealth)
 2. ✅ E2 — Migrate simple modules (Telegram channels + deliveries, ProviderHealth) to Firestore behind the factory
-3. E3 — Migrate Fixtures + LiveSnapshots (high volume; needs read-cost discipline)
-4. E4 — Migrate Patterns + Alerts + Resolutions
+3. ✅ E3 — Migrate Patterns + Alerts + AlertResolutions to Firestore; unlock Telegram alert-dependent flows in firebase mode
+4. E4 — Migrate Fixtures + LiveSnapshots (high volume; needs read-cost discipline)
 5. E5 — Re-model Performance analytics for Firestore (denormalized counters)
 6. E6 — Remove Prisma once all adapters exist and are validated
 
@@ -64,6 +64,9 @@ backend/src/repositories/
   firebase/
     firebaseProviderHealth.repository.ts  # first Firestore adapter (E1)
     firebaseTelegram.repository.ts        # Telegram channels + deliveries (E2)
+    firebasePattern.repository.ts         # Patterns (E3)
+    firebaseAlert.repository.ts           # Alerts (E3)
+    firebaseAlertResolution.repository.ts # Alert resolutions (E3)
 ```
 
 `PERSISTENCE_PROVIDER` env selects the implementation:
@@ -83,7 +86,7 @@ Firestore adapter (`firebaseTelegram.repository.ts`):
 - Deterministic delivery id `${alertId}__${channelId}` → idempotent writes (`set` with merge), no duplicate deliveries
 - `findRecentDeliveryByChannel` / `countSentDeliveries` filter in-memory after a status-scoped query (acceptable at current volume; revisit with composite indexes if needed)
 
-**E2 limitation (firebase mode):** `sendAlertToChannel` and `getApprovalQueue` read alerts via `repos.alerts`, which still throws "not implemented yet" in firebase mode. These flows require `PERSISTENCE_PROVIDER=prisma` until the Alert repository is migrated in E4. Telegram channel CRUD and delivery records work fully in firebase mode; only alert-dependent send/queue flows are gated.
+**E2 limitation (firebase mode):** _Resolved in E3._ `sendAlertToChannel` and `getApprovalQueue` now read alerts via `FirebaseAlertRepository`, so they work in firebase mode for alerts present in Firestore. See `FIREBASE_PATTERNS_ALERTS_MIGRATION.md`.
 
 ## What E1 Does NOT Do
 
@@ -97,9 +100,9 @@ Firestore adapter (`firebaseTelegram.repository.ts`):
 
 | Prisma Model | Firestore Collection | Notes |
 |-------------|---------------------|-------|
-| Pattern | patterns | doc per pattern, userId field |
-| Alert | alerts | doc per alert; index on patternId, fixtureId, status, duplicateSignature |
-| AlertResolution | alertResolutions or subcollection of alerts | 1:1 with alert |
+| Pattern | patterns | ✅ migrated in E3 (soft-delete via status='archived') |
+| Alert | alerts | ✅ migrated in E3; index on patternId, fixtureId, status, duplicateSignature |
+| AlertResolution | alertResolutions | ✅ migrated in E3; deterministic id = alertId (1:1) |
 | Fixture | fixtures | index on canonicalKey, provider+providerFixtureId |
 | LiveSnapshot | fixtures/{id}/snapshots | subcollection; high volume; TTL cleanup |
 | ProviderHealth | providerHealth | ✅ migrated in E1 |

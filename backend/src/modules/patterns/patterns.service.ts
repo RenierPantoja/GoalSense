@@ -1,35 +1,35 @@
-import { prisma } from '../../db/client.js'
+/**
+ * Patterns Service — persistence-agnostic via the repository layer (Phase E3).
+ * Works in both PERSISTENCE_PROVIDER=prisma and =firebase modes.
+ * Routes and payloads are unchanged.
+ */
+import { createRepositories } from '../../repositories/index.js'
 import type { CreatePatternInput, UpdatePatternInput } from './pattern.schemas.js'
 
 const DEFAULT_USER = 'default'
 
 export async function listPatterns() {
-  return prisma.pattern.findMany({
-    where: { userId: DEFAULT_USER },
-    orderBy: { updatedAt: 'desc' },
-  })
+  const repos = createRepositories()
+  return repos.patterns.listAll(DEFAULT_USER)
 }
 
 export async function getPattern(id: string) {
-  return prisma.pattern.findFirst({ where: { id, userId: DEFAULT_USER } })
+  const repos = createRepositories()
+  return repos.patterns.findById(id, DEFAULT_USER)
 }
 
 export async function createPattern(input: CreatePatternInput) {
-  return prisma.pattern.create({
-    data: { ...input, userId: DEFAULT_USER },
-  })
+  const repos = createRepositories()
+  return repos.patterns.create(input as any, DEFAULT_USER)
 }
 
 export async function updatePattern(id: string, input: UpdatePatternInput) {
-  return prisma.pattern.updateMany({
-    where: { id, userId: DEFAULT_USER },
-    data: input,
-  })
+  const repos = createRepositories()
+  return repos.patterns.update(id, input as any, DEFAULT_USER)
 }
 
 export async function deletePattern(id: string) {
-  return prisma.pattern.updateMany({
-    where: { id, userId: DEFAULT_USER },
-    data: { status: 'archived' },
-  })
+  // Soft delete (status='archived'), matching legacy behaviour.
+  const repos = createRepositories()
+  return repos.patterns.archive(id, DEFAULT_USER)
 }

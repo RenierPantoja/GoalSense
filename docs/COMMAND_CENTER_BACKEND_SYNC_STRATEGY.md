@@ -265,6 +265,25 @@ If not set, all backend functions return null and localStorage continues as sole
 | `backend/src/modules/telegram/telegram.routes.ts` | Telegram API routes (channels, send, eligibility, queue) |
 | `backend/src/modules/telegram/telegramChannelRules.service.ts` | Shared rule evaluation (cooldown, maxPerMatch) |
 
+## Backend Persistence Layer (Phases E1–E3)
+
+The backend now persists through a provider-agnostic **repository layer**
+(`backend/src/repositories/`), selected by `PERSISTENCE_PROVIDER`:
+
+- `prisma` (default) — Postgres, unchanged behaviour.
+- `firebase` — Firestore; no `DATABASE_URL` required.
+
+The Command Center HTTP contract is **unchanged** by this work: `/api/patterns`
+(list/get/create/update/delete) and `/api/alerts` (list/get/create/resolve)
+return identical payloads in both modes. The frontend (localStorage primary +
+write-through) is untouched.
+
+As of **E3**, `patterns.service` and `alerts.service` route through the
+repository layer, so Patterns, Alerts, and AlertResolutions persist to Firestore
+in firebase mode. Fixtures, LiveSnapshots, Odds, and the background workers still
+require prisma mode (E4+). See `FIREBASE_PATTERNS_ALERTS_MIGRATION.md` and
+`BACKEND_PERSISTENCE_STRATEGY.md`.
+
 ## Next Steps (Phase 5: Backend Primary)
 
 1. On mount, load patterns from backend (if online)

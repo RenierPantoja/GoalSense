@@ -14,7 +14,9 @@ import type {
 
 export class PrismaPatternRepository implements PatternRepository {
   listActive(userId: string) { return prisma.pattern.findMany({ where: { userId, status: 'active' } }) }
-  listAll(userId: string) { return prisma.pattern.findMany({ where: { userId, status: { not: 'archived' } }, orderBy: { updatedAt: 'desc' } }) }
+  // listAll mirrors the legacy listPatterns(): every pattern for the user
+  // (including archived), newest-updated first. No status filter.
+  listAll(userId: string) { return prisma.pattern.findMany({ where: { userId }, orderBy: { updatedAt: 'desc' } }) }
   findById(id: string, userId: string) { return prisma.pattern.findFirst({ where: { id, userId } }) }
   create(input: Json, userId: string) { return prisma.pattern.create({ data: { ...input, userId } as any }) }
   update(id: string, patch: Json, userId: string) { return prisma.pattern.updateMany({ where: { id, userId }, data: patch }) }

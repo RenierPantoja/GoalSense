@@ -91,25 +91,32 @@ migrated concerns:
 
 - `backend/src/modules/live/liveMonitor.service.ts` — `recordProviderHealth`
   (note: `upsertFixture` and `captureLiveSnapshot` still use Prisma directly; the
-  `prisma` import remains valid and required there until E3)
+  `prisma` import remains valid and required there until E4)
 - `backend/src/modules/live/liveMonitor.routes.ts` — `/provider-health`
 - `backend/src/modules/telegram/telegram.service.ts` — channels, deliveries,
   `sendAlertToChannel`, `getApprovalQueue`, `ignoreAlertInQueue`
 - `backend/src/modules/telegram/telegramChannelRules.service.ts`
+- `backend/src/modules/patterns/patterns.service.ts` — list/get/create/update/delete (E3)
+- `backend/src/modules/alerts/alerts.service.ts` — list/get/create/resolve + dedup (E3)
 
-## E2 limitations
+## E2 / E3 status
 
-- **Alert-dependent Telegram flows require Prisma mode.** `sendAlertToChannel`
-  and `getApprovalQueue` read alerts via `repos.alerts`, which throws
-  "not implemented yet" in firebase mode. Channel CRUD and delivery records work
-  fully in firebase mode; only flows that load an alert are gated until E4.
-- **In-memory filtering** in `findRecentDeliveryByChannel` / `countSentDeliveries`
-  / `listChannels` / `listDeliveries` sorting. Fine at current volume; revisit
-  with Firestore composite indexes and `orderBy` if delivery volume grows.
-- **Patterns / Alerts / Resolutions / Fixtures / LiveSnapshots / Odds** are not
-  yet migrated to Firestore — they throw clear errors in firebase mode.
+- ✅ **E2** — ProviderHealth + Telegram (channels + deliveries) on Firestore.
+- ✅ **E3** — Patterns + Alerts + AlertResolutions on Firestore. Alert-dependent
+  Telegram flows (`sendAlertToChannel`, `getApprovalQueue`) now work in firebase
+  mode. See `FIREBASE_PATTERNS_ALERTS_MIGRATION.md`.
+
+## Limitations (still open after E3)
+
+- **In-memory filtering / sorting** in several adapters (deliveries, alerts,
+  patterns). Fine at current single-user volume; switch to Firestore composite
+  indexes + server-side `orderBy/limit` as volume grows (indexes listed in
+  `FIREBASE_PATTERNS_ALERTS_MIGRATION.md`).
+- **Fixtures / LiveSnapshots / Odds** are not yet migrated to Firestore — they
+  throw clear "not implemented yet" errors in firebase mode (E4+).
 - **Workers** (live monitor, pattern evaluation, alert resolution) still depend
-  on Prisma directly and are not runnable in firebase mode yet.
+  on Prisma directly and require `PERSISTENCE_PROVIDER=prisma`.
+- **Performance analytics** still uses Prisma aggregations (E5).
 - **No data migration** has been performed. Switching providers starts from empty
   Firestore collections.
 
@@ -131,21 +138,20 @@ npm run typecheck
 npm run build
 ```
 
-### Firebase mode (ProviderHealth + Telegram channels/deliveries)
+### Firebase mode (Patterns, Alerts, Resolutions, ProviderHealth, Telegram)
 
 ```
 PERSISTENCE_PROVIDER=firebase
 FIREBASE_SERVICE_ACCOUNT_JSON={...}        # or the 3 separate vars
 ```
 
-No `DATABASE_URL` required. Alert-dependent flows and unmigrated modules will
-return clear errors until E3/E4.
+No `DATABASE_URL` required. Fixtures / LiveSnapshots / Odds and the workers still
+require prisma mode and return clear errors until E4+.
 
-## Next steps (E3+)
+## Next steps (E4+)
 
-- **E3** — `FirebaseFixtureRepository` + `FirebaseLiveSnapshotRepository`
-  (snapshots as a `fixtures/{id}/snapshots` subcollection; mind read costs + TTL).
-- **E4** — `FirebaseAlertRepository` + `FirebaseAlertResolutionRepository` +
-  `FirebasePatternRepository`. Unlocks Telegram send/queue in firebase mode.
+- **E4** — `FirebaseFixtureRepository` + `FirebaseLiveSnapshotRepository`
+  (snapshots as a `fixtures/{id}/snapshots` subcollection; mind read costs + TTL),
+  then migrate the workers off Prisma.
 - **E5** — Performance analytics re-modeled with denormalized counters.
 - **E6** — Remove Prisma once all adapters exist and are validated.

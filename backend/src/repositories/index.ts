@@ -18,6 +18,9 @@ import {
 } from './prisma/prismaRepositories.js'
 import { FirebaseProviderHealthRepository } from './firebase/firebaseProviderHealth.repository.js'
 import { FirebaseTelegramRepository } from './firebase/firebaseTelegram.repository.js'
+import { FirebasePatternRepository } from './firebase/firebasePattern.repository.js'
+import { FirebaseAlertRepository } from './firebase/firebaseAlert.repository.js'
+import { FirebaseAlertResolutionRepository } from './firebase/firebaseAlertResolution.repository.js'
 
 function notImplemented(name: string): never {
   throw new Error(`Firebase adapter for ${name} not implemented yet. Use PERSISTENCE_PROVIDER=prisma or implement the adapter.`)
@@ -30,13 +33,14 @@ export function createRepositories(): Repositories {
 
   if (env.PERSISTENCE_PROVIDER === 'firebase') {
     // E2: ProviderHealth + Telegram migrated to Firestore.
-    // Alert/Pattern/Fixture/etc. throw clear errors until migrated (E3+).
+    // E3: Patterns + Alerts + AlertResolutions migrated to Firestore.
+    // Fixture/LiveSnapshot/Odds throw clear errors until migrated (E4+).
     cached = {
       providerHealth: new FirebaseProviderHealthRepository(),
       telegram: new FirebaseTelegramRepository(),
-      patterns: new Proxy({} as any, { get: () => () => notImplemented('PatternRepository') }),
-      alerts: new Proxy({} as any, { get: () => () => notImplemented('AlertRepository') }),
-      alertResolutions: new Proxy({} as any, { get: () => () => notImplemented('AlertResolutionRepository') }),
+      patterns: new FirebasePatternRepository(),
+      alerts: new FirebaseAlertRepository(),
+      alertResolutions: new FirebaseAlertResolutionRepository(),
       fixtures: new Proxy({} as any, { get: () => () => notImplemented('FixtureRepository') }),
       liveSnapshots: new Proxy({} as any, { get: () => () => notImplemented('LiveSnapshotRepository') }),
       odds: new Proxy({} as any, { get: () => () => notImplemented('OddsRepository') }),
