@@ -51,6 +51,8 @@ export class PrismaAlertRepository implements AlertRepository {
   create(input: Json, userId: string) { return prisma.alert.create({ data: { ...input, userId } as any }) }
   updateStatus(id: string, status: string) { return prisma.alert.update({ where: { id }, data: { status } }) }
   listPending(userId: string, limit: number) { return prisma.alert.findMany({ where: { userId, status: 'pending' }, orderBy: { createdAt: 'asc' }, take: limit }) }
+  listByPatternId(patternId: string, userId: string, limit?: number) { return prisma.alert.findMany({ where: { patternId, userId }, orderBy: { createdAt: 'desc' }, ...(limit ? { take: limit } : {}) }) }
+  listAllForUser(userId: string, limit?: number) { return prisma.alert.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, ...(limit ? { take: limit } : {}) }) }
 }
 
 // ─── Alert Resolution ──────────────────────────────────────────────────────

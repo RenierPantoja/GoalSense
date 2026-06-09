@@ -1,13 +1,20 @@
 /**
  * Performance Service — calculates pattern performance from real alerts/resolutions.
  * ─────────────────────────────────────────────────────────────────────────────
- * Rules:
+ * Phase E6: Repository-backed (Prisma or Firebase). No direct Prisma import.
+ * On-demand aggregation in memory (no denormalized counters yet — see E6.1).
+ *
+ * Rules (unchanged):
  * - Unknown does NOT count as failed
  * - Rates only with resolvedCount >= 5
  * - No invented metrics
  * - Honest recommendations based on evidence
  */
-import { prisma } from '../../db/client.js'
+import { createRepositories } from '../../repositories/index.js'
+import {
+  normalizeAlertForPerformance, normalizeResolutionForPerformance,
+  type NormalizedPerformanceAlert,
+} from './performanceInputAdapter.js'
 
 const DEFAULT_USER = 'default'
 const MIN_SAMPLE_FOR_RATE = 5
@@ -83,11 +90,6 @@ export interface PerformanceSummary {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function safeParseJson(str: string | null | undefined, fallback: any): any {
-  if (!str) return fallback
-  try { return JSON.parse(str) } catch { return fallback }
-}
-
 function calculateRates(confirmed: number, partial: number, failed: number, unknown: number, total: number) {
   const resolved = confirmed + partial + failed
   return {
@@ -156,13 +158,12 @@ function buildWarningsAndRecommendations(
 // ─── Main Functions ──────────────────────────────────────────────────────────
 
 export async function buildPatternPerformance(patternId: string): Promise<PatternPerformanceReport | null> {
-  const pattern = await prisma.pattern.findFirst({ where: { id: patternId, userId: DEFAULT_USER } })
+  const repos = createRepositories()
+  const pattern = await repos.patterns.findById(patternId, DEFAULT_USER)
   if (!pattern) return null
 
-  const alerts = await prisma.alert.findMany({
-    where: { patternId, userId: DEFAULT_USER },
-    orderBy: { createdAt: 'desc' },
-  })
+  const rawAlerts = await repos.alerts.listByPatternId(patternId, DEFAULT_USER)
+  const alerts: NormalizedPerformanceAlert[] = rawAlerts.map(normalizeAlertForPerformance)
 
   const sampleSize = alerts.length
   if (sampleSize === 0) {
@@ -199,9 +200,8 @@ export async function buildPatternPerformance(patternId: string): Promise<Patter
   const byProvider: Record<string, number> = {}
 
   for (const alert of alerts) {
-    // Resolution type from resolution table
-    const evidence = safeParseJson(alert.evidenceJson, {})
-    const temporal = safeParseJson(alert.temporalEvidenceJson, null)
+    const evidence = alert.evidence
+    const temporal = alert.temporal
 
     // Momentum source
     const momentum = temporal?.momentumSource || 'unknown'
@@ -222,12 +222,11 @@ export async function buildPatternPerformance(patternId: string): Promise<Patter
     byProvider[provider] = (byProvider[provider] || 0) + 1
   }
 
-  // Resolution types from AlertResolution table
-  const resolutions = await prisma.alertResolution.findMany({
-    where: { alertId: { in: alerts.map(a => a.id) } },
-  })
-  for (const r of resolutions) {
-    const type = r.resolutionType || r.resolutionStatus
+  // Resolution types from AlertResolution records
+  const resolutions = await repos.alertResolutions.findByAlertIds(alerts.map(a => a.id))
+  for (const raw of resolutions) {
+    const r = normalizeResolutionForPerformance(raw)
+    const type = r.resolutionType || r.resolutionStatus || 'unknown'
     byResolutionType[type] = (byResolutionType[type] || 0) + 1
   }
 
@@ -265,10 +264,10 @@ export async function buildPatternPerformance(patternId: string): Promise<Patter
 }
 
 export async function buildAllPatternPerformance(): Promise<PatternPerformanceReport[]> {
-  const patterns = await prisma.pattern.findMany({
-    where: { userId: DEFAULT_USER, status: { not: 'archived' } },
-    orderBy: { updatedAt: 'desc' },
-  })
+  const repos = createRepositories()
+  // listAll returns every pattern (incl. archived), newest-updated first.
+  const allPatterns = await repos.patterns.listAll(DEFAULT_USER)
+  const patterns = allPatterns.filter((p: any) => p.status !== 'archived')
 
   const reports: PatternPerformanceReport[] = []
   for (const pattern of patterns) {
@@ -280,7 +279,9 @@ export async function buildAllPatternPerformance(): Promise<PatternPerformanceRe
 }
 
 export async function buildPerformanceSummary(): Promise<PerformanceSummary> {
-  const alerts = await prisma.alert.findMany({ where: { userId: DEFAULT_USER } })
+  const repos = createRepositories()
+  const rawAlerts = await repos.alerts.listAllForUser(DEFAULT_USER)
+  const alerts = rawAlerts.map(normalizeAlertForPerformance)
 
   const totalAlerts = alerts.length
   const confirmedCount = alerts.filter(a => a.status === 'confirmed').length

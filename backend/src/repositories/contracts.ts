@@ -35,6 +35,10 @@ export interface AlertRepository {
   create(input: Json, userId: string): Promise<Json>
   updateStatus(id: string, status: string): Promise<Json>
   listPending(userId: string, limit: number): Promise<Json[]>
+  /** All alerts for a pattern, newest first. Unbounded in Prisma; capped in Firebase (see limit). Used by performance analytics. */
+  listByPatternId(patternId: string, userId: string, limit?: number): Promise<Json[]>
+  /** All alerts for a user, newest first. Unbounded in Prisma; capped in Firebase (see limit). Used by performance analytics. */
+  listAllForUser(userId: string, limit?: number): Promise<Json[]>
 }
 
 // ─── Alert Resolution ──────────────────────────────────────────────────────

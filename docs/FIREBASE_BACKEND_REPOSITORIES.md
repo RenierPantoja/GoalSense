@@ -113,8 +113,11 @@ migrated concerns:
   `odds.routes.ts` — repo-backed (E5)
 - `backend/src/modules/telegram/telegram.routes.ts` — rules PATCH + eligibility
   GET use the repository layer (E5)
+- `backend/src/modules/performance/performance.service.ts` — pattern + summary
+  analytics, repo-backed via `patterns`/`alerts`/`alertResolutions`; no `prisma`
+  import (E6)
 
-## E2 / E3 / E4 / E5 status
+## E2 / E3 / E4 / E5 / E6 status
 
 - ✅ **E2** — ProviderHealth + Telegram (channels + deliveries) on Firestore.
 - ✅ **E3** — Patterns + Alerts + AlertResolutions on Firestore. Alert-dependent
@@ -123,19 +126,23 @@ migrated concerns:
   (service + routes + worker) runs in firebase mode without Postgres.
 - ✅ **E5** — Odds on Firestore; Command Center workers (pattern evaluation +
   resolution) and the odds/telegram routes are repository-backed and run in
-  firebase mode. See `FIREBASE_WORKER_RUNTIME_MIGRATION.md`.
+  firebase mode.
+- ✅ **E6** — Performance analytics repository-backed (on-demand, provider-agnostic).
+  Direct Prisma usage now confined to `db/client.ts` + the Prisma adapter. See
+  `FIREBASE_PERFORMANCE_ANALYTICS.md`.
 
-## Limitations (still open after E5)
+## Limitations (still open after E6)
 
-- **Performance analytics** (`performance.service.ts`) still uses Prisma
-  aggregations and requires `PERSISTENCE_PROVIDER=prisma` (E6).
+- **Performance analytics** computes on-demand by scanning alerts/resolutions per
+  request. Firebase reads are capped at 2000 for performance queries. Incremental
+  denormalized counters are deferred to **E6.1**.
 - **In-memory filtering / sorting** in several adapters. Fine at current
   single-user volume; switch to Firestore composite indexes + server-side
   `orderBy/limit` as volume grows (indexes listed in the per-phase migration docs).
 - **No data migration** has been performed. Switching providers starts from empty
   Firestore collections.
 - **Full firebase runtime** depends on real credentials and populated collections;
-  E5 validates typecheck/build + repository wiring.
+  the phases validate typecheck/build + repository wiring.
 
 ## How to run
 
@@ -155,7 +162,7 @@ npm run typecheck
 npm run build
 ```
 
-### Firebase mode (everything except Performance analytics)
+### Firebase mode (full backend — no Postgres required)
 
 ```
 PERSISTENCE_PROVIDER=firebase
@@ -163,11 +170,12 @@ FIREBASE_SERVICE_ACCOUNT_JSON={...}        # or the 3 separate vars
 ```
 
 No `DATABASE_URL` required. Live Monitor, Pattern Evaluation, and Alert
-Resolution workers all run in firebase mode, plus Odds and Telegram flows. Only
-Performance analytics still requires prisma mode until E6.
+Resolution workers run in firebase mode, plus Odds, Telegram, and Performance
+analytics. Every backend module is now repository-backed; no module imports
+Prisma directly.
 
-## Next steps (E6)
+## Next steps (E6.1)
 
-- **E6** — Re-model Performance analytics for Firestore (denormalized counters /
-  scheduled rollups instead of live `count`/`groupBy`), migrate
-  `performance.service`, then remove Prisma once all adapters are validated.
+- **E6.1** — Incremental denormalized performance counters (updated when the
+  resolution worker writes a resolution) to avoid scanning all alerts per request,
+  then remove Prisma once all adapters are validated.

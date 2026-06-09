@@ -278,11 +278,13 @@ The Command Center HTTP contract is **unchanged** by this work: `/api/patterns`
 return identical payloads in both modes. The frontend (localStorage primary +
 write-through) is untouched.
 
-As of **E5**, `patterns.service`, `alerts.service`, the **Live Monitor**, the
-**Pattern Evaluation** and **Alert Resolution** workers, and the **Odds** module
-all route through the repository layer, so the full Command Center pipeline runs
-in firebase mode without Postgres. Only **Performance analytics** still requires
-prisma mode (E6). See `FIREBASE_WORKER_RUNTIME_MIGRATION.md`,
+As of **E6**, the **entire backend** routes through the repository layer:
+`patterns.service`, `alerts.service`, the **Live Monitor**, the **Pattern
+Evaluation** and **Alert Resolution** workers, the **Odds** module, and
+**Performance analytics**. No backend module imports Prisma directly (only
+`db/client.ts` and the Prisma adapter do). The full Command Center pipeline runs
+in firebase mode without Postgres. See `FIREBASE_PERFORMANCE_ANALYTICS.md`,
+`FIREBASE_WORKER_RUNTIME_MIGRATION.md`,
 `FIREBASE_FIXTURES_SNAPSHOTS_MIGRATION.md`,
 `FIREBASE_PATTERNS_ALERTS_MIGRATION.md`, and `BACKEND_PERSISTENCE_STRATEGY.md`.
 

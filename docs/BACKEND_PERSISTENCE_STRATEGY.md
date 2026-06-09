@@ -51,7 +51,8 @@ Rationale: the project is already Firebase-first; running a second database (Pos
 3. ✅ E3 — Migrate Patterns + Alerts + AlertResolutions to Firestore; unlock Telegram alert-dependent flows in firebase mode
 4. ✅ E4 — Migrate Fixtures + LiveSnapshots to Firestore; Live Monitor (service + routes + worker) runs without Postgres
 5. ✅ E5 — Migrate Odds + Command Center workers (pattern evaluation + resolution) to repositories; both workers run in firebase mode
-6. E6 — Re-model Performance analytics for Firestore (denormalized counters), then remove Prisma
+6. ✅ E6 — Migrate Performance analytics to repositories (on-demand, provider-agnostic). Prisma direct usage now confined to `db/client.ts` + the Prisma adapter.
+7. E6.1 (future) — Incremental denormalized counters for performance; then remove Prisma once validated.
 
 ## Repository Layer (E1)
 

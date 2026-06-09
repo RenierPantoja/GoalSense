@@ -18,6 +18,10 @@ import type { AlertRepository, Json } from '../contracts.js'
 
 const COLLECTION = 'alerts'
 
+// Safe read cap for unbounded performance queries in Firestore (single-user volume).
+// Prisma reads unbounded; Firebase caps to control read cost. See FIREBASE_PERFORMANCE_ANALYTICS.md.
+const PERFORMANCE_READ_CAP = 2000
+
 function docData(doc: any): Json {
   return { id: doc.id, ...doc.data() }
 }
@@ -124,5 +128,21 @@ export class FirebaseAlertRepository implements AlertRepository {
       .filter((a: Json) => a.status === 'pending')
       .sort((a: Json, b: Json) => (a.createdAt || '').localeCompare(b.createdAt || '')) // oldest first
     return rows.slice(0, limit)
+  }
+
+  async listByPatternId(patternId: string, userId: string, limit?: number): Promise<Json[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(COLLECTION).where('patternId', '==', patternId).get()
+    const rows = snap.docs.map(docData)
+      .filter((a: Json) => a.userId === userId)
+      .sort(byCreatedAtDesc)
+    return rows.slice(0, limit || PERFORMANCE_READ_CAP)
+  }
+
+  async listAllForUser(userId: string, limit?: number): Promise<Json[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(COLLECTION).where('userId', '==', userId).get()
+    const rows = snap.docs.map(docData).sort(byCreatedAtDesc)
+    return rows.slice(0, limit || PERFORMANCE_READ_CAP)
   }
 }
