@@ -168,3 +168,42 @@ And prints per-fixture coverage + a D3 recommendation.
 | Fixture | Liga | Status | Odds? | Bookmakers | MW | O/U | BTTS | Corners | Cards | AH | Timing | Warnings |
 |---------|------|--------|-------|------------|----|----|------|---------|-------|----|----|----------|
 | _(run script to populate)_ | | | | | | | | | | | | |
+
+## DB-Free API-Football Odds Audit (Phase D2.2F)
+
+A standalone audit that does **NOT** require a database, Prisma, backend server, or `DATABASE_URL`. It fetches fixtures directly from API-Football, queries odds per fixture, probes `/odds/live` feasibility, and recommends a D3 direction.
+
+### Commands
+```bash
+node scripts/runApiFootballOddsAudit.mjs --source live --limit 15
+node scripts/runApiFootballOddsAudit.mjs --source today --limit 15
+node scripts/runApiFootballOddsAudit.mjs --source upcoming --limit 30
+node scripts/runApiFootballOddsAudit.mjs --source live --limit 10 --json
+```
+
+### How it works
+- No `DATABASE_URL`, no Prisma, no backend server
+- Reads key from `ODDS_API_KEY` → `API_FOOTBALL_KEY` → first of `API_FOOTBALL_KEYS`
+- Checks `process.env`, then `backend/.env`, then root `.env`
+- Never logs the key (only char count)
+- Read-only: does not persist, does not bet, does not send to Telegram
+- `--json` writes `odds-audit-result.json`
+
+### Sources
+| `--source` | Endpoint | Use case |
+|-----------|----------|----------|
+| `live` | `/fixtures?live=all` | In-play coverage |
+| `today` | `/fixtures?date=today` | Today's matches |
+| `upcoming` | `/fixtures?date=tomorrow` | Pre-match coverage |
+
+### Output
+- Per-fixture coverage table (markets, bookmakers, flags)
+- `/odds/live` feasibility probe (available / requiresUpgrade / markets / latency)
+- Coverage summary with `recommendationForD3`
+- Surfaces provider errors honestly (suspended account, plan limits)
+
+### Last Run (2026)
+- **Result**: ❌ API-Football account **suspended** — `{"access":"Your account is suspended, check on https://dashboard.api-football.com."}`
+- The script correctly surfaced the real provider status (zero invented data)
+- **Action needed**: resolve the account at the API-Football dashboard, then re-run
+- Coverage data + D3 recommendation pending a working account
