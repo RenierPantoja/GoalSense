@@ -32,6 +32,13 @@ export class PrismaAlertRepository implements AlertRepository {
     })
   }
   findById(id: string, userId: string) { return prisma.alert.findFirst({ where: { id, userId } }) }
+  listForApprovalQueue(filters: { userId: string; minConfidence?: number; status?: string; sinceMs?: number; limit?: number }) {
+    const where: any = { userId: filters.userId }
+    if (filters.minConfidence != null) where.confidence = { gte: filters.minConfidence }
+    if (filters.status) where.status = filters.status
+    where.createdAt = { gte: new Date(Date.now() - (filters.sinceMs ?? 24 * 60 * 60 * 1000)) }
+    return prisma.alert.findMany({ where, orderBy: { createdAt: 'desc' }, take: filters.limit || 200 })
+  }
   findByFixtureIds(fixtureId: string) { return prisma.alert.findMany({ where: { fixtureId }, select: { id: true }, take: 50 }) }
   findByDuplicateSignature(signature: string, sinceMs: number, userId: string) {
     return prisma.alert.findFirst({ where: { userId, duplicateSignature: signature, createdAt: { gte: new Date(Date.now() - sinceMs) } } })

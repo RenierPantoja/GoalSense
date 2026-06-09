@@ -3,6 +3,7 @@
  */
 import type { FastifyInstance } from 'fastify'
 import { prisma } from '../../db/client.js'
+import { createRepositories } from '../../repositories/index.js'
 import { getLiveMonitorStatus } from '../../workers/liveMonitor.worker.js'
 import { ok } from '../../utils/apiResponse.js'
 
@@ -63,16 +64,13 @@ export async function liveMonitorRoutes(app: FastifyInstance) {
     return ok(fixtures)
   })
 
-  // Provider health (recent)
+  // Provider health (recent) — uses repository (Prisma or Firebase per PERSISTENCE_PROVIDER)
   app.get('/provider-health', async (req) => {
     const { provider, limit } = req.query as { provider?: string; limit?: string }
     const take = Math.min(parseInt(limit || '20'), 100)
 
-    const records = await prisma.providerHealth.findMany({
-      where: provider ? { provider } : {},
-      orderBy: { checkedAt: 'desc' },
-      take,
-    })
+    const repos = createRepositories()
+    const records = await repos.providerHealth.listRecent({ provider, limit: take })
     return ok(records)
   })
 }

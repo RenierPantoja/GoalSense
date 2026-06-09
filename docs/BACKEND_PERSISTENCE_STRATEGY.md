@@ -47,7 +47,7 @@ Rationale: the project is already Firebase-first; running a second database (Pos
 
 **Migration approach:** Strangler pattern via repositories.
 1. ✅ E1 — Repository contracts + Prisma adapters + Firebase Admin + factory + 1 Firebase adapter (ProviderHealth)
-2. E2 — Migrate simple modules (Telegram channels, ProviderHealth) to Firestore behind the factory
+2. ✅ E2 — Migrate simple modules (Telegram channels + deliveries, ProviderHealth) to Firestore behind the factory
 3. E3 — Migrate Fixtures + LiveSnapshots (high volume; needs read-cost discipline)
 4. E4 — Migrate Patterns + Alerts + Resolutions
 5. E5 — Re-model Performance analytics for Firestore (denormalized counters)
@@ -62,12 +62,28 @@ backend/src/repositories/
   prisma/
     prismaRepositories.ts # Prisma adapters (all 8 repos)
   firebase/
-    firebaseProviderHealth.repository.ts  # first Firestore adapter
+    firebaseProviderHealth.repository.ts  # first Firestore adapter (E1)
+    firebaseTelegram.repository.ts        # Telegram channels + deliveries (E2)
 ```
 
 `PERSISTENCE_PROVIDER` env selects the implementation:
 - `prisma` (default) → requires `DATABASE_URL`
 - `firebase` → requires Firebase creds, no `DATABASE_URL`
+
+## E2 — Firebase Migration: ProviderHealth + Telegram
+
+Migrated to run through `createRepositories()` (provider-agnostic):
+- `liveMonitor.service.ts` → `recordProviderHealth` uses `repos.providerHealth`
+- `liveMonitor.routes.ts` → `/provider-health` uses `repos.providerHealth.listRecent()`
+- `telegram.service.ts` → channels CRUD, deliveries, `sendAlertToChannel`, `getApprovalQueue`, `ignoreAlertInQueue` use `repos.telegram`
+- `telegramChannelRules.service.ts` → uses `repos.telegram`
+
+Firestore adapter (`firebaseTelegram.repository.ts`):
+- Collections: `telegramChannels`, `signalDeliveries`
+- Deterministic delivery id `${alertId}__${channelId}` → idempotent writes (`set` with merge), no duplicate deliveries
+- `findRecentDeliveryByChannel` / `countSentDeliveries` filter in-memory after a status-scoped query (acceptable at current volume; revisit with composite indexes if needed)
+
+**E2 limitation (firebase mode):** `sendAlertToChannel` and `getApprovalQueue` read alerts via `repos.alerts`, which still throws "not implemented yet" in firebase mode. These flows require `PERSISTENCE_PROVIDER=prisma` until the Alert repository is migrated in E4. Telegram channel CRUD and delivery records work fully in firebase mode; only alert-dependent send/queue flows are gated.
 
 ## What E1 Does NOT Do
 
@@ -87,8 +103,8 @@ backend/src/repositories/
 | Fixture | fixtures | index on canonicalKey, provider+providerFixtureId |
 | LiveSnapshot | fixtures/{id}/snapshots | subcollection; high volume; TTL cleanup |
 | ProviderHealth | providerHealth | ✅ migrated in E1 |
-| TelegramChannel | telegramChannels | small |
-| SignalDelivery | signalDeliveries | index on alertId+channelId |
+| TelegramChannel | telegramChannels | ✅ migrated in E2 |
+| SignalDelivery | signalDeliveries | ✅ migrated in E2; deterministic id `${alertId}__${channelId}` |
 | OddsSnapshot | fixtures/{id}/oddsSnapshots | subcollection |
 | AlertOddsContext | alerts/{id}/oddsContext | subcollection |
 

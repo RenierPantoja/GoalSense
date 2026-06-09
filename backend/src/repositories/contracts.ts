@@ -27,6 +27,7 @@ export interface PatternRepository {
 
 export interface AlertRepository {
   list(filters: { userId: string; status?: string; patternId?: string; limit?: number }): Promise<Json[]>
+  listForApprovalQueue(filters: { userId: string; minConfidence?: number; status?: string; sinceMs?: number; limit?: number }): Promise<Json[]>
   findById(id: string, userId: string): Promise<Json | null>
   findByFixtureIds(fixtureId: string): Promise<Json[]>
   findByDuplicateSignature(signature: string, sinceMs: number, userId: string): Promise<Json | null>

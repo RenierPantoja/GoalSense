@@ -5,6 +5,7 @@
  */
 import { prisma } from '../../db/client.js'
 import { env } from '../../env.js'
+import { createRepositories } from '../../repositories/index.js'
 import type { ProviderFixture, ProviderFetchResult } from '../../providers/provider.types.js'
 import { fetchEspnSummary, extractEspnStats, extractEspnTimedEvents, extractEspnShootoutEvents, type LiveMatchStats, type BackendTimedEvent, type ShootoutEvent } from '../../providers/espn.provider.js'
 import { buildCanonicalKey, shouldUpdateStatus } from '../fixtures/fixtureIdentity.service.js'
@@ -213,13 +214,12 @@ export async function processLiveFixtures(fixtures: ProviderFixture[]): Promise<
 // ─── Provider Health ─────────────────────────────────────────────────────────
 
 export async function recordProviderHealth(result: ProviderFetchResult) {
-  await prisma.providerHealth.create({
-    data: {
-      provider: result.provider,
-      endpoint: result.endpoint,
-      status: result.success ? 'ok' : (result.error?.includes('timeout') ? 'degraded' : 'down'),
-      latencyMs: result.latencyMs,
-      errorMessage: result.error || null,
-    },
+  const repos = createRepositories()
+  await repos.providerHealth.create({
+    provider: result.provider,
+    endpoint: result.endpoint,
+    status: result.success ? 'ok' : (result.error?.includes('timeout') ? 'degraded' : 'down'),
+    latencyMs: result.latencyMs,
+    errorMessage: result.error || null,
   })
 }

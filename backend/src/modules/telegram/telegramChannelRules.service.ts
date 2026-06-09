@@ -2,9 +2,10 @@
  * Telegram Channel Rules — evaluates alert eligibility per channel.
  * ─────────────────────────────────────────────────────────────────────────────
  * Phase C2: Rules control which alerts can be sent to which channels.
+ * Phase E2: DB access routed through the repository layer (Prisma or Firebase).
  * Backend is the final authority. Frontend can preview but backend enforces.
  */
-import { prisma } from '../../db/client.js'
+import { createRepositories } from '../../repositories/index.js'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -143,11 +144,9 @@ export async function evaluateAlertAgainstChannelRules(
 
   // cooldownMinutes
   if (rules.cooldownMinutes && rules.cooldownMinutes > 0) {
+    const repos = createRepositories()
     const cutoff = new Date(Date.now() - rules.cooldownMinutes * 60 * 1000)
-    const recentDelivery = await prisma.signalDelivery.findFirst({
-      where: { channelId, status: 'sent', sentAt: { gte: cutoff } },
-      orderBy: { sentAt: 'desc' },
-    })
+    const recentDelivery = await repos.telegram.findRecentDeliveryByChannel(channelId, cutoff)
     if (recentDelivery) {
       blockedReasons.push(`Cooldown ativo: último envio há menos de ${rules.cooldownMinutes}min`)
     }
@@ -155,13 +154,9 @@ export async function evaluateAlertAgainstChannelRules(
 
   // maxSignalsPerMatch
   if (rules.maxSignalsPerMatch && rules.maxSignalsPerMatch > 0) {
-    const matchDeliveries = await prisma.signalDelivery.count({
-      where: {
-        channelId,
-        status: 'sent',
-        alertId: { in: await getAlertIdsForFixture(alertMeta.fixtureId) },
-      },
-    })
+    const repos = createRepositories()
+    const alertIds = await getAlertIdsForFixture(alertMeta.fixtureId)
+    const matchDeliveries = await repos.telegram.countSentDeliveries(channelId, alertIds)
     if (matchDeliveries >= rules.maxSignalsPerMatch) {
       blockedReasons.push(`Máximo de ${rules.maxSignalsPerMatch} sinal(is) por partida atingido`)
     }
@@ -173,12 +168,9 @@ export async function evaluateAlertAgainstChannelRules(
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 async function getAlertIdsForFixture(fixtureId: string): Promise<string[]> {
-  const alerts = await prisma.alert.findMany({
-    where: { fixtureId },
-    select: { id: true },
-    take: 50,
-  })
-  return alerts.map(a => a.id)
+  const repos = createRepositories()
+  const alerts = await repos.alerts.findByFixtureIds(fixtureId)
+  return alerts.map((a: any) => a.id)
 }
 
 function safeParseJson(str: string | null | undefined, fallback: any): any {

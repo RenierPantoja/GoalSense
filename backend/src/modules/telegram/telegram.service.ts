@@ -4,9 +4,9 @@
  * Phase C1: Semi-automatic. User must confirm each send.
  * No automatic delivery. No odds. No irresponsible language.
  */
-import { prisma } from '../../db/client.js'
 import { env } from '../../env.js'
 import { parseChannelRules, extractAlertMetadata, evaluateAlertAgainstChannelRules } from './telegramChannelRules.service.js'
+import { createRepositories } from '../../repositories/index.js'
 
 const DEFAULT_USER = 'default'
 
@@ -84,20 +84,18 @@ export function formatSignalMessage(alert: {
 // ─── Channel Management ──────────────────────────────────────────────────────
 
 export async function listChannels() {
-  return prisma.telegramChannel.findMany({
-    where: { userId: DEFAULT_USER },
-    orderBy: { createdAt: 'desc' },
-  })
+  const repos = createRepositories()
+  return repos.telegram.listChannels(DEFAULT_USER)
 }
 
 export async function createChannel(data: { name: string; chatId: string; type?: string }) {
-  return prisma.telegramChannel.create({
-    data: { userId: DEFAULT_USER, name: data.name, chatId: data.chatId, type: data.type || 'group' },
-  })
+  const repos = createRepositories()
+  return repos.telegram.createChannel({ name: data.name, chatId: data.chatId, type: data.type || 'group' }, DEFAULT_USER)
 }
 
 export async function deleteChannel(id: string) {
-  return prisma.telegramChannel.delete({ where: { id } })
+  const repos = createRepositories()
+  return repos.telegram.deleteChannel(id)
 }
 
 // ─── Signal Delivery ─────────────────────────────────────────────────────────
@@ -105,24 +103,24 @@ export async function deleteChannel(id: string) {
 export async function sendAlertToChannel(alertId: string, channelId: string): Promise<{ success: boolean; deliveryId?: string; error?: string }> {
   if (!isTelegramEnabled()) return { success: false, error: 'Telegram not enabled' }
 
+  const repos = createRepositories()
+
   // Check duplicate delivery
-  let delivery = await prisma.signalDelivery.findFirst({
-    where: { alertId, channelId },
-  })
+  let delivery = await repos.telegram.findDelivery(alertId, channelId)
   if (delivery?.status === 'sent') return { success: false, error: 'Already sent to this channel' }
 
-  // Load alert
-  const alert = await prisma.alert.findFirst({ where: { id: alertId, userId: DEFAULT_USER } })
+  // Load alert (AlertRepository — Prisma in prisma mode; firebase mode throws clear error until E4)
+  const alert = await repos.alerts.findById(alertId, DEFAULT_USER)
   if (!alert) return { success: false, error: 'Alert not found' }
 
   // Load channel
-  const channel = await prisma.telegramChannel.findFirst({ where: { id: channelId, userId: DEFAULT_USER, isActive: true } })
-  if (!channel) return { success: false, error: 'Channel not found or inactive' }
+  const channel = await repos.telegram.findChannel(channelId, DEFAULT_USER)
+  if (!channel || channel.isActive === false) return { success: false, error: 'Channel not found or inactive' }
 
   // Evaluate channel rules
   const rules = parseChannelRules(channel.rulesJson)
   if (rules) {
-    const alertMeta = extractAlertMetadata(alert)
+    const alertMeta = extractAlertMetadata(alert as any)
     const eligibility = await evaluateAlertAgainstChannelRules(alertMeta, channelId, rules)
     if (!eligibility.eligible) {
       return { success: false, error: `Blocked by channel rules: ${eligibility.blockedReasons[0]}` }
@@ -152,36 +150,28 @@ export async function sendAlertToChannel(alertId: string, channelId: string): Pr
     dataQuality: evidence.triggerSnapshot?.dataQuality,
   })
 
-  // Create or update delivery record
+  // Create or update delivery record (deterministic id in Firebase = idempotent)
   if (delivery) {
-    delivery = await prisma.signalDelivery.update({
-      where: { id: delivery.id },
-      data: { status: 'pending', messageText, errorMessage: null },
-    })
+    delivery = await repos.telegram.updateDelivery(delivery.id, { status: 'pending', messageText, errorMessage: null })
   } else {
-    delivery = await prisma.signalDelivery.create({
-      data: { userId: DEFAULT_USER, alertId, channelId, status: 'pending', provider: 'telegram', messageText },
-    })
+    delivery = await repos.telegram.createDelivery({ userId: DEFAULT_USER, alertId, channelId, status: 'pending', provider: 'telegram', messageText })
   }
 
   // Send
   const result = await sendTelegramMessage(channel.chatId, messageText)
 
   if (result.success) {
-    await prisma.signalDelivery.update({ where: { id: delivery.id }, data: { status: 'sent', sentAt: new Date() } })
+    await repos.telegram.updateDelivery(delivery.id, { status: 'sent', sentAt: new Date().toISOString() })
     return { success: true, deliveryId: delivery.id }
   } else {
-    await prisma.signalDelivery.update({ where: { id: delivery.id }, data: { status: 'failed', errorMessage: result.error } })
+    await repos.telegram.updateDelivery(delivery.id, { status: 'failed', errorMessage: result.error })
     return { success: false, deliveryId: delivery.id, error: result.error }
   }
 }
 
 export async function listDeliveries(alertId?: string) {
-  return prisma.signalDelivery.findMany({
-    where: { userId: DEFAULT_USER, ...(alertId ? { alertId } : {}) },
-    orderBy: { createdAt: 'desc' },
-    take: 50,
-  })
+  const repos = createRepositories()
+  return repos.telegram.listDeliveries({ userId: DEFAULT_USER, alertId, limit: 50 })
 }
 
 // ─── Approval Queue ────────────────────────────────────────────────────────────
@@ -189,27 +179,25 @@ export async function listDeliveries(alertId?: string) {
 export async function getApprovalQueue(filters?: { limit?: number; minConfidence?: number; status?: string; channelId?: string; onlyEligible?: boolean; source?: string }) {
   if (!isTelegramEnabled()) return []
 
+  const repos = createRepositories()
+
   // Load all active channels
-  const channels = await prisma.telegramChannel.findMany({ where: { userId: DEFAULT_USER, isActive: true } })
+  const allChannels = await repos.telegram.listChannels(DEFAULT_USER)
+  const channels = allChannels.filter((c: any) => c.isActive !== false)
   if (channels.length === 0) return []
 
-  // Base alert query
-  const alertWhere: any = { userId: DEFAULT_USER }
-  if (filters?.minConfidence != null) alertWhere.confidence = { gte: filters.minConfidence }
-  if (filters?.status) alertWhere.status = filters.status
-  // We want recent alerts, maybe last 24 hours, to avoid processing ancient ones
-  alertWhere.createdAt = { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
-
-  // Load alerts (we need their evidence to evaluate channel rules)
-  let alerts = await prisma.alert.findMany({
-    where: alertWhere,
-    orderBy: { createdAt: 'desc' },
-    take: 200 // hard limit for performance
+  // Load recent alerts (with evidence to evaluate channel rules)
+  let alerts = await repos.alerts.listForApprovalQueue({
+    userId: DEFAULT_USER,
+    minConfidence: filters?.minConfidence,
+    status: filters?.status,
+    sinceMs: 24 * 60 * 60 * 1000,
+    limit: 200,
   })
 
   // Filter alerts by source if requested
   if (filters?.source) {
-    alerts = alerts.filter(a => {
+    alerts = alerts.filter((a: any) => {
       const ev = safeParseJson(a.evidenceJson, {})
       return ev.source === filters.source
     })
@@ -218,9 +206,9 @@ export async function getApprovalQueue(filters?: { limit?: number; minConfidence
   const queue = []
 
   for (const alert of alerts) {
-    const alertMeta = extractAlertMetadata(alert)
+    const alertMeta = extractAlertMetadata(alert as any)
     if (!alertMeta) continue
-    
+
     const ev = safeParseJson(alert.evidenceJson, {})
     if (!ev.evidences || ev.evidences.length === 0) continue
 
@@ -235,20 +223,11 @@ export async function getApprovalQueue(filters?: { limit?: number; minConfidence
       if (filters?.channelId && channel.id !== filters.channelId) continue
 
       // Check deliveries (sent or skipped)
-      const delivery = await prisma.signalDelivery.findFirst({
-        where: { alertId: alert.id, channelId: channel.id },
-        orderBy: { createdAt: 'desc' }
-      })
+      const delivery = await repos.telegram.findDelivery(alert.id, channel.id)
 
       if (delivery) {
-        if (delivery.status === 'sent') {
-          alreadySentChannels.push(channel.id)
-          continue
-        }
-        if (delivery.status === 'skipped') {
-          skippedChannels.push(channel.id)
-          continue
-        }
+        if (delivery.status === 'sent') { alreadySentChannels.push(channel.id); continue }
+        if (delivery.status === 'skipped') { skippedChannels.push(channel.id); continue }
       }
 
       // Evaluate channel rules
@@ -256,19 +235,10 @@ export async function getApprovalQueue(filters?: { limit?: number; minConfidence
       const eligibility = await evaluateAlertAgainstChannelRules(alertMeta, channel.id, rules)
 
       if (eligibility.eligible) {
-        eligibleChannels.push({
-          channelId: channel.id,
-          channelName: channel.name,
-          reasons: [],
-          warnings: eligibility.warnings
-        })
+        eligibleChannels.push({ channelId: channel.id, channelName: channel.name, reasons: [], warnings: eligibility.warnings })
         isEligibleForAny = true
       } else {
-        blockedChannels.push({
-          channelId: channel.id,
-          channelName: channel.name,
-          blockedReasons: eligibility.blockedReasons
-        })
+        blockedChannels.push({ channelId: channel.id, channelName: channel.name, blockedReasons: eligibility.blockedReasons })
       }
     }
 
@@ -288,7 +258,7 @@ export async function getApprovalQueue(filters?: { limit?: number; minConfidence
         triggerScoreAway: alert.triggerScoreAway,
         createdAt: alert.createdAt,
         evidenceJson: alert.evidenceJson,
-        temporalEvidenceJson: alert.temporalEvidenceJson
+        temporalEvidenceJson: alert.temporalEvidenceJson,
       },
       eligibleChannels,
       blockedChannels,
@@ -296,9 +266,9 @@ export async function getApprovalQueue(filters?: { limit?: number; minConfidence
       skippedChannels,
       recommended: true,
       warnings: [],
-      createdAt: alert.createdAt
+      createdAt: alert.createdAt,
     })
-    
+
     if (filters?.limit && queue.length >= filters.limit) break
   }
 
@@ -306,40 +276,29 @@ export async function getApprovalQueue(filters?: { limit?: number; minConfidence
 }
 
 export async function ignoreAlertInQueue(alertId: string, channelId?: string, reason?: string) {
+  const repos = createRepositories()
   let channelsToSkip: { id: string }[] = []
   if (channelId) {
     channelsToSkip = [{ id: channelId }]
   } else {
-    channelsToSkip = await prisma.telegramChannel.findMany({ where: { userId: DEFAULT_USER, isActive: true }, select: { id: true } })
+    const channels = await repos.telegram.listChannels(DEFAULT_USER)
+    channelsToSkip = channels.filter((c: any) => c.isActive !== false).map((c: any) => ({ id: c.id }))
   }
 
   const results = []
   for (const ch of channelsToSkip) {
-    const existing = await prisma.signalDelivery.findFirst({
-      where: { alertId, channelId: ch.id }
-    })
-    
+    const existing = await repos.telegram.findDelivery(alertId, ch.id)
     if (!existing) {
-      const delivery = await prisma.signalDelivery.create({
-        data: {
-          userId: DEFAULT_USER,
-          alertId,
-          channelId: ch.id,
-          status: 'skipped',
-          provider: 'telegram',
-          errorMessage: reason || 'Skipped by user'
-        }
+      const delivery = await repos.telegram.createDelivery({
+        userId: DEFAULT_USER, alertId, channelId: ch.id, status: 'skipped', provider: 'telegram', errorMessage: reason || 'Skipped by user',
       })
       results.push(delivery)
     } else if (existing.status !== 'sent' && existing.status !== 'skipped') {
-       const delivery = await prisma.signalDelivery.update({
-         where: { id: existing.id },
-         data: { status: 'skipped', errorMessage: reason || 'Skipped by user' }
-       })
-       results.push(delivery)
+      const delivery = await repos.telegram.updateDelivery(existing.id, { status: 'skipped', errorMessage: reason || 'Skipped by user' })
+      results.push(delivery)
     }
   }
-  
+
   return { success: true, skippedCount: results.length }
 }
 
