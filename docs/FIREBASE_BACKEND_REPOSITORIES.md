@@ -20,7 +20,8 @@ Selection is centralized in `backend/src/repositories/index.ts` (`createReposito
 - Lazy: Firestore is only initialized on first `getFirestore()` call.
 - `firebase-admin` is loaded via dynamic import, so the Prisma path never touches it.
 - Credentials resolved from either:
-  - `FIREBASE_SERVICE_ACCOUNT_JSON` (full service account JSON, single line), or
+  - `FIREBASE_SERVICE_ACCOUNT_JSON` (full service account JSON, single line),
+  - `FIREBASE_SERVICE_ACCOUNT_PATH` (path to a JSON file — local convenience, never commit the file), or
   - `FIREBASE_PROJECT_ID` + `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY`
 - Private keys with literal `\n` are normalized to real newlines.
 - Credentials never leave the backend and are never bundled into the frontend.
@@ -130,6 +131,10 @@ migrated concerns:
 - ✅ **E6** — Performance analytics repository-backed (on-demand, provider-agnostic).
   Direct Prisma usage now confined to `db/client.ts` + the Prisma adapter. See
   `FIREBASE_PERFORMANCE_ANALYTICS.md`.
+- ✅ **E6.1** — Full backend validated end-to-end in firebase mode against a real
+  Firestore project (no Postgres). See `FIREBASE_RUNTIME_QA.md`. No Firestore
+  composite index was required for the QA (single-equality + in-memory sort);
+  recommended indexes for scale are documented.
 
 ## Limitations (still open after E6)
 
@@ -174,8 +179,9 @@ Resolution workers run in firebase mode, plus Odds, Telegram, and Performance
 analytics. Every backend module is now repository-backed; no module imports
 Prisma directly.
 
-## Next steps (E6.1)
+## Next steps (E6.2)
 
-- **E6.1** — Incremental denormalized performance counters (updated when the
-  resolution worker writes a resolution) to avoid scanning all alerts per request,
-  then remove Prisma once all adapters are validated.
+- **E6.2** — Implement incremental denormalized performance counters (design in
+  `FIREBASE_PERFORMANCE_ANALYTICS.md`) to replace the on-demand scan; add a
+  reconciliation job; then remove Prisma once all adapters are validated in
+  production.

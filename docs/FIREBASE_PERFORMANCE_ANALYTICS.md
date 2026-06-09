@@ -99,6 +99,78 @@ The frontend `PerformanceView` (backend-preferred, local fallback) is untouched.
 - Full firebase runtime depends on real credentials + populated collections;
   this phase validates typecheck/build + repository wiring.
 
+## Runtime validation (E6.1)
+
+Performance was validated end-to-end against a real Firestore project in firebase
+mode (see `FIREBASE_RUNTIME_QA.md`):
+- empty collections → honest empty/zeroed responses, no crash;
+- with 1 alert resolved as `unknown`: `/summary` reported `unknownCount:1`,
+  `failedCount:0`, `resolvedCount:0`, all rates `null` (sample < 5);
+- `/patterns/:id` reported `insufficient_sample` with breakdowns sourced from the
+  resolution doc (`byResolutionType`) and temporal evidence (`byMomentumSource`);
+- malformed/missing evidence tolerated by `performanceInputAdapter`.
+
+## E6.2 design — incremental performance counters (NOT YET IMPLEMENTED)
+
+Goal: avoid scanning all alerts per request by maintaining denormalized counters
+updated when a resolution is written. Design only — no implementation in this phase.
+
+### Collections
+
+`patternPerformanceCounters/{patternId}`
+```
+patternId            string
+totalAlerts          number
+resolvedAlerts       number
+confirmed            number
+confirmedPartial     number
+failed               number
+unknown              number
+expired              number
+usefulRate           number | null   // (confirmed + confirmedPartial) / resolved, when resolved >= 5
+failedRate           number | null
+unknownRate          number | null
+lastUpdatedAt        string (ISO)
+processedAlertIds     // see idempotency note (NOT stored inline at scale)
+```
+
+Breakdowns as subcollections (one doc per key, with a `count` field):
+```
+patternPerformanceBreakdowns/{patternId}/byMomentumSource/{source}   { count }
+patternPerformanceBreakdowns/{patternId}/byDataQuality/{quality}      { count }
+patternPerformanceBreakdowns/{patternId}/byProvider/{provider}        { count }
+```
+
+### Update trigger
+
+- Updated at the moment an `alertResolution` is written (resolution worker /
+  `alertResolutions.resolveAlert`), via a repository hook or a counter service,
+  inside the same Firestore batch where possible.
+- `totalAlerts` increments when an alert is created (pattern worker / alerts.create).
+
+### Idempotency (must not double-count)
+
+- Each resolution carries the `alertId`; the counter update must run **once per
+  alertId**. Options:
+  - mark the resolution doc with `countersApplied: true` and skip if already set
+    (checked inside the batch), or
+  - keep a `processedAlertIds` set in a dedicated `.../processed/{alertId}` doc
+    so re-processing the same alert is a no-op.
+- Rates are recomputed from the counters on write (still gated by
+  `resolved >= 5`); `unknown` is never folded into `failed`.
+
+### Read path after E6.2
+
+- `/performance/patterns/:id` and `/summary` read the counter docs directly
+  (O(1)), with the on-demand scan kept as a fallback / reconciliation job.
+- A periodic reconciliation (recompute from raw alerts) guards against drift.
+
+### Why deferred
+
+Counters are an optimization. On-demand aggregation is correct and honest today;
+incremental counters add write-path complexity and idempotency risk that should
+only be taken on once volume justifies it.
+
 ## Prisma direct-import audit (after E6)
 
 Direct Prisma usage now exists **only** in:

@@ -52,7 +52,8 @@ Rationale: the project is already Firebase-first; running a second database (Pos
 4. ✅ E4 — Migrate Fixtures + LiveSnapshots to Firestore; Live Monitor (service + routes + worker) runs without Postgres
 5. ✅ E5 — Migrate Odds + Command Center workers (pattern evaluation + resolution) to repositories; both workers run in firebase mode
 6. ✅ E6 — Migrate Performance analytics to repositories (on-demand, provider-agnostic). Prisma direct usage now confined to `db/client.ts` + the Prisma adapter.
-7. E6.1 (future) — Incremental denormalized counters for performance; then remove Prisma once validated.
+7. ✅ E6.1 — Firebase runtime QA against a real Firestore project (all modules validated end-to-end, no Postgres); E6.2 incremental performance counters designed (not implemented).
+8. E6.2 (future) — Implement incremental denormalized performance counters; then remove Prisma once validated.
 
 ## Repository Layer (E1)
 

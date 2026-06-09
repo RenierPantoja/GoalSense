@@ -6,6 +6,7 @@
  * Credentials NEVER leave the backend.
  */
 import { env } from '../env.js'
+import { readFileSync } from 'node:fs'
 
 // Dynamic import so firebase-admin is only loaded when actually needed.
 // This keeps the Prisma path free of the firebase-admin dependency at runtime.
@@ -20,7 +21,7 @@ interface ServiceAccountCreds {
 }
 
 function resolveCredentials(): ServiceAccountCreds | null {
-  // Option 1: full JSON
+  // Option 1: full JSON (inline string)
   if (env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     try {
       const parsed = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON)
@@ -33,7 +34,26 @@ function resolveCredentials(): ServiceAccountCreds | null {
       throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON')
     }
   }
-  // Option 2: separate vars
+  // Option 2: path to a service account JSON file (local convenience; never commit the file)
+  if (env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+    let raw: string
+    try {
+      raw = readFileSync(env.FIREBASE_SERVICE_ACCOUNT_PATH, 'utf8')
+    } catch {
+      throw new Error(`FIREBASE_SERVICE_ACCOUNT_PATH could not be read: ${env.FIREBASE_SERVICE_ACCOUNT_PATH}`)
+    }
+    try {
+      const parsed = JSON.parse(raw)
+      return {
+        projectId: parsed.project_id || parsed.projectId,
+        clientEmail: parsed.client_email || parsed.clientEmail,
+        privateKey: (parsed.private_key || parsed.privateKey || '').replace(/\\n/g, '\n'),
+      }
+    } catch {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT_PATH file is not valid JSON')
+    }
+  }
+  // Option 3: separate vars
   if (env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY) {
     return {
       projectId: env.FIREBASE_PROJECT_ID,
@@ -84,5 +104,5 @@ export async function getFirestore(): Promise<any> {
 }
 
 export function isFirebaseConfigured(): boolean {
-  return !!(env.FIREBASE_SERVICE_ACCOUNT_JSON || (env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY))
+  return !!(env.FIREBASE_SERVICE_ACCOUNT_JSON || env.FIREBASE_SERVICE_ACCOUNT_PATH || (env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY))
 }
