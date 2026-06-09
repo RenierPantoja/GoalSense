@@ -1,9 +1,9 @@
 /**
- * Live Monitor Service — captures live fixture snapshots into the database.
+ * Live Monitor Service — captures live fixture snapshots via the repository layer.
  * ─────────────────────────────────────────────────────────────────────────────
  * Phase B6.1: Enriched snapshots with stats + timed events from ESPN summary.
+ * Phase E4: Fixtures + LiveSnapshots persist through repos (Prisma or Firebase).
  */
-import { prisma } from '../../db/client.js'
 import { env } from '../../env.js'
 import { createRepositories } from '../../repositories/index.js'
 import type { ProviderFixture, ProviderFetchResult } from '../../providers/provider.types.js'
@@ -13,54 +13,45 @@ import { buildCanonicalKey, shouldUpdateStatus } from '../fixtures/fixtureIdenti
 // ─── Fixture Upsert ──────────────────────────────────────────────────────────
 
 export async function upsertFixture(pf: ProviderFixture) {
+  const repos = createRepositories()
   const canonicalKey = buildCanonicalKey(pf.homeTeam, pf.awayTeam, pf.startTime)
 
   // Try to find by provider + providerFixtureId first
-  const existing = await prisma.fixture.findFirst({
-    where: { provider: pf.provider, providerFixtureId: pf.providerFixtureId },
-  })
+  const existing = await repos.fixtures.findByProviderId(pf.provider, pf.providerFixtureId)
 
   if (existing) {
     // Only update if status doesn't regress
     if (shouldUpdateStatus(existing.status, pf.status)) {
-      await prisma.fixture.update({
-        where: { id: existing.id },
-        data: {
-          status: pf.status,
-          canonicalKey,
-          homeName: pf.homeTeam,
-          awayName: pf.awayTeam,
-          competition: pf.competition,
-        },
+      await repos.fixtures.update(existing.id, {
+        status: pf.status,
+        canonicalKey,
+        homeName: pf.homeTeam,
+        awayName: pf.awayTeam,
+        competition: pf.competition,
       })
     }
     return existing.id
   }
 
   // Try by canonical key (cross-provider dedup)
-  const byKey = await prisma.fixture.findFirst({ where: { canonicalKey } })
+  const byKey = await repos.fixtures.findByCanonicalKey(canonicalKey)
   if (byKey) {
     if (shouldUpdateStatus(byKey.status, pf.status)) {
-      await prisma.fixture.update({
-        where: { id: byKey.id },
-        data: { status: pf.status },
-      })
+      await repos.fixtures.update(byKey.id, { status: pf.status })
     }
     return byKey.id
   }
 
   // Create new
-  const created = await prisma.fixture.create({
-    data: {
-      provider: pf.provider,
-      providerFixtureId: pf.providerFixtureId,
-      canonicalKey,
-      homeName: pf.homeTeam,
-      awayName: pf.awayTeam,
-      competition: pf.competition,
-      status: pf.status,
-      startTime: new Date(pf.startTime),
-    },
+  const created = await repos.fixtures.create({
+    provider: pf.provider,
+    providerFixtureId: pf.providerFixtureId,
+    canonicalKey,
+    homeName: pf.homeTeam,
+    awayName: pf.awayTeam,
+    competition: pf.competition,
+    status: pf.status,
+    startTime: new Date(pf.startTime),
   })
   return created.id
 }
@@ -108,34 +99,30 @@ export async function captureLiveSnapshot(
   enrichedStats?: LiveMatchStats | null,
   enrichedEvents?: BackendTimedEvent[] | null,
 ): Promise<boolean> {
-  // Get last snapshot for this fixture to decide if we should store
-  const lastSnapshot = await prisma.liveSnapshot.findFirst({
-    where: { fixtureId },
-    orderBy: { capturedAt: 'desc' },
-    select: { minute: true, scoreHome: true, scoreAway: true, status: true, statsJson: true, eventsJson: true },
-  })
+  const repos = createRepositories()
 
-  const decision = shouldStoreSnapshot(lastSnapshot, pf, enrichedEvents)
+  // Get last snapshot for this fixture to decide if we should store
+  const lastSnapshot = await repos.liveSnapshots.findLatestByFixture(fixtureId)
+
+  const decision = shouldStoreSnapshot(lastSnapshot as any, pf, enrichedEvents)
   if (!decision.shouldStore) return false
 
   const stats = enrichedStats || pf.stats
   const events = enrichedEvents || pf.events
   const dataQuality = assessDataQuality(enrichedStats || null, enrichedEvents || null)
 
-  await prisma.liveSnapshot.create({
-    data: {
-      fixtureId,
-      minute: pf.minute,
-      status: pf.status,
-      scoreHome: pf.scoreHome,
-      scoreAway: pf.scoreAway,
-      penaltyHome: pf.penaltyHome,
-      penaltyAway: pf.penaltyAway,
-      dataQuality,
-      provider: pf.provider,
-      statsJson: stats ? JSON.stringify(stats) : null,
-      eventsJson: events ? JSON.stringify(events) : null,
-    },
+  await repos.liveSnapshots.create({
+    fixtureId,
+    minute: pf.minute,
+    status: pf.status,
+    scoreHome: pf.scoreHome,
+    scoreAway: pf.scoreAway,
+    penaltyHome: pf.penaltyHome,
+    penaltyAway: pf.penaltyAway,
+    dataQuality,
+    provider: pf.provider,
+    statsJson: stats ? JSON.stringify(stats) : null,
+    eventsJson: events ? JSON.stringify(events) : null,
   })
   return true
 }

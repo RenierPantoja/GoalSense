@@ -2,7 +2,6 @@
  * Live Monitor Routes — observability endpoints for the worker.
  */
 import type { FastifyInstance } from 'fastify'
-import { prisma } from '../../db/client.js'
 import { createRepositories } from '../../repositories/index.js'
 import { getLiveMonitorStatus } from '../../workers/liveMonitor.worker.js'
 import { ok } from '../../utils/apiResponse.js'
@@ -18,14 +17,11 @@ export async function liveMonitorRoutes(app: FastifyInstance) {
     const { fixtureId, limit } = req.query as { fixtureId?: string; limit?: string }
     const take = Math.min(parseInt(limit || '20'), 100)
 
-    const snapshots = await prisma.liveSnapshot.findMany({
-      where: fixtureId ? { fixtureId } : {},
-      orderBy: { capturedAt: 'desc' },
-      take,
-    })
+    const repos = createRepositories()
+    const snapshots = await repos.liveSnapshots.listRecent({ fixtureId, limit: take })
 
     // Enrich response with computed metadata
-    const enriched = snapshots.map(s => {
+    const enriched = snapshots.map((s: any) => {
       let eventsCount = 0
       let lastEvent: string | null = null
       if (s.eventsJson) {
@@ -57,10 +53,8 @@ export async function liveMonitorRoutes(app: FastifyInstance) {
   // Live fixtures from DB
   app.get('/fixtures/live', async () => {
     const liveStatuses = ['1H', '2H', 'HT', 'ET', 'P', 'BT']
-    const fixtures = await prisma.fixture.findMany({
-      where: { status: { in: liveStatuses } },
-      orderBy: { updatedAt: 'desc' },
-    })
+    const repos = createRepositories()
+    const fixtures = await repos.fixtures.listLive(liveStatuses)
     return ok(fixtures)
   })
 

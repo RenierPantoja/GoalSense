@@ -98,25 +98,34 @@ migrated concerns:
 - `backend/src/modules/telegram/telegramChannelRules.service.ts`
 - `backend/src/modules/patterns/patterns.service.ts` — list/get/create/update/delete (E3)
 - `backend/src/modules/alerts/alerts.service.ts` — list/get/create/resolve + dedup (E3)
+- `backend/src/modules/live/liveMonitor.service.ts` — `upsertFixture` +
+  `captureLiveSnapshot` now use `repos.fixtures` / `repos.liveSnapshots`; no
+  `prisma` import remains (E4)
+- `backend/src/modules/live/liveMonitor.routes.ts` — `/live-snapshots/recent`,
+  `/fixtures/live`, `/provider-health` use the repository layer (E4)
 
-## E2 / E3 status
+## E2 / E3 / E4 status
 
 - ✅ **E2** — ProviderHealth + Telegram (channels + deliveries) on Firestore.
 - ✅ **E3** — Patterns + Alerts + AlertResolutions on Firestore. Alert-dependent
   Telegram flows (`sendAlertToChannel`, `getApprovalQueue`) now work in firebase
   mode. See `FIREBASE_PATTERNS_ALERTS_MIGRATION.md`.
+- ✅ **E4** — Fixtures + LiveSnapshots on Firestore. The Live Monitor
+  (service + routes + worker) runs in firebase mode without Postgres. See
+  `FIREBASE_FIXTURES_SNAPSHOTS_MIGRATION.md`.
 
-## Limitations (still open after E3)
+## Limitations (still open after E4)
 
 - **In-memory filtering / sorting** in several adapters (deliveries, alerts,
-  patterns). Fine at current single-user volume; switch to Firestore composite
-  indexes + server-side `orderBy/limit` as volume grows (indexes listed in
-  `FIREBASE_PATTERNS_ALERTS_MIGRATION.md`).
-- **Fixtures / LiveSnapshots / Odds** are not yet migrated to Firestore — they
-  throw clear "not implemented yet" errors in firebase mode (E4+).
-- **Workers** (live monitor, pattern evaluation, alert resolution) still depend
-  on Prisma directly and require `PERSISTENCE_PROVIDER=prisma`.
-- **Performance analytics** still uses Prisma aggregations (E5).
+  patterns, fixtures listLive, snapshot per-fixture queries). Fine at current
+  single-user volume; switch to Firestore composite indexes + server-side
+  `orderBy/limit` as volume grows (indexes listed in the per-phase migration docs).
+- **Pattern evaluation + resolution workers** (`commandEvaluation.service`,
+  `alertResolution.service`) still use Prisma directly and require
+  `PERSISTENCE_PROVIDER=prisma` (E5).
+- **Odds** persistence is not yet migrated — throws a clear "not implemented yet"
+  error in firebase mode (E5).
+- **Performance analytics** still uses Prisma aggregations (E6).
 - **No data migration** has been performed. Switching providers starts from empty
   Firestore collections.
 
@@ -138,20 +147,21 @@ npm run typecheck
 npm run build
 ```
 
-### Firebase mode (Patterns, Alerts, Resolutions, ProviderHealth, Telegram)
+### Firebase mode (Patterns, Alerts, Resolutions, Fixtures, LiveSnapshots, ProviderHealth, Telegram)
 
 ```
 PERSISTENCE_PROVIDER=firebase
 FIREBASE_SERVICE_ACCOUNT_JSON={...}        # or the 3 separate vars
 ```
 
-No `DATABASE_URL` required. Fixtures / LiveSnapshots / Odds and the workers still
-require prisma mode and return clear errors until E4+.
+No `DATABASE_URL` required. The Live Monitor worker can capture fixtures +
+snapshots in firebase mode. Odds and the pattern-evaluation / resolution workers
+still require prisma mode and return clear errors until E5+.
 
-## Next steps (E4+)
+## Next steps (E5+)
 
-- **E4** — `FirebaseFixtureRepository` + `FirebaseLiveSnapshotRepository`
-  (snapshots as a `fixtures/{id}/snapshots` subcollection; mind read costs + TTL),
-  then migrate the workers off Prisma.
-- **E5** — Performance analytics re-modeled with denormalized counters.
-- **E6** — Remove Prisma once all adapters exist and are validated.
+- **E5** — `FirebaseOddsRepository`; migrate the pattern evaluation
+  (`commandEvaluation.service`) and resolution (`alertResolution.service`) workers
+  off Prisma (contracts already cover their needs).
+- **E6** — Performance analytics re-modeled with denormalized counters; remove
+  Prisma once all adapters exist and are validated.

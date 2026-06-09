@@ -49,9 +49,9 @@ Rationale: the project is already Firebase-first; running a second database (Pos
 1. ✅ E1 — Repository contracts + Prisma adapters + Firebase Admin + factory + 1 Firebase adapter (ProviderHealth)
 2. ✅ E2 — Migrate simple modules (Telegram channels + deliveries, ProviderHealth) to Firestore behind the factory
 3. ✅ E3 — Migrate Patterns + Alerts + AlertResolutions to Firestore; unlock Telegram alert-dependent flows in firebase mode
-4. E4 — Migrate Fixtures + LiveSnapshots (high volume; needs read-cost discipline)
-5. E5 — Re-model Performance analytics for Firestore (denormalized counters)
-6. E6 — Remove Prisma once all adapters exist and are validated
+4. ✅ E4 — Migrate Fixtures + LiveSnapshots to Firestore; Live Monitor (service + routes + worker) runs without Postgres
+5. E5 — Migrate Odds persistence to Firestore; migrate pattern evaluation + resolution workers
+6. E6 — Re-model Performance analytics for Firestore (denormalized counters), then remove Prisma
 
 ## Repository Layer (E1)
 
@@ -67,6 +67,8 @@ backend/src/repositories/
     firebasePattern.repository.ts         # Patterns (E3)
     firebaseAlert.repository.ts           # Alerts (E3)
     firebaseAlertResolution.repository.ts # Alert resolutions (E3)
+    firebaseFixture.repository.ts         # Fixtures (E4)
+    firebaseLiveSnapshot.repository.ts    # Live snapshots (E4)
 ```
 
 `PERSISTENCE_PROVIDER` env selects the implementation:
@@ -103,8 +105,8 @@ Firestore adapter (`firebaseTelegram.repository.ts`):
 | Pattern | patterns | ✅ migrated in E3 (soft-delete via status='archived') |
 | Alert | alerts | ✅ migrated in E3; index on patternId, fixtureId, status, duplicateSignature |
 | AlertResolution | alertResolutions | ✅ migrated in E3; deterministic id = alertId (1:1) |
-| Fixture | fixtures | index on canonicalKey, provider+providerFixtureId |
-| LiveSnapshot | fixtures/{id}/snapshots | subcollection; high volume; TTL cleanup |
+| Fixture | fixtures | ✅ migrated in E4; deterministic id `provider__providerFixtureId` |
+| LiveSnapshot | liveSnapshots | ✅ migrated in E4; auto id, indexed by fixtureId + capturedAt |
 | ProviderHealth | providerHealth | ✅ migrated in E1 |
 | TelegramChannel | telegramChannels | ✅ migrated in E2 |
 | SignalDelivery | signalDeliveries | ✅ migrated in E2; deterministic id `${alertId}__${channelId}` |
