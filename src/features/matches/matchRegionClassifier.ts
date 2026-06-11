@@ -5,9 +5,15 @@
  * Brazilian club is playing (even in Libertadores, friendlies, etc.).
  * Same logic for "Europa" with European competitions/clubs.
  *
- * Detection uses KEYWORD SUBSTRING matching on normalized names (lowercase,
- * no accents, no hyphens). This is intentionally more permissive than exact
- * set matching because providers send wildly different name formats.
+ * Detection uses TOKEN matching on normalized names (lowercase, no accents,
+ * no punctuation). Single-word aliases must match a WHOLE token; multi-word
+ * aliases must match a contiguous token sequence. This prevents substring
+ * false positives like "Sporting"/"Sportivo" being read as "Sport" (Recife).
+ *
+ * Ambiguous single words (e.g. "sport", "vitoria") are treated as WEAK
+ * evidence: they only classify a match as Brazil when the match also has
+ * STRONG Brazilian evidence (a safe Brazilian club, a Brazilian competition,
+ * or country = Brazil). See docs/MATCHES_REGION_FILTERS.md.
  *
  * No mocks. No invented data. No API calls.
  */
@@ -21,82 +27,122 @@ export interface RegionMatchResult {
   reasons: string[]
 }
 
-// --- Normalization --------------------------------------------------------
+type BrazilEvidence = 'strong' | 'weak' | null
+
+// --- Normalization & token matching ---------------------------------------
 
 function norm(s: string): string {
   return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/['\-\.~]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-// --- Brazilian clubs (keywords that appear in team names) ------------------
-// We use KEYWORDS but with WORD BOUNDARY matching to avoid false positives
-// like "Sporting" matching "sport". Keywords are checked as whole words or
-// multi-word sequences within the normalized name.
+function tokenize(s: string): string[] {
+  return norm(s).split(' ').filter(Boolean)
+}
 
-// Safe single-word keywords (unique enough to not cause false positives)
-const BRAZIL_SAFE_KEYWORDS = [
+/** Does `tokens` contain `seq` as a contiguous sub-sequence of tokens? */
+function hasTokenSequence(tokens: string[], seq: string[]): boolean {
+  if (seq.length === 0 || seq.length > tokens.length) return false
+  for (let i = 0; i + seq.length <= tokens.length; i++) {
+    let ok = true
+    for (let j = 0; j < seq.length; j++) {
+      if (tokens[i + j] !== seq[j]) { ok = false; break }
+    }
+    if (ok) return true
+  }
+  return false
+}
+
+/**
+ * Token-aware alias match. A single-word alias must equal a whole token; a
+ * multi-word alias must appear as a contiguous token sequence. Never matches
+ * inside a word (so "sport" does NOT match "sporting"/"sportivo").
+ */
+export function matchesClubAlias(name: string, alias: string): boolean {
+  const nameTokens = tokenize(name)
+  const aliasTokens = tokenize(alias)
+  if (aliasTokens.length === 0) return false
+  if (aliasTokens.length === 1) return nameTokens.includes(aliasTokens[0])
+  return hasTokenSequence(nameTokens, aliasTokens)
+}
+
+function debugRegion(message: string, data: Record<string, unknown>): void {
+  try {
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV) {
+      // eslint-disable-next-line no-console
+      console.debug(`[GoalSense][Region] ${message}`, data)
+    }
+  } catch { /* no-op */ }
+}
+
+// --- Brazilian clubs -------------------------------------------------------
+
+// Safe single-word aliases: unique enough that a whole-token match alone is
+// STRONG evidence of a Brazilian club.
+const BRAZIL_SAFE_SINGLE = [
   'flamengo', 'palmeiras', 'corinthians', 'santos', 'vasco',
   'botafogo', 'fluminense', 'gremio', 'internacional', 'cruzeiro',
   'bahia', 'fortaleza', 'coritiba', 'chapecoense', 'mirassol',
   'novorizontino', 'paysandu', 'remo', 'avai', 'guarani',
   'juventude', 'criciuma', 'cuiaba', 'tombense', 'londrina', 'ituano',
-  'bragantino', 'nautico', 'abc', 'csa', 'crb',
+  'bragantino', 'nautico', 'abc', 'csa', 'crb', 'ceara', 'goias', 'operario',
 ]
 
-// Multi-word keywords (must appear as sequence)
-const BRAZIL_MULTIWORD_KEYWORDS = [
+// Multi-word aliases: STRONG evidence (must match as a token sequence).
+// Includes the safe Sport Recife aliases.
+const BRAZIL_STRONG_MULTIWORD = [
   'sao paulo', 'atletico mineiro', 'atletico mg', 'athletico paranaense',
   'athletico pr', 'atletico goianiense', 'atletico go',
-  'sport recife', 'sport club', 'sport c recife',
+  'sport recife', 'sport club recife', 'sport club do recife',
+  'sport clube do recife', 'sport c recife', 'sc recife',
   'america mineiro', 'america mg', 'vila nova', 'santa cruz',
   'ponte preta', 'sampaio correa', 'botafogo sp', 'botafogo pb',
   'red bull bragantino', 'rb bragantino',
   'vasco da gama', 'ceara sc',
 ]
 
-// Ambiguous single words that need context (opponent or competition must also be Brazilian)
-const BRAZIL_AMBIGUOUS_KEYWORDS = ['vitoria', 'ceara', 'goias', 'operario', 'sport']
+// Ambiguous single words: WEAK evidence only. They classify Brazil ONLY when
+// the match has strong Brazilian evidence elsewhere (safe club / comp / country).
+// "sport" alone could be Sport Boys (PE) / Sportivo / Sporting; "vitoria" alone
+// could be Vitória Guimarães / Setúbal (PT).
+const BRAZIL_WEAK_SINGLE = ['sport', 'vitoria']
 
-function isBrazilianClub(teamName: string): boolean {
+// Extra safety net: names that must NEVER count as Brazilian via the "sport"
+// family, regardless of tokens. Used for clarity/auditing — token matching
+// already prevents these, this is a defensive second layer.
+const SPORT_LIKE_BLOCK_TOKENS = ['sporting', 'sportivo', 'sports']
+
+function isSportLikeNonRecife(name: string): boolean {
+  const tokens = tokenize(name)
+  return SPORT_LIKE_BLOCK_TOKENS.some(t => tokens.includes(t))
+}
+
+/**
+ * Classify a single team name as Brazilian evidence.
+ * - 'strong': a safe single-word club or a strong multi-word alias.
+ * - 'weak': only an ambiguous token (needs Brazilian context to count).
+ * - null: no Brazilian signal.
+ */
+function classifyBrazilClub(teamName: string): BrazilEvidence {
   const n = norm(teamName)
-  if (!n || n.length < 3) return false
+  if (!n || n.length < 3) return null
 
-  // 1. Check safe single-word keywords with word boundary
-  for (const kw of BRAZIL_SAFE_KEYWORDS) {
-    if (hasWordBoundary(n, kw)) return true
+  // Strong: multi-word aliases (sequence match).
+  for (const alias of BRAZIL_STRONG_MULTIWORD) {
+    if (matchesClubAlias(teamName, alias)) return 'strong'
   }
-
-  // 2. Check multi-word keywords (substring is fine for multi-word)
-  for (const kw of BRAZIL_MULTIWORD_KEYWORDS) {
-    if (n.includes(kw)) return true
+  // Strong: safe single-word aliases (whole-token match).
+  for (const kw of BRAZIL_SAFE_SINGLE) {
+    if (matchesClubAlias(teamName, kw)) return 'strong'
   }
-
-  // 3. Ambiguous keywords: only match with word boundary AND the name
-  //    doesn't start with a known false-positive prefix
-  for (const kw of BRAZIL_AMBIGUOUS_KEYWORDS) {
-    if (hasWordBoundary(n, kw) && !isFalsePositivePrefix(n)) return true
+  // Weak: ambiguous single words (need context).
+  for (const kw of BRAZIL_WEAK_SINGLE) {
+    if (kw === 'sport' && isSportLikeNonRecife(teamName)) {
+      debugRegion('Ignored ambiguous sport-like name', { teamName, reason: 'sporting/sportivo/sports is not Sport Recife' })
+      continue
+    }
+    if (matchesClubAlias(teamName, kw)) return 'weak'
   }
-
-  return false
-}
-
-/** Check if `keyword` appears as a whole word in `text`. */
-function hasWordBoundary(text: string, keyword: string): boolean {
-  // Build a regex with word boundaries
-  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`\\b${escaped}\\b`).test(text)
-}
-
-/** Known prefixes that indicate a non-Brazilian club even if it contains
- *  an ambiguous keyword like "sport" or "vitoria". */
-function isFalsePositivePrefix(normalizedName: string): boolean {
-  return (
-    normalizedName.startsWith('sporting') ||
-    normalizedName.startsWith('sportivo') ||
-    normalizedName.includes('sporting') ||
-    normalizedName.includes('sportivo') ||
-    normalizedName.includes('sports ') ||
-    normalizedName.includes(' sports')
-  )
+  return null
 }
 
 // --- Brazilian competitions -----------------------------------------------
@@ -155,14 +201,15 @@ function isEuropeanClub(teamName: string): boolean {
   const n = norm(teamName)
   if (!n || n.length < 3) return false
 
-  // Multi-word keywords (substring match is safe for multi-word)
+  // Multi-word keywords (token sequence match — safe, never matches mid-word).
   for (const kw of EUROPEAN_CLUB_KEYWORDS) {
-    if (kw.includes(' ') && n.includes(kw)) return true
+    if (kw.includes(' ') && matchesClubAlias(teamName, kw)) return true
   }
 
-  // Single-word safe keywords with word boundary
+  // Single-word safe keywords (whole-token match). Generic words like "real",
+  // "city", "united", "sporting" are intentionally NOT in this list.
   for (const kw of EUROPE_SAFE_SINGLE) {
-    if (hasWordBoundary(n, kw)) return true
+    if (matchesClubAlias(teamName, kw)) return true
   }
 
   return false
@@ -225,22 +272,31 @@ export function classifyMatchRegions(match: {
   const compName = norm(match.competition.name)
   const country = norm(match.area?.name || '')
 
-  // --- Brazil ---
-  if (BRAZIL_COUNTRIES.has(country)) {
+  // --- Brazil (strong/weak evidence model) ---
+  const countryBrazil = BRAZIL_COUNTRIES.has(country)
+  const compBrazil = BRAZIL_COMP_KEYWORDS.some(k => compName.includes(k))
+  const homeBr = classifyBrazilClub(homeName)
+  const awayBr = classifyBrazilClub(awayName)
+
+  // Strong evidence = Brazilian country, Brazilian competition, or a safe
+  // Brazilian club. Weak evidence (ambiguous tokens like "sport"/"vitoria")
+  // only counts when strong evidence is present in the same match.
+  const strongBrazil = countryBrazil || compBrazil || homeBr === 'strong' || awayBr === 'strong'
+
+  if (strongBrazil) {
     regions.add('brazil')
-    reasons.push('País: Brasil')
-  }
-  if (BRAZIL_COMP_KEYWORDS.some(k => compName.includes(k))) {
-    regions.add('brazil')
-    reasons.push(`Competição brasileira: ${match.competition.name}`)
-  }
-  if (isBrazilianClub(homeName)) {
-    regions.add('brazil')
-    reasons.push(`Clube brasileiro: ${homeName}`)
-  }
-  if (isBrazilianClub(awayName)) {
-    regions.add('brazil')
-    reasons.push(`Clube brasileiro: ${awayName}`)
+    if (countryBrazil) reasons.push('País: Brasil')
+    if (compBrazil) reasons.push(`Competição brasileira: ${match.competition.name}`)
+    if (homeBr === 'strong') reasons.push(`Clube brasileiro: ${homeName}`)
+    if (awayBr === 'strong') reasons.push(`Clube brasileiro: ${awayName}`)
+    // Ambiguous clubs ride along only because there is strong context.
+    if (homeBr === 'weak') reasons.push(`Clube brasileiro por contexto: ${homeName}`)
+    if (awayBr === 'weak') reasons.push(`Clube brasileiro por contexto: ${awayName}`)
+  } else if (homeBr === 'weak' || awayBr === 'weak') {
+    // Weak-only signal — NOT enough to classify as Brazil.
+    debugRegion('Weak Brazil evidence without context — not classified as brazil', {
+      home: homeName, away: awayName, competition: match.competition.name,
+    })
   }
 
   // --- Europe ---
