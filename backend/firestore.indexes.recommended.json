@@ -1,0 +1,17 @@
+{
+  "_comment": "Phase E7 — RECOMMENDED Firestore composite indexes for production scale. Not required today (adapters use single-equality + in-memory sort). Apply these and switch adapters to server-side where+orderBy+limit as volume grows. Single-field indexes (createdAt, capturedAt, canonicalKey, updatedAt) are automatic.",
+  "indexes": [
+    { "collectionGroup": "alerts", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "userId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "alerts", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "patternId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "alerts", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "fixtureId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "alerts", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "duplicateSignature", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "alerts", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "userId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "liveSnapshots", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "fixtureId", "order": "ASCENDING" }, { "fieldPath": "capturedAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "fixtures", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "updatedAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "signalDeliveries", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "channelId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "signalDeliveries", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "channelId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "oddsSnapshots", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "fixtureId", "order": "ASCENDING" }, { "fieldPath": "capturedAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "oddsSnapshots", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "marketType", "order": "ASCENDING" }, { "fieldPath": "capturedAt", "order": "DESCENDING" } ] }
+  ],
+  "fieldOverrides": []
+}
