@@ -57,3 +57,31 @@ export function normalizeResolutionForPerformance(resolution: any): NormalizedPe
     resolutionStatus: resolution?.resolutionStatus ?? null,
   }
 }
+
+export interface PerformanceBreakdownKeys {
+  momentumSource: string
+  dataQuality: string
+  provider: string
+}
+
+/**
+ * Derive the per-alert breakdown keys EXACTLY as the on-demand aggregation does,
+ * so incremental counters and on-demand reports stay consistent.
+ * Accepts a raw alert (Prisma or Firebase) with evidenceJson/temporalEvidenceJson.
+ */
+export function extractBreakdownKeys(alert: any): PerformanceBreakdownKeys {
+  const evidence = extractPerformanceEvidence(alert)
+  const temporal = extractTemporalEvidence(alert)
+
+  const momentumSource = (temporal && temporal.momentumSource) || 'unknown'
+
+  const snapshot = evidence?.triggerSnapshot
+  let dataQuality: string
+  if (snapshot?.stats?.shotsOnTarget && snapshot?.stats?.possession) dataQuality = 'rich'
+  else if (snapshot?.stats) dataQuality = 'partial'
+  else dataQuality = 'poor'
+
+  const provider = snapshot?.provider || evidence?.provider || 'unknown'
+
+  return { momentumSource, dataQuality, provider }
+}

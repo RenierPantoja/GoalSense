@@ -5,6 +5,7 @@
  */
 import { createRepositories } from '../../repositories/index.js'
 import { buildPatternInput, type PatternEvaluationInput } from './snapshotToPatternInput.js'
+import { extractBreakdownKeys } from '../performance/performanceInputAdapter.js'
 import { evaluateMomentum, type MomentumResult } from './backendMomentum.service.js'
 import { checkDuplicate, buildDuplicateSignature } from './backendDuplicateGuard.service.js'
 
@@ -279,7 +280,18 @@ export async function runPatternEvaluation(maxFixtures: number): Promise<WorkerR
           evidenceJson: JSON.stringify(evidenceData),
           temporalEvidenceJson: temporalData ? JSON.stringify(temporalData) : null,
           duplicateSignature: signature,
-        }, DEFAULT_USER)
+        }, DEFAULT_USER).then(async (createdAlert: any) => {
+          // Incremental performance counter (derivative; never block alert creation).
+          try {
+            const keys = extractBreakdownKeys(createdAlert)
+            await repos.performance.onAlertCreated({
+              alertId: createdAlert.id, patternId: pattern.id, userId: DEFAULT_USER,
+              confidence: evalResult.confidence, ...keys,
+            })
+          } catch (e: any) {
+            console.warn(`[PatternWorker] counter onAlertCreated failed for ${createdAlert?.id}: ${e?.message || e}`)
+          }
+        })
         result.alertsCreated++
       } catch (err: any) {
         result.errors.push(`Alert creation failed for ${pattern.name} on ${fixture.homeName} vs ${fixture.awayName}: ${err?.message}`)

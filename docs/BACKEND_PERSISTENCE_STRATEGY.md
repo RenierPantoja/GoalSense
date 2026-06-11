@@ -52,8 +52,9 @@ Rationale: the project is already Firebase-first; running a second database (Pos
 4. ✅ E4 — Migrate Fixtures + LiveSnapshots to Firestore; Live Monitor (service + routes + worker) runs without Postgres
 5. ✅ E5 — Migrate Odds + Command Center workers (pattern evaluation + resolution) to repositories; both workers run in firebase mode
 6. ✅ E6 — Migrate Performance analytics to repositories (on-demand, provider-agnostic). Prisma direct usage now confined to `db/client.ts` + the Prisma adapter.
-7. ✅ E6.1 — Firebase runtime QA against a real Firestore project (all modules validated end-to-end, no Postgres); E6.2 incremental performance counters designed (not implemented).
-8. E6.2 (future) — Implement incremental denormalized performance counters; then remove Prisma once validated.
+7. ✅ E6.1 — Firebase runtime QA against a real Firestore project (all modules validated end-to-end, no Postgres); E6.2 incremental performance counters designed.
+8. ✅ E6.2 — Incremental, idempotent performance counters implemented + validated in firebase runtime; on-demand kept as fallback + reconciliation. Prisma mode stays on-demand.
+9. E7 (future) — Bulk counter reconciliation + remove Prisma once validated in production.
 
 ## Repository Layer (E1)
 
@@ -72,6 +73,7 @@ backend/src/repositories/
     firebaseFixture.repository.ts         # Fixtures (E4)
     firebaseLiveSnapshot.repository.ts    # Live snapshots (E4)
     firebaseOdds.repository.ts            # Odds snapshots + alert contexts (E5)
+    firebasePerformance.repository.ts     # Incremental performance counters (E6.2)
 ```
 
 `PERSISTENCE_PROVIDER` env selects the implementation:
@@ -115,6 +117,7 @@ Firestore adapter (`firebaseTelegram.repository.ts`):
 | SignalDelivery | signalDeliveries | ✅ migrated in E2; deterministic id `${alertId}__${channelId}` |
 | OddsSnapshot | oddsSnapshots | ✅ migrated in E5; auto id, point-in-time history |
 | AlertOddsContext | alertOddsContexts | ✅ migrated in E5; deterministic id `alertId__marketType` |
+| (derived) | patternPerformanceCounters | ✅ E6.2 incremental counters; doc per pattern + `performanceCounterProcessed/{alertId}` markers |
 
 ## Limitations
 

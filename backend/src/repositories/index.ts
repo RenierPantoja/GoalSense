@@ -14,7 +14,7 @@ import type { Repositories } from './contracts.js'
 import {
   PrismaPatternRepository, PrismaAlertRepository, PrismaAlertResolutionRepository,
   PrismaFixtureRepository, PrismaLiveSnapshotRepository, PrismaProviderHealthRepository,
-  PrismaTelegramRepository, PrismaOddsRepository,
+  PrismaTelegramRepository, PrismaOddsRepository, PrismaPerformanceRepository,
 } from './prisma/prismaRepositories.js'
 import { FirebaseProviderHealthRepository } from './firebase/firebaseProviderHealth.repository.js'
 import { FirebaseTelegramRepository } from './firebase/firebaseTelegram.repository.js'
@@ -24,6 +24,7 @@ import { FirebaseAlertResolutionRepository } from './firebase/firebaseAlertResol
 import { FirebaseFixtureRepository } from './firebase/firebaseFixture.repository.js'
 import { FirebaseLiveSnapshotRepository } from './firebase/firebaseLiveSnapshot.repository.js'
 import { FirebaseOddsRepository } from './firebase/firebaseOdds.repository.js'
+import { FirebasePerformanceRepository } from './firebase/firebasePerformance.repository.js'
 
 let cached: Repositories | null = null
 
@@ -44,6 +45,7 @@ export function createRepositories(): Repositories {
       fixtures: new FirebaseFixtureRepository(),
       liveSnapshots: new FirebaseLiveSnapshotRepository(),
       odds: new FirebaseOddsRepository(),
+      performance: new FirebasePerformanceRepository(),
     }
     return cached
   }
@@ -58,6 +60,7 @@ export function createRepositories(): Repositories {
     providerHealth: new PrismaProviderHealthRepository(),
     telegram: new PrismaTelegramRepository(),
     odds: new PrismaOddsRepository(),
+    performance: new PrismaPerformanceRepository(),
   }
   return cached
 }

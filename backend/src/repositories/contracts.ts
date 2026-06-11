@@ -104,6 +104,23 @@ export interface OddsRepository {
   createAlertOddsContext(input: Json): Promise<Json>
 }
 
+// ─── Performance Counters (E6.2) ──────────────────────────────────────────
+
+export interface PerformanceRepository {
+  /** Read one pattern's incremental counter, or null if none exists yet. */
+  getPatternCounter(patternId: string, userId: string): Promise<Json | null>
+  /** Read all pattern counters for a user. */
+  listPatternCounters(userId: string): Promise<Json[]>
+  /** Whether a given phase ('created' | 'resolved') was already applied for an alert. */
+  hasProcessedAlert(alertId: string, phase: 'created' | 'resolved'): Promise<boolean>
+  /** Idempotent: apply an alert creation to the counter (totalAlerts, per-alert breakdowns, sumConfidence). */
+  onAlertCreated(input: { alertId: string; patternId: string; userId: string; confidence: number; momentumSource: string; dataQuality: string; provider: string }): Promise<{ applied: boolean; reason?: string }>
+  /** Idempotent: apply a resolution to the counter (terminal bucket, useful, byResolutionType, rates). */
+  applyResolutionToCounters(input: { alertId: string; patternId: string; userId: string; resolutionStatus: string; resolutionType: string | null }): Promise<{ applied: boolean; reason?: string }>
+  /** Recompute a pattern's counter from raw alerts/resolutions (drift reconciliation). */
+  rebuildPatternCounters(patternId: string, userId: string): Promise<Json | null>
+}
+
 // ─── Aggregate ─────────────────────────────────────────────────────────────
 
 export interface Repositories {
@@ -115,4 +132,5 @@ export interface Repositories {
   providerHealth: ProviderHealthRepository
   telegram: TelegramRepository
   odds: OddsRepository
+  performance: PerformanceRepository
 }

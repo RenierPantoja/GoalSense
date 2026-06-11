@@ -381,6 +381,16 @@ export async function resolvePendingAlerts(maxAlerts: number): Promise<Resolutio
         evidenceJson: JSON.stringify(resolution.evidence),
       })
 
+      // Incremental performance counter (derivative; idempotent; never block resolution).
+      try {
+        await repos.performance.applyResolutionToCounters({
+          alertId: alert.id, patternId: (alert as any).patternId, userId: DEFAULT_USER,
+          resolutionStatus: resolution.outcome, resolutionType: resolution.resolutionType,
+        })
+      } catch (e: any) {
+        console.warn(`[ResolutionWorker] counter applyResolution failed for ${alert.id}: ${e?.message || e}`)
+      }
+
       result.resolved++
       switch (resolution.outcome) {
         case 'confirmed': result.confirmed++; break

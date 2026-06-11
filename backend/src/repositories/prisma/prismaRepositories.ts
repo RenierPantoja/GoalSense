@@ -7,7 +7,8 @@
 import { prisma } from '../../db/client.js'
 import type {
   PatternRepository, AlertRepository, AlertResolutionRepository, FixtureRepository,
-  LiveSnapshotRepository, ProviderHealthRepository, TelegramRepository, OddsRepository, Json,
+  LiveSnapshotRepository, ProviderHealthRepository, TelegramRepository, OddsRepository,
+  PerformanceRepository, Json,
 } from '../contracts.js'
 
 // ─── Pattern ─────────────────────────────────────────────────────────────────
@@ -120,4 +121,18 @@ export class PrismaOddsRepository implements OddsRepository {
   listRecentSnapshots(fixtureId: string, limit?: number) { return prisma.oddsSnapshot.findMany({ where: { fixtureId }, orderBy: { capturedAt: 'desc' }, take: limit || 100 }) }
   findAlertOddsContext(alertId: string, marketType: string) { return prisma.alertOddsContext.findFirst({ where: { alertId, marketType } }) }
   createAlertOddsContext(input: Json) { return prisma.alertOddsContext.create({ data: input as any }) }
+}
+
+// ─── Performance (E6.2) ──────────────────────────────────────────────────────
+// Prisma mode keeps the on-demand calculation (no counters table). These methods
+// are safe no-ops so performance.service always falls back to on-demand in Prisma
+// mode. Incremental counters are a Firebase-focused optimization.
+
+export class PrismaPerformanceRepository implements PerformanceRepository {
+  async getPatternCounter(_patternId: string, _userId: string) { return null }
+  async listPatternCounters(_userId: string) { return [] as Json[] }
+  async hasProcessedAlert(_alertId: string, _phase: 'created' | 'resolved') { return false }
+  async onAlertCreated(_input: any) { return { applied: false, reason: 'prisma_on_demand' } }
+  async applyResolutionToCounters(_input: any) { return { applied: false, reason: 'prisma_on_demand' } }
+  async rebuildPatternCounters(_patternId: string, _userId: string) { return null }
 }

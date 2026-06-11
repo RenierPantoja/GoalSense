@@ -4,6 +4,7 @@
  * Routes, payloads, dedup and resolution semantics are unchanged.
  */
 import { createRepositories } from '../../repositories/index.js'
+import { extractBreakdownKeys } from '../performance/performanceInputAdapter.js'
 import type { CreateAlertInput, ResolveAlertInput } from './alert.schemas.js'
 
 const DEFAULT_USER = 'default'
@@ -32,16 +33,40 @@ export async function findByDuplicateSignature(signature: string) {
 
 export async function createAlert(input: CreateAlertInput) {
   const repos = createRepositories()
-  return repos.alerts.create(input as any, DEFAULT_USER)
+  const created = await repos.alerts.create(input as any, DEFAULT_USER)
+  // Incremental performance counter (derivative; idempotent; never block create).
+  try {
+    const keys = extractBreakdownKeys(created)
+    await repos.performance.onAlertCreated({
+      alertId: (created as any).id, patternId: (created as any).patternId, userId: DEFAULT_USER,
+      confidence: (created as any).confidence ?? 0, ...keys,
+    })
+  } catch (e: any) {
+    console.warn(`[Alerts] counter onAlertCreated failed: ${e?.message || e}`)
+  }
+  return created
 }
 
 export async function resolveAlert(alertId: string, input: ResolveAlertInput) {
   // Atomic: set alert.status + create resolution. 'unknown' stays 'unknown'.
   const repos = createRepositories()
-  return repos.alertResolutions.resolveAlert(alertId, input.resolutionStatus, {
+  const resolution = await repos.alertResolutions.resolveAlert(alertId, input.resolutionStatus, {
     resolutionStatus: input.resolutionStatus,
     resolutionType: input.resolutionType ?? null,
     windowMinutes: input.windowMinutes ?? null,
     evidenceJson: input.evidenceJson,
   })
+  // Incremental performance counter (derivative; idempotent; never block resolve).
+  try {
+    const alert = await repos.alerts.findById(alertId, DEFAULT_USER)
+    if (alert) {
+      await repos.performance.applyResolutionToCounters({
+        alertId, patternId: (alert as any).patternId, userId: DEFAULT_USER,
+        resolutionStatus: input.resolutionStatus, resolutionType: input.resolutionType ?? null,
+      })
+    }
+  } catch (e: any) {
+    console.warn(`[Alerts] counter applyResolution failed for ${alertId}: ${e?.message || e}`)
+  }
+  return resolution
 }

@@ -66,6 +66,8 @@ export interface PatternPerformanceReport {
     byMomentumSource: Record<string, number>
     byProvider: Record<string, number>
   }
+  /** Where the numbers came from: incremental counter or on-demand scan. */
+  source?: 'incremental' | 'on_demand'
 }
 
 export interface PerformanceSummary {
@@ -155,20 +157,108 @@ function buildWarningsAndRecommendations(
   return { warnings, recommendations }
 }
 
+// ─── Report Assembly (shared by on-demand + counter paths) ───────────────────
+
+interface AssemblyCounts {
+  sampleSize: number
+  pendingCount: number
+  confirmedCount: number
+  confirmedPartialCount: number
+  failedCount: number
+  unknownCount: number
+  expiredCount: number
+  averageConfidence: number | null
+}
+
+function assembleReport(
+  patternId: string,
+  patternName: string,
+  counts: AssemblyCounts,
+  breakdowns: PatternPerformanceReport['breakdowns'],
+  source: 'incremental' | 'on_demand',
+  extraWarnings: string[] = [],
+): PatternPerformanceReport {
+  const rates = calculateRates(counts.confirmedCount, counts.confirmedPartialCount, counts.failedCount, counts.unknownCount, counts.sampleSize)
+  const reliability = calculateReliability(counts.sampleSize, rates.resolvedCount, rates.usefulRate, rates.failedRate, rates.unknownRate)
+  const { warnings, recommendations } = buildWarningsAndRecommendations(
+    counts.sampleSize, rates.resolvedCount, rates.usefulRate, rates.failedRate, rates.unknownRate, breakdowns.byMomentumSource,
+  )
+  for (const w of extraWarnings) warnings.push(w)
+
+  return {
+    patternId,
+    patternName,
+    sampleSize: counts.sampleSize,
+    resolvedCount: rates.resolvedCount,
+    pendingCount: counts.pendingCount,
+    confirmedCount: counts.confirmedCount,
+    confirmedPartialCount: counts.confirmedPartialCount,
+    failedCount: counts.failedCount,
+    unknownCount: counts.unknownCount,
+    expiredCount: counts.expiredCount,
+    confirmedRate: rates.confirmedRate,
+    usefulRate: rates.usefulRate,
+    failedRate: rates.failedRate,
+    unknownRate: rates.unknownRate,
+    averageConfidence: counts.averageConfidence,
+    reliability,
+    warnings,
+    recommendations,
+    breakdowns,
+    source,
+  }
+}
+
 // ─── Main Functions ──────────────────────────────────────────────────────────
 
+/**
+ * Per-pattern performance. Prefers the incremental counter (E6.2) when present;
+ * falls back to the on-demand scan otherwise. The on-demand path remains the
+ * reconciliation source of truth (see rebuildPatternPerformance).
+ */
 export async function buildPatternPerformance(patternId: string): Promise<PatternPerformanceReport | null> {
   const repos = createRepositories()
   const pattern = await repos.patterns.findById(patternId, DEFAULT_USER)
   if (!pattern) return null
 
+  // Try incremental counter first.
+  let counter: any = null
+  try { counter = await repos.performance.getPatternCounter(patternId, DEFAULT_USER) } catch { counter = null }
+
+  if (counter && (counter.totalAlerts || 0) > 0) {
+    const terminal = (counter.confirmed || 0) + (counter.confirmedPartial || 0) + (counter.failed || 0) + (counter.unknown || 0) + (counter.expired || 0)
+    const counts: AssemblyCounts = {
+      sampleSize: counter.totalAlerts || 0,
+      pendingCount: Math.max(0, (counter.totalAlerts || 0) - terminal),
+      confirmedCount: counter.confirmed || 0,
+      confirmedPartialCount: counter.confirmedPartial || 0,
+      failedCount: counter.failed || 0,
+      unknownCount: counter.unknown || 0,
+      expiredCount: counter.expired || 0,
+      averageConfidence: (counter.totalAlerts || 0) > 0 ? Math.round((counter.sumConfidence || 0) / counter.totalAlerts) : null,
+    }
+    const breakdowns = {
+      byResolutionType: counter.byResolutionType || {},
+      byDataQuality: counter.byDataQuality || {},
+      byMomentumSource: counter.byMomentumSource || {},
+      byProvider: counter.byProvider || {},
+    }
+    return assembleReport(patternId, pattern.name, counts, breakdowns, 'incremental')
+  }
+
+  // Fallback: on-demand scan.
+  return buildPatternPerformanceOnDemand(patternId, pattern.name)
+}
+
+async function buildPatternPerformanceOnDemand(patternId: string, patternName: string): Promise<PatternPerformanceReport> {
+  const repos = createRepositories()
   const rawAlerts = await repos.alerts.listByPatternId(patternId, DEFAULT_USER)
   const alerts: NormalizedPerformanceAlert[] = rawAlerts.map(normalizeAlertForPerformance)
 
   const sampleSize = alerts.length
   if (sampleSize === 0) {
     return {
-      patternId, patternName: pattern.name,
+      patternId, patternName,
       sampleSize: 0, resolvedCount: 0, pendingCount: 0,
       confirmedCount: 0, confirmedPartialCount: 0, failedCount: 0, unknownCount: 0, expiredCount: 0,
       confirmedRate: null, usefulRate: null, failedRate: null, unknownRate: null, averageConfidence: null,
@@ -176,6 +266,7 @@ export async function buildPatternPerformance(patternId: string): Promise<Patter
       warnings: ['Nenhum alerta registrado para este padrão.'],
       recommendations: [],
       breakdowns: { byResolutionType: {}, byDataQuality: {}, byMomentumSource: {}, byProvider: {} },
+      source: 'on_demand',
     }
   }
 
@@ -185,15 +276,11 @@ export async function buildPatternPerformance(patternId: string): Promise<Patter
   const unknownCount = alerts.filter(a => a.status === 'unknown').length
   const expiredCount = alerts.filter(a => a.status === 'expired').length
   const pendingCount = alerts.filter(a => a.status === 'pending').length
-
-  const rates = calculateRates(confirmedCount, confirmedPartialCount, failedCount, unknownCount, sampleSize)
   const averageConfidence = Math.round(alerts.reduce((s, a) => s + a.confidence, 0) / sampleSize)
 
-  // Track unrecognized statuses for warnings
   const knownStatuses = new Set(['confirmed', 'confirmed_partial', 'failed', 'unknown', 'expired', 'pending'])
   const unrecognizedCount = alerts.filter(a => !knownStatuses.has(a.status)).length
 
-  // Breakdowns from evidence/temporal JSON
   const byResolutionType: Record<string, number> = {}
   const byDataQuality: Record<string, number> = {}
   const byMomentumSource: Record<string, number> = {}
@@ -202,12 +289,8 @@ export async function buildPatternPerformance(patternId: string): Promise<Patter
   for (const alert of alerts) {
     const evidence = alert.evidence
     const temporal = alert.temporal
-
-    // Momentum source
     const momentum = temporal?.momentumSource || 'unknown'
     byMomentumSource[momentum] = (byMomentumSource[momentum] || 0) + 1
-
-    // Data quality (from triggerSnapshot in evidence)
     const snapshot = evidence?.triggerSnapshot
     if (snapshot?.stats?.shotsOnTarget && snapshot?.stats?.possession) {
       byDataQuality['rich'] = (byDataQuality['rich'] || 0) + 1
@@ -216,13 +299,10 @@ export async function buildPatternPerformance(patternId: string): Promise<Patter
     } else {
       byDataQuality['poor'] = (byDataQuality['poor'] || 0) + 1
     }
-
-    // Provider
     const provider = snapshot?.provider || evidence?.provider || 'unknown'
     byProvider[provider] = (byProvider[provider] || 0) + 1
   }
 
-  // Resolution types from AlertResolution records
   const resolutions = await repos.alertResolutions.findByAlertIds(alerts.map(a => a.id))
   for (const raw of resolutions) {
     const r = normalizeResolutionForPerformance(raw)
@@ -230,37 +310,23 @@ export async function buildPatternPerformance(patternId: string): Promise<Patter
     byResolutionType[type] = (byResolutionType[type] || 0) + 1
   }
 
-  const reliability = calculateReliability(sampleSize, rates.resolvedCount, rates.usefulRate, rates.failedRate, rates.unknownRate)
-  const { warnings, recommendations } = buildWarningsAndRecommendations(
-    sampleSize, rates.resolvedCount, rates.usefulRate, rates.failedRate, rates.unknownRate, byMomentumSource,
+  const extraWarnings = unrecognizedCount > 0 ? [`${unrecognizedCount} alerta(s) com status não reconhecido.`] : []
+  return assembleReport(
+    patternId, patternName,
+    { sampleSize, pendingCount, confirmedCount, confirmedPartialCount, failedCount, unknownCount, expiredCount, averageConfidence },
+    { byResolutionType, byDataQuality, byMomentumSource, byProvider },
+    'on_demand',
+    extraWarnings,
   )
+}
 
-  // Add warning for unrecognized statuses
-  if (unrecognizedCount > 0) {
-    warnings.push(`${unrecognizedCount} alerta(s) com status não reconhecido.`)
-  }
-
-  return {
-    patternId,
-    patternName: pattern.name,
-    sampleSize,
-    resolvedCount: rates.resolvedCount,
-    pendingCount,
-    confirmedCount,
-    confirmedPartialCount,
-    failedCount,
-    unknownCount,
-    expiredCount,
-    confirmedRate: rates.confirmedRate,
-    usefulRate: rates.usefulRate,
-    failedRate: rates.failedRate,
-    unknownRate: rates.unknownRate,
-    averageConfidence,
-    reliability,
-    warnings,
-    recommendations,
-    breakdowns: { byResolutionType, byDataQuality, byMomentumSource, byProvider },
-  }
+/** Force a counter rebuild from raw, then return the reconciled report (source incremental). */
+export async function rebuildPatternPerformance(patternId: string): Promise<PatternPerformanceReport | null> {
+  const repos = createRepositories()
+  const pattern = await repos.patterns.findById(patternId, DEFAULT_USER)
+  if (!pattern) return null
+  await repos.performance.rebuildPatternCounters(patternId, DEFAULT_USER)
+  return buildPatternPerformance(patternId)
 }
 
 export async function buildAllPatternPerformance(): Promise<PatternPerformanceReport[]> {

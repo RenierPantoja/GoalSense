@@ -110,10 +110,11 @@ mode (see `FIREBASE_RUNTIME_QA.md`):
   resolution doc (`byResolutionType`) and temporal evidence (`byMomentumSource`);
 - malformed/missing evidence tolerated by `performanceInputAdapter`.
 
-## E6.2 design — incremental performance counters (NOT YET IMPLEMENTED)
+## E6.2 — incremental performance counters (IMPLEMENTED)
 
-Goal: avoid scanning all alerts per request by maintaining denormalized counters
-updated when a resolution is written. Design only — no implementation in this phase.
+Incremental, idempotent per-pattern counters maintained as alerts are created and
+resolved. The on-demand scan is kept as a fallback (patterns without a counter)
+and as the reconciliation source of truth (`rebuild`).
 
 ### Collections
 
@@ -170,6 +171,89 @@ patternPerformanceBreakdowns/{patternId}/byProvider/{provider}        { count }
 Counters are an optimization. On-demand aggregation is correct and honest today;
 incremental counters add write-path complexity and idempotency risk that should
 only be taken on once volume justifies it.
+
+## E6.2 — as built
+
+### Collections (actual)
+
+- `patternPerformanceCounters/{patternId}` — counts + rates + breakdown **maps**
+  (`byMomentumSource`, `byDataQuality`, `byProvider`, `byResolutionType` stored as
+  `Record<string, number>` inside the counter doc, not subcollections — chosen for
+  atomicity in a single transaction and lower read cost).
+  Fields: `patternId, userId, totalAlerts, resolvedAlerts, confirmed,
+  confirmedPartial, failed, unknown, expired, useful, sumConfidence, usefulRate,
+  failedRate, unknownRate, confirmedRate, byMomentumSource, byDataQuality,
+  byProvider, byResolutionType, createdAt, lastUpdatedAt`.
+- `performanceCounterProcessed/{alertId}` — idempotency marker
+  `{ alertId, patternId, createdApplied, resolvedApplied, appliedAt }`.
+
+### Two idempotent hooks (matches on-demand semantics exactly)
+
+- **onAlertCreated** (called after `alerts.create` in `commandEvaluation.service`
+  and `alerts.service.createAlert`): `totalAlerts++`, `sumConfidence += confidence`,
+  and the per-alert breakdowns (`byMomentumSource`, `byDataQuality`, `byProvider`)
+  derived via `extractBreakdownKeys` — the SAME derivation as the on-demand path.
+  Guarded by `marker.createdApplied`.
+- **applyResolutionToCounters** (called after `alertResolutions.resolveAlert` in
+  `alertResolution.service` and `alerts.service.resolveAlert`): increments the
+  terminal bucket, `byResolutionType`, recomputes rates. Guarded by
+  `marker.resolvedApplied`. Non-terminal statuses are ignored.
+
+`pendingCount = totalAlerts − (confirmed + confirmedPartial + failed + unknown +
+expired)`, so the counter report matches the on-demand report field-for-field.
+
+### Idempotency
+
+Both hooks run inside a Firestore **transaction** that reads the marker first and
+no-ops if the phase was already applied. Verified in runtime QA: re-resolving and
+re-creating the same alert left every counter value unchanged. No metric can be
+inflated.
+
+### Resilience
+
+Counter updates are wrapped in try/catch in every call site and **never block or
+fail** the alert create / resolution (the resolution is the source of truth). A
+failed counter update is logged as a warning and reconciled by `rebuild`.
+
+### Read path + fallback
+
+`performance.service.buildPatternPerformance` prefers the counter
+(`source: 'incremental'`) when present with `totalAlerts > 0`; otherwise it runs
+the on-demand scan (`source: 'on_demand'`). The served report shape is unchanged
+except for the additive `source` field.
+
+### Rebuild / reconciliation
+
+`POST /api/performance/rebuild/:patternId` (blocked when `APP_ENV=production`)
+recomputes the counter from raw alerts/resolutions, overwrites the counter doc,
+and re-writes processed markers. Use it to seed counters for pre-E6.2 patterns or
+to correct drift.
+
+### Prisma mode
+
+`PrismaPerformanceRepository` returns no-ops (`getPatternCounter → null`,
+`onAlertCreated`/`applyResolutionToCounters → { applied: false }`), so prisma mode
+always uses the on-demand path. No new Prisma table; schema unchanged.
+
+### Runtime QA (firebase mode, real Firestore)
+
+- Fresh pattern + 4 alerts resolved (confirmed / confirmed_partial / failed /
+  unknown): counter reported `source:incremental`, `sampleSize:4`,
+  `resolvedCount:3` (unknown excluded), each bucket `1`, `useful:2`, rates `null`
+  (resolved < 5), `unknown` NOT folded into `failed`, breakdowns
+  `byResolutionType:{goal_pressure:4}`, `byMomentumSource:{timed_events:4}`.
+- Re-resolve + re-create the same alert → counter unchanged (idempotent).
+- `POST /performance/rebuild/:id` → identical numbers (reconciliation).
+- Pre-E6.2 pattern (no counter) → `source:on_demand` fallback, no crash.
+
+### Known limitations
+
+- Counters added in E6.2; patterns with data created before E6.2 have no counter
+  until a `rebuild` is run (they correctly fall back to on-demand meanwhile).
+- Bulk rebuild for all patterns is not automated (per-pattern endpoint only).
+- Counter drift, if it ever occurs (e.g., a counter write failed while the
+  resolution succeeded), is corrected by `rebuild`; the resolution remains the
+  source of truth.
 
 ## Prisma direct-import audit (after E6)
 

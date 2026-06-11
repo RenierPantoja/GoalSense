@@ -135,6 +135,11 @@ migrated concerns:
   Firestore project (no Postgres). See `FIREBASE_RUNTIME_QA.md`. No Firestore
   composite index was required for the QA (single-equality + in-memory sort);
   recommended indexes for scale are documented.
+- ✅ **E6.2** — Incremental, idempotent performance counters
+  (`patternPerformanceCounters` + `performanceCounterProcessed` markers).
+  Counter-first read with on-demand fallback (`source` field), rebuild endpoint
+  for reconciliation. Validated in firebase runtime. See
+  `FIREBASE_PERFORMANCE_ANALYTICS.md`.
 
 ## Limitations (still open after E6)
 
@@ -179,9 +184,8 @@ Resolution workers run in firebase mode, plus Odds, Telegram, and Performance
 analytics. Every backend module is now repository-backed; no module imports
 Prisma directly.
 
-## Next steps (E6.2)
+## Next steps (E7)
 
-- **E6.2** — Implement incremental denormalized performance counters (design in
-  `FIREBASE_PERFORMANCE_ANALYTICS.md`) to replace the on-demand scan; add a
-  reconciliation job; then remove Prisma once all adapters are validated in
-  production.
+- **E7** — Bulk counter reconciliation across all patterns; remove Prisma once all
+  adapters are validated in production. (Per-pattern rebuild already available via
+  `POST /api/performance/rebuild/:patternId`.)
