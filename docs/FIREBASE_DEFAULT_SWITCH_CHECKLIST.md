@@ -4,6 +4,30 @@ The default `PERSISTENCE_PROVIDER` stays **`prisma`**. Only flip the default to
 `firebase` (or set it in production deploy env) after EVERY item below is checked.
 This is a gate, not an action for this phase.
 
+## GO / NO-GO gate (updated E9.2)
+
+**Current decision: NO-GO for production cutover.** Critical gates still pending.
+
+| Gate | Status |
+|------|--------|
+| Firebase active in controlled env | ✅ done (E8/E9) |
+| Smoke tests (all read routes) | ✅ done |
+| Controlled write test (pattern/alert/resolve/counter/rebuild) | ✅ done |
+| Live worker cycle (fetch + provider health + smart-diff) | ✅ done |
+| Live worker **rich** snapshot capture | ⏳ pending — no live match in windows tested |
+| Pattern worker **rich** validation (real live match) | ⏳ pending — no live match; no fake alert |
+| Resolution worker **real alert** validation | ⏳ pending — no live alert |
+| Telegram real-alert validation (manual, no auto-send) | ⏳ pending — needs a real alert; logic validated E6.1 |
+| Performance post-resolution validation | ⏳ pending — needs a real live resolution |
+| Backup/export Firestore | ⏳ pending — owner gcloud/Console access (`FIREBASE_BACKUP_EXECUTION_STATUS.md`) |
+| Firestore indexes deployed | ⏳ pending — Firebase CLI unavailable (`FIRESTORE_INDEX_DEPLOY_STATUS.md`) |
+| Odds provider | disabled/suspended (API-Football) |
+| Rollback to Prisma | ✅ ready (`FIREBASE_ROLLBACK_RUNBOOK.md`; env guard validated) |
+| Prisma not removed / default unchanged | ✅ enforced |
+
+Tooling to close the live gates: `scripts/watchLiveValidationWindow.mjs`
+(`LIVE_WORKER_VALIDATION_RUNBOOK.md`, `LIVE_VALIDATION_WATCH_REPORT.md`).
+
 ## Pre-switch checklist
 
 Legend: [x] done in staging (E8) · [ ] pending for the production switch (E9).

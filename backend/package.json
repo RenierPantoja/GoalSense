@@ -14,7 +14,8 @@
     "db:studio": "prisma studio",
     "qa:cleanup": "node scripts/firebaseCleanupQaData.mjs",
     "counters:rebuild-all": "node scripts/rebuildPerformanceCounters.mjs",
-    "migrate:dryrun": "node scripts/migratePrismaToFirebase.mjs"
+    "migrate:dryrun": "node scripts/migratePrismaToFirebase.mjs",
+    "watch:live": "node scripts/watchLiveValidationWindow.mjs"
   },
   "dependencies": {
     "fastify": "^5.0.0",
