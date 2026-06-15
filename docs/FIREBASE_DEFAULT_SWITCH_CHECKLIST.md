@@ -12,14 +12,14 @@ Legend: [x] done in staging (E8) · [ ] pending for the production switch (E9).
 - [x] `PERSISTENCE_PROVIDER=firebase` validated in **staging/dev** (real project goalsense-29892).
 - [x] Backend boots with **no `DATABASE_URL`** in firebase mode.
 - [x] Live Monitor worker validated (fixtures + snapshots written to Firestore — E6.1).
-- [ ] Pattern worker validated against a **live in-progress match** (validated with no live match at QA time; needs a real match window).
-- [ ] Resolution worker validated against a **real pending alert from a live match** (logic validated via API in E6.1/E6.2).
+- [ ] Pattern worker validated against a **live in-progress match** (E9.1: ran clean but **PENDING — no live match available** in the window; no fake alert created).
+- [ ] Resolution worker validated against a **real pending alert from a live match** (E9.1: ran clean but **PENDING — no live alert**; logic validated via API in E6.1/E6.2).
 - [x] Telegram validated (channels, rules, eligibility, approval queue — E6.1).
 - [x] Performance counters validated (incremental + on-demand fallback + rebuild; idempotency — E6.2).
 - [x] Odds disabled/unavailable path validated (no crash).
 - [x] Recommended composite indexes materialized (`firestore.indexes.json`); **deploy to the project still pending (E9)**.
 - [x] QA data cleanup executed (`scripts/firebaseCleanupQaData.mjs --confirm` → 19 docs removed; re-run dry-run = 0).
-- [ ] Firestore backup/export taken (`gcloud firestore export`). — runbook ready (`FIREBASE_BACKUP_RUNBOOK.md`); pending owner access (E9).
+- [ ] Firestore backup/export taken (`gcloud firestore export`). — runbook ready (`FIREBASE_BACKUP_RUNBOOK.md`); **PENDING owner access** (E9.1 not executed; not fabricated).
 - [x] Retention policy decided (`FIREBASE_RETENTION_POLICY.md`).
 - [x] Rollback plan confirmed (env guard validated; `PERSISTENCE_PROVIDER=prisma` + `DATABASE_URL` reverts — `FIREBASE_ROLLBACK_RUNBOOK.md`).
 - [x] Observability reviewed (`/api/health` provider diagnostic + worker status endpoints + counter-failure warnings).
