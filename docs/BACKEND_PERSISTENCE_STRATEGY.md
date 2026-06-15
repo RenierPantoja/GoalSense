@@ -59,7 +59,8 @@ Rationale: the project is already Firebase-first; running a second database (Pos
 11. ✅ E9 — Firebase set as the controlled-environment default (via `backend/.env`); full smoke tests + controlled write test + workers validated in firebase mode (live/rich worker validation pending a real match); backup + rollback runbooks; QA_E9 data cleaned. Committed default still prisma; Prisma not removed.
 12. ✅ E9.1 — Live worker validation runbook + attempt: live worker / pattern worker / resolution worker ran clean in firebase mode, but **no live rich match was available** in the window → rich alerting validation honestly PENDING (no fake alert). Backup/export + index deploy PENDING (no gcloud/Firebase CLI). QA_E9.1 cleaned.
 13. ✅ E9.2 — Observe-only live validation watcher (`watchLiveValidationWindow.mjs`) + GO/NO-GO gate; backup + index deploy execution-status docs. Watcher smoke-tested (NO_LIVE_FIXTURES, no fake data). Decision: **NO-GO** for cutover until live-rich + backup + index gates close.
-14. E10 (future) — Close live-rich/backup/index gates, flip the deploy-env default, approved data migration, then remove Prisma.
+14. ✅ E9.3 — Gate-closure run: `firebase.json` added; index deploy attempted via `npx firebase-tools` + Admin SDK SA → **403 (SA lacks deploy IAM)**, documented; backup still pending (no gcloud/SA roles); watcher run in real window → `NO_LIVE_FIXTURES`, rich validation still PENDING (no fake alert). Decision remains **NO-GO**.
+15. E10 (future, owner-gated) — Owner deploys indexes + runs backup; re-validate workers on a live-rich window; only then flip the deploy-env default; data migration + Prisma removal later.
 
 ## Repository Layer (E1)
 

@@ -10,7 +10,7 @@ Tracks the Firestore backup gate. Procedure: `FIREBASE_BACKUP_RUNBOOK.md`.
 | date/time | — |
 | method | Console / GCP / `gcloud firestore export` (TBD) |
 | backup location | TBD (e.g. `gs://goalsense-29892-backups/firestore/<stamp>`) |
-| notes | Not executed by the agent — no gcloud/Console credentials in this environment. Not fabricated. Must be done before the production cutover (E10). |
+| notes | Not executed by the agent. `gcloud`/`gsutil` are NOT installed in this environment, and the Admin SDK SA lacks export IAM roles (same permission class as the index 403). Not fabricated. Must be done before the production cutover (E10). |
 
 ## How to update
 

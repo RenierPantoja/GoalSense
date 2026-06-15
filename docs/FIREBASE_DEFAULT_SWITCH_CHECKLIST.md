@@ -20,7 +20,7 @@ This is a gate, not an action for this phase.
 | Telegram real-alert validation (manual, no auto-send) | ⏳ pending — needs a real alert; logic validated E6.1 |
 | Performance post-resolution validation | ⏳ pending — needs a real live resolution |
 | Backup/export Firestore | ⏳ pending — owner gcloud/Console access (`FIREBASE_BACKUP_EXECUTION_STATUS.md`) |
-| Firestore indexes deployed | ⏳ pending — Firebase CLI unavailable (`FIRESTORE_INDEX_DEPLOY_STATUS.md`) |
+| Firestore indexes deployed | ❌ failed (E9.3) — Admin SDK SA lacks deploy IAM (403); owner action (`FIRESTORE_INDEX_DEPLOY_STATUS.md`) |
 | Odds provider | disabled/suspended (API-Football) |
 | Rollback to Prisma | ✅ ready (`FIREBASE_ROLLBACK_RUNBOOK.md`; env guard validated) |
 | Prisma not removed / default unchanged | ✅ enforced |
@@ -48,7 +48,7 @@ Legend: [x] done in staging (E8) · [ ] pending for the production switch (E9).
 - [x] Rollback plan confirmed (env guard validated; `PERSISTENCE_PROVIDER=prisma` + `DATABASE_URL` reverts — `FIREBASE_ROLLBACK_RUNBOOK.md`).
 - [x] Observability reviewed (`/api/health` provider diagnostic + worker status endpoints + counter-failure warnings).
 - [x] Firebase active as the **controlled-environment** provider (E9); smoke tests + controlled write test passed.
-- [ ] Firebase CLI available + `firebase deploy --only firestore:indexes` run (CLI not installed; pending E10).
+- [ ] Firebase CLI available + `firebase deploy --only firestore:indexes` run (E9.3: CLI available via `npx`, deploy **failed 403** — SA lacks index IAM; owner action pending).
 
 ## Switch
 
