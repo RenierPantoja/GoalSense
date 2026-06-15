@@ -14,7 +14,7 @@
  * No push handlers are registered yet. When real backend + token management
  * lands, push/notificationclick handlers can be added here without rewrites.
  */
-const SW_VERSION = 'v5-4-navigation-fix'
+const SW_VERSION = 'v6-asset-mime-guard'
 const STATIC_CACHE = `gs-static-${SW_VERSION}`
 const SHELL_CACHE = `gs-shell-${SW_VERSION}`
 
@@ -73,16 +73,25 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Strategy 2: Hashed Vite assets. Cache-first because the URL changes on rebuild.
+  // IMPORTANT: after a redeploy an old shell may request a chunk that no longer
+  // exists; the host then returns index.html (text/html). We must NEVER cache or
+  // return that HTML under an asset URL (it poisons the cache and breaks module
+  // loading). In that case we return the HTML response as-is so the page's
+  // chunk-reload handler can recover with a one-time reload.
   if (isHashedAsset(url)) {
     event.respondWith((async () => {
       const cached = await caches.match(request)
       if (cached) return cached
       try {
         const fresh = await fetch(request)
-        if (fresh.ok) {
+        const contentType = fresh.headers.get('content-type') || ''
+        const isHtmlFallback = contentType.includes('text/html')
+        if (fresh.ok && !isHtmlFallback) {
           const cache = await caches.open(STATIC_CACHE)
           cache.put(request, fresh.clone())
         }
+        // Do NOT cache HTML fallbacks for asset URLs; just return for the
+        // client to detect the stale chunk and reload.
         return fresh
       } catch (e) {
         return cached || Response.error()

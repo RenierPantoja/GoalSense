@@ -7,8 +7,12 @@ import { AlertsProvider } from './context/AlertsContext'
 import { PatternProvider } from './features/command/contexts/PatternContext'
 import { runStartupMaintenance } from './services/cache/storageMaintenance'
 import { registerServiceWorker } from './features/pwa/pwaRegistration'
+import { registerChunkReloadHandler } from './lib/lazyWithReload'
 import { App } from './app/App'
 import './styles/globals.css'
+
+// Recover from stale-chunk errors after a new deploy (one-time reload).
+registerChunkReloadHandler()
 
 // Run cache cleanup on startup
 runStartupMaintenance()

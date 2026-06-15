@@ -4,6 +4,7 @@ import { ClubLogo } from '@/components/ui/ClubLogo'
 import type { LiveFixture } from '@/lib/apiClient'
 import { calculateAttention } from '@/features/live/attentionQueue'
 import { displayCompetition } from '@/lib/competitionLabels'
+import { fetchFootballDataMatches } from '@/lib/footballDataClient'
 
 interface Props {
   fixture: LiveFixture | null
@@ -53,11 +54,10 @@ export function InspectorPanel({ fixture, liveCount, allFixtures, onSelectBest, 
             fouls: fouls[0] !== undefined ? fouls as [number, number] : undefined,
           })
         } else {
-          // ESPN has no stats — try football-data.org via proxy
+          // ESPN has no stats — try football-data.org via the throttled client
           try {
-            const fdRes = await fetch('/api/football-data-matches')
-            if (fdRes.ok) {
-              const fdJson = await fdRes.json()
+            const fdJson = await fetchFootballDataMatches()
+            {
               const matches = fdJson.matches || []
               // Try to find this match by team name similarity
               const fdMatch = matches.find((m: any) =>

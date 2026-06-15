@@ -1,15 +1,16 @@
-import { lazy, Suspense } from 'react'
+import { Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
+import { lazyWithReload } from '@/lib/lazyWithReload'
 
-const LiveRadarPage = lazy(() => import('@/features/live/LiveRadarPage').then(m => ({ default: m.LiveRadarPage })))
-const MatchCenterPage = lazy(() => import('@/features/matches/MatchCenterPage').then(m => ({ default: m.MatchCenterPage })))
-const MatchesPage = lazy(() => import('@/features/matches/MatchesPage').then(m => ({ default: m.MatchesPage })))
-const LeaguesPage = lazy(() => import('@/features/leagues/LeaguesPage').then(m => ({ default: m.LeaguesPage })))
-const AlertsPage = lazy(() => import('@/features/alerts/AlertsPage').then(m => ({ default: m.AlertsPage })))
-const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then(m => ({ default: m.SettingsPage })))
-const CommandCenterPage = lazy(() => import('@/features/command/CommandCenterPage').then(m => ({ default: m.CommandCenterPage })))
-const FavoritesPage = lazy(() => import('@/features/favorites/FavoritesPage').then(m => ({ default: m.FavoritesPage })))
+const LiveRadarPage = lazyWithReload(() => import('@/features/live/LiveRadarPage').then(m => ({ default: m.LiveRadarPage })))
+const MatchCenterPage = lazyWithReload(() => import('@/features/matches/MatchCenterPage').then(m => ({ default: m.MatchCenterPage })))
+const MatchesPage = lazyWithReload(() => import('@/features/matches/MatchesPage').then(m => ({ default: m.MatchesPage })))
+const LeaguesPage = lazyWithReload(() => import('@/features/leagues/LeaguesPage').then(m => ({ default: m.LeaguesPage })))
+const AlertsPage = lazyWithReload(() => import('@/features/alerts/AlertsPage').then(m => ({ default: m.AlertsPage })))
+const SettingsPage = lazyWithReload(() => import('@/features/settings/SettingsPage').then(m => ({ default: m.SettingsPage })))
+const CommandCenterPage = lazyWithReload(() => import('@/features/command/CommandCenterPage').then(m => ({ default: m.CommandCenterPage })))
+const FavoritesPage = lazyWithReload(() => import('@/features/favorites/FavoritesPage').then(m => ({ default: m.FavoritesPage })))
 
 function PageLoader() {
   return (

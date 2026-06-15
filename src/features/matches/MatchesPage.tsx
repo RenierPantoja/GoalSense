@@ -18,6 +18,7 @@ import { classifyMatch, type MatchClassification } from '@/lib/matchesClassifica
 import { getMainMatches, scoreMatchImportance } from '@/features/matches/mainMatchRanking'
 import { isMatchBrazil, isMatchEurope } from '@/features/matches/matchRegionClassifier'
 import { buildMatchDisplayModel, type MatchDisplayModel } from '@/features/matches/buildMatchDisplayModel'
+import { fetchFootballDataMatches } from '@/lib/footballDataClient'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -179,9 +180,10 @@ export function MatchesPage() {
   useEffect(() => {
     setLoading(true); setError(null)
 
-    // Fetch from both football-data AND ESPN, merge results
+    // Fetch from both football-data AND ESPN, merge results.
+    // football-data goes through the throttled client (shared cache + 429-safe).
     Promise.allSettled([
-      fetch(`/api/football-data-matches?date=${date}`, { cache: 'no-store' }).then(r => r.json()),
+      fetchFootballDataMatches(`date=${date}`),
       fetch('/api/espn-live?date=' + date.replace(/-/g, ''), { cache: 'no-store' }).then(r => r.json()),
     ]).then(async ([fdResult, espnResult]) => {
       let fdMatches: FDMatch[] = []

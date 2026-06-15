@@ -17,6 +17,8 @@ type CustomModule = typeof import('./CustomPatternModal')
 type TemplateModule = typeof import('./TemplateConfigModal')
 type AutoModule = typeof import('./AutoDiscoveryConfigModal')
 
+import { importWithReload } from '@/lib/lazyWithReload'
+
 let customModalPromise: Promise<CustomModule> | null = null
 let templateModalPromise: Promise<TemplateModule> | null = null
 let autoModalPromise: Promise<AutoModule> | null = null
@@ -24,7 +26,8 @@ let autoModalPromise: Promise<AutoModule> | null = null
 /** Returns (and caches) the dynamic import of CustomPatternModal. */
 export function importCustomPatternModal(): Promise<CustomModule> {
   if (!customModalPromise) {
-    customModalPromise = import('./CustomPatternModal')
+    customModalPromise = importWithReload(() => import('./CustomPatternModal'))
+      .catch((e) => { customModalPromise = null; throw e })
   }
   return customModalPromise
 }
@@ -32,7 +35,8 @@ export function importCustomPatternModal(): Promise<CustomModule> {
 /** Returns (and caches) the dynamic import of TemplateConfigModal. */
 export function importTemplateConfigModal(): Promise<TemplateModule> {
   if (!templateModalPromise) {
-    templateModalPromise = import('./TemplateConfigModal')
+    templateModalPromise = importWithReload(() => import('./TemplateConfigModal'))
+      .catch((e) => { templateModalPromise = null; throw e })
   }
   return templateModalPromise
 }
@@ -40,7 +44,8 @@ export function importTemplateConfigModal(): Promise<TemplateModule> {
 /** Returns (and caches) the dynamic import of AutoDiscoveryConfigModal. */
 export function importAutoDiscoveryConfigModal(): Promise<AutoModule> {
   if (!autoModalPromise) {
-    autoModalPromise = import('./AutoDiscoveryConfigModal')
+    autoModalPromise = importWithReload(() => import('./AutoDiscoveryConfigModal'))
+      .catch((e) => { autoModalPromise = null; throw e })
   }
   return autoModalPromise
 }

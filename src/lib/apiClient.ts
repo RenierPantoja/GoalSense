@@ -1,6 +1,7 @@
 import { teamsAreSame } from '@/features/providers/teamNameNormalizer'
 import { buildCanonicalMatchId } from '@/features/providers/canonicalMatchId'
 import { reconcileAllFixtureScores, reconcileAllPenaltyScores } from './liveScoreCache'
+import { fetchFootballDataMatches } from './footballDataClient'
 
 // BASE moved to apiPath
 const BASE = ''
@@ -294,17 +295,17 @@ function normalizeApiFootball(item: any): LiveFixture {
 
 // football-data.org live matches
 async function fetchFootballDataLive(): Promise<LiveFixture[]> {
-  // Fetch today and tomorrow (handles UTC timezone edge cases for Brazilian games)
-  const today = new Date().toISOString().split('T')[0]
+  // Fetch today and tomorrow (handles UTC timezone edge cases for Brazilian games).
+  // Routed through the throttled client to avoid 429 storms (shared cache + dedup).
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
 
-  const [resToday, resTomorrow] = await Promise.allSettled([
-    fetch('/api/football-data-matches', { cache: 'no-store' }),
-    fetch(`/api/football-data-matches?date=${tomorrow}`, { cache: 'no-store' }),
+  const [todayData, tomorrowData] = await Promise.all([
+    fetchFootballDataMatches(),
+    fetchFootballDataMatches(`date=${tomorrow}`),
   ])
 
-  const matchesToday = resToday.status === 'fulfilled' ? (await resToday.value.json()).matches || [] : []
-  const matchesTomorrow = resTomorrow.status === 'fulfilled' ? (await resTomorrow.value.json()).matches || [] : []
+  const matchesToday = todayData?.matches || []
+  const matchesTomorrow = tomorrowData?.matches || []
   const allMatches = [...matchesToday, ...matchesTomorrow]
 
   // Filter in-play matches
