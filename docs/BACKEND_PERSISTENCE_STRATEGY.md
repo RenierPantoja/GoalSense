@@ -56,7 +56,8 @@ Rationale: the project is already Firebase-first; running a second database (Pos
 8. ✅ E6.2 — Incremental, idempotent performance counters implemented + validated in firebase runtime; on-demand kept as fallback + reconciliation. Prisma mode stays on-demand.
 9. ✅ E7 — Production readiness: collection inventory, recommended indexes, retention policy, data migration plan, default-switch checklist, and dry-run maintenance scripts (QA cleanup, rebuild-all, Prisma→Firebase dry-run). Default stays prisma; Prisma not removed.
 10. ✅ E8 — Staging switch prep: `firestore.indexes.json` materialized, QA data cleaned (`--confirm`, 19 docs), rebuild/migration dry-runs executed, firebase staging runtime validated, `/api/health` provider diagnostic, Prisma rollback validated. Default still prisma.
-11. E9 (future) — Deploy indexes, flip the deploy-env default to firebase after live-match worker validation, execute approved data migration, then remove Prisma.
+11. ✅ E9 — Firebase set as the controlled-environment default (via `backend/.env`); full smoke tests + controlled write test + workers validated in firebase mode (live/rich worker validation pending a real match); backup + rollback runbooks; QA_E9 data cleaned. Committed default still prisma; Prisma not removed.
+12. E10 (future) — Backup/export, deploy indexes, validate workers on a live rich match, flip the deploy-env default, approved data migration, then remove Prisma.
 
 ## Repository Layer (E1)
 

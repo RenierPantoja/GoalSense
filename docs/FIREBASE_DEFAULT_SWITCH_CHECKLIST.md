@@ -19,10 +19,12 @@ Legend: [x] done in staging (E8) · [ ] pending for the production switch (E9).
 - [x] Odds disabled/unavailable path validated (no crash).
 - [x] Recommended composite indexes materialized (`firestore.indexes.json`); **deploy to the project still pending (E9)**.
 - [x] QA data cleanup executed (`scripts/firebaseCleanupQaData.mjs --confirm` → 19 docs removed; re-run dry-run = 0).
-- [ ] Firestore backup/export taken (`gcloud firestore export`).
+- [ ] Firestore backup/export taken (`gcloud firestore export`). — runbook ready (`FIREBASE_BACKUP_RUNBOOK.md`); pending owner access (E9).
 - [x] Retention policy decided (`FIREBASE_RETENTION_POLICY.md`).
-- [x] Rollback plan confirmed (env guard validated; `PERSISTENCE_PROVIDER=prisma` + `DATABASE_URL` reverts).
+- [x] Rollback plan confirmed (env guard validated; `PERSISTENCE_PROVIDER=prisma` + `DATABASE_URL` reverts — `FIREBASE_ROLLBACK_RUNBOOK.md`).
 - [x] Observability reviewed (`/api/health` provider diagnostic + worker status endpoints + counter-failure warnings).
+- [x] Firebase active as the **controlled-environment** provider (E9); smoke tests + controlled write test passed.
+- [ ] Firebase CLI available + `firebase deploy --only firestore:indexes` run (CLI not installed; pending E10).
 
 ## Switch
 
