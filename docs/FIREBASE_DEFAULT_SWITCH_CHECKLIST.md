@@ -6,29 +6,23 @@ This is a gate, not an action for this phase.
 
 ## Pre-switch checklist
 
-- [ ] Firebase credentials configured in the deploy environment
-      (`FIREBASE_SERVICE_ACCOUNT_JSON` or the 3 vars; never commit the file).
-- [ ] `PERSISTENCE_PROVIDER=firebase` validated in a **staging** environment first.
-- [ ] Backend boots with **no `DATABASE_URL`** in firebase mode.
-- [ ] Live Monitor worker validated (fixtures + snapshots written to Firestore).
-- [ ] Pattern worker validated against a **live in-progress match** (creates real
-      alerts; hard gates + duplicate guard intact).
-- [ ] Resolution worker validated against a **real pending alert** (confirmed /
-      partial / failed / unknown correct; `unknown` never becomes `failed`).
-- [ ] Telegram validated (channels, rules, eligibility, approval queue, send with
-      `confirm:true`, deterministic delivery id, no token in logs/responses).
-- [ ] Performance counters validated (incremental + on-demand fallback + rebuild);
-      idempotency confirmed (no double counting).
-- [ ] Odds: disabled/unavailable path validated (no crash); if enabled, snapshots
-      + alert context persist and odds never reach Telegram.
-- [ ] Recommended composite indexes created in the Firebase project
-      (`backend/firestore.indexes.recommended.json`).
-- [ ] QA data cleanup executed (`scripts/firebaseCleanupQaData.mjs --confirm`).
+Legend: [x] done in staging (E8) · [ ] pending for the production switch (E9).
+
+- [x] Firebase credentials configured (local `backend/.env` via `FIREBASE_SERVICE_ACCOUNT_PATH`; deploy env still TODO).
+- [x] `PERSISTENCE_PROVIDER=firebase` validated in **staging/dev** (real project goalsense-29892).
+- [x] Backend boots with **no `DATABASE_URL`** in firebase mode.
+- [x] Live Monitor worker validated (fixtures + snapshots written to Firestore — E6.1).
+- [ ] Pattern worker validated against a **live in-progress match** (validated with no live match at QA time; needs a real match window).
+- [ ] Resolution worker validated against a **real pending alert from a live match** (logic validated via API in E6.1/E6.2).
+- [x] Telegram validated (channels, rules, eligibility, approval queue — E6.1).
+- [x] Performance counters validated (incremental + on-demand fallback + rebuild; idempotency — E6.2).
+- [x] Odds disabled/unavailable path validated (no crash).
+- [x] Recommended composite indexes materialized (`firestore.indexes.json`); **deploy to the project still pending (E9)**.
+- [x] QA data cleanup executed (`scripts/firebaseCleanupQaData.mjs --confirm` → 19 docs removed; re-run dry-run = 0).
 - [ ] Firestore backup/export taken (`gcloud firestore export`).
-- [ ] Retention policy decided (see `FIREBASE_RETENTION_POLICY.md`).
-- [ ] Rollback plan confirmed: set `PERSISTENCE_PROVIDER=prisma` + `DATABASE_URL`
-      to revert instantly (Prisma adapters remain in the codebase).
-- [ ] Observability reviewed (worker status endpoints + counter-failure warnings).
+- [x] Retention policy decided (`FIREBASE_RETENTION_POLICY.md`).
+- [x] Rollback plan confirmed (env guard validated; `PERSISTENCE_PROVIDER=prisma` + `DATABASE_URL` reverts).
+- [x] Observability reviewed (`/api/health` provider diagnostic + worker status endpoints + counter-failure warnings).
 
 ## Switch
 

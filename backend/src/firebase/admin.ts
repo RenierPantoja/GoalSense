@@ -106,3 +106,29 @@ export async function getFirestore(): Promise<any> {
 export function isFirebaseConfigured(): boolean {
   return !!(env.FIREBASE_SERVICE_ACCOUNT_JSON || env.FIREBASE_SERVICE_ACCOUNT_PATH || (env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY))
 }
+
+/** Mask a project id for diagnostics (project ids are low-sensitivity, but we mask anyway). */
+function maskProjectId(id: string): string {
+  if (!id) return ''
+  if (id.length <= 7) return `${id.slice(0, 2)}***`
+  return `${id.slice(0, 4)}***${id.slice(-3)}`
+}
+
+let cachedDiagnostics: { configured: boolean; projectId: string | null } | null = null
+
+/**
+ * Non-secret Firebase diagnostics for /health. Never exposes the private key,
+ * client email, or the service-account file path. Resolves credentials once.
+ */
+export function getFirebaseDiagnostics(): { configured: boolean; projectId: string | null } {
+  if (cachedDiagnostics) return cachedDiagnostics
+  try {
+    const creds = resolveCredentials()
+    cachedDiagnostics = creds
+      ? { configured: true, projectId: maskProjectId(creds.projectId || '') }
+      : { configured: false, projectId: null }
+  } catch {
+    cachedDiagnostics = { configured: false, projectId: null }
+  }
+  return cachedDiagnostics
+}

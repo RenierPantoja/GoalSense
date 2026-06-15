@@ -74,10 +74,19 @@ All collections are scoped to a single user (`userId = "default"`) today.
 
 ## Recommended indexes
 
-See `backend/firestore.indexes.recommended.json`. **None are required today** — no
+See `backend/firestore.indexes.recommended.json` (reference) and the deployable
+`firestore.indexes.json` at the repo root (Phase E8). **None are required today** — no
 composite index error was hit during E6.1 runtime QA because every adapter uses
 single-equality queries + in-memory sort/filter. Create the composite indexes
 before switching adapters to server-side `where + orderBy + limit` at scale.
+
+Deploy (when Firebase CLI is configured): `firebase deploy --only firestore:indexes`.
+
+## Provider diagnostic
+
+`GET /api/health` reports the active provider without secrets (Phase E8):
+`persistenceProvider`, `databaseUrlConfigured`, `firebaseConfigured`,
+`firebaseProjectId` (masked, e.g. `goal***892`).
 
 ## Maintenance scripts (all dry-run by default)
 
