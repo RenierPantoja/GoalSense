@@ -108,14 +108,28 @@ async function main() {
   }
 
   const endAt = Date.now() + DURATION_MIN * 60 * 1000
-  const samples = []
-  let best = 'NO_LIVE_FIXTURES'
   const RANK = { NO_LIVE_FIXTURES: 0, LIVE_POOR_DATA: 1, LIVE_PARTIAL_DATA: 2, LIVE_RICH_DATA: 3 }
+  const TAIL_MAX = 60 // bound memory on long runs — keep only the most recent samples
+
+  let best = 'NO_LIVE_FIXTURES'
+  let sampleCount = 0
+  let richEver = false
+  let anyLiveEver = false
+  let firstAlerts = null
+  let firstResolved = null
+  let lastSample = null
+  const tail = []
 
   do {
     const s = await snapshotState()
-    samples.push(s)
+    sampleCount++
+    if (firstAlerts === null) { firstAlerts = s.alertsCreated ?? 0; firstResolved = s.resolvedAlerts ?? 0 }
     if (RANK[s.validationStatus] > RANK[best]) best = s.validationStatus
+    if (s.richSnapshotsCount > 0) richEver = true
+    if (s.liveFixturesCount > 0) anyLiveEver = true
+    lastSample = s
+    tail.push(s)
+    if (tail.length > TAIL_MAX) tail.shift() // bounded
     console.log(`[${s.checkedAt}] ${s.validationStatus} live=${s.liveFixturesCount} snaps=${s.snapshotsCount} (rich=${s.richSnapshotsCount} partial=${s.partialSnapshotsCount} poor=${s.poorSnapshotsCount}) alertsCreated=${s.alertsCreated} resolved=${s.resolvedAlerts}${s.workerErrors.length ? ' ERRORS:' + s.workerErrors.join('|') : ''}`)
     if (Date.now() >= endAt) break
     await new Promise(r => setTimeout(r, INTERVAL_SEC * 1000))
@@ -130,13 +144,14 @@ async function main() {
     backend: BASE,
     durationMinutes: DURATION_MIN,
     intervalSeconds: INTERVAL_SEC,
-    samples: samples.length,
+    samples: sampleCount,
     bestObserved: best,
-    richEverObserved: samples.some(s => s.richSnapshotsCount > 0),
-    anyLiveEverObserved: samples.some(s => s.liveFixturesCount > 0),
-    alertsCreatedDuringWindow: samples.length ? (samples[samples.length - 1].alertsCreated - samples[0].alertsCreated) : 0,
-    resolvedDuringWindow: samples.length ? (samples[samples.length - 1].resolvedAlerts - samples[0].resolvedAlerts) : 0,
-    lastSample: samples[samples.length - 1] || null,
+    richEverObserved: richEver,
+    anyLiveEverObserved: anyLiveEver,
+    alertsCreatedDuringWindow: lastSample ? ((lastSample.alertsCreated ?? 0) - (firstAlerts ?? 0)) : 0,
+    resolvedDuringWindow: lastSample ? ((lastSample.resolvedAlerts ?? 0) - (firstResolved ?? 0)) : 0,
+    recentSamples: tail,
+    lastSample: lastSample,
     conclusion: best === 'LIVE_RICH_DATA'
       ? 'Rich live data observed — workers can be validated with real data (review samples).'
       : best === 'NO_LIVE_FIXTURES'

@@ -15,7 +15,8 @@
     "qa:cleanup": "node scripts/firebaseCleanupQaData.mjs",
     "counters:rebuild-all": "node scripts/rebuildPerformanceCounters.mjs",
     "migrate:dryrun": "node scripts/migratePrismaToFirebase.mjs",
-    "watch:live": "node scripts/watchLiveValidationWindow.mjs"
+    "watch:live": "node scripts/watchLiveValidationWindow.mjs",
+    "watch:live:long": "node scripts/watchLiveValidationWindow.mjs --duration 240 --interval 60 --json"
   },
   "dependencies": {
     "fastify": "^5.0.0",

@@ -45,3 +45,13 @@ Record the output, success/failure, and date here once done.
 Adapters query with a single equality filter and sort/filter in memory, so
 Firestore does not require these composite indexes yet. They become necessary when
 adapters move to server-side ordering/limits at scale (post-cutover optimization).
+
+## Owner Action Required
+
+- **Observed error (real):** `HTTP 403 — Permission denied to get service
+  [firestore.googleapis.com]` when deploying with the Admin SDK service account.
+- **Probable cause:** the service account lacks index-deploy / Service Usage roles.
+- **Resolution options (see `OWNER_GATE_ACTIONS.md` §1):**
+  - Option A — owner runs `npx firebase-tools login` then `... deploy --only firestore:indexes`.
+  - Option B — grant the SA `Cloud Datastore Index Admin` + `Service Usage Consumer`, then re-run the non-interactive deploy.
+- **Do not mark this gate DONE until a real successful deploy output is recorded here.**
