@@ -55,3 +55,17 @@ adapters move to server-side ordering/limits at scale (post-cutover optimization
   - Option A — owner runs `npx firebase-tools login` then `... deploy --only firestore:indexes`.
   - Option B — grant the SA `Cloud Datastore Index Admin` + `Service Usage Consumer`, then re-run the non-interactive deploy.
 - **Do not mark this gate DONE until a real successful deploy output is recorded here.**
+
+## Second attempt (Owner Gate Execution run)
+
+- `npx firebase-tools projects:list` → **succeeded** (listed `goalsense-29892`),
+  i.e. ambient/ADC credentials allow read-only project access.
+- `npx firebase-tools deploy --only firestore:indexes --project goalsense-29892`
+  (no service-account override) → **FAILED: "Failed to authenticate, have you run
+  firebase login?"**
+- `npx firebase-tools login:list` → **"No authorized accounts, run firebase login"**.
+- **Conclusion:** deploy needs an interactive `firebase login` (browser OAuth)
+  which cannot be completed in this non-interactive agent environment. The owner
+  must run `npx firebase-tools login` once on their machine, then
+  `npx firebase-tools deploy --only firestore:indexes --project goalsense-29892`.
+  Status stays **PENDING**. No success fabricated.

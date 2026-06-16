@@ -20,7 +20,7 @@ This is a gate, not an action for this phase.
 | Telegram real-alert validation (manual, no auto-send) | ⏳ pending — needs a real alert; logic validated E6.1 |
 | Performance post-resolution validation | ⏳ pending — needs a real live resolution |
 | Backup/export Firestore | ⏳ pending owner action — `OWNER_GATE_ACTIONS.md` §2 / `FIREBASE_BACKUP_EXECUTION_STATUS.md` |
-| Firestore indexes deployed | ❌ failed (E9.3 403); ⏳ pending owner action — `OWNER_GATE_ACTIONS.md` §1 / `FIRESTORE_INDEX_DEPLOY_STATUS.md` |
+| Firestore indexes deployed | ❌ not deployed — needs interactive `firebase login` (no authorized account); owner action (`OWNER_GATE_EXECUTION_LOG.md`, `FIRESTORE_INDEX_DEPLOY_STATUS.md`) |
 | Odds provider | disabled/suspended (API-Football) |
 | Rollback to Prisma | ✅ ready (`FIREBASE_ROLLBACK_RUNBOOK.md`; env guard validated) |
 | Prisma not removed / default unchanged | ✅ enforced |
