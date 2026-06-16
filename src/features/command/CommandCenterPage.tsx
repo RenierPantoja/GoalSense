@@ -16,6 +16,7 @@ import { useAlerts } from '@/context/AlertsContext'
 import { useViewMode } from '@/context/ViewModeContext'
 import { useBackendSync } from '@/services/useBackendSync'
 import { isBackendOnly, setBackendOnly } from '@/services/backendOnlyMode'
+import { getBackendUrl, setBackendUrl } from '@/services/commandBackendClient'
 import { usePatternWriteThrough } from '@/services/usePatternWriteThrough'
 import { useAlertWriteThrough } from '@/services/useAlertWriteThrough'
 import { useBackendPerformance } from '@/services/useBackendPerformance'
@@ -60,6 +61,7 @@ export function CommandCenterPage() {
   const [activeTab, setActiveTab] = useState<Tab>('cockpit')
   const [showBuilder, setShowBuilder] = useState(false)
   const [backendOnly, setBackendOnlyState] = useState(() => isBackendOnly())
+  const [backendUrlInput, setBackendUrlInput] = useState(() => getBackendUrl())
   const [prefilledDraft, setPrefilledDraft] = useState<Pattern | null>(null)
   const prevRef = useRef<LiveFixture[] | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -77,6 +79,18 @@ export function CommandCenterPage() {
   const toggleBackendOnly = useCallback(() => {
     setBackendOnlyState(prev => { const next = !prev; setBackendOnly(next); return next })
   }, [])
+  const connectBackend = useCallback(() => {
+    setBackendUrl(backendUrlInput)
+    setBackendUrlInput(getBackendUrl())
+    // Force the sync hook to re-check now that the URL changed.
+    setTimeout(() => { backendSync.refreshBackendHealth(); backendSync.refreshPatternMirror() }, 0)
+  }, [backendUrlInput, backendSync])
+  const disconnectBackend = useCallback(() => {
+    setBackendUrl('')
+    setBackendUrlInput('')
+    setBackendOnlyState(false); setBackendOnly(false)
+    setTimeout(() => { backendSync.refreshBackendHealth() }, 0)
+  }, [backendSync])
   const writeThrough = usePatternWriteThrough(
     { createPattern, createFromTemplate, updatePattern, deletePattern, togglePattern, patterns },
     backendSync.online,
@@ -476,6 +490,30 @@ export function CommandCenterPage() {
       </header>
 
       {error && <div className="rounded-xl border border-rose-500/12 bg-rose-500/[0.025] px-6 py-3.5 text-[13px] text-rose-400/80 flex items-center gap-3"><AlertCircle size={15} />{error}</div>}
+
+      {/* ═══ BACKEND CONNECTION (Advanced Mode Only) ═══ */}
+      {isAdvanced && (
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.015] px-5 py-3.5">
+          <div className="flex items-center gap-3 flex-wrap">
+            <Database size={13} className={backendSync.online ? 'text-emerald-400/70' : 'text-white/25'} />
+            <span className="text-[11px] font-medium text-white/50 shrink-0">Backend</span>
+            <input
+              type="text"
+              value={backendUrlInput}
+              onChange={e => setBackendUrlInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') connectBackend() }}
+              placeholder="https://seu-tunnel.trycloudflare.com"
+              spellCheck={false}
+              className="flex-1 min-w-[260px] h-8 px-3 rounded-lg bg-black/30 border border-white/[0.08] text-[12px] text-white/80 placeholder:text-white/25 focus:outline-none focus:border-cyan-500/30"
+            />
+            <button onClick={connectBackend} className="h-8 px-4 rounded-lg text-[11px] font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/25 hover:bg-cyan-500/25 transition-colors" type="button">Conectar</button>
+            {backendSync.enabled && <button onClick={disconnectBackend} className="h-8 px-3 rounded-lg text-[11px] text-white/40 border border-white/[0.08] hover:text-white/70 transition-colors" type="button">Desconectar</button>}
+            <span className={`text-[10px] font-medium shrink-0 ${backendSync.online ? 'text-emerald-400/70' : backendSync.enabled ? 'text-amber-400/70' : 'text-white/30'}`}>
+              {backendSync.online ? '● online' : backendSync.enabled ? '● configurado, offline' : '○ não configurado'}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ═══ BACKEND SYNC DIAGNOSTICS (Advanced Mode Only) ═══ */}
       {isAdvanced && backendSync.enabled && (
