@@ -39,6 +39,8 @@ interface RadarInspectorPanelProps {
   totalSteps?: number
   currentStepIndex?: number
   canSave?: boolean
+  /** Composer 2.0: header label (defaults to "Inspector"). */
+  heading?: string
 }
 
 export function RadarInspectorPanel({
@@ -47,6 +49,7 @@ export function RadarInspectorPanel({
   excludeLeagues, excludeTeams, excludeMatches,
   leagueLookup, teamLookup, matchLookup,
   currentStepLabel, totalSteps, currentStepIndex, canSave,
+  heading = 'Inspector',
 }: RadarInspectorPanelProps) {
   const sevLabel = severity === 'critical' ? 'Crítico' : severity === 'attention' ? 'Atenção' : 'Informação'
   const sevDot = severity === 'critical' ? 'bg-rose-400/80' : severity === 'attention' ? 'bg-amber-400/80' : 'bg-cyan-400/80'
@@ -78,7 +81,7 @@ export function RadarInspectorPanel({
       {/* Inspector header */}
       <div className="px-4 pt-4 pb-3 border-b border-white/[0.05]">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Inspector</span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">{heading}</span>
           {currentStepLabel && totalSteps && typeof currentStepIndex === 'number' && (
             <span className="ml-auto text-[10px] text-white/35 tabular-nums">{currentStepIndex + 1}/{totalSteps}</span>
           )}
