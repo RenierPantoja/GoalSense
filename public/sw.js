@@ -14,7 +14,7 @@
  * No push handlers are registered yet. When real backend + token management
  * lands, push/notificationclick handlers can be added here without rewrites.
  */
-const SW_VERSION = 'v6-asset-mime-guard'
+const SW_VERSION = 'v7-passthrough-cross-origin'
 const STATIC_CACHE = `gs-static-${SW_VERSION}`
 const SHELL_CACHE = `gs-shell-${SW_VERSION}`
 
@@ -63,8 +63,14 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url)
 
-  // Strategy 1: Live data. Always network. Don't cache match results.
-  // If network fails, let it fail naturally (no fake fallback for live data).
+  // Cross-origin requests (local backend at 127.0.0.1, ESPN, football-data, etc.)
+  // are NOT intercepted: let the browser handle them natively so real CORS /
+  // Private Network Access errors surface instead of being masked by a fake 503,
+  // and so the SW never proxies a different-origin API call.
+  if (url.origin !== self.location.origin) return
+
+  // Strategy 1: Same-origin live data (Vercel serverless /api/ proxies).
+  // Always network. Don't cache match results.
   if (isApiRequest(url)) {
     event.respondWith(
       fetch(request).catch(() => new Response(JSON.stringify({ ok: false, error: 'network' }), { status: 503, headers: { 'Content-Type': 'application/json' } }))
