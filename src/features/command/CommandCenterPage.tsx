@@ -15,6 +15,7 @@ import { useFavorites } from '@/context/FavoritesContext'
 import { useAlerts } from '@/context/AlertsContext'
 import { useViewMode } from '@/context/ViewModeContext'
 import { useBackendSync } from '@/services/useBackendSync'
+import { isBackendOnly, setBackendOnly } from '@/services/backendOnlyMode'
 import { usePatternWriteThrough } from '@/services/usePatternWriteThrough'
 import { useAlertWriteThrough } from '@/services/useAlertWriteThrough'
 import { useBackendPerformance } from '@/services/useBackendPerformance'
@@ -58,6 +59,7 @@ export function CommandCenterPage() {
   const [eventsMap, setEventsMap] = useState<Map<number, CommandTimedEvent[]>>(new Map())
   const [activeTab, setActiveTab] = useState<Tab>('cockpit')
   const [showBuilder, setShowBuilder] = useState(false)
+  const [backendOnly, setBackendOnlyState] = useState(() => isBackendOnly())
   const [prefilledDraft, setPrefilledDraft] = useState<Pattern | null>(null)
   const prevRef = useRef<LiveFixture[] | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -67,6 +69,14 @@ export function CommandCenterPage() {
   const { isAdvanced } = useViewMode()
   const { patterns, templates, createPattern, createFromTemplate, updatePattern, togglePattern, deletePattern, getActivePatterns, triggeredAlerts, triggerAlert, getRecentTriggered, resolveExpired, discoveryConfig, updateDiscoveryConfig, activePatternCount, triggeredTodayCount } = usePatterns()
   const backendSync = useBackendSync(patterns)
+  // Backend-only mode: when on AND a backend is configured, the local client
+  // engine stops generating/persisting alerts — the backend Pattern Worker
+  // becomes the sole source of truth. Local evaluation still feeds the
+  // Scanner/Cockpit as a live preview, but no local alerts are written.
+  const delegateToBackend = backendOnly && backendSync.enabled
+  const toggleBackendOnly = useCallback(() => {
+    setBackendOnlyState(prev => { const next = !prev; setBackendOnly(next); return next })
+  }, [])
   const writeThrough = usePatternWriteThrough(
     { createPattern, createFromTemplate, updatePattern, deletePattern, togglePattern, patterns },
     backendSync.online,
@@ -203,7 +213,7 @@ export function CommandCenterPage() {
   }, [hasManualPatterns, patterns, fixtures, statsMap, isFavoriteTeam, getActivePatterns])
 
   useEffect(() => {
-    if (!hasIntelligence) return
+    if (!hasIntelligence || delegateToBackend) return
     for (const hit of patternHits) {
       const pat = patterns.find(p => p.id === hit.patternId)
       if (!pat) continue
@@ -235,10 +245,11 @@ export function CommandCenterPage() {
       triggerAlert({ patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, league: fx.league.name, minute: fx.status.elapsed, confidence: precision.adjustedConfidence, reasons: hit.reasons, timestamp: new Date().toISOString(), status: 'pending', scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 } })
       alertWT.registerCommandAlertWT({ source: 'command_center', patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, competition: fx.league.name, minuteAtTrigger: fx.status.elapsed, scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 }, confidence: precision.adjustedConfidence, severity: hit.severity, evidences: [...hit.reasons, ...precision.reasons], status: 'pending', triggerSnapshot: { minute: fx.status.elapsed, homeScore: fx.score.home ?? 0, awayScore: fx.score.away ?? 0, status: fx.status.short, competition: fx.league.name, provider: fx.provider, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, homeLogo: fx.homeTeam.logo, awayLogo: fx.awayTeam.logo, favoriteInvolved: isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name), conditionsMatched: hit.matchedConditions, conditionsTotal: hit.totalConditions, confidenceAtTrigger: precision.adjustedConfidence, ...(fxStats ? { stats: fxStats } : {}) }, temporalEvidence: { momentumSource: momSrc as any, recencyConfidence: recConf, windowMinutes: recentWindow, recentEventsUsed: recentEvts.map(e => ({ minute: e.minute, type: e.type, side: e.side, teamName: e.teamName, playerName: e.playerName })) } })
     }
-  }, [patternHits, hasIntelligence, triggerAlert, patterns, alertWT, isFavoriteTeam, statsMap, commandAlerts, eventsMap])
+  }, [patternHits, hasIntelligence, triggerAlert, patterns, alertWT, isFavoriteTeam, statsMap, commandAlerts, eventsMap, delegateToBackend])
 
   // ─── Resolution ────────────────────────────────────────────────────────────
   useEffect(() => {
+    if (delegateToBackend) return
     if (fixtures.length === 0 || commandAlerts.length === 0) return
     const pending = commandAlerts.filter(a => a.status === 'pending')
     if (pending.length === 0) return
@@ -248,7 +259,7 @@ export function CommandCenterPage() {
       const result = resolveAlert({ id: alert.id, patternName: alert.patternName, fixtureId: alert.fixtureId, minuteAtTrigger: alert.minuteAtTrigger, scoreAtTrigger: alert.scoreAtTrigger, confidence: alert.confidence, createdAt: alert.createdAt, status: 'pending' }, fx)
       if (result) { const finalStatus = result.strength === 'partial_confirmation' ? 'confirmed_partial' as const : result.status; alertWT.updateCommandAlertStatusWT(alert.id, finalStatus, { score: result.scoreAtResolution, reason: result.reason }) }
     }
-  }, [fixtures, commandAlerts, alertWT])
+  }, [fixtures, commandAlerts, alertWT, delegateToBackend])
 
   // ─── Auto Discovery (ONLY if configured) ──────────────────────────────────
   const discoveries = useMemo(() => {
@@ -263,6 +274,7 @@ export function CommandCenterPage() {
   // and inside registerCommandAlert (5min window per pattern+fixture).
   useEffect(() => {
     if (!hasAutoDiscovery) return
+    if (delegateToBackend) return
     if (!discoveryConfig.registerAlertAuto) return
 
     // Collect fixture ids that already have manual pattern alerts to avoid duplication
@@ -352,7 +364,7 @@ export function CommandCenterPage() {
         temporalEvidence: validation.temporalEvidence,
       })
     }
-  }, [hasAutoDiscovery, discoveryConfig, discoveries, triggerAlert, alertWT, isFavoriteTeam, statsMap, eventsMap, commandAlerts])
+  }, [hasAutoDiscovery, discoveryConfig, discoveries, triggerAlert, alertWT, isFavoriteTeam, statsMap, eventsMap, commandAlerts, delegateToBackend])
 
   // ─── Scanner (ONLY signals) — V5 with precision states ──────────────────────
   const scannerEntries = useMemo((): ScannerEntry[] => {
@@ -449,7 +461,7 @@ export function CommandCenterPage() {
         <div className="relative px-8 py-7">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <div className="flex items-center gap-3"><h1 className="text-[28px] font-bold text-white/95 tracking-tight">Command Center</h1><span className={`text-[11px] font-bold uppercase tracking-[0.08em] px-3 py-1 rounded-full border ${statusBadge.color}`}>{statusBadge.label}</span></div>
+              <div className="flex items-center gap-3"><h1 className="text-[28px] font-bold text-white/95 tracking-tight">Command Center</h1><span className={`text-[11px] font-bold uppercase tracking-[0.08em] px-3 py-1 rounded-full border ${statusBadge.color}`}>{statusBadge.label}</span>{delegateToBackend && <span className="text-[11px] font-bold uppercase tracking-[0.08em] px-3 py-1 rounded-full border text-cyan-300 bg-cyan-500/10 border-cyan-500/20" title="Detecção e alertas vêm somente do backend">Somente backend</span>}</div>
               <p className="text-[14px] text-white/45 mt-1.5">Motor de decisão em tempo real{timeSince !== null && <span className="text-white/30"> · atualizado {timeSince < 60 ? `${timeSince}s` : `${Math.floor(timeSince / 60)}min`} atrás</span>}{refreshing && <span className="text-cyan-400/50 ml-2 animate-pulse">●</span>}{isAdvanced && backendSync.enabled && <span className={`ml-2 text-[10px] ${backendSync.online ? 'text-emerald-400/60' : 'text-white/25'}`}>· Backend {backendSync.online ? 'online' : 'offline'}{backendSync.online && backendSync.patternMirror.summary ? ` · ${backendSync.patternMirror.summary}` : ''}</span>}</p>
             </div>
             <div className="flex items-center gap-2.5">
@@ -494,6 +506,14 @@ export function CommandCenterPage() {
             </div>
             <div className="flex items-center gap-2">
               {backendSync.patternMirror.error && <span className="text-[10px] text-rose-400/60">{backendSync.patternMirror.error}</span>}
+              <button
+                onClick={toggleBackendOnly}
+                className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${delegateToBackend ? 'text-cyan-300 bg-cyan-500/10 border-cyan-500/25' : 'text-white/35 border-white/[0.1] hover:text-white/60'}`}
+                type="button"
+                title="Quando ativo, a detecção e os alertas vêm SOMENTE do backend. O motor local vira apenas pré-visualização."
+              >
+                {delegateToBackend ? '● Somente backend' : '○ Somente backend'}
+              </button>
               <button onClick={() => { backendSync.refreshBackendHealth(); backendSync.refreshPatternMirror() }} className="text-[10px] text-white/30 hover:text-white/60 transition-colors" type="button">↻ Mirror</button>
               {(patterns.some(p => p.syncStatus === 'pending_create' || p.syncStatus === 'pending_update' || p.syncStatus === 'pending_delete' || p.syncStatus === 'error') || alertWT.pendingAlertSyncCount > 0 || alertWT.errorAlertSyncCount > 0) && (
                 <button onClick={() => { writeThrough.syncPending(); alertWT.syncPendingAlertsManual() }} className="text-[10px] text-cyan-400/40 hover:text-cyan-400/70 transition-colors" type="button">⟳ Sync pendentes</button>
