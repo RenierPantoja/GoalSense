@@ -19,9 +19,22 @@ import { startAlertResolutionWorker } from './workers/alertResolution.worker.js'
 
 const app = Fastify({ logger: true })
 
+// Private Network Access: allow an HTTPS public site (e.g. the Vercel frontend)
+// to reach this local/loopback backend. Chrome sends the request header
+// `Access-Control-Request-Private-Network: true` on preflight and requires the
+// matching response header. Registered before CORS so the header is present on
+// the preflight reply.
+app.addHook('onRequest', async (req, reply) => {
+  if (req.headers['access-control-request-private-network']) {
+    reply.header('Access-Control-Allow-Private-Network', 'true')
+  }
+})
+
 // CORS
 await app.register(cors, {
-  origin: env.CORS_ORIGIN.split(',').map(s => s.trim()),
+  origin: env.CORS_ORIGIN.split(',').map(s => s.trim()).filter(Boolean),
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
 })
 
 // Routes

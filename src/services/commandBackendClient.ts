@@ -1,22 +1,50 @@
 /**
  * commandBackendClient — frontend client for the GoalSense backend API.
  * ─────────────────────────────────────────────────────────────────────────────
- * If VITE_COMMAND_BACKEND_URL is not set, all functions return null/empty
- * and the frontend continues using localStorage as primary.
+ * Backend URL resolution (first match wins):
+ *   1. localStorage 'goalsense_backend_url'  (runtime override — set on the
+ *      deployed site to point at your LOCAL backend, no rebuild needed)
+ *   2. import.meta.env.VITE_COMMAND_BACKEND_URL  (build-time, e.g. Vercel env)
+ * If neither is set, all functions return null/empty and the frontend
+ * continues using localStorage as primary.
  *
  * No mocks. No fake data. Graceful degradation.
  */
 
-const BACKEND_URL = import.meta.env.VITE_COMMAND_BACKEND_URL || ''
+const RUNTIME_KEY = 'goalsense_backend_url'
+
+/** Resolve the backend base URL at call time (runtime override > build env). */
+function resolveBackendUrl(): string {
+  try {
+    const override = localStorage.getItem(RUNTIME_KEY)
+    if (override && override.trim()) return override.trim().replace(/\/+$/, '')
+  } catch { /* localStorage unavailable */ }
+  return (import.meta.env.VITE_COMMAND_BACKEND_URL || '').replace(/\/+$/, '')
+}
+
+/** Set (or clear) the backend URL at runtime. Pass '' to clear the override. */
+export function setBackendUrl(url: string): void {
+  try {
+    const clean = (url || '').trim().replace(/\/+$/, '')
+    if (clean) localStorage.setItem(RUNTIME_KEY, clean)
+    else localStorage.removeItem(RUNTIME_KEY)
+  } catch { /* ignore */ }
+}
+
+/** Current resolved backend URL (empty string when not configured). */
+export function getBackendUrl(): string {
+  return resolveBackendUrl()
+}
 
 function isEnabled(): boolean {
-  return BACKEND_URL.length > 0
+  return resolveBackendUrl().length > 0
 }
 
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T | null> {
-  if (!isEnabled()) return null
+  const base = resolveBackendUrl()
+  if (!base) return null
   try {
-    const res = await fetch(`${BACKEND_URL}${path}`, {
+    const res = await fetch(`${base}${path}`, {
       ...options,
       headers: { 'Content-Type': 'application/json', ...options?.headers },
     })
@@ -30,8 +58,9 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T | nul
 
 /** Like fetchApi but throws on HTTP errors (preserving status code). Used by write-through. */
 async function fetchApiStrict<T>(path: string, options?: RequestInit): Promise<T | null> {
-  if (!isEnabled()) return null
-  const res = await fetch(`${BACKEND_URL}${path}`, {
+  const base = resolveBackendUrl()
+  if (!base) return null
+  const res = await fetch(`${base}${path}`, {
     ...options,
     headers: { 'Content-Type': 'application/json', ...options?.headers },
   })

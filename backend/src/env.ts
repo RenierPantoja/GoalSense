@@ -16,7 +16,7 @@ const envSchema = z.object({
 
   APP_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(4000),
-  CORS_ORIGIN: z.string().default('http://localhost:5173'),
+  CORS_ORIGIN: z.string().default('http://localhost:5173,https://goal-sense.vercel.app'),
   API_FOOTBALL_KEY: z.string().optional(),
   FOOTBALL_DATA_KEY: z.string().optional(),
   // Live monitoring worker
