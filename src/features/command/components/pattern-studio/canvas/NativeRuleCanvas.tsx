@@ -101,12 +101,14 @@ export function NativeRuleCanvas(props: NativeRuleCanvasProps) {
   const [sheet, setSheet] = useState<Sheet>({ kind: 'none' })
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<TriggerCategory | 'all'>('all')
+  const [addTab, setAddTab] = useState<'supported' | 'partial' | 'unsupported'>('supported')
 
   const usedTypes = useMemo(() => new Set(conditions.map(c => c.type)), [conditions])
   const filters = conditions.map((c, i) => ({ c, i })).filter(({ c }) => getCapability(c.type).kind !== 'signal')
   const signals = conditions.map((c, i) => ({ c, i })).filter(({ c }) => getCapability(c.type).kind === 'signal')
 
   const close = () => { setSheet({ kind: 'none' }); setQuery(''); setCategory('all') }
+  const openAdd = (target: 'eligibility' | 'signal') => { setSheet({ kind: 'add', target }); setQuery(''); setCategory('all'); setAddTab('supported') }
   const addTrigger = (spec: TriggerSpec) => { if (!usedTypes.has(spec.type)) onConditions([...conditions, { type: spec.type, params: { ...spec.defaultParams } }]) }
   const removeCond = (idx: number) => onConditions(conditions.filter((_, j) => j !== idx))
   const updateParam = (idx: number, key: string, raw: number) => {
@@ -205,15 +207,15 @@ export function NativeRuleCanvas(props: NativeRuleCanvasProps) {
 
         <Line kicker="Avaliar quando">
           {filters.map(renderChip)}
-          {pill(<><Plus size={12} />filtro</>, () => { setSheet({ kind: 'add', target: 'eligibility' }); setQuery(''); setCategory('all') }, { chevron: false, tone: 'muted' })}
+          {pill(<><Plus size={12} />filtro</>, () => openAdd('eligibility'), { chevron: false, tone: 'muted' })}
         </Line>
 
         <Line kicker="Disparar se">
           {signals.length === 0
-            ? pill(<><Plus size={12} />adicionar sinal real</>, () => { setSheet({ kind: 'add', target: 'signal' }); setQuery(''); setCategory('all') }, { chevron: false, tone: 'warn' })
+            ? pill(<><Plus size={12} />adicionar sinal real</>, () => openAdd('signal'), { chevron: false, tone: 'warn' })
             : <>
                 {signals.map(renderChip)}
-                {pill(<><Plus size={12} />sinal real</>, () => { setSheet({ kind: 'add', target: 'signal' }); setQuery(''); setCategory('all') }, { chevron: false, tone: 'muted' })}
+                {pill(<><Plus size={12} />sinal real</>, () => openAdd('signal'), { chevron: false, tone: 'muted' })}
                 {pill(<><Sparkles size={11} />receita</>, () => setSheet({ kind: 'recipes' }), { chevron: false, tone: 'muted' })}
               </>}
         </Line>
@@ -241,9 +243,25 @@ export function NativeRuleCanvas(props: NativeRuleCanvasProps) {
             ))}
           </div>
           {grouped.supported.length === 0 && grouped.partial.length === 0 && grouped.unsupported.length === 0 && <p className="text-center text-[11px] text-white/40 py-6">Nada encontrado.</p>}
-          <AddGroup label="Disponíveis para ativação" tone="emerald" specs={grouped.supported} usedTypes={usedTypes} onAdd={addTrigger} />
-          <AddGroup label="Parcialmente suportadas · cobertura variável" tone="amber" specs={grouped.partial} usedTypes={usedTypes} onAdd={addTrigger} />
-          <AddGroup label="Ainda não executável pelo backend" tone="rose" specs={grouped.unsupported} usedTypes={usedTypes} onAdd={addTrigger} note="Podem ser usadas no motor local, mas impedem a ativação." />
+          {(grouped.supported.length + grouped.partial.length + grouped.unsupported.length) > 0 && (
+            <>
+              <div className="flex items-center gap-1 mb-3">
+                {([
+                  { k: 'supported' as const, label: 'Executáveis', n: grouped.supported.length },
+                  { k: 'partial' as const, label: 'Parciais', n: grouped.partial.length },
+                  { k: 'unsupported' as const, label: 'Não executáveis', n: grouped.unsupported.length },
+                ]).map(t => (
+                  <button key={t.k} type="button" onClick={() => setAddTab(t.k)} className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${addTab === t.k ? 'bg-white/[0.08] text-white/95 border border-white/[0.14]' : 'text-white/50 hover:text-white/80 border border-transparent'}`}>{t.label}<span className="ml-1 text-[10px] tabular-nums opacity-60">{t.n}</span></button>
+                ))}
+              </div>
+              {addTab === 'supported' && <AddGroup label="Disponíveis para ativação" tone="emerald" specs={grouped.supported} usedTypes={usedTypes} onAdd={addTrigger} />}
+              {addTab === 'partial' && <AddGroup label="Cobertura variável por provedor" tone="amber" specs={grouped.partial} usedTypes={usedTypes} onAdd={addTrigger} />}
+              {addTab === 'unsupported' && <AddGroup label="Ainda não executável pelo backend" tone="rose" specs={grouped.unsupported} usedTypes={usedTypes} onAdd={addTrigger} note="Podem ser usadas no motor local, mas impedem a ativação." />}
+              {addTab === 'supported' && grouped.supported.length === 0 && <p className="text-center text-[11px] text-white/40 py-4">Nenhuma condição executável nesta busca.</p>}
+              {addTab === 'partial' && grouped.partial.length === 0 && <p className="text-center text-[11px] text-white/40 py-4">Nenhuma condição parcial nesta busca.</p>}
+              {addTab === 'unsupported' && grouped.unsupported.length === 0 && <p className="text-center text-[11px] text-white/40 py-4">Nenhuma condição não executável nesta busca.</p>}
+            </>
+          )}
         </SheetShell>
       )}
 

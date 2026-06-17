@@ -23,7 +23,7 @@ import { getRadarReadiness, compileRadarContract, type RadarDraftInput } from '.
 import { diagnoseBackendRadar, isBackendEnabled } from '@/services/commandBackendClient'
 import { ModalShell } from '../shell/ModalShell'
 import { NativeRuleCanvas } from '../canvas/NativeRuleCanvas'
-import { EngineReadinessPanel } from '../inspector/EngineReadinessPanel'
+import { ReadinessInline } from '../canvas/ReadinessInline'
 import { RadarContractView } from '../preview/RadarContractView'
 import { EngineDiagnosticPanel, type BackendDiagnostic } from '../dryrun/EngineDiagnosticPanel'
 import { PatternDryRunPanel } from '../dryrun/PatternDryRunPanel'
@@ -201,7 +201,7 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
       onClose={requestClose}
       title={initial ? 'Editar radar' : 'Criar radar'}
       subtitle="Desenhe uma regra operacional para o motor do GoalSense executar."
-      maxWidth="max-w-[1120px]"
+      maxWidth="max-w-[1360px]"
       headerExtra={
         <div className="flex items-center gap-2 text-[11px]">
           <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
@@ -211,9 +211,6 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
       footer={
         <>
           <button onClick={requestClose} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/65 border border-white/[0.07] hover:text-white/95 hover:border-white/[0.12] transition-colors mr-auto">Cancelar</button>
-          {readiness.canRunEngineDiagnostic && (
-            <button onClick={handleEngineDiagnostic} disabled={diagLoading} title="Diagnóstico read-only — não cria alerta, não salva" type="button" className="px-3.5 py-2.5 rounded-xl text-[11px] font-medium text-cyan-300/80 border border-cyan-400/15 bg-cyan-500/[0.04] hover:bg-cyan-500/[0.08] hover:border-cyan-400/25 disabled:opacity-30 disabled:cursor-not-allowed transition-all">{diagLoading ? 'Validando…' : 'Validar no motor'}</button>
-          )}
           {readiness.canSavePaused
             ? <button onClick={savePaused} title="Cmd/Ctrl+S" type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-all">Salvar pausado</button>
             : <button onClick={saveDraft} disabled={!readiness.canSaveDraft} title={!readiness.canSaveDraft ? 'Dê um nome ao radar' : 'Salva como rascunho (pausado)'} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar rascunho</button>}
@@ -226,15 +223,20 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
         </>
       }
     >
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-5 lg:min-h-[440px]">
-        {/* Rule Canvas / Contract */}
-        <div className="min-w-0">
-          {mode === 'review'
-            ? <RadarContractView name={name.trim()} contract={contract} actionLabel={actionLabel} />
-            : <NativeRuleCanvas
+      <div className="min-w-0 max-w-[880px] mx-auto w-full">
+        {mode === 'review'
+          ? <>
+              <RadarContractView name={name.trim()} contract={contract} actionLabel={actionLabel} />
+              <div className="mt-3 flex items-center justify-end">
+                <button onClick={handleEngineDiagnostic} disabled={diagLoading} type="button" className="text-[11.5px] font-medium text-cyan-300/80 hover:text-cyan-200 disabled:opacity-40 transition-colors">{diagLoading ? 'Verificando…' : 'Verificar com partidas atuais →'}</button>
+              </div>
+            </>
+          : <>
+              <NativeRuleCanvas
                 name={name} onName={setName}
                 desc={desc} onDesc={setDesc}
-                severity={severity} onSeverity={setSeverity}                scope={scope} scopeFilter={scopeFilter} matchesFilter={matchesFilter}
+                severity={severity} onSeverity={setSeverity}
+                scope={scope} scopeFilter={scopeFilter} matchesFilter={matchesFilter}
                 excludeLeagues={excludeLeagues} excludeTeams={excludeTeams} excludeMatches={excludeMatches}
                 requireRichData={requireRichData} onlyLive={onlyLive} onlyPreMatch={onlyPreMatch}
                 availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich}
@@ -245,7 +247,9 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
                 action={action} onAction={a => { setAction(a); setActionTouched(true) }}
                 minConf={minConf} onMinConf={n => { setMinConf(n); setConfidenceTouched(true) }}
                 contract={contract}
-              />}
+              />
+              <ReadinessInline readiness={readiness} contract={contract} />
+            </>}
 
           {dryRunErrors.length > 0 && (
             <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/[0.05] px-4 py-3">
@@ -256,12 +260,6 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
           {diagError && <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/[0.05] px-4 py-3 text-[11px] text-amber-200/80">{diagError}</div>}
           {backendDiag && <EngineDiagnosticPanel result={backendDiag} source="backend" onClose={() => setBackendDiag(null)} />}
           {showDryRun && dryRunResults && <PatternDryRunPanel results={dryRunResults} onClose={() => setShowDryRun(false)} isAdvanced={isAdvanced} />}
-        </div>
-
-        {/* Engine Panel */}
-        <aside className="min-w-0">
-          <EngineReadinessPanel readiness={readiness} contract={contract} actionLabel={actionLabel} lastDiagnostic={backendDiag} />
-        </aside>
       </div>
     </ModalShell>
   )

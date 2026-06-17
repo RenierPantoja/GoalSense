@@ -156,3 +156,21 @@ Reconstrução de layout (mantendo toda a lógica 3.1). Detalhes em
   Mantidos (usados pelo TemplateConfigModal): `WizardProgressRail`,
   `WizardStepHeader`, `ConditionsEditor`, `RadarInspectorPanel`, `RadarPreview`.
 - Payload/readiness/capabilities/diagnóstico preservados. Backend não tocado.
+
+---
+
+## 3.3 — Native Rule Studio
+
+Reconstrução visual premium (lógica 3.1 intocada). Detalhes em
+`RADAR_BLUEPRINT_3_3_NATIVE_RULE_STUDIO.md`.
+
+- **Engine Panel fixo removido**: status no header, pendências/avisos inline no
+  canvas (`ReadinessInline`), compatibilidade no contrato.
+- **"Validar no motor" sai do footer** e vira ação secundária no modo revisão
+  ("Verificar com partidas atuais →"), ainda read-only.
+- **Modal ampliado** (`max-w-[1360px]`, conteúdo centralizado), coluna única.
+- **Native Rule Studio**: nome editorial, severidade segmented, escopo/ação/rigor
+  como controles inline com sheets; filtros e sinais separados; chips premium.
+- **Sheet de condições com abas** (Executáveis/Parciais/Não executáveis) + editor inline.
+- **Footer progressivo** sem CTA confuso; revisão como contrato focado.
+- Removido dormente: `EngineReadinessPanel`. Mantidos os usados pelo TemplateConfigModal.
