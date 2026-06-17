@@ -1,12 +1,9 @@
 /**
- * CustomPatternModal — Radar Blueprint 3.6 (two-zone premium modal)
+ * CustomPatternModal — Radar Blueprint 4.0 (single-view bento board)
  * ─────────────────────────────────────────────────────────────────────────────
- * Wide modal that uses the horizontal space intentionally:
- *   LEFT  — the rule composer (NativeRuleCanvas)
- *   RIGHT — a live, plain-language contract preview (LiveContractPreview) with
- *           readiness, dependencies, compatibility and a secondary diagnostic.
- * Editing happens in dedicated command sheets owned here, so they overlay the
- * full body (both columns).
+ * The radar is laid out as a premium bento board (RuleBoard) that fills the
+ * modal body and shows everything at once — no vertical scroll. Editing happens
+ * in dedicated command sheets owned here, overlaying the full body.
  *
  * ALL 3.1 LOGIC PRESERVED: getRadarReadiness, compileRadarContract, capability
  * matrix, the read-only diagnostic endpoint, payload (buildData) and props.
@@ -22,8 +19,7 @@ import { useScopeLookups } from '../../../utils/patternStudioHelpers'
 import { getRadarReadiness, compileRadarContract, type RadarDraftInput } from '../../../intelligence/radarReadiness'
 import { diagnoseBackendRadar, isBackendEnabled } from '@/services/commandBackendClient'
 import { RuleStudioShell } from '../canvas/RuleStudioShell'
-import { NativeRuleCanvas } from '../canvas/NativeRuleCanvas'
-import { LiveContractPreview } from '../canvas/LiveContractPreview'
+import { RuleBoard } from '../canvas/RuleBoard'
 import { SheetShell } from '../canvas/SheetShell'
 import { ScopeSelectionSheet, type ScopeSelectionValue } from '../scope/ScopeSelectionSheet'
 import { ConditionCommandSheet, type ConditionSheetMode } from '../canvas/ConditionCommandSheet'
@@ -237,30 +233,23 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
       }
     >
       <div className="relative h-full">
-        {/* Two zones */}
-        <div className="h-full grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
-          <div className="min-w-0 overflow-y-auto sidebar-scroll px-7 sm:px-10 py-8">
-            <NativeRuleCanvas
-              name={name} onName={setName}
-              desc={desc} onDesc={setDesc}
-              severity={severity} onSeverity={setSeverity}
-              scope={scope}
-              conditions={conditions} onConditions={setConditions}
-              action={action} minConf={minConf}
-              contract={contract}
-              onOpenScope={() => setSheet({ kind: 'scope' })}
-              onOpenCondition={mode => setSheet({ kind: 'condition', mode })}
-              onOpenAction={() => setSheet({ kind: 'action' })}
-              onOpenRigor={() => setSheet({ kind: 'rigor' })}
-            />
-          </div>
-          <aside className="hidden lg:block overflow-y-auto sidebar-scroll border-l border-white/[0.07] bg-black/[0.18] px-6 py-8">
-            <LiveContractPreview
-              name={name} contract={contract} readiness={readiness} actionLabel={actionLabel}
-              reviewed={reviewed} canDiagnose={readiness.canRunEngineDiagnostic} diagLoading={diagLoading}
-              lastDiagnostic={backendDiag} onDiagnose={handleEngineDiagnostic}
-            />
-          </aside>
+        {/* Bento board — everything visible, no inner scroll */}
+        <div className="h-full px-6 sm:px-8 py-6">
+          <RuleBoard
+            name={name} onName={setName}
+            desc={desc} onDesc={setDesc}
+            severity={severity} onSeverity={setSeverity}
+            scope={scope}
+            conditions={conditions} onConditions={setConditions}
+            action={action} minConf={minConf}
+            contract={contract} readiness={readiness} reviewed={reviewed}
+            canDiagnose={readiness.canRunEngineDiagnostic} diagLoading={diagLoading} lastDiagnostic={backendDiag}
+            onDiagnose={handleEngineDiagnostic}
+            onOpenScope={() => setSheet({ kind: 'scope' })}
+            onOpenCondition={mode => setSheet({ kind: 'condition', mode })}
+            onOpenAction={() => setSheet({ kind: 'action' })}
+            onOpenRigor={() => setSheet({ kind: 'rigor' })}
+          />
         </div>
 
         {/* Sheets (overlay the whole body) */}
