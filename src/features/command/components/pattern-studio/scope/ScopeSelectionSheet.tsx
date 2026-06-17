@@ -85,10 +85,10 @@ export function ScopeSelectionSheet(props: ScopeSelectionSheetProps) {
   }
 
   const Row = ({ active, logo, square, title, sub, onClick }: { active: boolean; logo?: string | null; square?: boolean; title: string; sub?: string; onClick: () => void }) => (
-    <button type="button" onClick={onClick} className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg border text-left transition-colors ${active ? 'border-[#0A84FF]/35 bg-[#0A84FF]/[0.1]' : 'border-transparent hover:bg-white/[0.04]'}`}>
+    <button type="button" onClick={onClick} className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg border text-left transition-colors ${active ? 'border-[#2DD4BF]/35 bg-[#2DD4BF]/[0.1]' : 'border-transparent hover:bg-white/[0.04]'}`}>
       {logo ? <img src={logo} alt="" className={`h-5 w-5 object-contain shrink-0 ${square ? '' : 'rounded-full'}`} /> : <span className="h-5 w-5 rounded-full bg-white/[0.06] shrink-0" />}
       <span className="min-w-0 flex-1"><span className="block text-[12px] text-white/85 truncate">{title}</span>{sub && <span className="block text-[10px] text-white/40 truncate">{sub}</span>}</span>
-      {active && <Check size={13} className="text-[#0A84FF] shrink-0" />}
+      {active && <Check size={13} className="text-[#2DD4BF] shrink-0" />}
     </button>
   )
 
@@ -99,7 +99,7 @@ export function ScopeSelectionSheet(props: ScopeSelectionSheetProps) {
       onClose={props.onClose}
       footer={<>
         <button onClick={props.onClose} type="button" className="px-4 py-2 rounded-lg text-[12px] font-medium text-white/65 border border-white/[0.08] hover:text-white/90 hover:border-white/[0.14] transition-colors">Cancelar</button>
-        <button onClick={apply} type="button" className="px-4 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#0A84FF] hover:bg-[#0A84FF]/90 transition-colors">Aplicar escopo</button>
+        <button onClick={apply} type="button" className="px-4 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#13B8A6] hover:bg-[#0FA594] transition-colors">Aplicar escopo</button>
       </>}
     >
       <div className="grid grid-cols-1 md:grid-cols-[180px_minmax(0,1fr)_220px] gap-3 min-h-[300px]">
@@ -160,7 +160,7 @@ export function ScopeSelectionSheet(props: ScopeSelectionSheetProps) {
       <div className="mt-4 pt-3 border-t border-white/[0.05]">
         <button type="button" onClick={() => setShowAdvanced(v => !v)} className="text-[11px] font-semibold text-white/60 hover:text-white/90 flex items-center gap-1.5 transition-colors">
           <span>{showAdvanced ? '▾' : '▸'}</span>Filtros avançados
-          {(excludeLeagues.length + excludeTeams.length + excludeMatches.length > 0 || requireRichData || onlyLive || onlyPreMatch) && <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-[#0A84FF]/15 text-[#0A84FF]">ativos</span>}
+          {(excludeLeagues.length + excludeTeams.length + excludeMatches.length > 0 || requireRichData || onlyLive || onlyPreMatch) && <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-[#2DD4BF]/15 text-[#2DD4BF]">ativos</span>}
         </button>
         {showAdvanced && (
           <div className="mt-3 space-y-3">

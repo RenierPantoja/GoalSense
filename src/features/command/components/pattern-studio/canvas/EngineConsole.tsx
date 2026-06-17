@@ -120,11 +120,11 @@ export function EngineConsole({ readiness, contract, canDiagnose, diagLoading, l
 
       {/* Diagnostic */}
       <div className="shrink-0 px-6 py-4 border-t border-white/[0.07]">
-        <button onClick={onDiagnose} disabled={!canDiagnose || diagLoading} type="button" className="w-full h-9 rounded-[10px] flex items-center justify-center gap-2 text-[13px] font-medium text-[#0A84FF] hover:bg-[#0A84FF]/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+        <button onClick={onDiagnose} disabled={!canDiagnose || diagLoading} type="button" className="w-full h-9 rounded-[10px] flex items-center justify-center gap-2 text-[13px] font-medium text-[#2DD4BF] hover:bg-[#2DD4BF]/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
           {diagLoading ? <><Loader2 size={14} className="animate-spin" />Verificando…</> : <>Verificar com partidas atuais<ChevronRight size={14} className="opacity-60" /></>}
         </button>
         {lastDiagnostic && (
-          <p className="text-[11px] text-white/40 mt-2 text-center">{lastDiagnostic.evaluatedFixtures} avaliadas · <span className={lastDiagnostic.wouldTrigger > 0 ? 'text-[#30D158]' : ''}>{lastDiagnostic.wouldTrigger} disparos</span></p>
+          <p className="text-[11px] text-white/40 mt-2 text-center">{lastDiagnostic.evaluatedFixtures} avaliadas · <span className={lastDiagnostic.wouldTrigger > 0 ? 'text-[#34D399]' : ''}>{lastDiagnostic.wouldTrigger} disparos</span></p>
         )}
         {!canDiagnose && <p className="text-[10.5px] text-white/25 mt-1.5 text-center">Complete a regra para diagnosticar</p>}
       </div>

@@ -192,7 +192,7 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
     : c.signal === 0 ? 'sem sinal real'
     : 'incompleto'
   const statusLine = `${readiness.maturityLabel} · ${c.eligibility} filtro${c.eligibility === 1 ? '' : 's'} · ${c.signal} sinal${c.signal === 1 ? '' : 's'} real${c.signal === 1 ? '' : 'is'} · ${statusTail}`
-  const statusDot = readiness.status === 'blocked' ? 'bg-[#FF453A]' : readiness.canActivate ? 'bg-[#30D158]' : readiness.canSavePaused ? 'bg-[#0A84FF]' : 'bg-[#FF9F0A]'
+  const statusDot = readiness.status === 'blocked' ? 'bg-[#FF5A52]' : readiness.canActivate ? 'bg-[#34D399]' : readiness.canSavePaused ? 'bg-[#2DD4BF]' : 'bg-[#FFB02E]'
 
   return (
     <RuleStudioShell
@@ -213,9 +213,9 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
           {mode === 'review'
             ? <>
                 <button onClick={() => setMode('compose')} type="button" className="px-4 py-2.5 rounded-[10px] text-[13px] font-medium text-white/85 bg-white/[0.08] hover:bg-white/[0.12] transition-all">Editar regra</button>
-                <button onClick={activate} disabled={!readiness.canActivate} title={!readiness.canActivate ? readiness.primaryMessage : 'Cmd/Ctrl+Enter'} type="button" className="px-6 py-2.5 rounded-[10px] text-[13px] font-semibold text-white bg-[#0A84FF] hover:bg-[#0A84FF]/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all">{initial ? 'Salvar e ativar' : 'Ativar radar'}</button>
+                <button onClick={activate} disabled={!readiness.canActivate} title={!readiness.canActivate ? readiness.primaryMessage : 'Cmd/Ctrl+Enter'} type="button" className="px-6 py-2.5 rounded-[10px] text-[13px] font-semibold text-white bg-[#13B8A6] hover:bg-[#0FA594] disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-[0_6px_18px_-8px_rgba(19,184,166,0.8)]">{initial ? 'Salvar e ativar' : 'Ativar radar'}</button>
               </>
-            : <button onClick={goReview} disabled={!readiness.canSavePaused} title={!readiness.canSavePaused ? readiness.primaryMessage : 'Revise o contrato antes de ativar'} type="button" className="px-6 py-2.5 rounded-[10px] text-[13px] font-semibold text-white bg-[#0A84FF] hover:bg-[#0A84FF]/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all">Revisar radar</button>}
+            : <button onClick={goReview} disabled={!readiness.canSavePaused} title={!readiness.canSavePaused ? readiness.primaryMessage : 'Revise o contrato antes de ativar'} type="button" className="px-6 py-2.5 rounded-[10px] text-[13px] font-semibold text-white bg-[#13B8A6] hover:bg-[#0FA594] disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-[0_6px_18px_-8px_rgba(19,184,166,0.8)]">Revisar radar</button>}
         </>
       }
     >

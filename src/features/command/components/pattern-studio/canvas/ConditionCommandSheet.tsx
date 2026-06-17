@@ -124,7 +124,7 @@ export function ConditionCommandSheet({ mode, conditions, onChange, onClose }: C
                     : <span className="text-[9.5px] font-medium px-1.5 py-0.5 rounded border bg-amber-500/10 border-amber-400/20 text-amber-200">{unsup.length > 0 ? 'Contém condição não executável' : 'Sem sinal real'}</span>}
                   {partial.length > 0 && executable && <span className="ml-1 text-[9.5px] font-medium px-1.5 py-0.5 rounded border bg-amber-500/10 border-amber-400/20 text-amber-200">cobertura variável</span>}
                 </div>
-                <button onClick={() => applyRecipe(r.conditions as PatternCondition[])} type="button" className="mt-2.5 h-8 rounded-lg text-[11px] font-semibold text-white bg-[#0A84FF] hover:bg-[#0A84FF]/90 transition-colors">Aplicar</button>
+                <button onClick={() => applyRecipe(r.conditions as PatternCondition[])} type="button" className="mt-2.5 h-8 rounded-lg text-[11px] font-semibold text-white bg-[#13B8A6] hover:bg-[#0FA594] transition-colors">Aplicar</button>
               </div>
             )
           })}
@@ -172,8 +172,8 @@ export function ConditionCommandSheet({ mode, conditions, onChange, onClose }: C
                 const cap = getCapability(t.type)
                 const Icon = CATEGORY_ICON[t.category]
                 return (
-                  <button key={t.id} type="button" disabled={used} onClick={() => addTrigger(t)} className={`group flex items-start gap-3 text-left rounded-xl border px-3.5 py-3 transition-all ${used ? 'border-white/[0.04] bg-white/[0.01] opacity-50 cursor-not-allowed' : tab === 'unsupported' ? 'border-[#FF453A]/15 bg-[#FF453A]/[0.04] hover:border-[#FF453A]/30' : 'border-white/[0.07] bg-white/[0.03] hover:border-[#0A84FF]/35 hover:bg-[#0A84FF]/[0.06]'}`}>
-                    <span className={`h-8 w-8 rounded-lg grid place-items-center shrink-0 border ${tab === 'unsupported' ? 'border-[#FF453A]/20 text-[#FF8A80]' : 'border-white/[0.08] text-white/45 group-hover:text-[#0A84FF] group-hover:border-[#0A84FF]/25'} transition-colors`}><Icon size={15} /></span>
+                  <button key={t.id} type="button" disabled={used} onClick={() => addTrigger(t)} className={`group flex items-start gap-3 text-left rounded-xl border px-3.5 py-3 transition-all ${used ? 'border-white/[0.04] bg-white/[0.01] opacity-50 cursor-not-allowed' : tab === 'unsupported' ? 'border-[#FF5A52]/15 bg-[#FF5A52]/[0.04] hover:border-[#FF5A52]/30' : 'border-white/[0.07] bg-white/[0.03] hover:border-[#2DD4BF]/35 hover:bg-[#2DD4BF]/[0.06]'}`}>
+                    <span className={`h-8 w-8 rounded-lg grid place-items-center shrink-0 border ${tab === 'unsupported' ? 'border-[#FF5A52]/20 text-[#FF8A80]' : 'border-white/[0.08] text-white/45 group-hover:text-[#2DD4BF] group-hover:border-[#2DD4BF]/25'} transition-colors`}><Icon size={15} /></span>
                     <span className="min-w-0">
                       <span className="flex items-center gap-1.5"><span className="text-[12.5px] font-semibold text-white/90 leading-tight">{t.title}</span>{used && <span className="text-[9.5px] text-emerald-300/70 font-medium">adicionado</span>}</span>
                       <span className="block text-[10.5px] text-white/50 leading-snug mt-0.5">{cap.backendSupport === 'unsupported' ? cap.reasonIfUnsupported : t.description}</span>
