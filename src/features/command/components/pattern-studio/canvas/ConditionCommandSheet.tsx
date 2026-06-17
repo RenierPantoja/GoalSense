@@ -9,7 +9,7 @@
  * PatternCondition[] is byte-identical to before.
  */
 import { useMemo, useState } from 'react'
-import { Search, Clock, Goal, Flame, Activity, Flag, RectangleHorizontal, Star, type LucideIcon } from 'lucide-react'
+import { Search, Clock, Goal, Flame, Activity, Flag, RectangleHorizontal, Star, Crosshair, Timer, Wand2, SlidersHorizontal, type LucideIcon } from 'lucide-react'
 import type { PatternCondition } from '../../../types/commandTypes'
 import { formatConditionHuman } from '../../../utils/commandFormatters'
 import { TRIGGER_BY_TYPE, TRIGGER_CATEGORY_LABELS, TRIGGER_LIBRARY, type TriggerCategory, type TriggerSpec } from '../../../intelligence/triggerLibrary'
@@ -79,7 +79,7 @@ export function ConditionCommandSheet({ mode, conditions, onChange, onClose }: C
       onChange(conditions.map((cc, i) => i === mode.index ? { ...cc, params: { ...cc.params, [key]: next } } : cc))
     }
     return (
-      <SheetShell title={`Editar · ${spec?.title || cond.type}`} subtitle={formatConditionHuman(cond)} onClose={onClose}
+      <SheetShell title={`Editar · ${spec?.title || cond.type}`} subtitle={formatConditionHuman(cond)} icon={<SlidersHorizontal size={20} />} accentFrom="#9AA6B8" accentTo="#5E6A7D" onClose={onClose}
         footer={<button onClick={onClose} type="button" className="h-8 px-4 rounded-lg text-[11px] font-semibold text-white/90 bg-white/[0.06] border border-white/[0.12] hover:bg-white/[0.1]">Concluir</button>}>
         <div className="flex items-center gap-2 flex-wrap">
           {cond.params.min !== undefined && cond.params.max !== undefined && (
@@ -101,7 +101,7 @@ export function ConditionCommandSheet({ mode, conditions, onChange, onClose }: C
       onChange(next); onClose()
     }
     return (
-      <SheetShell title="Receitas rápidas" subtitle="Atalhos confiáveis · edite depois de aplicar" onClose={onClose}>
+      <SheetShell title="Receitas rápidas" subtitle="Atalhos confiáveis · edite depois de aplicar" icon={<Wand2 size={20} />} accentFrom="#34E3CB" accentTo="#0E9E8C" onClose={onClose}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {TRIGGER_RECIPES.map(r => {
             const unsup = r.conditions.filter(cc => getCapability(cc.type).backendSupport === 'unsupported')
@@ -157,6 +157,8 @@ export function ConditionCommandSheet({ mode, conditions, onChange, onClose }: C
     <SheetShell
       title={wantSignal ? 'Adicionar sinal real' : 'Adicionar filtro'}
       subtitle={wantSignal ? 'Sinais reais definem o que dispara o radar' : 'Filtros definem quando o radar avalia — não disparam sozinhos'}
+      icon={wantSignal ? <Crosshair size={20} /> : <Timer size={20} />}
+      accentFrom={wantSignal ? '#4ADE80' : '#A78BFA'} accentTo={wantSignal ? '#1FA855' : '#7C4DEF'}
       onClose={onClose}
     >
       <div className="max-w-[1040px] mx-auto">

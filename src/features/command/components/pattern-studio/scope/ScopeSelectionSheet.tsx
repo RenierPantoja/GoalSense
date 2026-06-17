@@ -8,7 +8,7 @@
  * full-width disclosure that reuses the existing tested pickers.
  */
 import { useMemo, useState } from 'react'
-import { Search, X, Check } from 'lucide-react'
+import { Search, X, Check, Telescope, Globe2, Star, Trophy, Users, CalendarClock, type LucideIcon } from 'lucide-react'
 import type { PatternScope } from '../../../types/commandTypes'
 import type { ScopeKbLeague, ScopeKbMatch, ScopeKbTeam } from '@/services/intelligence/scopeKnowledgeBase'
 import { SheetShell } from '../canvas/SheetShell'
@@ -37,12 +37,12 @@ interface ScopeSelectionSheetProps extends ScopeSelectionValue {
   onClose: () => void
 }
 
-const MODES: { v: PatternScope; label: string; hint: string }[] = [
-  { v: 'all', label: 'Todos os jogos', hint: 'Qualquer partida disponível' },
-  { v: 'favorites_only', label: 'Favoritos', hint: 'Apenas times favoritos' },
-  { v: 'specific_leagues', label: 'Ligas', hint: 'Uma ou mais ligas' },
-  { v: 'specific_teams', label: 'Times', hint: 'Um ou mais times' },
-  { v: 'specific_matches', label: 'Partidas', hint: 'Partidas específicas' },
+const MODES: { v: PatternScope; label: string; hint: string; icon: LucideIcon; from: string; to: string }[] = [
+  { v: 'all', label: 'Todos os jogos', hint: 'Qualquer partida disponível', icon: Globe2, from: '#5AA2FF', to: '#2D6FE0' },
+  { v: 'favorites_only', label: 'Favoritos', hint: 'Apenas times favoritos', icon: Star, from: '#FFC75A', to: '#F08E1B' },
+  { v: 'specific_leagues', label: 'Ligas', hint: 'Uma ou mais ligas', icon: Trophy, from: '#A78BFA', to: '#7C4DEF' },
+  { v: 'specific_teams', label: 'Times', hint: 'Um ou mais times', icon: Users, from: '#4ADE80', to: '#1FA855' },
+  { v: 'specific_matches', label: 'Partidas', hint: 'Partidas específicas', icon: CalendarClock, from: '#34E3CB', to: '#0E9E8C' },
 ]
 
 export function ScopeSelectionSheet(props: ScopeSelectionSheetProps) {
@@ -96,28 +96,37 @@ export function ScopeSelectionSheet(props: ScopeSelectionSheetProps) {
     <SheetShell
       title="Onde monitorar"
       subtitle="Escolha o universo de partidas que este radar pode avaliar"
+      icon={<Telescope size={20} />} accentFrom="#5AA2FF" accentTo="#2D6FE0"
       onClose={props.onClose}
       footer={<>
-        <button onClick={props.onClose} type="button" className="px-4 py-2 rounded-lg text-[12px] font-medium text-white/65 border border-white/[0.08] hover:text-white/90 hover:border-white/[0.14] transition-colors">Cancelar</button>
-        <button onClick={apply} type="button" className="px-4 py-2 rounded-lg text-[12px] font-semibold text-white bg-[#13B8A6] hover:bg-[#0FA594] transition-colors">Aplicar escopo</button>
+        <button onClick={props.onClose} type="button" className="px-4 py-2.5 rounded-[10px] text-[13px] font-medium text-white/65 hover:text-white/90 transition-colors">Cancelar</button>
+        <button onClick={apply} type="button" className="px-5 py-2.5 rounded-[10px] text-[13px] font-semibold text-white bg-[#13B8A6] hover:bg-[#0FA594] transition-colors shadow-[0_6px_18px_-8px_rgba(19,184,166,0.8)]">Aplicar escopo</button>
       </>}
     >
-      <div className="grid grid-cols-1 md:grid-cols-[180px_minmax(0,1fr)_220px] gap-3 min-h-[300px]">
+      <div className="grid grid-cols-1 md:grid-cols-[214px_minmax(0,1fr)_248px] gap-4 h-full min-h-[400px]">
         {/* Left: modes */}
-        <div className="space-y-1">
-          {MODES.map(m => (
-            <button key={m.v} type="button" onClick={() => setScope(m.v)} aria-pressed={scope === m.v} className={`w-full text-left rounded-lg border px-3 py-2 transition-colors ${scope === m.v ? 'border-white/[0.16] bg-white/[0.05]' : 'border-transparent hover:bg-white/[0.025]'}`}>
-              <span className={`block text-[12.5px] font-medium ${scope === m.v ? 'text-white/95' : 'text-white/70'}`}>{m.label}</span>
-              <span className="block text-[10px] text-white/40 leading-tight mt-0.5">{m.hint}</span>
-            </button>
-          ))}
+        <div className="space-y-1.5">
+          {MODES.map(m => {
+            const on = scope === m.v
+            const Icon = m.icon
+            return (
+              <button key={m.v} type="button" onClick={() => setScope(m.v)} aria-pressed={on} className={`w-full flex items-center gap-3 text-left rounded-[12px] border px-3 py-2.5 transition-all ${on ? 'border-white/[0.16] bg-white/[0.05]' : 'border-transparent hover:bg-white/[0.03]'}`}>
+                <span className="h-8 w-8 rounded-[9px] grid place-items-center text-white shrink-0 ring-1 ring-inset ring-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]" style={{ backgroundImage: `linear-gradient(155deg, ${m.from}, ${m.to})`, opacity: on ? 1 : 0.7 }}><Icon size={15} /></span>
+                <span className="min-w-0"><span className={`block text-[13px] font-medium ${on ? 'text-white/95' : 'text-white/75'}`}>{m.label}</span><span className="block text-[10.5px] text-white/40 leading-tight">{m.hint}</span></span>
+              </button>
+            )
+          })}
         </div>
 
         {/* Center: results */}
         <div className="min-w-0 flex flex-col">
           {!isList ? (
-            <div className="flex-1 flex items-center justify-center rounded-xl border border-dashed border-white/[0.08] px-6 py-10 text-center">
-              <p className="text-[12px] text-white/50 max-w-[280px]">{scope === 'favorites_only' ? 'O radar avaliará apenas partidas com um time favorito envolvido.' : 'O radar avaliará todas as partidas disponíveis. Escolha Ligas, Times ou Partidas para restringir.'}</p>
+            <div className="flex-1 flex flex-col items-center justify-center rounded-[16px] border border-white/[0.06] bg-white/[0.015] px-6 py-10 text-center">
+              <span className="h-16 w-16 rounded-[18px] grid place-items-center text-white ring-1 ring-inset ring-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_8px_20px_-6px_rgba(0,0,0,0.6)]" style={{ backgroundImage: scope === 'favorites_only' ? 'linear-gradient(155deg,#FFC75A,#F08E1B)' : 'linear-gradient(155deg,#5AA2FF,#2D6FE0)' }}>
+                {scope === 'favorites_only' ? <Star size={28} /> : <Globe2 size={28} />}
+              </span>
+              <p className="text-[15px] font-semibold text-white/85 mt-4">{scope === 'favorites_only' ? 'Apenas favoritos' : 'Todos os jogos'}</p>
+              <p className="text-[12.5px] text-white/45 mt-1 max-w-[300px] leading-snug">{scope === 'favorites_only' ? 'O radar avaliará apenas partidas com um time favorito envolvido.' : 'O radar avaliará todas as partidas disponíveis. Escolha Ligas, Times ou Partidas para restringir.'}</p>
             </div>
           ) : (
             <>

@@ -24,12 +24,12 @@ import { SheetShell } from '../canvas/SheetShell'
 import { ScopeSelectionSheet, type ScopeSelectionValue } from '../scope/ScopeSelectionSheet'
 import { ConditionCommandSheet, type ConditionSheetMode } from '../canvas/ConditionCommandSheet'
 import { ActionCardPicker } from '../form-controls/ActionCardPicker'
-import { ConfidenceSlider } from '../form-controls/ConfidenceSlider'
+import { RigorStudio } from '../form-controls/RigorStudio'
+import { BellRing, Gauge } from 'lucide-react'
 import { EngineDiagnosticPanel, type BackendDiagnostic } from '../dryrun/EngineDiagnosticPanel'
 import { PatternDryRunPanel } from '../dryrun/PatternDryRunPanel'
 
 const ACTION_LABEL = { register_alert: 'Registrar alerta', suggest_only: 'Apenas sugerir', highlight: 'Destacar no Scanner' } as const
-const RIGOR_PRESETS = [{ label: 'Sensível', value: 40 }, { label: 'Equilibrado', value: 50 }, { label: 'Rigoroso', value: 70 }]
 
 type RuleSheet =
   | { kind: 'none' }
@@ -266,26 +266,13 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
           <ConditionCommandSheet mode={sheet.mode} conditions={conditions} onChange={setConditions} onClose={close} />
         )}
         {sheet.kind === 'action' && (
-          <SheetShell title="Ação ao disparar" subtitle="O que o radar faz quando todas as condições batem" onClose={close}>
-            <div className="max-w-[760px] mx-auto"><ActionCardPicker value={action} onChange={a => { setAction(a); setActionTouched(true); close() }} /></div>
+          <SheetShell title="Ação ao disparar" subtitle="O que o radar faz quando todas as condições batem" icon={<BellRing size={20} />} accentFrom="#FFC75A" accentTo="#F08E1B" onClose={close}>
+            <ActionCardPicker value={action} onChange={a => { setAction(a); setActionTouched(true); close() }} />
           </SheetShell>
         )}
         {sheet.kind === 'rigor' && (
-          <SheetShell title="Rigor do radar" subtitle="Quanto maior, menos alertas falsos" onClose={close}>
-            <div className="max-w-[640px] mx-auto">
-              <div className="flex items-center gap-2 mb-5">
-                {RIGOR_PRESETS.map(p => {
-                  const on = minConf === p.value
-                  return (
-                    <button key={p.label} type="button" onClick={() => { setMinConf(p.value); setConfidenceTouched(true) }} className="flex-1 h-16 rounded-[14px] border border-white/[0.08] bg-white/[0.03] text-[14px] font-semibold transition-all" style={on ? { borderColor: '#2DD4BF66', backgroundColor: '#2DD4BF1f', color: '#fff' } : {}}>
-                      <span className={on ? '' : 'text-white/55'}>{p.label}</span>
-                      <span className={`block text-[12px] font-normal mt-0.5 ${on ? 'text-white/70' : 'text-white/40'}`}>{p.value}%</span>
-                    </button>
-                  )
-                })}
-              </div>
-              <ConfidenceSlider value={minConf} onChange={n => { setMinConf(n); setConfidenceTouched(true) }} action={action} />
-            </div>
+          <SheetShell title="Rigor do radar" subtitle="Quanto maior, menos alertas falsos" icon={<Gauge size={20} />} accentFrom="#34E3CB" accentTo="#0E9E8C" onClose={close}>
+            <RigorStudio value={minConf} onChange={n => { setMinConf(n); setConfidenceTouched(true) }} action={action} />
           </SheetShell>
         )}
 
