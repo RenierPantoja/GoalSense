@@ -135,7 +135,6 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
   const contract = compileRadarContract(draftInput)
   const actionLabel = ACTION_LABEL[action]
 
-  const saveDraft = () => { if (readiness.canSaveDraft) { onSave(buildData('paused')); onClose() } }
   const savePaused = () => { if (readiness.canSavePaused) { onSave(buildData('paused')); onClose() } }
   const activate = () => { if (readiness.canActivate) { onSave(buildData('active')); onClose() } }
   const goReview = () => { if (readiness.canSavePaused) { setReviewed(true); setMode('review') } }
@@ -175,7 +174,7 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
     if (!open) return
     const handler = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey
-      if (mod && (e.key === 's' || e.key === 'S')) { e.preventDefault(); if (readiness.canSavePaused) savePaused(); else if (readiness.canSaveDraft) saveDraft() }
+      if (mod && (e.key === 's' || e.key === 'S')) { e.preventDefault(); if (readiness.canSavePaused) savePaused() }
       else if (mod && e.key === 'Enter') { e.preventDefault(); if (readiness.canActivate) activate() }
     }
     window.addEventListener('keydown', handler)
@@ -211,9 +210,7 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
       footer={
         <>
           <button onClick={requestClose} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/65 border border-white/[0.07] hover:text-white/95 hover:border-white/[0.12] transition-colors mr-auto">Cancelar</button>
-          {readiness.canSavePaused
-            ? <button onClick={savePaused} title="Cmd/Ctrl+S" type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-all">Salvar pausado</button>
-            : <button onClick={saveDraft} disabled={!readiness.canSaveDraft} title={!readiness.canSaveDraft ? 'Dê um nome ao radar' : 'Salva como rascunho (pausado)'} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar rascunho</button>}
+          <button onClick={savePaused} disabled={!readiness.canSavePaused} title={!readiness.canSavePaused ? readiness.primaryMessage : 'Cmd/Ctrl+S'} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar pausado</button>
           {mode === 'review'
             ? <>
                 <button onClick={() => setMode('compose')} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/75 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-all">Editar regra</button>
@@ -258,7 +255,7 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
             </div>
           )}
           {diagError && <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/[0.05] px-4 py-3 text-[11px] text-amber-200/80">{diagError}</div>}
-          {backendDiag && <EngineDiagnosticPanel result={backendDiag} source="backend" onClose={() => setBackendDiag(null)} />}
+          {backendDiag && <EngineDiagnosticPanel result={backendDiag} source="backend" onClose={() => setBackendDiag(null)} scopeNote={scope !== 'all' && scope !== 'favorites_only' ? 'Diagnóstico avalia os jogos ao vivo disponíveis; o filtro de escopo específico é aplicado pelo motor no runtime.' : undefined} />}
           {showDryRun && dryRunResults && <PatternDryRunPanel results={dryRunResults} onClose={() => setShowDryRun(false)} isAdvanced={isAdvanced} />}
       </div>
     </ModalShell>

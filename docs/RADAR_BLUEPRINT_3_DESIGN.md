@@ -174,3 +174,21 @@ Reconstrução visual premium (lógica 3.1 intocada). Detalhes em
 - **Sheet de condições com abas** (Executáveis/Parciais/Não executáveis) + editor inline.
 - **Footer progressivo** sem CTA confuso; revisão como contrato focado.
 - Removido dormente: `EngineReadinessPanel`. Mantidos os usados pelo TemplateConfigModal.
+
+---
+
+## 3.4 — Premium Interaction System + Dedicated Selection Sheets
+
+Interação premium e organização de componentes (lógica 3.1 intocada). Detalhes em
+`RADAR_BLUEPRINT_3_4_PREMIUM_INTERACTIONS.md`.
+
+- **ScopeSelectionSheet** dedicada (3 colunas: modos · resultados com busca ·
+  selecionados; snapshot temp com Aplicar/Cancelar; avançado reusa pickers).
+- **ConditionCommandSheet** dedicada (addFilter/addSignal/edit/recipes; abas
+  Executáveis/Parciais/Não executáveis; editor de params; receitas com suporte).
+- **RadarConditionChip** premium; **SheetShell** extraído (ESC fecha sheet antes do modal).
+- Linguagem corrigida: removido "Salvar rascunho" (modelo não tem `draft`); só
+  "Salvar pausado" (desabilitado com motivo quando inválido).
+- **ReadinessInline** refinado (3 estados); diagnóstico segue secundário na revisão.
+- Diagnóstico não filtra escopo específico → aviso honesto exibido.
+- Removido dormente: `TriggerComposer`. Mantidos os usados pelo TemplateConfigModal.

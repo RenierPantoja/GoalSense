@@ -15,17 +15,24 @@ interface ReadinessInlineProps {
 export function ReadinessInline({ readiness, contract }: ReadinessInlineProps) {
   const blocked = readiness.requirements.length > 0 || readiness.status === 'blocked'
   const ready = readiness.canSavePaused && readiness.requirements.length === 0
-  const tone = blocked
-    ? { dot: 'bg-rose-400/85', text: 'text-rose-200', label: 'Falta para ativar' }
+  const headline = readiness.status === 'ready_to_activate'
+    ? 'Contrato confirmado · pronto para ativar'
     : ready
-      ? { dot: 'bg-emerald-400/85', text: 'text-emerald-200', label: 'Pronto para revisão' }
-      : { dot: 'bg-amber-400/80', text: 'text-amber-200', label: readiness.maturityLabel }
+      ? 'Regra executável · revise antes de ativar'
+      : blocked
+        ? readiness.primaryMessage
+        : readiness.maturityLabel
+  const tone = blocked
+    ? { dot: 'bg-rose-400/85', text: 'text-rose-200' }
+    : ready
+      ? { dot: 'bg-emerald-400/85', text: 'text-emerald-200' }
+      : { dot: 'bg-amber-400/80', text: 'text-amber-200' }
 
   return (
     <div className="mt-4 rounded-xl border border-white/[0.05] bg-white/[0.01] px-4 py-3">
       <div className="flex items-center gap-2">
         <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
-        <span className={`text-[12px] font-semibold ${tone.text}`}>{tone.label}</span>
+        <span className={`text-[12px] font-semibold ${tone.text}`}>{headline}</span>
         <span className="text-[11px] text-white/40 ml-1">· {contract.eligibilityConditions.length} filtro(s) · {contract.signalConditions.length} sinal(is) real(is)</span>
       </div>
 

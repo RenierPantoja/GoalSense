@@ -28,7 +28,7 @@ const CODE_MESSAGE: Record<BackendDiagnostic['code'], string> = {
   UNSUPPORTED_CONDITION: 'Há condição não suportada pelo motor',
 }
 
-export function EngineDiagnosticPanel({ result, onClose, source }: { result: BackendDiagnostic; onClose: () => void; source: 'backend' | 'local' }) {
+export function EngineDiagnosticPanel({ result, onClose, source, scopeNote }: { result: BackendDiagnostic; onClose: () => void; source: 'backend' | 'local'; scopeNote?: string }) {
   const blocked = Object.entries(result.blockedReasons).sort((a, b) => b[1] - a[1])
   return (
     <div className="mt-4 rounded-2xl border border-white/[0.08] bg-white/[0.012] overflow-hidden">
@@ -88,6 +88,7 @@ export function EngineDiagnosticPanel({ result, onClose, source }: { result: Bac
 
       <div className="px-5 py-2.5 border-t border-white/[0.05]">
         <span className="text-[10px] text-white/35">Read-only · não cria alerta · não salva · não envia Telegram</span>
+        {scopeNote && <p className="text-[10px] text-amber-200/70 mt-1">{scopeNote}</p>}
       </div>
     </div>
   )
