@@ -21,9 +21,9 @@ import { runPatternDryRun, validateDryRunPattern } from '../../../intelligence/p
 import { useScopeLookups } from '../../../utils/patternStudioHelpers'
 import { getRadarReadiness, compileRadarContract, type RadarDraftInput } from '../../../intelligence/radarReadiness'
 import { diagnoseBackendRadar, isBackendEnabled } from '@/services/commandBackendClient'
-import { ModalShell } from '../shell/ModalShell'
+import { RuleStudioShell } from '../canvas/RuleStudioShell'
 import { NativeRuleCanvas } from '../canvas/NativeRuleCanvas'
-import { ReadinessInline } from '../canvas/ReadinessInline'
+import { EngineConsole } from '../canvas/EngineConsole'
 import { RadarContractView } from '../preview/RadarContractView'
 import { EngineDiagnosticPanel, type BackendDiagnostic } from '../dryrun/EngineDiagnosticPanel'
 import { PatternDryRunPanel } from '../dryrun/PatternDryRunPanel'
@@ -195,41 +195,35 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
   const statusDot = readiness.status === 'blocked' ? 'bg-rose-400/85' : readiness.canActivate ? 'bg-emerald-400/85' : readiness.canSavePaused ? 'bg-cyan-300/80' : 'bg-amber-400/75'
 
   return (
-    <ModalShell
+    <RuleStudioShell
       open={open}
       onClose={requestClose}
       title={initial ? 'Editar radar' : 'Criar radar'}
       subtitle="Desenhe uma regra operacional para o motor do GoalSense executar."
-      maxWidth="max-w-[1360px]"
-      headerExtra={
-        <div className="flex items-center gap-2 text-[11px]">
-          <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
-          <span className="text-white/55">{statusLine}</span>
+      statusNode={
+        <div className="inline-flex items-center gap-2 h-7 pl-2.5 pr-3 rounded-full border border-white/[0.08] bg-white/[0.02]">
+          <span className={`h-1.5 w-1.5 rounded-full ${statusDot} ${readiness.canActivate || readiness.status === 'blocked' ? '' : 'animate-pulse'}`} />
+          <span className="text-[11px] text-white/60">{statusLine}</span>
         </div>
       }
       footer={
         <>
-          <button onClick={requestClose} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/65 border border-white/[0.07] hover:text-white/95 hover:border-white/[0.12] transition-colors mr-auto">Cancelar</button>
+          <button onClick={requestClose} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/65 border border-white/[0.08] hover:text-white/95 hover:border-white/[0.16] transition-colors mr-auto">Cancelar</button>
           <button onClick={savePaused} disabled={!readiness.canSavePaused} title={!readiness.canSavePaused ? readiness.primaryMessage : 'Cmd/Ctrl+S'} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar pausado</button>
           {mode === 'review'
             ? <>
                 <button onClick={() => setMode('compose')} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/75 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-all">Editar regra</button>
-                <button onClick={activate} disabled={!readiness.canActivate} title={!readiness.canActivate ? readiness.primaryMessage : 'Cmd/Ctrl+Enter'} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold text-white bg-white/[0.95] hover:bg-white border border-white/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200" style={{ color: '#0b0d12' }}>{initial ? 'Salvar e ativar' : 'Ativar radar'}</button>
+                <button onClick={activate} disabled={!readiness.canActivate} title={!readiness.canActivate ? readiness.primaryMessage : 'Cmd/Ctrl+Enter'} type="button" className="px-6 py-2.5 rounded-xl text-[12px] font-semibold text-[#06121a] bg-gradient-to-b from-cyan-300 to-cyan-400 hover:from-cyan-200 hover:to-cyan-300 border border-cyan-300/50 shadow-[0_0_24px_-6px_rgba(34,211,238,0.7)] disabled:opacity-30 disabled:shadow-none disabled:cursor-not-allowed transition-all">{initial ? 'Salvar e ativar' : 'Ativar radar'}</button>
               </>
-            : <button onClick={goReview} disabled={!readiness.canSavePaused} title={!readiness.canSavePaused ? readiness.primaryMessage : 'Revise o contrato antes de ativar'} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold text-white bg-white/[0.12] hover:bg-white/[0.18] border border-white/[0.18] disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200">Revisar radar</button>}
+            : <button onClick={goReview} disabled={!readiness.canSavePaused} title={!readiness.canSavePaused ? readiness.primaryMessage : 'Revise o contrato antes de ativar'} type="button" className="px-6 py-2.5 rounded-xl text-[12px] font-semibold text-white bg-white/[0.1] hover:bg-white/[0.16] border border-white/[0.2] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Revisar radar →</button>}
         </>
       }
     >
-      <div className="min-w-0 max-w-[880px] mx-auto w-full">
-        {mode === 'review'
-          ? <>
-              <RadarContractView name={name.trim()} contract={contract} actionLabel={actionLabel} />
-              <div className="mt-3 flex items-center justify-end">
-                <button onClick={handleEngineDiagnostic} disabled={diagLoading} type="button" className="text-[11.5px] font-medium text-cyan-300/80 hover:text-cyan-200 disabled:opacity-40 transition-colors">{diagLoading ? 'Verificando…' : 'Verificar com partidas atuais →'}</button>
-              </div>
-            </>
-          : <>
-              <NativeRuleCanvas
+      <div className="h-full grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="min-w-0 overflow-y-auto sidebar-scroll px-7 py-6">
+          {mode === 'review'
+            ? <RadarContractView name={name.trim()} contract={contract} actionLabel={actionLabel} />
+            : <NativeRuleCanvas
                 name={name} onName={setName}
                 desc={desc} onDesc={setDesc}
                 severity={severity} onSeverity={setSeverity}
@@ -244,9 +238,7 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
                 action={action} onAction={a => { setAction(a); setActionTouched(true) }}
                 minConf={minConf} onMinConf={n => { setMinConf(n); setConfidenceTouched(true) }}
                 contract={contract}
-              />
-              <ReadinessInline readiness={readiness} contract={contract} />
-            </>}
+              />}
 
           {dryRunErrors.length > 0 && (
             <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/[0.05] px-4 py-3">
@@ -257,7 +249,17 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
           {diagError && <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/[0.05] px-4 py-3 text-[11px] text-amber-200/80">{diagError}</div>}
           {backendDiag && <EngineDiagnosticPanel result={backendDiag} source="backend" onClose={() => setBackendDiag(null)} scopeNote={scope !== 'all' && scope !== 'favorites_only' ? 'Diagnóstico avalia os jogos ao vivo disponíveis; o filtro de escopo específico é aplicado pelo motor no runtime.' : undefined} />}
           {showDryRun && dryRunResults && <PatternDryRunPanel results={dryRunResults} onClose={() => setShowDryRun(false)} isAdvanced={isAdvanced} />}
+        </div>
+
+        <EngineConsole
+          readiness={readiness}
+          contract={contract}
+          canDiagnose={readiness.canRunEngineDiagnostic}
+          diagLoading={diagLoading}
+          lastDiagnostic={backendDiag}
+          onDiagnose={handleEngineDiagnostic}
+        />
       </div>
-    </ModalShell>
+    </RuleStudioShell>
   )
 }

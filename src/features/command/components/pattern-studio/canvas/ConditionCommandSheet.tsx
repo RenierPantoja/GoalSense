@@ -9,7 +9,7 @@
  * PatternCondition[] is byte-identical to before.
  */
 import { useMemo, useState } from 'react'
-import { Search, Sparkles } from 'lucide-react'
+import { Search, Clock, Goal, Flame, Activity, Flag, RectangleHorizontal, Star, type LucideIcon } from 'lucide-react'
 import type { PatternCondition } from '../../../types/commandTypes'
 import { formatConditionHuman } from '../../../utils/commandFormatters'
 import { TRIGGER_BY_TYPE, TRIGGER_CATEGORY_LABELS, TRIGGER_LIBRARY, type TriggerCategory, type TriggerSpec } from '../../../intelligence/triggerLibrary'
@@ -18,6 +18,10 @@ import { getCapability } from '../../../intelligence/radarConditionCapabilities'
 import { clampParam } from '../../../utils/patternStudioHelpers'
 import { ParamField } from '../triggers/ParamField'
 import { SheetShell } from './SheetShell'
+
+const CATEGORY_ICON: Record<TriggerCategory, LucideIcon> = {
+  tempo: Clock, placar: Goal, pressao: Flame, controle: Activity, escanteios: Flag, disciplina: RectangleHorizontal, contexto: Star,
+}
 
 export type ConditionSheetMode =
   | { kind: 'addFilter' }
@@ -166,10 +170,14 @@ export function ConditionCommandSheet({ mode, conditions, onChange, onClose }: C
               {active.specs.map(t => {
                 const used = usedTypes.has(t.type)
                 const cap = getCapability(t.type)
+                const Icon = CATEGORY_ICON[t.category]
                 return (
-                  <button key={t.id} type="button" disabled={used} onClick={() => addTrigger(t)} className={`text-left rounded-xl border px-3.5 py-2.5 transition-colors ${used ? 'border-white/[0.04] bg-white/[0.01] opacity-50 cursor-not-allowed' : tab === 'unsupported' ? 'border-rose-400/15 bg-rose-500/[0.02] hover:border-rose-400/25' : 'border-white/[0.07] bg-white/[0.014] hover:border-white/[0.16] hover:bg-white/[0.03]'}`}>
-                    <div className="flex items-center gap-1.5 mb-0.5"><span className="text-[12.5px] font-semibold text-white/90 leading-tight">{t.title}</span>{used && <span className="ml-auto text-[9.5px] text-emerald-300/70 font-medium">adicionado</span>}</div>
-                    <p className="text-[10.5px] text-white/50 leading-snug">{cap.backendSupport === 'unsupported' ? cap.reasonIfUnsupported : t.description}</p>
+                  <button key={t.id} type="button" disabled={used} onClick={() => addTrigger(t)} className={`group flex items-start gap-3 text-left rounded-xl border px-3.5 py-3 transition-all ${used ? 'border-white/[0.04] bg-white/[0.01] opacity-50 cursor-not-allowed' : tab === 'unsupported' ? 'border-rose-400/15 bg-rose-500/[0.02] hover:border-rose-400/30' : 'border-white/[0.07] bg-white/[0.014] hover:border-cyan-400/25 hover:bg-cyan-500/[0.03]'}`}>
+                    <span className={`h-8 w-8 rounded-lg grid place-items-center shrink-0 border ${tab === 'unsupported' ? 'border-rose-400/20 text-rose-300/80' : 'border-white/[0.08] text-white/45 group-hover:text-cyan-300 group-hover:border-cyan-400/25'} transition-colors`}><Icon size={15} /></span>
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-1.5"><span className="text-[12.5px] font-semibold text-white/90 leading-tight">{t.title}</span>{used && <span className="text-[9.5px] text-emerald-300/70 font-medium">adicionado</span>}</span>
+                      <span className="block text-[10.5px] text-white/50 leading-snug mt-0.5">{cap.backendSupport === 'unsupported' ? cap.reasonIfUnsupported : t.description}</span>
+                    </span>
                   </button>
                 )
               })}
