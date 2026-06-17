@@ -11,11 +11,12 @@ import { Radar, Telescope, Timer, Crosshair, BellRing, Gauge, Plus, ChevronRight
 import type { PatternAction, PatternCondition, PatternScope, PatternSeverity } from '../../../types/commandTypes'
 import type { ScopeKbLeague, ScopeKbMatch, ScopeKbTeam } from '@/services/intelligence/scopeKnowledgeBase'
 import { getCapability } from '../../../intelligence/radarConditionCapabilities'
-import type { RadarContract } from '../../../intelligence/radarReadiness'
+import type { RadarContract, RadarReadiness } from '../../../intelligence/radarReadiness'
 import { ActionCardPicker } from '../form-controls/ActionCardPicker'
 import { ConfidenceSlider } from '../form-controls/ConfidenceSlider'
 import { SheetShell } from './SheetShell'
 import { RadarConditionChip } from './RadarConditionChip'
+import { RuleReadinessStrip } from './RuleReadinessStrip'
 import { ConditionCommandSheet, type ConditionSheetMode } from './ConditionCommandSheet'
 import { ScopeSelectionSheet, type ScopeSelectionValue } from '../scope/ScopeSelectionSheet'
 
@@ -67,6 +68,7 @@ export interface NativeRuleCanvasProps {
   minConf: number
   onMinConf: (n: number) => void
   contract: RadarContract
+  readiness: RadarReadiness
 }
 
 type Sheet =
@@ -141,7 +143,9 @@ export function NativeRuleCanvas(props: NativeRuleCanvasProps) {
   const rigorLabel = RIGOR_PRESETS.find(p => p.value === minConf)?.label
 
   return (
-    <div className="relative max-w-[680px] mx-auto">
+    <div className="relative h-full">
+      <div className="h-full overflow-y-auto sidebar-scroll px-6 sm:px-8 py-7">
+      <div className="max-w-[720px] mx-auto">
       {/* Identity card */}
       <div className="rounded-[16px] border border-white/[0.07] bg-gradient-to-b from-white/[0.05] to-white/[0.025] px-4 py-4">
         <div className="flex items-center gap-3.5">
@@ -183,6 +187,10 @@ export function NativeRuleCanvas(props: NativeRuleCanvasProps) {
         <NavRow tile={<Tile {...TILES.then} icon={<BellRing size={16} />} />} label="Então" value={ACTION_LABEL[action]} onClick={() => setSheet({ kind: 'action' })} />
 
         <NavRow tile={<Tile {...TILES.rigor} icon={<Gauge size={16} />} />} label="Rigor" value={`${minConf}%${rigorLabel ? ` · ${rigorLabel}` : ''}`} onClick={() => setSheet({ kind: 'rigor' })} />
+      </div>
+
+      <RuleReadinessStrip readiness={props.readiness} contract={contract} />
+      </div>
       </div>
 
       {/* ── Dedicated sheets ── */}

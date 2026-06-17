@@ -23,7 +23,6 @@ import { getRadarReadiness, compileRadarContract, type RadarDraftInput } from '.
 import { diagnoseBackendRadar, isBackendEnabled } from '@/services/commandBackendClient'
 import { RuleStudioShell } from '../canvas/RuleStudioShell'
 import { NativeRuleCanvas } from '../canvas/NativeRuleCanvas'
-import { EngineConsole } from '../canvas/EngineConsole'
 import { RadarContractView } from '../preview/RadarContractView'
 import { EngineDiagnosticPanel, type BackendDiagnostic } from '../dryrun/EngineDiagnosticPanel'
 import { PatternDryRunPanel } from '../dryrun/PatternDryRunPanel'
@@ -219,47 +218,45 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
         </>
       }
     >
-      <div className="h-full grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="min-w-0 overflow-y-auto sidebar-scroll px-7 py-6">
-          {mode === 'review'
-            ? <RadarContractView name={name.trim()} contract={contract} actionLabel={actionLabel} />
-            : <NativeRuleCanvas
-                name={name} onName={setName}
-                desc={desc} onDesc={setDesc}
-                severity={severity} onSeverity={setSeverity}
-                scope={scope} scopeFilter={scopeFilter} matchesFilter={matchesFilter}
-                excludeLeagues={excludeLeagues} excludeTeams={excludeTeams} excludeMatches={excludeMatches}
-                requireRichData={requireRichData} onlyLive={onlyLive} onlyPreMatch={onlyPreMatch}
-                availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich}
-                onScope={s => { setScope(s); setScopeTouched(true) }} onScopeFilter={setScopeFilter} onMatches={setMatchesFilter}
-                onExcludeLeagues={setExcludeLeagues} onExcludeTeams={setExcludeTeams} onExcludeMatches={setExcludeMatches}
-                onAdvancedToggle={handleAdvancedToggle}
-                conditions={conditions} onConditions={setConditions}
-                action={action} onAction={a => { setAction(a); setActionTouched(true) }}
-                minConf={minConf} onMinConf={n => { setMinConf(n); setConfidenceTouched(true) }}
-                contract={contract}
-              />}
-
-          {dryRunErrors.length > 0 && (
-            <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/[0.05] px-4 py-3">
-              <p className="text-[11px] text-amber-200 font-medium mb-1">Não é possível validar:</p>
-              <ul className="space-y-0.5">{dryRunErrors.map((e, i) => <li key={i} className="text-[11px] text-amber-200/70">· {e}</li>)}</ul>
+      {mode === 'review'
+        ? (
+          <div className="h-full overflow-y-auto sidebar-scroll px-6 sm:px-8 py-7">
+            <div className="max-w-[760px] mx-auto">
+              <RadarContractView name={name.trim()} contract={contract} actionLabel={actionLabel} />
+              <div className="mt-4 flex items-center justify-end">
+                <button onClick={handleEngineDiagnostic} disabled={diagLoading} type="button" className="text-[12.5px] font-medium text-[#2DD4BF] hover:text-[#5CE6D4] disabled:opacity-40 transition-colors">{diagLoading ? 'Verificando…' : 'Verificar com partidas atuais →'}</button>
+              </div>
+              {dryRunErrors.length > 0 && (
+                <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/[0.05] px-4 py-3">
+                  <p className="text-[11px] text-amber-200 font-medium mb-1">Não é possível validar:</p>
+                  <ul className="space-y-0.5">{dryRunErrors.map((e, i) => <li key={i} className="text-[11px] text-amber-200/70">· {e}</li>)}</ul>
+                </div>
+              )}
+              {diagError && <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/[0.05] px-4 py-3 text-[11px] text-amber-200/80">{diagError}</div>}
+              {backendDiag && <EngineDiagnosticPanel result={backendDiag} source="backend" onClose={() => setBackendDiag(null)} scopeNote={scope !== 'all' && scope !== 'favorites_only' ? 'Diagnóstico avalia os jogos ao vivo disponíveis; o filtro de escopo específico é aplicado pelo motor no runtime.' : undefined} />}
+              {showDryRun && dryRunResults && <PatternDryRunPanel results={dryRunResults} onClose={() => setShowDryRun(false)} isAdvanced={isAdvanced} />}
             </div>
-          )}
-          {diagError && <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/[0.05] px-4 py-3 text-[11px] text-amber-200/80">{diagError}</div>}
-          {backendDiag && <EngineDiagnosticPanel result={backendDiag} source="backend" onClose={() => setBackendDiag(null)} scopeNote={scope !== 'all' && scope !== 'favorites_only' ? 'Diagnóstico avalia os jogos ao vivo disponíveis; o filtro de escopo específico é aplicado pelo motor no runtime.' : undefined} />}
-          {showDryRun && dryRunResults && <PatternDryRunPanel results={dryRunResults} onClose={() => setShowDryRun(false)} isAdvanced={isAdvanced} />}
-        </div>
-
-        <EngineConsole
-          readiness={readiness}
-          contract={contract}
-          canDiagnose={readiness.canRunEngineDiagnostic}
-          diagLoading={diagLoading}
-          lastDiagnostic={backendDiag}
-          onDiagnose={handleEngineDiagnostic}
-        />
-      </div>
+          </div>
+        )
+        : (
+          <NativeRuleCanvas
+            name={name} onName={setName}
+            desc={desc} onDesc={setDesc}
+            severity={severity} onSeverity={setSeverity}
+            scope={scope} scopeFilter={scopeFilter} matchesFilter={matchesFilter}
+            excludeLeagues={excludeLeagues} excludeTeams={excludeTeams} excludeMatches={excludeMatches}
+            requireRichData={requireRichData} onlyLive={onlyLive} onlyPreMatch={onlyPreMatch}
+            availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich}
+            onScope={s => { setScope(s); setScopeTouched(true) }} onScopeFilter={setScopeFilter} onMatches={setMatchesFilter}
+            onExcludeLeagues={setExcludeLeagues} onExcludeTeams={setExcludeTeams} onExcludeMatches={setExcludeMatches}
+            onAdvancedToggle={handleAdvancedToggle}
+            conditions={conditions} onConditions={setConditions}
+            action={action} onAction={a => { setAction(a); setActionTouched(true) }}
+            minConf={minConf} onMinConf={n => { setMinConf(n); setConfidenceTouched(true) }}
+            contract={contract}
+            readiness={readiness}
+          />
+        )}
     </RuleStudioShell>
   )
 }

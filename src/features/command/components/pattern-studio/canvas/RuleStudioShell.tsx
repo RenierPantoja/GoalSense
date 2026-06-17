@@ -40,8 +40,8 @@ export function RuleStudioShell({ open, onClose, title, subtitle, statusNode, ch
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-6 animate-fadeIn" role="dialog" aria-modal="true" aria-label={title}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-[6px]" onClick={onClose} aria-hidden="true" />
       <div
-        className="relative w-full max-w-[1280px] h-[min(88vh,820px)] flex flex-col rounded-[20px] overflow-hidden animate-scaleIn border border-white/[0.09] shadow-[0_30px_90px_-25px_rgba(0,0,0,0.8)]"
-        style={{ backgroundColor: '#1b1b1d', backgroundImage: 'linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0) 140px)' }}
+        className="relative w-full max-w-[1460px] h-[min(91vh,900px)] flex flex-col rounded-[22px] overflow-hidden animate-scaleIn border border-white/[0.09] shadow-[0_40px_110px_-28px_rgba(0,0,0,0.85)]"
+        style={{ backgroundColor: '#1b1b1d', backgroundImage: 'linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0) 160px)' }}
       >
         {/* Header */}
         <header className="shrink-0 px-7 pt-6 pb-5 border-b border-white/[0.07]">

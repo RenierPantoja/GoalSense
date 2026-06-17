@@ -134,55 +134,72 @@ export function ConditionCommandSheet({ mode, conditions, onChange, onClose }: C
   }
 
   // ── Add mode (filter | signal) ──
-  const groups = [
+  const availableCategories = useMemo(() => {
+    const set = new Set<TriggerCategory>()
+    for (const t of TRIGGER_LIBRARY) {
+      const isSignal = getCapability(t.type).kind === 'signal'
+      if (wantSignal ? isSignal : !isSignal) set.add(t.category)
+    }
+    return (Object.keys(TRIGGER_CATEGORY_LABELS) as TriggerCategory[]).filter(c => set.has(c))
+  }, [wantSignal])
+
+  const allGroups = [
     { key: 'supported' as const, label: 'Executáveis', specs: grouped.supported },
     { key: 'partial' as const, label: 'Parciais', specs: grouped.partial },
     { key: 'unsupported' as const, label: 'Não executáveis', specs: grouped.unsupported },
   ]
-  const active = groups.find(g => g.key === tab)!
+  const visibleGroups = allGroups.filter(g => g.specs.length > 0)
+  const effectiveKey = visibleGroups.some(g => g.key === tab) ? tab : (visibleGroups[0]?.key ?? 'supported')
+  const active = allGroups.find(g => g.key === effectiveKey)!
+  const noResults = visibleGroups.length === 0
 
   return (
     <SheetShell
       title={wantSignal ? 'Adicionar sinal real' : 'Adicionar filtro'}
-      subtitle={wantSignal ? 'Sinais reais definem o que dispara o radar' : 'Filtros definem quando o radar avalia (não disparam sozinhos)'}
+      subtitle={wantSignal ? 'Sinais reais definem o que dispara o radar' : 'Filtros definem quando o radar avalia — não disparam sozinhos'}
       onClose={onClose}
     >
-      <div className="relative mb-3">
-        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-        <input value={query} onChange={e => setQuery(e.target.value)} autoFocus placeholder="Buscar condição..." className="w-full h-9 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[12px] text-white/90 placeholder:text-white/30 outline-none focus:border-white/25" />
+      <div className="max-w-[1040px] mx-auto">
+        <div className="relative mb-3">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+          <input value={query} onChange={e => setQuery(e.target.value)} autoFocus placeholder="Buscar condição..." className="w-full h-11 pl-10 pr-3 rounded-[12px] bg-white/[0.04] border border-white/[0.08] text-[13.5px] text-white/90 placeholder:text-white/30 outline-none focus:border-[#2DD4BF]/40" />
+        </div>
+        <div className="flex items-center gap-1 flex-wrap mb-3">
+          <button onClick={() => setCategory('all')} type="button" className={`px-3 py-1.5 rounded-full text-[11.5px] font-medium transition-colors ${category === 'all' ? 'bg-white/[0.1] text-white/95' : 'text-white/50 hover:text-white/80'}`}>Todas</button>
+          {availableCategories.map(cat => (
+            <button key={cat} onClick={() => setCategory(cat)} type="button" className={`px-3 py-1.5 rounded-full text-[11.5px] font-medium transition-colors ${category === cat ? 'bg-white/[0.1] text-white/95' : 'text-white/50 hover:text-white/80'}`}>{TRIGGER_CATEGORY_LABELS[cat]}</button>
+          ))}
+        </div>
+
+        {noResults
+          ? <p className="text-center text-[12.5px] text-white/45 py-12">Nenhuma condição {wantSignal ? 'de sinal' : 'de filtro'} {category === 'all' ? 'encontrada' : 'nesta categoria'}.</p>
+          : <>
+              {visibleGroups.length > 1 && (
+                <div className="flex items-center gap-1 mb-4 border-b border-white/[0.07]">
+                  {visibleGroups.map(g => (
+                    <button key={g.key} type="button" onClick={() => setTab(g.key)} className={`px-3.5 py-2.5 text-[12.5px] font-medium border-b-2 -mb-px transition-colors ${effectiveKey === g.key ? `border-[#2DD4BF] ${TAB_TONE[g.key]}` : 'border-transparent text-white/45 hover:text-white/70'}`}>{g.label}<span className="ml-1.5 text-[10.5px] tabular-nums opacity-60">{g.specs.length}</span></button>
+                  ))}
+                </div>
+              )}
+              {effectiveKey === 'unsupported' && <p className="text-[11px] text-white/40 mb-3">Podem ser usadas no motor local, mas impedem a ativação do radar.</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {active.specs.map(t => {
+                  const used = usedTypes.has(t.type)
+                  const cap = getCapability(t.type)
+                  const Icon = CATEGORY_ICON[t.category]
+                  return (
+                    <button key={t.id} type="button" disabled={used} onClick={() => addTrigger(t)} className={`group flex items-start gap-3 text-left rounded-[12px] border px-4 py-3.5 transition-all ${used ? 'border-white/[0.04] bg-white/[0.01] opacity-50 cursor-not-allowed' : effectiveKey === 'unsupported' ? 'border-[#FF5A52]/15 bg-[#FF5A52]/[0.04] hover:border-[#FF5A52]/30' : 'border-white/[0.07] bg-white/[0.03] hover:border-[#2DD4BF]/35 hover:bg-[#2DD4BF]/[0.06]'}`}>
+                      <span className={`h-9 w-9 rounded-[10px] grid place-items-center shrink-0 border ${effectiveKey === 'unsupported' ? 'border-[#FF5A52]/20 text-[#FF8A80]' : 'border-white/[0.08] text-white/45 group-hover:text-[#2DD4BF] group-hover:border-[#2DD4BF]/25'} transition-colors`}><Icon size={16} /></span>
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-1.5"><span className="text-[13px] font-semibold text-white/90 leading-tight">{t.title}</span>{used && <span className="text-[9.5px] text-emerald-300/70 font-medium">adicionado</span>}</span>
+                        <span className="block text-[11px] text-white/50 leading-snug mt-0.5">{cap.backendSupport === 'unsupported' ? cap.reasonIfUnsupported : t.description}</span>
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </>}
       </div>
-      <div className="flex items-center gap-1 flex-wrap mb-3">
-        <button onClick={() => setCategory('all')} type="button" className={`px-2.5 py-1 rounded-lg text-[10.5px] font-medium ${category === 'all' ? 'bg-white/[0.08] text-white/95 border border-white/[0.14]' : 'text-white/50 hover:text-white/80 border border-transparent'}`}>Todas</button>
-        {(Object.keys(TRIGGER_CATEGORY_LABELS) as TriggerCategory[]).map(cat => (
-          <button key={cat} onClick={() => setCategory(cat)} type="button" className={`px-2.5 py-1 rounded-lg text-[10.5px] font-medium ${category === cat ? 'bg-white/[0.08] text-white/95 border border-white/[0.14]' : 'text-white/50 hover:text-white/80 border border-transparent'}`}>{TRIGGER_CATEGORY_LABELS[cat]}</button>
-        ))}
-      </div>
-      <div className="flex items-center gap-1 mb-3 border-b border-white/[0.06]">
-        {groups.map(g => (
-          <button key={g.key} type="button" onClick={() => setTab(g.key)} className={`px-3 py-2 text-[11.5px] font-medium border-b-2 -mb-px transition-colors ${tab === g.key ? `border-white/60 ${TAB_TONE[g.key]}` : 'border-transparent text-white/45 hover:text-white/70'}`}>{g.label}<span className="ml-1 text-[10px] tabular-nums opacity-60">{g.specs.length}</span></button>
-        ))}
-      </div>
-      {active.specs.length === 0
-        ? <p className="text-center text-[11px] text-white/40 py-6">Nenhuma condição nesta aba.</p>
-        : <>
-            {tab === 'unsupported' && <p className="text-[10px] text-white/40 mb-2">Podem ser usadas no motor local, mas impedem a ativação do radar.</p>}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {active.specs.map(t => {
-                const used = usedTypes.has(t.type)
-                const cap = getCapability(t.type)
-                const Icon = CATEGORY_ICON[t.category]
-                return (
-                  <button key={t.id} type="button" disabled={used} onClick={() => addTrigger(t)} className={`group flex items-start gap-3 text-left rounded-xl border px-3.5 py-3 transition-all ${used ? 'border-white/[0.04] bg-white/[0.01] opacity-50 cursor-not-allowed' : tab === 'unsupported' ? 'border-[#FF5A52]/15 bg-[#FF5A52]/[0.04] hover:border-[#FF5A52]/30' : 'border-white/[0.07] bg-white/[0.03] hover:border-[#2DD4BF]/35 hover:bg-[#2DD4BF]/[0.06]'}`}>
-                    <span className={`h-8 w-8 rounded-lg grid place-items-center shrink-0 border ${tab === 'unsupported' ? 'border-[#FF5A52]/20 text-[#FF8A80]' : 'border-white/[0.08] text-white/45 group-hover:text-[#2DD4BF] group-hover:border-[#2DD4BF]/25'} transition-colors`}><Icon size={15} /></span>
-                    <span className="min-w-0">
-                      <span className="flex items-center gap-1.5"><span className="text-[12.5px] font-semibold text-white/90 leading-tight">{t.title}</span>{used && <span className="text-[9.5px] text-emerald-300/70 font-medium">adicionado</span>}</span>
-                      <span className="block text-[10.5px] text-white/50 leading-snug mt-0.5">{cap.backendSupport === 'unsupported' ? cap.reasonIfUnsupported : t.description}</span>
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          </>}
     </SheetShell>
   )
 }
