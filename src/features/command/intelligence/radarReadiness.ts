@@ -17,68 +17,41 @@
  * Pure module: no React, no side effects, no network. Safe to unit test.
  */
 import type { PatternAction, PatternCondition, PatternConditionType, PatternScope, PatternSeverity } from '../types/commandTypes'
-import { TRIGGER_BY_TYPE } from './triggerLibrary'
+import {
+  classifyConditionKind as classifyKind,
+  getCapability,
+  unsupportedConditionsOf,
+  BACKEND_EXECUTABLE,
+  type ConditionKind,
+} from './radarConditionCapabilities'
 
-// ─── Condition operational kind ────────────────────────────────────────────────
+// ─── Condition operational kind (re-exported from the capability matrix) ───────
 
-export type ConditionKind = 'eligibility' | 'signal' | 'blocker' | 'context'
+export type { ConditionKind }
 
-/** Eligibility = defines WHEN a match can be evaluated (not an opportunity). */
-const ELIGIBILITY_TYPES = new Set<PatternConditionType>([
-  'is_live', 'is_pre_live', 'minute_between', 'is_final_phase',
-])
-/** Context = helps the radar but never fires on its own. */
-const CONTEXT_TYPES = new Set<PatternConditionType>(['favorite_involved'])
-
-/**
- * Classify a condition by operational role. Everything that is not eligibility
- * or context is treated as a real signal (placar/pressão/controle/escanteios/
- * disciplina). Blockers are reserved for future explicit block-conditions.
- */
+/** Classify a condition by operational role (delegates to the capability matrix). */
 export function classifyConditionKind(condition: PatternCondition): ConditionKind {
-  const t = condition.type
-  if (ELIGIBILITY_TYPES.has(t)) return 'eligibility'
-  if (CONTEXT_TYPES.has(t)) return 'context'
-  return 'signal'
+  return classifyKind(condition)
 }
 
 // ─── Backend executor contract ─────────────────────────────────────────────────
 
 /** Condition types the backend Pattern Worker can actually evaluate. */
-export const BACKEND_SUPPORTED_CONDITIONS = new Set<PatternConditionType>([
-  'is_live', 'minute_between', 'score_tied', 'score_diff_lte', 'goals_total_gte',
-  'goals_total_lte', 'possession_gte', 'shots_on_target_gte', 'corners_gte',
-  'cards_gte', 'is_final_phase', 'shots_total_gte', 'home_shots_on_target_gte',
-  'away_shots_on_target_gte', 'home_possession_gte', 'away_possession_gte',
-  'home_corners_gte', 'away_corners_gte',
-])
+export const BACKEND_SUPPORTED_CONDITIONS = BACKEND_EXECUTABLE
 
 // ─── Data dependency mapping ────────────────────────────────────────────────────
 
-/** Human label of the data each condition depends on. */
+/** Human label of the data each condition depends on (from capability matrix). */
 function conditionDataDependency(type: PatternConditionType): string | null {
-  switch (type) {
-    case 'is_live': case 'is_pre_live': return 'status ao vivo'
-    case 'minute_between': case 'is_final_phase': return 'minuto'
-    case 'score_tied': case 'score_diff_lte': case 'goals_total_gte': case 'goals_total_lte':
-    case 'home_goals_gte': case 'away_goals_gte': return 'placar'
-    case 'shots_on_target_gte': case 'home_shots_on_target_gte': case 'away_shots_on_target_gte': return 'chutes no alvo'
-    case 'shots_total_gte': case 'shots_recent_gte': return 'finalizações'
-    case 'possession_gte': case 'home_possession_gte': case 'away_possession_gte': return 'posse de bola'
-    case 'corners_gte': case 'home_corners_gte': case 'away_corners_gte': return 'escanteios'
-    case 'cards_gte': case 'yellow_cards_gte': case 'red_cards_gte': return 'cartões'
-    case 'favorite_involved': return 'favoritos'
-    default: return null
-  }
+  const deps = getCapability(type).dataDependencies
+  return deps.length > 0 ? deps[0] : null
 }
 
 /** Conditions whose underlying data is not always available across providers. */
-const FRAGILE_DEPENDENCIES = new Set<PatternConditionType>([
-  'shots_on_target_gte', 'home_shots_on_target_gte', 'away_shots_on_target_gte',
-  'shots_total_gte', 'shots_recent_gte', 'possession_gte', 'home_possession_gte',
-  'away_possession_gte', 'corners_gte', 'home_corners_gte', 'away_corners_gte',
-  'cards_gte', 'yellow_cards_gte', 'red_cards_gte',
-])
+function isFragileDependency(type: PatternConditionType): boolean {
+  const cap = getCapability(type)
+  return cap.kind === 'signal' && (cap.backendSupport === 'partial' || cap.dataDependencies.some(d => d !== 'placar' && d !== 'minuto' && d !== 'status ao vivo'))
+}
 
 // ─── Condition validity ──────────────────────────────────────────────────────
 
@@ -204,12 +177,10 @@ function dataDependenciesOf(conditions: PatternCondition[]): string[] {
 }
 
 function backendCompatibilityOf(draft: RadarDraftInput): BackendCompatibility {
-  const unsupported = draft.conditions
-    .map(c => c.type)
-    .filter(t => !BACKEND_SUPPORTED_CONDITIONS.has(t))
+  const unsupported = unsupportedConditionsOf(draft.conditions)
   const resolutionMode: BackendCompatibility['resolutionMode'] =
     draft.action === 'register_alert' ? 'tracked' : draft.action === 'suggest_only' ? 'suggest' : 'highlight'
-  return { compatible: unsupported.length === 0, unsupported: [...new Set(unsupported)], resolutionMode }
+  return { compatible: unsupported.length === 0, unsupported, resolutionMode }
 }
 
 export function compileRadarContract(draft: RadarDraftInput): RadarContract {
@@ -280,8 +251,10 @@ export function getRadarReadiness(draft: RadarDraftInput, flags: RadarReadinessF
   if (!flags.actionTouched) warnings.push('Ação ainda usa o padrão: registrar alerta')
   if (draft.minConfidence < 40) warnings.push('Rigor baixo pode gerar muitos alertas')
   if (counts.eligibility === 0 && hasSignal) warnings.push('Sem filtro de tempo: o radar avalia em qualquer minuto')
-  const fragile = draft.conditions.some(c => FRAGILE_DEPENDENCIES.has(c.type))
+  const fragile = draft.conditions.some(c => isFragileDependency(c.type))
   if (fragile) warnings.push('Depende de estatística (pode faltar em alguns jogos/provedores)')
+  const partial = draft.conditions.filter(c => getCapability(c.type).backendSupport === 'partial')
+  if (partial.length > 0) warnings.push(`Cobertura variável: ${partial.map(c => getCapability(c.type).label).join(', ')}`)
   if (contract.resolutionMode !== 'tracked') warnings.push('Esta ação não registra alerta acompanhado pela resolução')
 
   // Technical validity = can persist as a real paused pattern that the engine

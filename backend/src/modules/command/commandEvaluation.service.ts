@@ -45,7 +45,8 @@ const LIVE_STATUSES = new Set(['1H', '2H', 'HT', 'ET', 'BT'])
 
 // ─── Condition Evaluation ────────────────────────────────────────────────────
 
-function evaluateCondition(
+/** Exported for read-only diagnostics (radarDiagnostic.service). Pure, no writes. */
+export function evaluateCondition(
   condition: { type: string; params: Record<string, any> },
   input: PatternEvaluationInput,
 ): boolean {

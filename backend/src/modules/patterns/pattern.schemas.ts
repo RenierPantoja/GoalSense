@@ -19,5 +19,16 @@ export const createPatternSchema = z.object({
 
 export const updatePatternSchema = createPatternSchema.partial()
 
+/** Read-only engine diagnostic — accepts a draft (conditions array or JSON). */
+export const diagnosePatternSchema = z.object({
+  conditions: z.array(z.object({ type: z.string(), params: z.record(z.any()).default({}) })).optional(),
+  conditionsJson: z.string().optional(),
+  minConfidence: z.number().min(0).max(99).default(50),
+  severity: z.enum(['critical', 'attention', 'info']).default('attention'),
+  requireRichData: z.boolean().optional(),
+  limit: z.number().min(1).max(50).optional(),
+})
+
 export type CreatePatternInput = z.infer<typeof createPatternSchema>
 export type UpdatePatternInput = z.infer<typeof updatePatternSchema>
+export type DiagnosePatternInput = z.infer<typeof diagnosePatternSchema>

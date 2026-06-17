@@ -26,6 +26,7 @@ import type { ScopeKbLeague, ScopeKbMatch, ScopeKbTeam } from '@/services/intell
 import { runPatternDryRun, validateDryRunPattern } from '../../../intelligence/patternDryRunEngine'
 import { useScopeLookups } from '../../../utils/patternStudioHelpers'
 import { getRadarReadiness, compileRadarContract, type RadarDraftInput } from '../../../intelligence/radarReadiness'
+import { diagnoseBackendRadar, isBackendEnabled } from '@/services/commandBackendClient'
 import { ModalShell } from '../shell/ModalShell'
 import { BlueprintNav, type BlueprintNavItem, type SectionMaturity } from '../shell/BlueprintNav'
 import { BlueprintSummary } from '../preview/BlueprintSummary'
@@ -36,6 +37,7 @@ import { ActionCardPicker } from '../form-controls/ActionCardPicker'
 import { ConfidenceSlider } from '../form-controls/ConfidenceSlider'
 import { EngineReadinessPanel } from '../inspector/EngineReadinessPanel'
 import { RadarContractView } from '../preview/RadarContractView'
+import { EngineDiagnosticPanel, type BackendDiagnostic } from '../dryrun/EngineDiagnosticPanel'
 import { PatternDryRunPanel } from '../dryrun/PatternDryRunPanel'
 
 type CustomStep = 'identity' | 'scope' | 'conditions' | 'action' | 'confidence' | 'review'
@@ -93,6 +95,9 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
   const [showDryRun, setShowDryRun] = useState(false)
   const [dryRunResults, setDryRunResults] = useState<ReturnType<typeof runPatternDryRun> | null>(null)
   const [dryRunErrors, setDryRunErrors] = useState<string[]>([])
+  const [backendDiag, setBackendDiag] = useState<BackendDiagnostic | null>(null)
+  const [diagLoading, setDiagLoading] = useState(false)
+  const [diagError, setDiagError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -120,6 +125,9 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
     setShowDryRun(false)
     setDryRunResults(null)
     setDryRunErrors([])
+    setBackendDiag(null)
+    setDiagLoading(false)
+    setDiagError(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial])
 
@@ -176,11 +184,34 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
   }
   const requestClose = () => { if (isDirty() && !window.confirm('Descartar as alterações deste radar?')) return; onClose() }
 
-  const handleEngineDiagnostic = () => {
+  const handleEngineDiagnostic = async () => {
     const draft = buildData('active')
     const validation = validateDryRunPattern(draft)
     if (!validation.valid) { setDryRunErrors(validation.errors); return }
     setDryRunErrors([])
+    setBackendDiag(null)
+    setShowDryRun(false)
+    setDiagError(null)
+
+    // Prefer the REAL backend diagnostic (read-only) when a backend is configured.
+    if (isBackendEnabled()) {
+      setDiagLoading(true)
+      try {
+        const res = await diagnoseBackendRadar({
+          conditions: conditions.map(c => ({ type: c.type, params: c.params as Record<string, unknown> })),
+          minConfidence: minConf,
+          severity,
+          requireRichData,
+        })
+        setDiagLoading(false)
+        if (res) { setBackendDiag(res as BackendDiagnostic); return }
+        setDiagError('Backend indisponível — exibindo diagnóstico local')
+      } catch {
+        setDiagLoading(false)
+        setDiagError('Backend indisponível — exibindo diagnóstico local')
+      }
+    }
+    // Fallback: client-side diagnostic (clearly labeled as local).
     setDryRunResults(runPatternDryRun({ pattern: draft, fixtures, statsMap, eventsMap, isFavoriteTeam, commandAlerts }))
     setShowDryRun(true)
   }
@@ -244,7 +275,7 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
       footer={
         <>
           <button onClick={requestClose} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/65 border border-white/[0.07] hover:text-white/95 hover:border-white/[0.12] transition-colors mr-auto">Cancelar</button>
-          <button onClick={handleEngineDiagnostic} disabled={!readiness.canRunEngineDiagnostic} title={!readiness.canRunEngineDiagnostic ? 'Complete a regra antes de validar' : 'Diagnóstico local — não cria alerta, não salva'} type="button" className="px-3.5 py-2.5 rounded-xl text-[11px] font-medium text-cyan-300/80 border border-cyan-400/15 bg-cyan-500/[0.04] hover:bg-cyan-500/[0.08] hover:border-cyan-400/25 disabled:opacity-30 disabled:cursor-not-allowed transition-all">Validar no motor</button>
+          <button onClick={handleEngineDiagnostic} disabled={!readiness.canRunEngineDiagnostic || diagLoading} title={!readiness.canRunEngineDiagnostic ? 'Complete a regra antes de validar' : 'Diagnóstico read-only — não cria alerta, não salva'} type="button" className="px-3.5 py-2.5 rounded-xl text-[11px] font-medium text-cyan-300/80 border border-cyan-400/15 bg-cyan-500/[0.04] hover:bg-cyan-500/[0.08] hover:border-cyan-400/25 disabled:opacity-30 disabled:cursor-not-allowed transition-all">{diagLoading ? 'Validando…' : 'Validar no motor'}</button>
           {readiness.canSavePaused
             ? <button onClick={savePaused} title="Cmd/Ctrl+S" type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] transition-all">Salvar pausado</button>
             : <button onClick={saveDraft} disabled={!readiness.canSaveDraft} title={!readiness.canSaveDraft ? 'Dê um nome ao radar' : 'Salva como rascunho (pausado)'} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar rascunho</button>}
@@ -331,7 +362,7 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
 
         {/* Right: engine readiness */}
         <aside className="hidden lg:block lg:overflow-y-auto sidebar-scroll">
-          <EngineReadinessPanel readiness={readiness} contract={contract} actionLabel={actionLabel} />
+          <EngineReadinessPanel readiness={readiness} contract={contract} actionLabel={actionLabel} lastDiagnostic={backendDiag} />
         </aside>
       </div>
 
@@ -341,6 +372,8 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
           <ul className="space-y-0.5">{dryRunErrors.map((e, i) => <li key={i} className="text-[11px] text-amber-200/70">· {e}</li>)}</ul>
         </div>
       )}
+      {diagError && <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/[0.05] px-4 py-3 text-[11px] text-amber-200/80">{diagError}</div>}
+      {backendDiag && <EngineDiagnosticPanel result={backendDiag} source="backend" onClose={() => setBackendDiag(null)} />}
       {showDryRun && dryRunResults && (
         <PatternDryRunPanel results={dryRunResults} onClose={() => setShowDryRun(false)} isAdvanced={isAdvanced} />
       )}

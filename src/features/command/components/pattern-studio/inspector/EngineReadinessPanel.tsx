@@ -6,11 +6,13 @@
  * `compileRadarContract` — never invents a green state.
  */
 import type { RadarContract, RadarReadiness } from '../../../intelligence/radarReadiness'
+import type { BackendDiagnostic } from '../dryrun/EngineDiagnosticPanel'
 
 interface EngineReadinessPanelProps {
   readiness: RadarReadiness
   contract: RadarContract
   actionLabel: string
+  lastDiagnostic?: BackendDiagnostic | null
 }
 
 const TONE: Record<string, { dot: string; text: string; chip: string; ring: string }> = {
@@ -20,7 +22,7 @@ const TONE: Record<string, { dot: string; text: string; chip: string; ring: stri
   neutral: { dot: 'bg-white/40', text: 'text-white/70', chip: 'bg-white/[0.04] border-white/[0.08] text-white/60', ring: 'border-white/[0.06]' },
 }
 
-export function EngineReadinessPanel({ readiness, contract, actionLabel }: EngineReadinessPanelProps) {
+export function EngineReadinessPanel({ readiness, contract, actionLabel, lastDiagnostic }: EngineReadinessPanelProps) {
   const blocked = readiness.status === 'blocked' || readiness.requirements.length > 0
   const ready = readiness.status === 'ready_to_activate' || readiness.status === 'ready_for_review'
   const tone = blocked ? TONE.blocked : ready ? TONE.ready : readiness.warnings.length > 0 ? TONE.warn : TONE.neutral
@@ -110,6 +112,18 @@ export function EngineReadinessPanel({ readiness, contract, actionLabel }: Engin
           {contract.backendCompatibility.compatible ? 'Condições suportadas pelo motor' : 'Condição não suportada pelo motor'}
         </span>
       </div>
+
+      {/* Last real diagnostic */}
+      {lastDiagnostic && (
+        <div className="px-4 py-3 border-t border-white/[0.05]">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35 block mb-1.5">Último diagnóstico (backend)</span>
+          <ul className="space-y-0.5 text-[11px] text-white/65">
+            <li>{lastDiagnostic.evaluatedFixtures} partida(s) avaliada(s)</li>
+            <li>{lastDiagnostic.wouldTrigger} disparo(s) potencial(is)</li>
+            {lastDiagnostic.sufficientDataFixtures < lastDiagnostic.evaluatedFixtures && <li>{lastDiagnostic.evaluatedFixtures - lastDiagnostic.sufficientDataFixtures} com dados insuficientes</li>}
+          </ul>
+        </div>
+      )}
     </section>
   )
 }

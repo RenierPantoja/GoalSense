@@ -110,3 +110,27 @@ Dormentes (preservados): `ComposerNav.tsx`, `ConditionsEditor.tsx`,
   não tem `draft`).
 - "Validar no motor" continua client-side; não há endpoint de diagnóstico no
   backend que rode a regra contra os snapshots reais (refinamento futuro).
+
+---
+
+## 3.1 — Engine Capability Matrix + Real Diagnostic
+
+Extensão do 3.0. Detalhes em `RADAR_ENGINE_CAPABILITY_MATRIX.md` e
+`RADAR_ENGINE_CAPABILITY_AUDIT.md`.
+
+- **Matriz central** `radarConditionCapabilities.ts` vira a fonte única de
+  verdade (kind, backendSupport, activationAllowed, dependências, params).
+  `radarReadiness`/`compileRadarContract`/`TriggerComposer`/`EngineReadinessPanel`
+  passam a derivar daí.
+- **Editor capability-aware**: o sheet "Adicionar condição" agrupa em
+  Disponíveis · Parcialmente suportadas · Ainda não executável pelo backend.
+  Receitas mostram "Executável pelo backend" ou alerta de condição não executável.
+- **Diagnóstico real**: novo endpoint read-only `POST /api/patterns/diagnose`
+  reaproveita o evaluator do worker contra snapshots reais, sem escrever nada.
+  "Validar no motor" usa o backend (com fallback local rotulado).
+- **Engine Readiness** mostra suporte real + resumo do último diagnóstico.
+- **Backend**: `score_diff_lte` já lia `maxDiff ?? value` (3.0); 3.1 exporta
+  `evaluateCondition` (puro) e adiciona `radarDiagnostic.service.ts`. Sem mudança
+  de schema. `buildData`/payload preservados — capability é só guia de UI.
+- Resolve a limitação do 3.0: o item "Validar no motor continua client-side"
+  deixa de valer quando há backend configurado.

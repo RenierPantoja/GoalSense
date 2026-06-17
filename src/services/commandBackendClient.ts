@@ -97,6 +97,18 @@ export async function deleteBackendPattern(id: string): Promise<any | null> {
   return fetchApiStrict(`/api/patterns/${id}`, { method: 'DELETE' })
 }
 
+/** Read-only engine diagnostic — evaluates a draft against real live snapshots.
+ *  Writes nothing (no alert/pattern/resolution). Returns null when backend off. */
+export async function diagnoseBackendRadar(payload: {
+  conditions: { type: string; params: Record<string, unknown> }[]
+  minConfidence: number
+  severity: string
+  requireRichData?: boolean
+  limit?: number
+}): Promise<any | null> {
+  return fetchApi('/api/patterns/diagnose', { method: 'POST', body: JSON.stringify(payload) })
+}
+
 // --- Alerts ---
 
 export async function listBackendAlerts(filters?: { status?: string; limit?: number }): Promise<any[] | null> {
