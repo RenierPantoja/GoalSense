@@ -36,13 +36,10 @@ import { TemplateCard } from './TemplateCard'
 // V4.4 — share the import promises with the prefetch helpers via
 // `./modalPreload` so hover/focus on the relevant CTA can warm the chunk
 // before the click without ever ending up with two separate chunks.
-import { importAutoDiscoveryConfigModal, importCustomPatternModal, importTemplateConfigModal, preloadAutoDiscoveryConfigModal, preloadCustomPatternModal, preloadTemplateConfigModal } from '../../pattern-studio/modals/modalPreload'
+import { importAutoDiscoveryConfigModal, importCustomPatternModal, preloadAutoDiscoveryConfigModal, preloadCustomPatternModal } from '../../pattern-studio/modals/modalPreload'
 
 const CustomPatternModal = lazy(() =>
   importCustomPatternModal().then(m => ({ default: m.CustomPatternModal }))
-)
-const TemplateConfigModal = lazy(() =>
-  importTemplateConfigModal().then(m => ({ default: m.TemplateConfigModal }))
 )
 const AutoDiscoveryConfigModal = lazy(() =>
   importAutoDiscoveryConfigModal().then(m => ({ default: m.AutoDiscoveryConfigModal }))
@@ -341,6 +338,35 @@ export function PatternsView({ patterns, templates, createFromTemplate: _createF
     })
   }, [templates, categoryFilter, templateSearch])
 
+  // V4.5 — templates now reuse the single-view CustomPatternModal (bento board)
+  // instead of the old scroll-heavy 5-step wizard. When configuring a template
+  // we either edit the existing instance or synthesize an `initial` Pattern from
+  // the template definition. `buildData` in CustomPatternModal preserves
+  // `isTemplate`/`templateId`, so the saved radar keeps its template lineage.
+  const templateInitial = useMemo<Pattern | null>(() => {
+    if (!templateModal) return null
+    if (templateModal.existing) return templateModal.existing
+    const t = templateModal.template
+    const now = new Date().toISOString()
+    return {
+      id: 'tpl_draft',
+      name: t.name,
+      description: t.description,
+      conditions: [...t.conditions],
+      severity: t.severity,
+      status: 'paused',
+      isTemplate: true,
+      templateId: t.id,
+      scope: 'all',
+      minConfidence: 50,
+      action: 'register_alert',
+      maxTriggersPerMatch: 2,
+      antiDuplicateWindow: 5,
+      createdAt: now,
+      updatedAt: now,
+    }
+  }, [templateModal])
+
   return (
     <div className="space-y-6">
       {/* Modals — lazy-loaded and conditionally mounted so their JS chunk
@@ -352,66 +378,75 @@ export function PatternsView({ patterns, templates, createFromTemplate: _createF
           <CustomPatternModal open={showBuilder} initial={editingPattern} onClose={() => { setShowBuilder(false); setEditingPattern(null); if (prefilledDraft) clearPrefilledDraft() }} onSave={handleCustomSave} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} fixtures={fixtures} statsMap={statsMap} eventsMap={eventsMap} isFavoriteTeam={isFavoriteTeam} isAdvanced={isAdvanced} commandAlerts={commandAlerts} />
         )}
         {templateModal && (
-          <TemplateConfigModal open={!!templateModal} template={templateModal.template} existingPattern={templateModal.existing} onClose={() => setTemplateModal(null)} onSave={handleTemplateSave} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} fixtures={fixtures} statsMap={statsMap} eventsMap={eventsMap} isFavoriteTeam={isFavoriteTeam} isAdvanced={isAdvanced} commandAlerts={commandAlerts} />
+          <CustomPatternModal open={!!templateModal} initial={templateInitial} onClose={() => setTemplateModal(null)} onSave={handleTemplateSave} availableMatches={availableMatches} availableLeaguesRich={availableLeaguesRich} availableTeamsRich={availableTeamsRich} fixtures={fixtures} statsMap={statsMap} eventsMap={eventsMap} isFavoriteTeam={isFavoriteTeam} isAdvanced={isAdvanced} commandAlerts={commandAlerts} />
         )}
         {showAutoConfig && (
           <AutoDiscoveryConfigModal open={showAutoConfig} config={discoveryConfig} onClose={() => setShowAutoConfig(false)} onChange={updateDiscoveryConfig} onActivate={handleActivateAuto} onDeactivate={handleDeactivateAuto} />
         )}
       </Suspense>
 
-      {/* Header — Pattern Studio premium */}
-      <header className="rounded-[20px] border border-white/[0.06] bg-white/[0.012] p-6 sm:p-7">
-        <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
-          <div className="min-w-0">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40 block mb-1.5">Pattern Studio</span>
-            <h2 className="text-[22px] sm:text-[24px] font-semibold text-white/95 tracking-tight leading-[1.15]">Crie radares inteligentes</h2>
-            <p className="text-[13px] text-white/55 mt-2 max-w-[560px] leading-relaxed">Combine gatilhos reais e configure o motor automático para detectar sinais ao vivo nas partidas.</p>
+      {/* Header — Pattern Studio. Hero on the left, live stat rail on the right,
+          using the full horizontal width instead of stacking a separate strip. */}
+      <header className="relative overflow-hidden rounded-[22px] border border-white/[0.06] bg-gradient-to-br from-[#13B8A6]/[0.06] via-white/[0.014] to-transparent p-6 sm:p-7">
+        <div className="absolute -top-px left-8 right-8 h-px bg-gradient-to-r from-transparent via-[#2DD4BF]/30 to-transparent" />
+        <div className="flex items-start justify-between gap-6 flex-wrap">
+          <div className="min-w-0 max-w-[560px]">
+            <div className="flex items-center gap-2 mb-2.5">
+              <span className="h-6 w-6 rounded-lg grid place-items-center bg-[#13B8A6]/[0.14] border border-[#2DD4BF]/25">
+                <Sparkles size={12} className="text-[#5EEAD4]" />
+              </span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7FE9DC]/80">Pattern Studio</span>
+            </div>
+            <h2 className="text-[23px] sm:text-[26px] font-semibold text-white/95 tracking-[-0.02em] leading-[1.1]">Crie radares inteligentes</h2>
+            <p className="text-[13px] text-white/55 mt-2.5 leading-relaxed">Combine gatilhos reais e configure o motor automático para detectar sinais ao vivo nas partidas.</p>
+            <div className="flex items-center gap-2 mt-5">
+              <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} onMouseEnter={preloadCustomPatternModal} onFocus={preloadCustomPatternModal} type="button" className="px-5 py-2.5 rounded-xl text-[12.5px] font-semibold text-white bg-[#13B8A6] hover:bg-[#0FA594] transition-colors duration-200 flex items-center gap-1.5 shadow-[0_8px_22px_-10px_rgba(19,184,166,0.9)]">
+                <Plus size={14} />Criar radar
+              </button>
+              <button onClick={() => setShowAutoConfig(true)} onMouseEnter={preloadAutoDiscoveryConfigModal} onFocus={preloadAutoDiscoveryConfigModal} type="button" className="px-4 py-2.5 rounded-xl text-[12.5px] font-medium text-white/85 border border-white/[0.1] bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/[0.18] transition-colors flex items-center gap-1.5">
+                <Sparkles size={13} />Configurar motor
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button onClick={() => setShowAutoConfig(true)} onMouseEnter={preloadAutoDiscoveryConfigModal} onFocus={preloadAutoDiscoveryConfigModal} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/[0.14] transition-colors flex items-center gap-1.5">
-              <Sparkles size={13} />Configurar motor
-            </button>
-            <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} onMouseEnter={preloadCustomPatternModal} onFocus={preloadCustomPatternModal} type="button" className="px-5 py-2.5 rounded-xl text-[12px] font-semibold border border-white/30 bg-white/[0.95] hover:bg-white transition-colors duration-200 flex items-center gap-1.5" style={{ color: '#0b0d12' }}>
-              <Plus size={14} />Criar radar
-            </button>
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-px rounded-2xl overflow-hidden border border-white/[0.06] bg-white/[0.02] shrink-0 min-w-[260px] sm:min-w-[440px]">
+            <CounterCell label="Ativos" value={activeCount} tone="emerald" />
+            <CounterCell label="Pausados" value={pausedCount} tone="white" />
+            <CounterCell label="Templates" value={templates.length} tone="cyan" />
+            <CounterCell label="Motor auto" value={isAutoActive ? 'On' : 'Off'} tone={isAutoActive ? 'emerald' : 'white'} />
+            <CounterCell label="Disparos hoje" value={triggeredTodayCount} tone={triggeredTodayCount > 0 ? 'amber' : 'white'} />
           </div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-px rounded-xl overflow-hidden border border-white/[0.05] bg-white/[0.01]">
-          <CounterCell label="Ativos" value={activeCount} tone="emerald" />
-          <CounterCell label="Pausados" value={pausedCount} tone="white" />
-          <CounterCell label="Templates" value={templates.length} tone="cyan" />
-          <CounterCell label="Motor auto" value={isAutoActive ? 'On' : 'Off'} tone={isAutoActive ? 'emerald' : 'white'} />
-          <CounterCell label="Disparos hoje" value={triggeredTodayCount} tone={triggeredTodayCount > 0 ? 'amber' : 'white'} />
         </div>
       </header>
 
-      {/* Motor automático — quiet operational module */}
-      <section onMouseEnter={preloadAutoDiscoveryConfigModal} className="rounded-2xl border border-white/[0.07] bg-white/[0.012] p-5">
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border ${isAutoActive ? 'border-emerald-400/25 bg-emerald-500/[0.06]' : 'border-white/[0.08] bg-white/[0.04]'}`}>
-            <Sparkles size={15} className={isAutoActive ? 'text-emerald-200/85' : 'text-white/55'} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
+      {/* Operational modules — the automatic engine and the scope intelligence
+          live side by side so the page reads as one cohesive control surface
+          and stops stacking full-width cards down the page. */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <section onMouseEnter={preloadAutoDiscoveryConfigModal} className="lg:col-span-7 rounded-2xl border border-white/[0.07] bg-white/[0.012] p-5 flex flex-col">
+          <div className="flex items-center gap-3 mb-3">
+            <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border ${isAutoActive ? 'border-emerald-400/25 bg-emerald-500/[0.07]' : 'border-white/[0.08] bg-white/[0.04]'}`}>
+              <Sparkles size={15} className={isAutoActive ? 'text-emerald-200/85' : 'text-white/55'} />
+            </div>
+            <div className="flex-1 min-w-0">
               <h3 className="text-[14px] font-semibold text-white/95 tracking-tight">Motor automático</h3>
-              <span className="flex items-center gap-1.5 text-[11px] text-white/55">
-                <span className={`h-1.5 w-1.5 rounded-full ${isAutoActive ? 'bg-emerald-400/85' : discoveryConfig.userConfigured ? 'bg-cyan-300/70' : 'bg-white/30'}`} />
-                {isAutoActive ? 'Monitorando' : discoveryConfig.userConfigured ? 'Configurado, pausado' : 'Desligado'}
+              <span className="flex items-center gap-1.5 text-[11px] text-white/55 mt-0.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${isAutoActive ? 'bg-emerald-400/85' : discoveryConfig.userConfigured ? 'bg-[#2DD4BF]/75' : 'bg-white/30'}`} />
+                {isAutoActive ? 'Monitorando ao vivo' : discoveryConfig.userConfigured ? 'Configurado, pausado' : 'Desligado'}
               </span>
             </div>
-            <p className="text-[12px] text-white/55 mt-1 leading-snug">
-              {isAutoActive
-                ? <>Confiança ≥ <span className="text-white/85 font-medium tabular-nums">{discoveryConfig.minConfidence}%</span> · {discoveryConfig.registerAlertAuto ? 'Registrando alertas' : 'Apenas sugerindo'} · {discoveryConfig.monitorAllLeagues ? 'todas as ligas' : discoveryConfig.monitorMainLeagues ? 'ligas principais' : 'favoritos'}</>
-                : 'O motor só roda após configuração explícita. Ative para o GoalSense detectar sinais sem você criar padrões.'}
-            </p>
+            <PremiumToggle checked={isAutoActive} onChange={(v) => { if (v && !discoveryConfig.userConfigured) setShowAutoConfig(true); else updateDiscoveryConfig({ enabled: v }) }} ariaLabel="Motor automático" />
           </div>
-          <PremiumToggle checked={isAutoActive} onChange={(v) => { if (v && !discoveryConfig.userConfigured) setShowAutoConfig(true); else updateDiscoveryConfig({ enabled: v }) }} ariaLabel="Motor automático" />
-          <button onClick={() => setShowAutoConfig(true)} onFocus={preloadAutoDiscoveryConfigModal} type="button" className="px-3.5 py-2 rounded-xl text-[11.5px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/[0.14] transition-colors">Configurar</button>
-        </div>
-      </section>
+          <p className="text-[12px] text-white/55 leading-snug flex-1">
+            {isAutoActive
+              ? <>Confiança ≥ <span className="text-white/85 font-medium tabular-nums">{discoveryConfig.minConfidence}%</span> · {discoveryConfig.registerAlertAuto ? 'Registrando alertas' : 'Apenas sugerindo'} · {discoveryConfig.monitorAllLeagues ? 'todas as ligas' : discoveryConfig.monitorMainLeagues ? 'ligas principais' : 'favoritos'}</>
+              : 'O motor só roda após configuração explícita. Ative para o GoalSense detectar sinais sem você criar padrões.'}
+          </p>
+          <button onClick={() => setShowAutoConfig(true)} onFocus={preloadAutoDiscoveryConfigModal} type="button" className="mt-4 self-start px-3.5 py-2 rounded-xl text-[11.5px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] hover:border-white/[0.14] transition-colors">Configurar motor</button>
+        </section>
 
-      {/* Scope intelligence — compact panel showing the Knowledge Base footprint */}
-      <ScopeHealthPanel availableLeagues={availableLeagues} availableTeams={availableTeams} availableMatches={availableMatches} fixturesCount={fixtures.length} patternsCount={patterns.length} />
+        {/* Scope intelligence — compact panel showing the Knowledge Base footprint */}
+        <ScopeHealthPanel availableLeagues={availableLeagues} availableTeams={availableTeams} availableMatches={availableMatches} fixturesCount={fixtures.length} patternsCount={patterns.length} />
+      </div>
 
       {/* Radares para revisar — only renders when there are real signals */}
       {reviewablePatterns.length > 0 && (
@@ -458,7 +493,7 @@ export function PatternsView({ patterns, templates, createFromTemplate: _createF
           <div className="mt-5 flex items-center justify-center gap-2 flex-wrap">
             <button onClick={() => { setEditingPattern(null); setShowBuilder(true) }} onMouseEnter={preloadCustomPatternModal} onFocus={preloadCustomPatternModal} type="button" className="px-4 py-2 rounded-xl text-[12px] font-semibold border border-white/30 bg-white/[0.95] hover:bg-white transition-colors duration-200" style={{ color: '#0b0d12' }}>+ Criar radar personalizado</button>
             {templates.length > 0 && (
-              <button onClick={() => { const first = templates[0]; if (first) handleTemplateConfigure(first) }} onMouseEnter={preloadTemplateConfigModal} onFocus={preloadTemplateConfigModal} type="button" className="px-4 py-2 rounded-xl text-[12px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-colors">Ativar template</button>
+              <button onClick={() => { const first = templates[0]; if (first) handleTemplateConfigure(first) }} onMouseEnter={preloadCustomPatternModal} onFocus={preloadCustomPatternModal} type="button" className="px-4 py-2 rounded-xl text-[12px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-colors">Ativar template</button>
             )}
             <button onClick={() => setShowAutoConfig(true)} onMouseEnter={preloadAutoDiscoveryConfigModal} onFocus={preloadAutoDiscoveryConfigModal} type="button" className="px-4 py-2 rounded-xl text-[12px] font-medium text-white/85 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-colors">Configurar motor</button>
           </div>
@@ -507,7 +542,7 @@ export function PatternsView({ patterns, templates, createFromTemplate: _createF
               const isActiveTpl = !!existing && existing.status === 'active'
               const tplHealth = existing ? healthByPattern.get(existing.id) : undefined
               const tplReport = existing ? reportByPattern.get(existing.id) : undefined
-              return <TemplateCard key={t.id} template={t} existing={existing} isActive={isActiveTpl} health={tplHealth} performanceReport={tplReport} onToggle={() => handleTemplateToggle(t)} onConfigure={() => handleTemplateConfigure(t)} onPrefetch={preloadTemplateConfigModal} />
+              return <TemplateCard key={t.id} template={t} existing={existing} isActive={isActiveTpl} health={tplHealth} performanceReport={tplReport} onToggle={() => handleTemplateToggle(t)} onConfigure={() => handleTemplateConfigure(t)} onPrefetch={preloadCustomPatternModal} />
             })}
           </div>
         )}

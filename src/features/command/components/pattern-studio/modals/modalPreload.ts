@@ -14,13 +14,11 @@
  *    Safe to evaluate during SSR or any environment that runs the bundle.
  */
 type CustomModule = typeof import('./CustomPatternModal')
-type TemplateModule = typeof import('./TemplateConfigModal')
 type AutoModule = typeof import('./AutoDiscoveryConfigModal')
 
 import { importWithReload } from '@/lib/lazyWithReload'
 
 let customModalPromise: Promise<CustomModule> | null = null
-let templateModalPromise: Promise<TemplateModule> | null = null
 let autoModalPromise: Promise<AutoModule> | null = null
 
 /** Returns (and caches) the dynamic import of CustomPatternModal. */
@@ -30,15 +28,6 @@ export function importCustomPatternModal(): Promise<CustomModule> {
       .catch((e) => { customModalPromise = null; throw e })
   }
   return customModalPromise
-}
-
-/** Returns (and caches) the dynamic import of TemplateConfigModal. */
-export function importTemplateConfigModal(): Promise<TemplateModule> {
-  if (!templateModalPromise) {
-    templateModalPromise = importWithReload(() => import('./TemplateConfigModal'))
-      .catch((e) => { templateModalPromise = null; throw e })
-  }
-  return templateModalPromise
 }
 
 /** Returns (and caches) the dynamic import of AutoDiscoveryConfigModal. */
@@ -53,11 +42,6 @@ export function importAutoDiscoveryConfigModal(): Promise<AutoModule> {
 /** Fire-and-forget prefetch of the CustomPatternModal chunk. */
 export function preloadCustomPatternModal(): void {
   void importCustomPatternModal()
-}
-
-/** Fire-and-forget prefetch of the TemplateConfigModal chunk. */
-export function preloadTemplateConfigModal(): void {
-  void importTemplateConfigModal()
 }
 
 /** Fire-and-forget prefetch of the AutoDiscoveryConfigModal chunk. */
