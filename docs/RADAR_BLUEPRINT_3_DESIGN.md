@@ -134,3 +134,25 @@ Extensão do 3.0. Detalhes em `RADAR_ENGINE_CAPABILITY_MATRIX.md` e
   de schema. `buildData`/payload preservados — capability é só guia de UI.
 - Resolve a limitação do 3.0: o item "Validar no motor continua client-side"
   deixa de valer quando há backend configurado.
+
+---
+
+## 3.2 — Native Rule Canvas
+
+Reconstrução de layout (mantendo toda a lógica 3.1). Detalhes em
+`RADAR_BLUEPRINT_3_2_NATIVE_RULE_CANVAS.md`.
+
+- Removida a navegação lateral fixa (duplicava o canvas). Status real agora é uma
+  linha compacta no header (de `getRadarReadiness`).
+- Layout 2 áreas: **Rule Canvas** (≈70%) + **Engine Panel** (≈30%); sem 3ª coluna.
+- `canvas/NativeRuleCanvas.tsx`: a regra como frase editável inline — Radar (nome
+  editorial + severidade + nota), Monitorar (sheet de escopo), Avaliar quando
+  (chips de filtro), Disparar se (chips de sinal real), Então (sheet de ação), Com
+  rigor (sheet com presets + slider). Chips premium tonalizados por capacidade.
+- Sheets de adicionar condição separados por contexto (filtro vs sinal) e
+  agrupados por capacidade; receitas marcadas como executáveis ou não.
+- Revisão vira modo do canvas (`RadarContractView`); footer progressivo.
+- Dormentes removidos: `BlueprintNav`, `BlueprintSummary`, `ComposerNav`.
+  Mantidos (usados pelo TemplateConfigModal): `WizardProgressRail`,
+  `WizardStepHeader`, `ConditionsEditor`, `RadarInspectorPanel`, `RadarPreview`.
+- Payload/readiness/capabilities/diagnóstico preservados. Backend não tocado.
