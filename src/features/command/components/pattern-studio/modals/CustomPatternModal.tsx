@@ -192,7 +192,7 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
     : c.signal === 0 ? 'sem sinal real'
     : 'incompleto'
   const statusLine = `${readiness.maturityLabel} · ${c.eligibility} filtro${c.eligibility === 1 ? '' : 's'} · ${c.signal} sinal${c.signal === 1 ? '' : 's'} real${c.signal === 1 ? '' : 'is'} · ${statusTail}`
-  const statusDot = readiness.status === 'blocked' ? 'bg-rose-400/85' : readiness.canActivate ? 'bg-emerald-400/85' : readiness.canSavePaused ? 'bg-cyan-300/80' : 'bg-amber-400/75'
+  const statusDot = readiness.status === 'blocked' ? 'bg-[#FF453A]' : readiness.canActivate ? 'bg-[#30D158]' : readiness.canSavePaused ? 'bg-[#0A84FF]' : 'bg-[#FF9F0A]'
 
   return (
     <RuleStudioShell
@@ -201,21 +201,21 @@ export function CustomPatternModal({ open, initial, onClose, onSave, availableMa
       title={initial ? 'Editar radar' : 'Criar radar'}
       subtitle="Desenhe uma regra operacional para o motor do GoalSense executar."
       statusNode={
-        <div className="inline-flex items-center gap-2 h-7 pl-2.5 pr-3 rounded-full border border-white/[0.08] bg-white/[0.02]">
-          <span className={`h-1.5 w-1.5 rounded-full ${statusDot} ${readiness.canActivate || readiness.status === 'blocked' ? '' : 'animate-pulse'}`} />
-          <span className="text-[11px] text-white/60">{statusLine}</span>
+        <div className="inline-flex items-center gap-2 h-7 pl-2.5 pr-3 rounded-full border border-white/[0.08] bg-white/[0.04]">
+          <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
+          <span className="text-[11.5px] text-white/55">{statusLine}</span>
         </div>
       }
       footer={
         <>
-          <button onClick={requestClose} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/65 border border-white/[0.08] hover:text-white/95 hover:border-white/[0.16] transition-colors mr-auto">Cancelar</button>
-          <button onClick={savePaused} disabled={!readiness.canSavePaused} title={!readiness.canSavePaused ? readiness.primaryMessage : 'Cmd/Ctrl+S'} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-semibold text-white/85 border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar pausado</button>
+          <button onClick={requestClose} type="button" className="px-4 py-2.5 rounded-[10px] text-[13px] font-medium text-white/60 hover:text-white/90 transition-colors mr-auto">Cancelar</button>
+          <button onClick={savePaused} disabled={!readiness.canSavePaused} title={!readiness.canSavePaused ? readiness.primaryMessage : 'Cmd/Ctrl+S'} type="button" className="px-4 py-2.5 rounded-[10px] text-[13px] font-medium text-white/85 bg-white/[0.08] hover:bg-white/[0.12] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Salvar pausado</button>
           {mode === 'review'
             ? <>
-                <button onClick={() => setMode('compose')} type="button" className="px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/75 border border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.05] transition-all">Editar regra</button>
-                <button onClick={activate} disabled={!readiness.canActivate} title={!readiness.canActivate ? readiness.primaryMessage : 'Cmd/Ctrl+Enter'} type="button" className="px-6 py-2.5 rounded-xl text-[12px] font-semibold text-[#06121a] bg-gradient-to-b from-cyan-300 to-cyan-400 hover:from-cyan-200 hover:to-cyan-300 border border-cyan-300/50 shadow-[0_0_24px_-6px_rgba(34,211,238,0.7)] disabled:opacity-30 disabled:shadow-none disabled:cursor-not-allowed transition-all">{initial ? 'Salvar e ativar' : 'Ativar radar'}</button>
+                <button onClick={() => setMode('compose')} type="button" className="px-4 py-2.5 rounded-[10px] text-[13px] font-medium text-white/85 bg-white/[0.08] hover:bg-white/[0.12] transition-all">Editar regra</button>
+                <button onClick={activate} disabled={!readiness.canActivate} title={!readiness.canActivate ? readiness.primaryMessage : 'Cmd/Ctrl+Enter'} type="button" className="px-6 py-2.5 rounded-[10px] text-[13px] font-semibold text-white bg-[#0A84FF] hover:bg-[#0A84FF]/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all">{initial ? 'Salvar e ativar' : 'Ativar radar'}</button>
               </>
-            : <button onClick={goReview} disabled={!readiness.canSavePaused} title={!readiness.canSavePaused ? readiness.primaryMessage : 'Revise o contrato antes de ativar'} type="button" className="px-6 py-2.5 rounded-xl text-[12px] font-semibold text-white bg-white/[0.1] hover:bg-white/[0.16] border border-white/[0.2] disabled:opacity-30 disabled:cursor-not-allowed transition-all">Revisar radar →</button>}
+            : <button onClick={goReview} disabled={!readiness.canSavePaused} title={!readiness.canSavePaused ? readiness.primaryMessage : 'Revise o contrato antes de ativar'} type="button" className="px-6 py-2.5 rounded-[10px] text-[13px] font-semibold text-white bg-[#0A84FF] hover:bg-[#0A84FF]/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all">Revisar radar</button>}
         </>
       }
     >

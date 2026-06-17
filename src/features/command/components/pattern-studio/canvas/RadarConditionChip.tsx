@@ -1,9 +1,9 @@
 /**
- * RadarConditionChip — Radar Blueprint 3.4 premium condition chip
+ * RadarConditionChip — Radar Blueprint 3.6 refined Apple-style tag
  * ─────────────────────────────────────────────────────────────────────────────
- * A condition rendered as a manipulable native object: short label, support
- * state, edit-on-click (when it has params) and a discreet remove control.
- * Tonalized by capability (eligibility / signal / partial / unsupported).
+ * A condition as a calm, rounded tag: short label, edit-on-click (when it has
+ * params) and a discreet remove control. Tonalized by capability with restrained
+ * system colors (no neon).
  */
 import { AlertTriangle, X } from 'lucide-react'
 import type { PatternCondition } from '../../../types/commandTypes'
@@ -19,9 +19,9 @@ interface RadarConditionChipProps {
 
 function toneClass(c: PatternCondition): string {
   const cap = getCapability(c.type)
-  if (cap.backendSupport === 'unsupported') return 'bg-rose-500/10 border-rose-400/25 text-rose-100'
-  if (cap.backendSupport === 'partial') return 'bg-amber-500/[0.08] border-amber-400/25 text-amber-100'
-  return cap.kind === 'signal' ? 'bg-emerald-500/[0.09] border-emerald-400/25 text-emerald-50' : 'bg-white/[0.05] border-white/[0.12] text-white/85'
+  if (cap.backendSupport === 'unsupported') return 'bg-[#FF453A]/12 border-[#FF453A]/25 text-[#FF8A80]'
+  if (cap.backendSupport === 'partial') return 'bg-[#FF9F0A]/12 border-[#FF9F0A]/22 text-[#FFD08A]'
+  return cap.kind === 'signal' ? 'bg-[#30D158]/12 border-[#30D158]/22 text-[#8FE9A6]' : 'bg-white/[0.07] border-white/[0.1] text-white/80'
 }
 
 export function RadarConditionChip({ condition, onEdit, onRemove }: RadarConditionChipProps) {
@@ -31,16 +31,10 @@ export function RadarConditionChip({ condition, onEdit, onRemove }: RadarConditi
   const label = spec?.title || COND_LABELS[condition.type] || condition.type
   const title = cap.backendSupport === 'unsupported' ? cap.reasonIfUnsupported : cap.backendSupport === 'partial' ? cap.warningIfPartial : (editable ? 'Editar valores' : undefined)
   return (
-    <span className={`group inline-flex items-center gap-1.5 h-7 pl-2.5 pr-1 rounded-lg border text-[12px] font-medium transition-colors ${toneClass(condition)}`} title={title}>
-      {cap.backendSupport === 'unsupported' && <AlertTriangle size={11} className="opacity-80 shrink-0" />}
-      <button
-        type="button"
-        onClick={() => editable && onEdit ? onEdit() : undefined}
-        className={`outline-none focus-visible:ring-1 focus-visible:ring-white/40 rounded ${editable ? 'hover:underline decoration-dotted underline-offset-2 cursor-pointer' : 'cursor-default'}`}
-      >
-        {label}
-      </button>
-      <button type="button" onClick={onRemove} aria-label={`Remover ${label}`} className="h-5 w-5 rounded flex items-center justify-center hover:bg-black/20 opacity-50 group-hover:opacity-100 focus:opacity-100 transition-opacity outline-none focus-visible:ring-1 focus-visible:ring-white/40"><X size={11} /></button>
+    <span className={`group inline-flex items-center gap-1.5 h-7 pl-2.5 pr-1 rounded-full border text-[12px] font-medium transition-colors ${toneClass(condition)}`} title={title}>
+      {cap.backendSupport === 'unsupported' && <AlertTriangle size={10.5} className="opacity-80 shrink-0" />}
+      <button type="button" onClick={() => editable && onEdit ? onEdit() : undefined} className={`outline-none focus-visible:ring-1 focus-visible:ring-white/40 rounded ${editable ? 'cursor-pointer' : 'cursor-default'}`}>{label}</button>
+      <button type="button" onClick={onRemove} aria-label={`Remover ${label}`} className="h-5 w-5 rounded-full grid place-items-center hover:bg-black/25 opacity-50 group-hover:opacity-100 focus:opacity-100 transition-opacity outline-none focus-visible:ring-1 focus-visible:ring-white/40"><X size={11} /></button>
     </span>
   )
 }

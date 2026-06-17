@@ -1,15 +1,13 @@
 /**
- * NativeRuleCanvas — Radar Blueprint 3.5 (cockpit rule modules)
+ * NativeRuleCanvas — Radar Blueprint 3.6 (Apple-native grouped rule)
  * ─────────────────────────────────────────────────────────────────────────────
- * The radar as a stack of premium cockpit modules — each line is a real part of
- * the engine contract, edited inline via dedicated command sheets:
- *   - ScopeSelectionSheet (premium 3-column scope picker)
- *   - ConditionCommandSheet (add filter/signal, edit, recipes)
- * Conditions render as premium RadarConditionChip objects. Presentation only —
- * all logic stays in the 3.1 layer.
+ * The radar composed as a calm iOS/macOS-settings grouped list: a prominent name
+ * field, vivid rounded app-icon tiles, refined typography, hairline rows and
+ * value + chevron affordances. Editing happens in dedicated command sheets.
+ * Presentation only — all logic stays in the 3.1 layer.
  */
 import { useState, type ReactNode } from 'react'
-import { Radar, Globe2, Clock, Crosshair, Bell, Gauge, Plus, Sparkles, ChevronRight } from 'lucide-react'
+import { Radar, Globe2, Clock, Target, Bell, SlidersHorizontal, Plus, ChevronRight, Sparkles } from 'lucide-react'
 import type { PatternAction, PatternCondition, PatternScope, PatternSeverity } from '../../../types/commandTypes'
 import type { ScopeKbLeague, ScopeKbMatch, ScopeKbTeam } from '@/services/intelligence/scopeKnowledgeBase'
 import { getCapability } from '../../../intelligence/radarConditionCapabilities'
@@ -22,10 +20,10 @@ import { ConditionCommandSheet, type ConditionSheetMode } from './ConditionComma
 import { ScopeSelectionSheet, type ScopeSelectionValue } from '../scope/ScopeSelectionSheet'
 
 const ACTION_LABEL: Record<PatternAction, string> = { register_alert: 'Registrar alerta', suggest_only: 'Apenas sugerir', highlight: 'Destacar no Scanner' }
-const SEVERITIES: { v: PatternSeverity; label: string; dot: string; on: string }[] = [
-  { v: 'critical', label: 'Crítico', dot: 'bg-rose-400', on: 'bg-rose-500/15 text-rose-200 border-rose-400/30' },
-  { v: 'attention', label: 'Atenção', dot: 'bg-amber-400', on: 'bg-amber-500/15 text-amber-200 border-amber-400/30' },
-  { v: 'info', label: 'Info', dot: 'bg-cyan-400', on: 'bg-cyan-500/15 text-cyan-200 border-cyan-400/30' },
+const SEVERITIES: { v: PatternSeverity; label: string; dot: string }[] = [
+  { v: 'critical', label: 'Crítico', dot: 'bg-[#FF453A]' },
+  { v: 'attention', label: 'Atenção', dot: 'bg-[#FF9F0A]' },
+  { v: 'info', label: 'Info', dot: 'bg-[#0A84FF]' },
 ]
 const RIGOR_PRESETS = [
   { label: 'Sensível', value: 40 },
@@ -75,6 +73,12 @@ type Sheet =
   | { kind: 'action' }
   | { kind: 'rigor' }
 
+function Tile({ color, icon }: { color: string; icon: ReactNode }) {
+  return <span className="h-[30px] w-[30px] rounded-[8px] grid place-items-center text-white shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.25)]" style={{ backgroundColor: color }}>{icon}</span>
+}
+
+const ADD = 'inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[12.5px] font-medium text-[#0A84FF] hover:bg-[#0A84FF]/12 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[#0A84FF]/40'
+
 export function NativeRuleCanvas(props: NativeRuleCanvasProps) {
   const { name, onName, desc, onDesc, severity, onSeverity, conditions, onConditions, action, onAction, minConf, onMinConf, contract } = props
   const [sheet, setSheet] = useState<Sheet>({ kind: 'none' })
@@ -96,74 +100,73 @@ export function NativeRuleCanvas(props: NativeRuleCanvasProps) {
     props.onAdvancedToggle('onlyPreMatch', next.onlyPreMatch)
   }
 
-  const valuePill = (label: ReactNode, onClick: () => void, opts?: { tone?: 'default' | 'muted' }) => (
-    <button type="button" onClick={onClick} className={`group inline-flex items-center gap-2 h-8 pl-3 pr-2.5 rounded-xl border text-[12.5px] font-medium transition-all outline-none focus-visible:ring-1 focus-visible:ring-cyan-400/40 ${opts?.tone === 'muted' ? 'border-white/[0.08] bg-white/[0.02] text-white/60 hover:text-white/90 hover:border-white/[0.14]' : 'border-cyan-400/20 bg-cyan-500/[0.05] text-white/90 hover:bg-cyan-500/[0.1] hover:border-cyan-400/35'}`}>
-      {label}<ChevronRight size={13} className="opacity-40 group-hover:opacity-70 group-hover:translate-x-0.5 transition-all" />
+  // Clickable settings row (value + chevron)
+  const NavRow = ({ tile, label, value, onClick, muted }: { tile: ReactNode; label: string; value: string; onClick: () => void; muted?: boolean }) => (
+    <button type="button" onClick={onClick} className="w-full flex items-center gap-3 px-4 h-[52px] text-left hover:bg-white/[0.025] transition-colors outline-none focus-visible:bg-white/[0.04]">
+      {tile}
+      <span className="text-[15px] text-white/88">{label}</span>
+      <span className={`ml-auto text-[14px] truncate max-w-[55%] text-right ${muted ? 'text-white/35' : 'text-white/55'}`}>{value}</span>
+      <ChevronRight size={16} className="text-white/25 shrink-0" />
     </button>
   )
 
-  const addPill = (label: ReactNode, onClick: () => void, warn?: boolean) => (
-    <button type="button" onClick={onClick} className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border border-dashed text-[12px] font-medium transition-colors outline-none focus-visible:ring-1 focus-visible:ring-cyan-400/40 ${warn ? 'border-amber-400/35 text-amber-200 hover:bg-amber-500/[0.06]' : 'border-white/[0.14] text-white/55 hover:text-white/85 hover:border-white/[0.22] hover:bg-white/[0.02]'}`}>
-      <Plus size={13} />{label}
-    </button>
-  )
-
-  const Module = ({ icon, kicker, accent, children }: { icon: ReactNode; kicker: string; accent?: boolean; children: ReactNode }) => (
-    <div className="group flex items-start gap-3.5 px-4 py-3.5 rounded-2xl border border-white/[0.055] bg-white/[0.012] hover:border-white/[0.1] hover:bg-white/[0.02] transition-all">
-      <div className={`h-9 w-9 rounded-xl grid place-items-center shrink-0 border transition-colors ${accent ? 'border-cyan-400/25 bg-cyan-500/[0.08] text-cyan-300 shadow-[0_0_18px_-6px_rgba(34,211,238,0.5)]' : 'border-white/[0.08] bg-white/[0.02] text-white/50 group-hover:text-white/70'}`}>{icon}</div>
-      <div className="min-w-0 flex-1">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35 block mb-2">{kicker}</span>
-        <div className="flex items-center gap-1.5 flex-wrap min-h-[32px]">{children}</div>
-      </div>
+  // Chips row (filters / signals)
+  const ChipRow = ({ tile, label, children }: { tile: ReactNode; label: string; children: ReactNode }) => (
+    <div className="flex items-center gap-3 px-4 py-2.5 min-h-[52px]">
+      {tile}
+      <span className="text-[15px] text-white/88 shrink-0">{label}</span>
+      <div className="ml-auto flex items-center justify-end gap-1.5 flex-wrap max-w-[68%]">{children}</div>
     </div>
   )
 
+  const rigorLabel = RIGOR_PRESETS.find(p => p.value === minConf)?.label
+  const scopeMuted = props.scope === 'all'
+
   return (
-    <div className="relative">
-      {/* Identity header */}
-      <div className="rounded-2xl border border-white/[0.06] bg-gradient-to-br from-white/[0.03] via-white/[0.01] to-transparent px-5 py-4 mb-2.5">
+    <div className="relative max-w-[680px] mx-auto">
+      {/* Name card */}
+      <div className="rounded-[14px] border border-white/[0.07] bg-white/[0.04] px-4 py-4">
         <div className="flex items-center gap-3.5">
-          <div className="h-11 w-11 rounded-xl grid place-items-center shrink-0 border border-cyan-400/25 bg-cyan-500/[0.08] text-cyan-300 shadow-[0_0_20px_-6px_rgba(34,211,238,0.5)]"><Radar size={20} /></div>
-          <input value={name} onChange={e => onName(e.target.value)} placeholder="Nomeie este radar" autoFocus aria-invalid={!name.trim()} className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[22px] font-semibold tracking-tight text-white/95 placeholder:text-white/25 placeholder:font-normal" />
-          <div className="flex items-center gap-1 shrink-0 rounded-xl border border-white/[0.07] bg-black/20 p-1">
+          <span className="h-[34px] w-[34px] rounded-[9px] grid place-items-center text-white shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_1px_3px_rgba(0,0,0,0.3)]" style={{ backgroundImage: 'linear-gradient(160deg,#0A84FF,#0066d6)' }}><Radar size={19} /></span>
+          <input value={name} onChange={e => onName(e.target.value)} placeholder="Nomeie este radar" autoFocus aria-invalid={!name.trim()} className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[22px] font-semibold tracking-[-0.02em] text-white/92 placeholder:text-white/25 placeholder:font-normal" />
+        </div>
+        <div className="mt-3 pt-3 border-t border-white/[0.06] flex items-center gap-3">
+          <input value={desc} onChange={e => onDesc(e.target.value)} placeholder="Descrição opcional" className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[13px] text-white/65 placeholder:text-white/30" />
+          <div className="inline-flex items-center gap-0.5 rounded-[9px] bg-black/25 p-[3px] shrink-0">
             {SEVERITIES.map(s => (
-              <button key={s.v} type="button" onClick={() => onSeverity(s.v)} aria-pressed={severity === s.v} className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[11px] font-semibold border transition-all ${severity === s.v ? s.on : 'border-transparent text-white/40 hover:text-white/70'}`}>
+              <button key={s.v} type="button" onClick={() => onSeverity(s.v)} aria-pressed={severity === s.v} className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[7px] text-[12px] font-medium transition-all ${severity === s.v ? 'bg-white/[0.14] text-white/95 shadow-[0_1px_2px_rgba(0,0,0,0.3)]' : 'text-white/45 hover:text-white/70'}`}>
                 <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />{s.label}
               </button>
             ))}
           </div>
         </div>
-        <input value={desc} onChange={e => onDesc(e.target.value)} placeholder="Descrição opcional — quando este radar é útil" className="w-full mt-2 pl-[58px] bg-transparent border-0 outline-none text-[12.5px] text-white/60 placeholder:text-white/25" />
       </div>
 
-      {/* Modules */}
-      <div className="space-y-2.5">
-        <Module icon={<Globe2 size={17} />} kicker="Monitorar">
-          {valuePill(contract.scopeLabel, () => setSheet({ kind: 'scope' }), { tone: props.scope === 'all' ? 'muted' : 'default' })}
-        </Module>
+      {/* Group header */}
+      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-white/35 px-3 mt-6 mb-2">Regra</p>
 
-        <Module icon={<Clock size={17} />} kicker="Avaliar quando">
+      {/* Grouped list */}
+      <div className="rounded-[14px] border border-white/[0.07] bg-white/[0.04] overflow-hidden divide-y divide-white/[0.06]">
+        <NavRow tile={<Tile color="#0A84FF" icon={<Globe2 size={16} />} />} label="Monitorar" value={contract.scopeLabel} onClick={() => setSheet({ kind: 'scope' })} muted={scopeMuted} />
+
+        <ChipRow tile={<Tile color="#5E5CE6" icon={<Clock size={16} />} />} label="Avaliar quando">
           {filters.map(({ c, i }) => <RadarConditionChip key={i} condition={c} onEdit={() => setSheet({ kind: 'condition', mode: { kind: 'edit', index: i } })} onRemove={() => removeCond(i)} />)}
-          {addPill('filtro', () => setSheet({ kind: 'condition', mode: { kind: 'addFilter' } }))}
-        </Module>
+          <button type="button" className={ADD} onClick={() => setSheet({ kind: 'condition', mode: { kind: 'addFilter' } })}><Plus size={13} />filtro</button>
+        </ChipRow>
 
-        <Module icon={<Crosshair size={17} />} kicker="Disparar se" accent={signals.length > 0}>
+        <ChipRow tile={<Tile color="#30D158" icon={<Target size={16} />} />} label="Disparar se">
           {signals.length === 0
-            ? addPill('adicionar sinal real', () => setSheet({ kind: 'condition', mode: { kind: 'addSignal' } }), true)
+            ? <button type="button" className={ADD} onClick={() => setSheet({ kind: 'condition', mode: { kind: 'addSignal' } })}><Plus size={13} />adicionar sinal real</button>
             : <>
                 {signals.map(({ c, i }) => <RadarConditionChip key={i} condition={c} onEdit={() => setSheet({ kind: 'condition', mode: { kind: 'edit', index: i } })} onRemove={() => removeCond(i)} />)}
-                {addPill('sinal real', () => setSheet({ kind: 'condition', mode: { kind: 'addSignal' } }))}
-                <button type="button" onClick={() => setSheet({ kind: 'condition', mode: { kind: 'recipes' } })} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border border-white/[0.08] text-[12px] font-medium text-cyan-300/80 hover:text-cyan-200 hover:border-cyan-400/25 transition-colors"><Sparkles size={12} />receita</button>
+                <button type="button" className={ADD} onClick={() => setSheet({ kind: 'condition', mode: { kind: 'addSignal' } })}><Plus size={13} />sinal</button>
+                <button type="button" className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[12.5px] font-medium text-white/45 hover:text-white/75 transition-colors" onClick={() => setSheet({ kind: 'condition', mode: { kind: 'recipes' } })}><Sparkles size={12} />receita</button>
               </>}
-        </Module>
+        </ChipRow>
 
-        <Module icon={<Bell size={17} />} kicker="Então">
-          {valuePill(ACTION_LABEL[action], () => setSheet({ kind: 'action' }))}
-        </Module>
+        <NavRow tile={<Tile color="#FF9F0A" icon={<Bell size={16} />} />} label="Então" value={ACTION_LABEL[action]} onClick={() => setSheet({ kind: 'action' })} />
 
-        <Module icon={<Gauge size={17} />} kicker="Com rigor">
-          {valuePill(`${minConf}% · ${RIGOR_PRESETS.find(p => p.value === minConf)?.label || 'Personalizado'}`, () => setSheet({ kind: 'rigor' }))}
-        </Module>
+        <NavRow tile={<Tile color="#8E8E93" icon={<SlidersHorizontal size={16} />} />} label="Rigor" value={`${minConf}%${rigorLabel ? ` · ${rigorLabel}` : ''}`} onClick={() => setSheet({ kind: 'rigor' })} />
       </div>
 
       {/* ── Dedicated sheets ── */}
@@ -186,9 +189,9 @@ export function NativeRuleCanvas(props: NativeRuleCanvasProps) {
       )}
       {sheet.kind === 'rigor' && (
         <SheetShell title="Rigor do radar" subtitle="Quanto maior, menos alertas falsos" onClose={close}>
-          <div className="flex items-center gap-1.5 mb-4">
+          <div className="flex items-center gap-2 mb-5">
             {RIGOR_PRESETS.map(p => (
-              <button key={p.label} type="button" onClick={() => onMinConf(p.value)} className={`flex-1 h-12 rounded-xl border text-[12px] font-semibold transition-all ${minConf === p.value ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-200 shadow-[0_0_18px_-8px_rgba(34,211,238,0.6)]' : 'border-white/[0.08] bg-white/[0.02] text-white/60 hover:text-white/85'}`}>{p.label}<span className="block text-[10px] font-normal opacity-60 mt-0.5">{p.value}%</span></button>
+              <button key={p.label} type="button" onClick={() => onMinConf(p.value)} className={`flex-1 h-14 rounded-[12px] border text-[13px] font-semibold transition-all ${minConf === p.value ? 'border-[#0A84FF]/40 bg-[#0A84FF]/12 text-white' : 'border-white/[0.08] bg-white/[0.03] text-white/55 hover:text-white/85'}`}>{p.label}<span className="block text-[11px] font-normal opacity-60 mt-0.5">{p.value}%</span></button>
             ))}
           </div>
           <ConfidenceSlider value={minConf} onChange={onMinConf} action={action} />
