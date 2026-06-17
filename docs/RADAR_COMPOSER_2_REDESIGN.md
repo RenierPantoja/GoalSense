@@ -1,5 +1,10 @@
 # Radar Composer 2.0 — Redesign
 
+> **Substituído pela fase Radar Blueprint 3.0** (`RADAR_BLUEPRINT_3_DESIGN.md`).
+> O layout de 3 colunas permanece, mas a lógica de prontidão, a classificação
+> elegibilidade/sinal, o contrato do motor e os CTAs foram reconstruídos no 3.0.
+> Componentes `ComposerNav` e `RadarInspectorPanel` ficaram dormentes.
+
 Redesign do modal de criação/edição de radar do Command Center, de "wizard web
 longo" para um composer nativo premium. Auditoria prévia: `RADAR_COMPOSER_2_AUDIT.md`.
 

@@ -62,7 +62,7 @@ function evaluateCondition(
     case 'score_tied':
       return score.home === score.away
     case 'score_diff_lte':
-      return Math.abs(score.home - score.away) <= (params.value || 1)
+      return Math.abs(score.home - score.away) <= (params.maxDiff ?? params.value ?? 1)
     case 'goals_total_gte':
       return (score.home + score.away) >= (params.value || 1)
     case 'goals_total_lte':

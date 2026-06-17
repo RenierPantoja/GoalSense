@@ -1,0 +1,112 @@
+# Radar Blueprint 3.0 — Logic-first Native Composer
+
+Substitui o Radar Composer 2.0. Esta fase é **logic-first**: a prontidão e o
+contrato do radar vêm antes da estética. Auditoria: `RADAR_BLUEPRINT_3_AUDIT.md`.
+
+## Por que 2.0 não bastava
+
+- `canSave`/`canActivate` liberavam cedo (nome + `is_live` já habilitava ativar).
+- Defaults (escopo "todos", ação "registrar", rigor 50%) eram tratados como decisões.
+- Elegibilidade (`is_live`, `minute_between`) contava como sinal.
+- "Testar ao vivo" não comunicava o que fazia.
+- Nada garantia que o motor (worker) conseguia executar as condições.
+
+## Nova lógica (fonte única de verdade)
+
+`src/features/command/intelligence/radarReadiness.ts` (puro, testável):
+
+- **`classifyConditionKind(condition)`** → `eligibility | signal | blocker | context`.
+  - eligibility: `is_live`, `is_pre_live`, `minute_between`, `is_final_phase`.
+  - context: `favorite_involved`.
+  - signal: placar/pressão/controle/escanteios/disciplina.
+- **`compileRadarContract(draft)`** → contrato canônico (escopo, elegibilidade,
+  sinais, ação, confiança, severidade, resolutionMode, dependências de dados,
+  compatibilidade de backend). Deriva do draft; NÃO altera o payload salvo.
+- **`getRadarReadiness(draft, flags)`** → `{ status, canSaveDraft, canSavePaused,
+  canActivate, canRunEngineDiagnostic, errors, warnings, requirements,
+  dataDependencies, backendCompatibility, maturityLabel, primaryMessage, counts }`.
+
+Status: `empty · draft · incomplete · valid_paused · ready_for_review ·
+ready_to_activate · blocked`.
+
+Regras-chave:
+- **≥ 1 sinal real** é obrigatório para `canSavePaused` e `canActivate`.
+- `is_live`/`minute_between` sozinhos NÃO ativam.
+- Defaults não confirmados viram **warnings** (flags `*Touched`).
+- `canActivate` exige `reviewed` (contrato revisado).
+- **Compatibilidade de backend**: condição fora do avaliador do worker
+  (`favorite_involved`, `is_pre_live`, `home/away_goals_gte`, `yellow/red_cards_gte`,
+  `shots_recent_gte`) → `blocked`, ativação impedida com motivo nomeado.
+
+## Compatibilidade com o motor (backend)
+
+`BACKEND_SUPPORTED_CONDITIONS` espelha exatamente o switch de
+`backend/src/modules/command/commandEvaluation.service.ts`. Ajuste mínimo no
+backend: `score_diff_lte` agora lê `params.maxDiff ?? params.value ?? 1`
+(corrige mismatch maxDiff↔value; retrocompatível; sem mudança de schema).
+
+## CTAs corrigidos (footer contextual)
+
+- Incompleto: **Cancelar · (Validar no motor) · Salvar rascunho · Revisar (bloqueado)**.
+- Tecnicamente válido, não revisado: **Cancelar · Validar no motor · Salvar pausado · Revisar radar**.
+- Revisado e pronto: **Cancelar · Validar no motor · Salvar pausado · Ativar radar**.
+- "Criar e ativar" não aparece cedo. "Revisar radar" é o CTA antes da revisão.
+- `Pattern.status` não tem `draft`; "Salvar rascunho" persiste `paused` (mesmo
+  payload). A diferença é só o gate/label (documentado).
+
+## "Validar no motor" (ex-"Testar ao vivo")
+
+- Diagnóstico **local** (client-side, `runPatternDryRun`). Não cria alerta, não
+  salva, não manipula snapshot/fixture. Tooltip deixa claro que é diagnóstico local.
+
+## Nova arquitetura visual
+
+- **Esquerda — Mapa de maturidade** (`BlueprintNav`): status reais por seção
+  (vazio/padrão/definido/incompleto/inválido/pronto/bloqueado), Elegibilidade e
+  Sinal separados com contagem. Não há check verde para default sem maturidade.
+- **Centro — Blueprint** (`BlueprintSummary`): a regra como frase clicável
+  (Radar · Monitorar · Avaliar quando · Disparar se · Então · Com rigor) +
+  editor da seção ativa abaixo.
+- **Direita — Prontidão do motor** (`EngineReadinessPanel`): bloqueado/atenção/
+  pronto, contagem de filtros vs sinais, "Falta para ativar", "O motor vai…",
+  avisos, dependências de dados, compatibilidade de backend.
+- **Revisão — Contrato executável** (`RadarContractView`): "o motor avaliará
+  quando…", "o alerta será disparado se…", "ao disparar…".
+
+## Payload preservado
+
+`buildData` idêntico ao 2.0. `CustomPatternModalProps` inalterado. Reset em
+reopen preservado. `useScopeLookups` antes do early-return.
+
+## Acessibilidade / teclado
+
+- Esc fecha sheet antes do modal (sheets do TriggerComposer) e, no modal, pede
+  confirmação se houver alterações.
+- Cmd/Ctrl+S salva (pausado se válido, senão rascunho).
+- Cmd/Ctrl+Enter ativa só se `canActivate`.
+- `aria-invalid` no nome, `aria-current` na seção ativa, foco visível, disabled com motivo.
+
+## Arquivos
+
+Criados: `intelligence/radarReadiness.ts`, `shell/BlueprintNav.tsx`,
+`preview/BlueprintSummary.tsx`, `preview/RadarContractView.tsx`,
+`inspector/EngineReadinessPanel.tsx`, `docs/RADAR_BLUEPRINT_3_AUDIT.md`, este doc.
+
+Alterados: `modals/CustomPatternModal.tsx` (reescrito logic-first),
+`backend/src/modules/command/commandEvaluation.service.ts` (fix score_diff_lte).
+
+Dormentes (preservados): `ComposerNav.tsx`, `ConditionsEditor.tsx`,
+`WizardProgressRail.tsx`, `WizardStepHeader.tsx`, `RadarInspectorPanel.tsx`,
+`RadarPreview.tsx`.
+
+## Limitações reais restantes
+
+- Ligas/times/partidas ainda usam os pickers inline no módulo Escopo (já com
+  busca/chips); drawer dedicado é refinamento futuro.
+- O editor de condições (`TriggerComposer`) lista todas as condições juntas; a
+  separação elegibilidade/sinal aparece no Blueprint e no Engine Readiness, não
+  dentro do editor.
+- "Salvar rascunho" e "Salvar pausado" geram o mesmo `status: paused` (o modelo
+  não tem `draft`).
+- "Validar no motor" continua client-side; não há endpoint de diagnóstico no
+  backend que rode a regra contra os snapshots reais (refinamento futuro).
