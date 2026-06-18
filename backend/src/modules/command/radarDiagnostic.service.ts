@@ -22,6 +22,10 @@ const BACKEND_SUPPORTED = new Set<string>([
   'cards_gte', 'is_final_phase', 'shots_total_gte', 'home_shots_on_target_gte',
   'away_shots_on_target_gte', 'home_possession_gte', 'away_possession_gte',
   'home_corners_gte', 'away_corners_gte',
+  // Newly resolvable (Phase B8 — analytical engine upgrade).
+  'home_goals_gte', 'away_goals_gte', 'yellow_cards_gte', 'red_cards_gte', 'shots_recent_gte',
+  // Note: favorite_involved resolves in the live worker (favorites synced via
+  // extendedJson) but NOT in this diagnostic, which has no favorites context.
 ])
 
 /** Conditions that only gate WHEN a match can be evaluated (not opportunity). */
@@ -36,18 +40,22 @@ const CONDITION_LABEL: Record<string, string> = {
   away_shots_on_target_gte: 'Visitante sem chutes no alvo', shots_total_gte: 'Finalizações insuficientes',
   corners_gte: 'Escanteios insuficientes', home_corners_gte: 'Escanteios mandante insuficientes',
   away_corners_gte: 'Escanteios visitante insuficientes', cards_gte: 'Cartões insuficientes',
+  home_goals_gte: 'Mandante não marcou o suficiente', away_goals_gte: 'Visitante não marcou o suficiente',
+  yellow_cards_gte: 'Amarelos insuficientes', red_cards_gte: 'Sem expulsões suficientes',
+  shots_recent_gte: 'Finalizações insuficientes', favorite_involved: 'Sem favorito na partida',
 }
 
 function conditionDataDependency(type: string): string | null {
   switch (type) {
     case 'is_live': case 'is_pre_live': return 'status ao vivo'
     case 'minute_between': case 'is_final_phase': return 'minuto'
-    case 'score_tied': case 'score_diff_lte': case 'goals_total_gte': case 'goals_total_lte': return 'placar'
+    case 'score_tied': case 'score_diff_lte': case 'goals_total_gte': case 'goals_total_lte':
+    case 'home_goals_gte': case 'away_goals_gte': return 'placar'
     case 'shots_on_target_gte': case 'home_shots_on_target_gte': case 'away_shots_on_target_gte': return 'chutes no alvo'
-    case 'shots_total_gte': return 'finalizações'
+    case 'shots_total_gte': case 'shots_recent_gte': return 'finalizações'
     case 'possession_gte': case 'home_possession_gte': case 'away_possession_gte': return 'posse de bola'
     case 'corners_gte': case 'home_corners_gte': case 'away_corners_gte': return 'escanteios'
-    case 'cards_gte': return 'cartões'
+    case 'cards_gte': case 'yellow_cards_gte': case 'red_cards_gte': return 'cartões'
     default: return null
   }
 }

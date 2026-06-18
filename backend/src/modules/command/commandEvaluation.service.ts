@@ -8,6 +8,8 @@ import { buildPatternInput, type PatternEvaluationInput } from './snapshotToPatt
 import { extractBreakdownKeys } from '../performance/performanceInputAdapter.js'
 import { evaluateMomentum, type MomentumResult } from './backendMomentum.service.js'
 import { checkDuplicate, buildDuplicateSignature } from './backendDuplicateGuard.service.js'
+import { deriveMatchContext, contextConfidenceDelta } from './matchContext.service.js'
+import { evaluatePatternScope, parseScopeExtended, parseScopeFilter } from './backendScopeFilter.service.js'
 
 const DEFAULT_USER = 'default'
 
@@ -35,6 +37,8 @@ export interface WorkerRunResult {
   candidates: number
   alertsCreated: number
   duplicatesBlocked: number
+  scopeSkipped: number
+  maxTriggersBlocked: number
   errors: string[]
 }
 
@@ -92,9 +96,35 @@ export function evaluateCondition(
       return s?.cornersHome != null && s.cornersHome >= (params.value || 4)
     case 'away_corners_gte':
       return s?.cornersAway != null && s.cornersAway >= (params.value || 4)
+    case 'home_goals_gte':
+      return score.home >= (params.value || 1)
+    case 'away_goals_gte':
+      return score.away >= (params.value || 1)
+    case 'yellow_cards_gte':
+      return s?.yellowCardsHome != null && ((s.yellowCardsHome + (s.yellowCardsAway ?? 0)) >= (params.value || 4))
+    case 'red_cards_gte':
+      return s?.redCardsHome != null && ((s.redCardsHome + (s.redCardsAway ?? 0)) >= (params.value || 1))
+    case 'shots_recent_gte':
+      // Catalog defines this as "soma de finalizações dos dois times" (total),
+      // so it resolves against total shots — no invented "recent" window.
+      return s?.shotsHome != null && ((s.shotsHome + (s.shotsAway ?? 0)) >= (params.value || 8))
+    case 'favorite_involved': {
+      const favs = input.favoriteTeams
+      if (!favs || favs.length === 0) return false
+      const teamHit = (name: string) => favs.some(f => normName(f) === normName(name) || (normName(f).length >= 4 && normName(name).includes(normName(f))))
+      return teamHit(input.homeName) || teamHit(input.awayName)
+    }
+    case 'is_pre_live':
+      // The live worker only sees live fixtures; a pre-live gate is never true here.
+      return false
     default:
       return false // Unknown condition type — conservative: don't match
   }
+}
+
+/** Accent-insensitive name normalization used by favorite matching. */
+function normName(s: string): string {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
 }
 
 // ─── Pattern Evaluation ──────────────────────────────────────────────────────
@@ -165,7 +195,23 @@ export function evaluatePatternAgainstInput(
   if (momentum.momentumSource === 'timed_events') confidence += 15
   else if (momentum.momentumSource === 'stats_proxy') confidence += 5
   if (input.dataQuality === 'rich') confidence += 5
-  confidence = Math.min(confidence, 99)
+
+  // ─── Match-context intelligence (bounded, conservative) ────────────────
+  // High-stakes matches (finals, knockouts, continental) get a small nudge;
+  // friendlies a small penalty. This never flips a non-match into a match —
+  // the matchRatio gate above already decided the conditions are met.
+  if (input.context) {
+    const delta = contextConfidenceDelta(input.context)
+    if (delta !== 0) {
+      confidence += delta
+      reasons.push(delta > 0
+        ? `Contexto: ${input.context.importanceLabel} (${input.context.competitionType})`
+        : `Contexto: ${input.context.competitionType} reduz peso`)
+    }
+    for (const note of input.context.notes) reasons.push(note)
+  }
+
+  confidence = Math.max(1, Math.min(confidence, 99))
 
   // ─── Signal State ──────────────────────────────────────────────────────
   let signalState: EvaluationResult['signalState'] = 'watch_only'
@@ -195,7 +241,7 @@ export function evaluatePatternAgainstInput(
 // ─── Full Evaluation Run ─────────────────────────────────────────────────────
 
 export async function runPatternEvaluation(maxFixtures: number): Promise<WorkerRunResult> {
-  const result: WorkerRunResult = { patternsChecked: 0, fixturesChecked: 0, evaluations: 0, blocked: 0, candidates: 0, alertsCreated: 0, duplicatesBlocked: 0, errors: [] }
+  const result: WorkerRunResult = { patternsChecked: 0, fixturesChecked: 0, evaluations: 0, blocked: 0, candidates: 0, alertsCreated: 0, duplicatesBlocked: 0, scopeSkipped: 0, maxTriggersBlocked: 0, errors: [] }
   const repos = createRepositories()
 
   // Load active patterns
@@ -218,12 +264,44 @@ export async function runPatternEvaluation(maxFixtures: number): Promise<WorkerR
     const snapshotAge = Date.now() - toDate(snapshot.capturedAt).getTime()
     if (snapshotAge > 5 * 60 * 1000) continue // Stale snapshot
 
-    const input = buildPatternInput(fixture as any, snapshot as any)
+    const baseInput = buildPatternInput(fixture as any, snapshot as any)
+    // Analytical context derived from the competition (finals/knockouts/etc.).
+    const context = deriveMatchContext(fixture.competition)
+
+    const scopeFx = {
+      competition: fixture.competition,
+      homeName: fixture.homeName,
+      awayName: fixture.awayName,
+      canonicalKey: fixture.canonicalKey,
+    }
 
     // Evaluate each pattern
     for (const pattern of patterns) {
-      result.evaluations++
       const conditions = safeParseConditions(pattern.conditionsJson)
+      const extended = parseScopeExtended(pattern.extendedJson)
+      const scopeFilter = parseScopeFilter(pattern.scopeFilterJson)
+
+      // ── Scope enforcement: respect the radar's configured contract ──────
+      const scopeDecision = evaluatePatternScope({
+        scope: pattern.scope,
+        onlyLive: pattern.onlyLive,
+        onlyPreMatch: pattern.onlyPreMatch,
+        scopeFilter,
+        matches: extended.matches,
+        excludeLeagues: extended.excludeLeagues,
+        excludeTeams: extended.excludeTeams,
+        excludeMatches: extended.excludeMatches,
+        favoriteTeams: extended.favoriteTeams,
+        favoriteLeagues: extended.favoriteLeagues,
+      }, scopeFx)
+      if (!scopeDecision.inScope) {
+        result.scopeSkipped++
+        continue
+      }
+
+      result.evaluations++
+
+      const input: PatternEvaluationInput = { ...baseInput, context, favoriteTeams: extended.favoriteTeams }
 
       const evalResult = evaluatePatternAgainstInput(
         { id: pattern.id, name: pattern.name, conditions, minConfidence: pattern.minConfidence, severity: pattern.severity, requireRichData: pattern.requireRichData, action: pattern.action, status: pattern.status },
@@ -238,6 +316,19 @@ export async function runPatternEvaluation(maxFixtures: number): Promise<WorkerR
       if (!evalResult.shouldAlert) {
         if (evalResult.signalState === 'strong_candidate') result.candidates++
         continue
+      }
+
+      // ── maxTriggersPerMatch: cap alerts per (pattern, fixture) ──────────
+      const maxTriggers = extended.maxTriggersPerMatch ?? 2
+      if (maxTriggers > 0) {
+        try {
+          const existing = await repos.alerts.findByFixtureIds(fixture.id)
+          const sameP = existing.filter((a: any) => a.patternId === pattern.id && a.status !== 'rejected' && a.status !== 'expired')
+          if (sameP.length >= maxTriggers) {
+            result.maxTriggersBlocked++
+            continue
+          }
+        } catch { /* read failure should never block the run */ }
       }
 
       // Duplicate check
@@ -259,6 +350,14 @@ export async function runPatternEvaluation(maxFixtures: number): Promise<WorkerR
           competition: fixture.competition,
           severity: pattern.severity,
           evidences: evalResult.reasons,
+          scope: { resolved: scopeDecision.reason },
+          matchContext: {
+            competitionType: context.competitionType,
+            stage: context.stage,
+            isKnockout: context.isKnockout,
+            importance: context.importance,
+            importanceLabel: context.importanceLabel,
+          },
           triggerSnapshot: { provider: input.provider, stats: input.stats, dataQuality: input.dataQuality },
           source: 'backend_worker',
         }

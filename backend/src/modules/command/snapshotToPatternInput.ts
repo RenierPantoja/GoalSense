@@ -3,11 +3,14 @@
  * Converts raw DB records into a stable input for the evaluation engine.
  */
 import type { LiveMatchStats, BackendTimedEvent } from '../../providers/espn.provider.js'
+import type { MatchContext } from './matchContext.service.js'
 
 export interface PatternEvaluationInput {
   fixtureId: string
   canonicalKey: string
   matchLabel: string
+  homeName: string
+  awayName: string
   competition: string
   status: string
   minute: number | null
@@ -18,6 +21,10 @@ export interface PatternEvaluationInput {
   dataQuality: 'rich' | 'partial' | 'poor'
   provider: string
   capturedAt: string
+  /** Optional analytical context (competition type / stage / importance). */
+  context?: MatchContext
+  /** Favorite team names synced from the frontend (for favorite_involved). */
+  favoriteTeams?: string[]
 }
 
 function safeParseJson<T>(str: string | null | undefined, fallback: T): T {
@@ -33,6 +40,8 @@ export function buildPatternInput(
     fixtureId: fixture.id,
     canonicalKey: fixture.canonicalKey,
     matchLabel: `${fixture.homeName} vs ${fixture.awayName}`,
+    homeName: fixture.homeName,
+    awayName: fixture.awayName,
     competition: fixture.competition,
     status: fixture.status,
     minute: snapshot.minute,

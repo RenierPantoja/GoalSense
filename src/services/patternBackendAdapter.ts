@@ -32,6 +32,19 @@ export function toBackendPayload(pattern: Omit<Pattern, 'id' | 'createdAt' | 'up
   if (pattern.maxTriggersPerMatch !== 2) extended.maxTriggersPerMatch = pattern.maxTriggersPerMatch
   if (pattern.antiDuplicateWindow !== 5) extended.antiDuplicateWindow = pattern.antiDuplicateWindow
 
+  // The backend has no notion of "favorites" — it only knows what we sync.
+  // When a radar depends on favorites (favorites_only scope or a
+  // favorite_involved condition), attach the current favorite team/league names
+  // so the worker can resolve scope and the condition server-side. (Re-sync the
+  // pattern to refresh this snapshot if favorites change.)
+  const needsFavorites = pattern.scope === 'favorites_only'
+    || (pattern.conditions || []).some(c => c.type === 'favorite_involved')
+  if (needsFavorites) {
+    const fav = readFavoritesSnapshot()
+    if (fav.teams.length > 0) extended.favoriteTeams = fav.teams
+    if (fav.leagues.length > 0) extended.favoriteLeagues = fav.leagues
+  }
+
   return {
     name: pattern.name,
     description: pattern.description || '',
@@ -47,6 +60,21 @@ export function toBackendPayload(pattern: Omit<Pattern, 'id' | 'createdAt' | 'up
     scopeFilterJson: pattern.scopeFilter ? JSON.stringify(pattern.scopeFilter) : null,
     templateId: pattern.templateId || null,
     extendedJson: Object.keys(extended).length > 0 ? JSON.stringify(extended) : null,
+  }
+}
+
+/** Reads favorite team & league names from localStorage (FavoritesContext store). */
+function readFavoritesSnapshot(): { teams: string[]; leagues: string[] } {
+  try {
+    if (typeof localStorage === 'undefined') return { teams: [], leagues: [] }
+    const raw = localStorage.getItem('goalsense_favorites')
+    if (!raw) return { teams: [], leagues: [] }
+    const parsed = JSON.parse(raw)
+    const teams = Array.isArray(parsed.teams) ? parsed.teams.map((t: any) => t?.name).filter((n: any): n is string => typeof n === 'string' && n.length > 0) : []
+    const leagues = Array.isArray(parsed.leagues) ? parsed.leagues.map((l: any) => l?.name).filter((n: any): n is string => typeof n === 'string' && n.length > 0) : []
+    return { teams, leagues }
+  } catch {
+    return { teams: [], leagues: [] }
   }
 }
 

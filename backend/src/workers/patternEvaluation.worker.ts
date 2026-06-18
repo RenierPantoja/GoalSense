@@ -50,7 +50,7 @@ async function runOnce(): Promise<WorkerRunResult | null> {
     consecutiveErrors = 0
 
     if (result.alertsCreated > 0 || result.evaluations > 0) {
-      console.log(`[PatternWorker] Run #${totalRuns}: ${result.patternsChecked} patterns × ${result.fixturesChecked} fixtures = ${result.evaluations} evals, ${result.alertsCreated} alerts, ${result.blocked} blocked, ${result.duplicatesBlocked} dupes${result.errors.length > 0 ? `, ${result.errors.length} errors` : ''}`)
+      console.log(`[PatternWorker] Run #${totalRuns}: ${result.patternsChecked} patterns × ${result.fixturesChecked} fixtures = ${result.evaluations} evals, ${result.alertsCreated} alerts, ${result.blocked} blocked, ${result.duplicatesBlocked} dupes, ${result.scopeSkipped} out-of-scope, ${result.maxTriggersBlocked} max/match${result.errors.length > 0 ? `, ${result.errors.length} errors` : ''}`)
     }
 
     return result

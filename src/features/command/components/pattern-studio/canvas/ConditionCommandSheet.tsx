@@ -15,9 +15,13 @@ import { formatConditionHuman } from '../../../utils/commandFormatters'
 import { TRIGGER_BY_TYPE, TRIGGER_CATEGORY_LABELS, TRIGGER_LIBRARY, type TriggerCategory, type TriggerSpec } from '../../../intelligence/triggerLibrary'
 import { TRIGGER_RECIPES } from '../../../intelligence/triggerRecipes'
 import { getCapability } from '../../../intelligence/radarConditionCapabilities'
-import { clampParam } from '../../../utils/patternStudioHelpers'
-import { ParamField } from '../triggers/ParamField'
 import { SheetShell } from './SheetShell'
+import { ConditionConfigurator } from './ConditionConfigurator'
+
+const PARAM_KEYS = ['min', 'max', 'value', 'maxDiff', 'minutes'] as const
+function specHasParams(spec: TriggerSpec): boolean {
+  return Object.keys(spec.defaultParams || {}).some(k => (PARAM_KEYS as readonly string[]).includes(k))
+}
 
 const CATEGORY_ICON: Record<TriggerCategory, LucideIcon> = {
   tempo: Clock, placar: Goal, pressao: Flame, controle: Activity, escanteios: Flag, disciplina: RectangleHorizontal, contexto: Star,
@@ -42,12 +46,29 @@ export function ConditionCommandSheet({ mode, conditions, onChange, onClose }: C
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<TriggerCategory | 'all'>('all')
   const [tab, setTab] = useState<'supported' | 'partial' | 'unsupported'>('supported')
+  // Draft for the "configure before adding" step (add modes only). When a picked
+  // trigger has editable params we stage it here instead of committing instantly.
+  const [draft, setDraft] = useState<PatternCondition | null>(null)
 
   const usedTypes = useMemo(() => new Set(conditions.map(c => c.type)), [conditions])
   const wantSignal = mode.kind === 'addSignal'
 
   const addTrigger = (spec: TriggerSpec) => {
-    if (!usedTypes.has(spec.type)) onChange([...conditions, { type: spec.type, params: { ...spec.defaultParams } }])
+    if (usedTypes.has(spec.type)) return
+    // Conditions with tunable params open the configurator first so the user
+    // sets the values BEFORE the trigger is committed to the radar.
+    if (specHasParams(spec)) {
+      setDraft({ type: spec.type, params: { ...spec.defaultParams } })
+      return
+    }
+    onChange([...conditions, { type: spec.type, params: { ...spec.defaultParams } }])
+    onClose()
+  }
+
+  const commitDraft = () => {
+    if (!draft) return
+    onChange([...conditions, draft])
+    setDraft(null)
     onClose()
   }
 
@@ -69,26 +90,28 @@ export function ConditionCommandSheet({ mode, conditions, onChange, onClose }: C
     return { supported, partial, unsupported }
   }, [mode.kind, wantSignal, query, category])
 
+  // Hoisted above the early returns so hook order stays stable when `draft` toggles.
+  const availableCategories = useMemo(() => {
+    const set = new Set<TriggerCategory>()
+    for (const t of TRIGGER_LIBRARY) {
+      const isSignal = getCapability(t.type).kind === 'signal'
+      if (wantSignal ? isSignal : !isSignal) set.add(t.category)
+    }
+    return (Object.keys(TRIGGER_CATEGORY_LABELS) as TriggerCategory[]).filter(c => set.has(c))
+  }, [wantSignal])
+
   // ── Edit mode ──
   if (mode.kind === 'edit') {
     const cond = conditions[mode.index]
     if (!cond) { onClose(); return null }
     const spec = TRIGGER_BY_TYPE[cond.type]
-    const updateParam = (key: string, raw: number) => {
-      const next = clampParam(key, raw, spec?.paramBounds?.[key])
-      onChange(conditions.map((cc, i) => i === mode.index ? { ...cc, params: { ...cc.params, [key]: next } } : cc))
+    const setParams = (params: Record<string, number | string | boolean>) => {
+      onChange(conditions.map((cc, i) => i === mode.index ? { ...cc, params } : cc))
     }
     return (
-      <SheetShell title={`Editar · ${spec?.title || cond.type}`} subtitle={formatConditionHuman(cond)} icon={<SlidersHorizontal size={20} />} accentFrom="#9AA6B8" accentTo="#5E6A7D" onClose={onClose}
-        footer={<button onClick={onClose} type="button" className="h-8 px-4 rounded-lg text-[11px] font-semibold text-white/90 bg-white/[0.06] border border-white/[0.12] hover:bg-white/[0.1]">Concluir</button>}>
-        <div className="flex items-center gap-2 flex-wrap">
-          {cond.params.min !== undefined && cond.params.max !== undefined && (
-            <><ParamField idx={mode.index} cond={cond} keyName="min" onChange={(_, k, v) => updateParam(k, v)} spec={spec} /><span className="text-[10px] text-white/35 font-medium">até</span><ParamField idx={mode.index} cond={cond} keyName="max" onChange={(_, k, v) => updateParam(k, v)} spec={spec} /></>
-          )}
-          {cond.params.value !== undefined && <ParamField idx={mode.index} cond={cond} keyName="value" onChange={(_, k, v) => updateParam(k, v)} spec={spec} />}
-          {cond.params.maxDiff !== undefined && <ParamField idx={mode.index} cond={cond} keyName="maxDiff" onChange={(_, k, v) => updateParam(k, v)} spec={spec} />}
-          {cond.params.minutes !== undefined && <ParamField idx={mode.index} cond={cond} keyName="minutes" onChange={(_, k, v) => updateParam(k, v)} spec={spec} />}
-        </div>
+      <SheetShell title={`Editar · ${spec?.title || cond.type}`} subtitle="Ajuste os parâmetros — o motor passa a usar os novos valores" icon={<SlidersHorizontal size={20} />} accentFrom="#34E3CB" accentTo="#0E9E8C" onClose={onClose}
+        footer={<button onClick={onClose} type="button" className="px-5 py-2.5 rounded-[10px] text-[13px] font-semibold text-white bg-[#13B8A6] hover:bg-[#0FA594] transition-colors">Concluir</button>}>
+        <ConditionConfigurator condition={cond} spec={spec} onChange={setParams} />
       </SheetShell>
     )
   }
@@ -134,14 +157,24 @@ export function ConditionCommandSheet({ mode, conditions, onChange, onClose }: C
   }
 
   // ── Add mode (filter | signal) ──
-  const availableCategories = useMemo(() => {
-    const set = new Set<TriggerCategory>()
-    for (const t of TRIGGER_LIBRARY) {
-      const isSignal = getCapability(t.type).kind === 'signal'
-      if (wantSignal ? isSignal : !isSignal) set.add(t.category)
-    }
-    return (Object.keys(TRIGGER_CATEGORY_LABELS) as TriggerCategory[]).filter(c => set.has(c))
-  }, [wantSignal])
+  // When a trigger with params was picked, show the configurator step first.
+  if (draft) {
+    const dSpec = TRIGGER_BY_TYPE[draft.type]
+    return (
+      <SheetShell
+        title={`Configurar · ${dSpec?.title || draft.type}`}
+        subtitle="Defina os valores antes de adicionar ao radar"
+        icon={<SlidersHorizontal size={20} />}
+        accentFrom={wantSignal ? '#4ADE80' : '#A78BFA'} accentTo={wantSignal ? '#1FA855' : '#7C4DEF'}
+        onClose={onClose}
+        footer={<>
+          <button onClick={() => setDraft(null)} type="button" className="px-4 py-2.5 rounded-[10px] text-[13px] font-medium text-white/60 hover:text-white/90 transition-colors mr-auto">Voltar</button>
+          <button onClick={commitDraft} type="button" className="px-5 py-2.5 rounded-[10px] text-[13px] font-semibold text-white bg-[#13B8A6] hover:bg-[#0FA594] transition-colors shadow-[0_6px_18px_-8px_rgba(19,184,166,0.8)]">Adicionar ao radar</button>
+        </>}>
+        <ConditionConfigurator condition={draft} spec={dSpec} onChange={params => setDraft({ ...draft, params })} />
+      </SheetShell>
+    )
+  }
 
   const allGroups = [
     { key: 'supported' as const, label: 'Executáveis', specs: grouped.supported },

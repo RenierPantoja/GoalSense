@@ -49,11 +49,14 @@ const SUPPORTED = new Set<PatternConditionType>([
   'is_live', 'minute_between', 'is_final_phase', 'score_tied', 'score_diff_lte',
   'goals_total_gte', 'goals_total_lte', 'possession_gte', 'home_possession_gte',
   'away_possession_gte', 'shots_on_target_gte', 'home_shots_on_target_gte',
-  'away_shots_on_target_gte', 'shots_total_gte',
+  'away_shots_on_target_gte', 'shots_total_gte', 'shots_recent_gte',
+  'home_goals_gte', 'away_goals_gte',
 ])
-/** Evaluator handles it BUT provider coverage is variable (corners/cards). */
+/** Evaluator handles it BUT provider coverage is variable (corners/cards) or
+ * depends on synced data (favorites). */
 const PARTIAL = new Set<PatternConditionType>([
   'corners_gte', 'home_corners_gte', 'away_corners_gte', 'cards_gte',
+  'yellow_cards_gte', 'red_cards_gte', 'favorite_involved',
 ])
 // Everything else is unsupported by the backend worker.
 
@@ -83,12 +86,13 @@ function dataDependenciesOf(type: PatternConditionType): string[] {
 
 const UNSUPPORTED_REASON: Partial<Record<PatternConditionType, string>> = {
   is_pre_live: 'O motor só avalia partidas ao vivo (sem janela pré-jogo no worker)',
-  favorite_involved: 'O motor não conhece seus favoritos no servidor',
-  shots_recent_gte: 'O motor usa finalizações totais, não "recentes"',
-  home_goals_gte: 'O motor avalia gols totais/diferença, não gols por mando',
-  away_goals_gte: 'O motor avalia gols totais/diferença, não gols por mando',
-  yellow_cards_gte: 'O motor avalia cartões totais, não amarelos isolados',
-  red_cards_gte: 'O motor avalia cartões totais, não vermelhos isolados',
+}
+
+/** Custom partial-coverage warnings (override the generic provider-coverage note). */
+const PARTIAL_WARNING: Partial<Record<PatternConditionType, string>> = {
+  favorite_involved: 'Resolve no servidor apenas com seus favoritos sincronizados',
+  yellow_cards_gte: 'Cobertura de cartões varia por provedor',
+  red_cards_gte: 'Cobertura de cartões varia por provedor',
 }
 
 // ─── Build the matrix ───────────────────────────────────────────────────────────
@@ -118,7 +122,7 @@ function buildCapability(type: PatternConditionType): ConditionCapability {
     requiredParams,
     resolutionSupported: support !== 'unsupported',
     reasonIfUnsupported: support === 'unsupported' ? (UNSUPPORTED_REASON[type] || 'Não suportado pelo motor') : undefined,
-    warningIfPartial: support === 'partial' ? 'Cobertura de dados varia por provedor' : undefined,
+    warningIfPartial: support === 'partial' ? (PARTIAL_WARNING[type] || 'Cobertura de dados varia por provedor') : undefined,
   }
 }
 
