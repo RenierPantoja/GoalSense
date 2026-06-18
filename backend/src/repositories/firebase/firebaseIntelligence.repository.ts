@@ -19,12 +19,22 @@ import type {
   SignalLedgerEntry, AlertOutcomeRecord, SignalFailureAnalysis,
   MissedOpportunityRecord, LearningEvent, IntelligenceOverview, AlertResult,
 } from '../../modules/intelligence/contracts/intelligence.types.js'
+import type {
+  LearningAggregationRun, PatternLearningProfile, CompetitionLearningProfile,
+  TeamLearningProfile, SignalContextStats, LearningRecommendation,
+} from '../../modules/intelligence/contracts/learning.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
 const FAILURES = 'signalFailures'
 const MISSED = 'missedOpportunities'
 const LEARNING = 'learningEvents'
+const RUNS = 'learningAggregationRuns'
+const PATTERN_PROFILES = 'patternLearningProfiles'
+const COMPETITION_PROFILES = 'competitionLearningProfiles'
+const TEAM_PROFILES = 'teamLearningProfiles'
+const CONTEXT_STATS = 'signalContextStats'
+const RECOMMENDATIONS = 'learningRecommendations'
 
 const READ_CAP = 2000
 
@@ -159,5 +169,115 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
       missedOpportunities: missedSnap.size,
       generatedAt: new Date().toISOString(),
     }
+  }
+
+  // ── B13: bulk reads ──────────────────────────────────────────────────────────
+  async listAllSignalLedgerEntries(limit?: number): Promise<SignalLedgerEntry[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(LEDGER).limit(limit || READ_CAP).get()
+    return snap.docs.map((d: any) => docData<SignalLedgerEntry>(d))
+  }
+  async listAllAlertOutcomes(limit?: number): Promise<AlertOutcomeRecord[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(OUTCOMES).limit(limit || READ_CAP).get()
+    return snap.docs.map((d: any) => docData<AlertOutcomeRecord>(d))
+  }
+  async listAllFailureAnalyses(limit?: number): Promise<SignalFailureAnalysis[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(FAILURES).limit(limit || READ_CAP).get()
+    return snap.docs.map((d: any) => docData<SignalFailureAnalysis>(d))
+  }
+  async listRecentLearningEvents(limit?: number): Promise<LearningEvent[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(LEARNING).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<LearningEvent>(d)).sort(byCreatedAtDesc).slice(0, limit || 50)
+  }
+
+  // ── B13: aggregation runs ────────────────────────────────────────────────────
+  async createLearningAggregationRun(run: LearningAggregationRun): Promise<LearningAggregationRun> {
+    const db = await getFirestore()
+    await db.collection(RUNS).doc(run.id).set(run, { merge: true })
+    return run
+  }
+  async updateLearningAggregationRun(id: string, patch: Partial<LearningAggregationRun>): Promise<{ count: number }> {
+    const db = await getFirestore()
+    const clean: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(patch)) { if (v !== undefined) clean[k] = v }
+    await db.collection(RUNS).doc(id).set(clean, { merge: true })
+    return { count: 1 }
+  }
+  async getLatestLearningAggregationRun(): Promise<LearningAggregationRun | null> {
+    const db = await getFirestore()
+    const snap = await db.collection(RUNS).limit(READ_CAP).get()
+    const rows = snap.docs.map((d: any) => docData<LearningAggregationRun>(d))
+      .sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || ''))
+    return rows.length > 0 ? rows[0] : null
+  }
+
+  // ── B13: profiles ────────────────────────────────────────────────────────────
+  async upsertPatternLearningProfile(profile: PatternLearningProfile): Promise<PatternLearningProfile> {
+    const db = await getFirestore()
+    await db.collection(PATTERN_PROFILES).doc(profile.id).set(profile, { merge: true })
+    return profile
+  }
+  async getPatternLearningProfile(patternId: string): Promise<PatternLearningProfile | null> {
+    const db = await getFirestore()
+    const snap = await db.collection(PATTERN_PROFILES).where('scopeKey', '==', patternId).limit(1).get()
+    return snap.empty ? null : docData<PatternLearningProfile>(snap.docs[0])
+  }
+  async listPatternLearningProfiles(limit?: number): Promise<PatternLearningProfile[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(PATTERN_PROFILES).limit(limit || 500).get()
+    return snap.docs.map((d: any) => docData<PatternLearningProfile>(d))
+  }
+  async upsertCompetitionLearningProfile(profile: CompetitionLearningProfile): Promise<CompetitionLearningProfile> {
+    const db = await getFirestore()
+    await db.collection(COMPETITION_PROFILES).doc(profile.id).set(profile, { merge: true })
+    return profile
+  }
+  async getCompetitionLearningProfile(key: string): Promise<CompetitionLearningProfile | null> {
+    const db = await getFirestore()
+    const snap = await db.collection(COMPETITION_PROFILES).where('scopeKey', '==', key).limit(1).get()
+    return snap.empty ? null : docData<CompetitionLearningProfile>(snap.docs[0])
+  }
+  async listCompetitionLearningProfiles(limit?: number): Promise<CompetitionLearningProfile[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(COMPETITION_PROFILES).limit(limit || 500).get()
+    return snap.docs.map((d: any) => docData<CompetitionLearningProfile>(d))
+  }
+  async upsertTeamLearningProfile(profile: TeamLearningProfile): Promise<TeamLearningProfile> {
+    const db = await getFirestore()
+    await db.collection(TEAM_PROFILES).doc(profile.id).set(profile, { merge: true })
+    return profile
+  }
+  async getTeamLearningProfile(key: string): Promise<TeamLearningProfile | null> {
+    const db = await getFirestore()
+    const snap = await db.collection(TEAM_PROFILES).where('scopeKey', '==', key).limit(1).get()
+    return snap.empty ? null : docData<TeamLearningProfile>(snap.docs[0])
+  }
+  async listTeamLearningProfiles(limit?: number): Promise<TeamLearningProfile[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(TEAM_PROFILES).limit(limit || 500).get()
+    return snap.docs.map((d: any) => docData<TeamLearningProfile>(d))
+  }
+  async upsertSignalContextStats(stats: SignalContextStats): Promise<SignalContextStats> {
+    const db = await getFirestore()
+    await db.collection(CONTEXT_STATS).doc(stats.id).set(stats, { merge: true })
+    return stats
+  }
+  async listSignalContextStats(limit?: number): Promise<SignalContextStats[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(CONTEXT_STATS).limit(limit || 1000).get()
+    return snap.docs.map((d: any) => docData<SignalContextStats>(d))
+  }
+  async createLearningRecommendation(rec: LearningRecommendation): Promise<LearningRecommendation> {
+    const db = await getFirestore()
+    await db.collection(RECOMMENDATIONS).doc(rec.id).set(rec, { merge: true })
+    return rec
+  }
+  async listLearningRecommendations(limit?: number): Promise<LearningRecommendation[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(RECOMMENDATIONS).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<LearningRecommendation>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
   }
 }

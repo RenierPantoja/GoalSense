@@ -124,3 +124,17 @@ this without gambiarra.
   recompute momentum); creation-time momentum is captured in the ledger evidence.
 - Learning events are **observations only** — nothing auto-tunes patterns or
   confidence in this phase.
+
+
+## B13 — Learning Aggregator
+
+Phase B13 turns this memory into **aggregated, queryable intelligence**
+(see `LEARNING_AGGREGATOR_FOUNDATION.md`): deterministic Pattern / Competition /
+Team / context profiles, conservative sample-aware recommendations, aggregation
+learning events, a read API under `/api/intelligence/learning/*`, and a manual
+aggregation script (`scripts/runLearningAggregation.mjs`).
+
+Key guarantees carried over: `unknown` is never a failure, `confirmed_partial`
+counts as partial usefulness, rates are computed over resolved alerts only, small
+samples are gated by `sampleQuality`, nothing auto-tunes patterns or confidence.
+Firebase persists the profiles; Prisma mode uses the Noop adapter.

@@ -126,6 +126,10 @@ import type {
   SignalLedgerEntry, AlertOutcomeRecord, SignalFailureAnalysis,
   MissedOpportunityRecord, LearningEvent, IntelligenceOverview,
 } from '../modules/intelligence/contracts/intelligence.types.js'
+import type {
+  LearningAggregationRun, PatternLearningProfile, CompetitionLearningProfile,
+  TeamLearningProfile, SignalContextStats, LearningRecommendation,
+} from '../modules/intelligence/contracts/learning.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -147,6 +151,35 @@ export interface IntelligenceRepository {
   listLearningEventsByPattern(patternId: string, limit?: number): Promise<LearningEvent[]>
   // Aggregate
   getOverview(): Promise<IntelligenceOverview>
+
+  // ── B13: bulk reads for aggregation ────────────────────────────────────────
+  listAllSignalLedgerEntries(limit?: number): Promise<SignalLedgerEntry[]>
+  listAllAlertOutcomes(limit?: number): Promise<AlertOutcomeRecord[]>
+  listAllFailureAnalyses(limit?: number): Promise<SignalFailureAnalysis[]>
+  listRecentLearningEvents(limit?: number): Promise<LearningEvent[]>
+
+  // ── B13: learning persistence ──────────────────────────────────────────────
+  createLearningAggregationRun(run: LearningAggregationRun): Promise<LearningAggregationRun>
+  updateLearningAggregationRun(id: string, patch: Partial<LearningAggregationRun>): Promise<{ count: number }>
+  getLatestLearningAggregationRun(): Promise<LearningAggregationRun | null>
+
+  upsertPatternLearningProfile(profile: PatternLearningProfile): Promise<PatternLearningProfile>
+  getPatternLearningProfile(patternId: string): Promise<PatternLearningProfile | null>
+  listPatternLearningProfiles(limit?: number): Promise<PatternLearningProfile[]>
+
+  upsertCompetitionLearningProfile(profile: CompetitionLearningProfile): Promise<CompetitionLearningProfile>
+  getCompetitionLearningProfile(key: string): Promise<CompetitionLearningProfile | null>
+  listCompetitionLearningProfiles(limit?: number): Promise<CompetitionLearningProfile[]>
+
+  upsertTeamLearningProfile(profile: TeamLearningProfile): Promise<TeamLearningProfile>
+  getTeamLearningProfile(key: string): Promise<TeamLearningProfile | null>
+  listTeamLearningProfiles(limit?: number): Promise<TeamLearningProfile[]>
+
+  upsertSignalContextStats(stats: SignalContextStats): Promise<SignalContextStats>
+  listSignalContextStats(limit?: number): Promise<SignalContextStats[]>
+
+  createLearningRecommendation(rec: LearningRecommendation): Promise<LearningRecommendation>
+  listLearningRecommendations(limit?: number): Promise<LearningRecommendation[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

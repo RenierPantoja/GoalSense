@@ -14,6 +14,10 @@ import type {
   SignalLedgerEntry, AlertOutcomeRecord, SignalFailureAnalysis,
   MissedOpportunityRecord, LearningEvent, IntelligenceOverview, AlertResult,
 } from '../modules/intelligence/contracts/intelligence.types.js'
+import type {
+  LearningAggregationRun, PatternLearningProfile, CompetitionLearningProfile,
+  TeamLearningProfile, SignalContextStats, LearningRecommendation,
+} from '../modules/intelligence/contracts/learning.types.js'
 
 let warned = false
 function warnOnce(): void {
@@ -43,4 +47,32 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
     const outcomeBreakdown: Record<AlertResult, number> = { pending: 0, confirmed: 0, confirmed_partial: 0, failed: 0, unknown: 0, expired: 0 }
     return { ledgerEntries: 0, outcomes: 0, outcomeBreakdown, failureAnalyses: 0, learningEvents: 0, missedOpportunities: 0, generatedAt: new Date().toISOString() }
   }
+
+  // ── B13 (Noop): reads return empty honestly; writes accepted without persistence ──
+  async listAllSignalLedgerEntries(): Promise<SignalLedgerEntry[]> { return [] }
+  async listAllAlertOutcomes(): Promise<AlertOutcomeRecord[]> { return [] }
+  async listAllFailureAnalyses(): Promise<SignalFailureAnalysis[]> { return [] }
+  async listRecentLearningEvents(): Promise<LearningEvent[]> { return [] }
+
+  async createLearningAggregationRun(run: LearningAggregationRun): Promise<LearningAggregationRun> { warnOnce(); return run }
+  async updateLearningAggregationRun(): Promise<{ count: number }> { return { count: 0 } }
+  async getLatestLearningAggregationRun(): Promise<LearningAggregationRun | null> { return null }
+
+  async upsertPatternLearningProfile(p: PatternLearningProfile): Promise<PatternLearningProfile> { warnOnce(); return p }
+  async getPatternLearningProfile(): Promise<PatternLearningProfile | null> { return null }
+  async listPatternLearningProfiles(): Promise<PatternLearningProfile[]> { return [] }
+
+  async upsertCompetitionLearningProfile(p: CompetitionLearningProfile): Promise<CompetitionLearningProfile> { warnOnce(); return p }
+  async getCompetitionLearningProfile(): Promise<CompetitionLearningProfile | null> { return null }
+  async listCompetitionLearningProfiles(): Promise<CompetitionLearningProfile[]> { return [] }
+
+  async upsertTeamLearningProfile(p: TeamLearningProfile): Promise<TeamLearningProfile> { warnOnce(); return p }
+  async getTeamLearningProfile(): Promise<TeamLearningProfile | null> { return null }
+  async listTeamLearningProfiles(): Promise<TeamLearningProfile[]> { return [] }
+
+  async upsertSignalContextStats(s: SignalContextStats): Promise<SignalContextStats> { warnOnce(); return s }
+  async listSignalContextStats(): Promise<SignalContextStats[]> { return [] }
+
+  async createLearningRecommendation(r: LearningRecommendation): Promise<LearningRecommendation> { warnOnce(); return r }
+  async listLearningRecommendations(): Promise<LearningRecommendation[]> { return [] }
 }
