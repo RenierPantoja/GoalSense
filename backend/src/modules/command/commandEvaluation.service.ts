@@ -10,6 +10,8 @@ import { evaluateMomentum, type MomentumResult } from './backendMomentum.service
 import { checkDuplicate, buildDuplicateSignature } from './backendDuplicateGuard.service.js'
 import { deriveMatchContext, contextConfidenceDelta } from './matchContext.service.js'
 import { evaluatePatternScope, parseScopeExtended, parseScopeFilter } from './backendScopeFilter.service.js'
+import { recordAlertCreated } from '../intelligence/memory/intelligenceMemory.service.js'
+import { classifyConditionKind, flattenStats } from '../intelligence/explainability/signalExplainability.service.js'
 
 const DEFAULT_USER = 'default'
 
@@ -390,6 +392,38 @@ export async function runPatternEvaluation(maxFixtures: number): Promise<WorkerR
             })
           } catch (e: any) {
             console.warn(`[PatternWorker] counter onAlertCreated failed for ${createdAlert?.id}: ${e?.message || e}`)
+          }
+          // Intelligence Memory (Phase B12): make the alert traceable. Self-contained,
+          // non-blocking — never throws, never affects alert creation.
+          try {
+            const condTypes = conditions.map((c: any) => c.type)
+            const passed: string[] = []
+            const failed: string[] = []
+            for (const c of conditions) { (evaluateCondition(c, input) ? passed : failed).push(c.type) }
+            const signalType = condTypes.find((t: string) => classifyConditionKind(t) === 'signal') || 'eligibility_only'
+            void recordAlertCreated({
+              alertId: createdAlert.id,
+              userId: DEFAULT_USER,
+              pattern: { id: pattern.id, name: pattern.name, severity: pattern.severity },
+              fixture: { id: fixture.id, homeName: fixture.homeName, awayName: fixture.awayName, competition: fixture.competition, canonicalKey: fixture.canonicalKey },
+              minute: input.minute,
+              score: input.score,
+              confidence: evalResult.confidence,
+              blockers: evalResult.blockers,
+              conditionTypes: condTypes,
+              passedConditionTypes: passed,
+              failedConditionTypes: failed,
+              signalType,
+              momentumSource: evalResult.momentum?.momentumSource ?? null,
+              liveStats: flattenStats(input.stats as any),
+              recentEvents: Array.isArray(input.events) ? input.events.slice(0, 8).map((e: any) => ({ minute: e.minute, type: e.type, side: e.side })) : null,
+              provider: input.provider,
+              dataQuality: input.dataQuality,
+              scopeReason: scopeDecision.reason,
+              matchContext: { competitionType: context.competitionType, stage: context.stage, isKnockout: context.isKnockout, importance: context.importance, importanceLabel: context.importanceLabel, notes: context.notes },
+            })
+          } catch (e: any) {
+            console.warn(`[PatternWorker] intelligence ledger failed for ${createdAlert?.id}: ${e?.message || e}`)
           }
         })
         result.alertsCreated++

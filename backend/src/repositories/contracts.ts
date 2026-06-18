@@ -105,7 +105,6 @@ export interface OddsRepository {
 }
 
 // ─── Performance Counters (E6.2) ──────────────────────────────────────────
-
 export interface PerformanceRepository {
   /** Read one pattern's incremental counter, or null if none exists yet. */
   getPatternCounter(patternId: string, userId: string): Promise<Json | null>
@@ -121,6 +120,35 @@ export interface PerformanceRepository {
   rebuildPatternCounters(patternId: string, userId: string): Promise<Json | null>
 }
 
+// ─── Intelligence Memory (B12) ──────────────────────────────────────────────
+
+import type {
+  SignalLedgerEntry, AlertOutcomeRecord, SignalFailureAnalysis,
+  MissedOpportunityRecord, LearningEvent, IntelligenceOverview,
+} from '../modules/intelligence/contracts/intelligence.types.js'
+
+export interface IntelligenceRepository {
+  // Signal Ledger
+  createSignalLedgerEntry(entry: SignalLedgerEntry): Promise<SignalLedgerEntry>
+  updateSignalLedgerEntry(id: string, patch: Partial<SignalLedgerEntry>): Promise<{ count: number }>
+  getSignalLedgerEntryByAlertId(alertId: string): Promise<SignalLedgerEntry | null>
+  listSignalLedgerEntries(filters: { patternId?: string; fixtureId?: string; limit?: number }): Promise<SignalLedgerEntry[]>
+  // Alert Outcome
+  createAlertOutcome(record: AlertOutcomeRecord): Promise<AlertOutcomeRecord>
+  updateAlertOutcome(alertId: string, patch: Partial<AlertOutcomeRecord>): Promise<{ count: number }>
+  getAlertOutcomeByAlertId(alertId: string): Promise<AlertOutcomeRecord | null>
+  listAlertOutcomesByPattern(patternId: string, limit?: number): Promise<AlertOutcomeRecord[]>
+  // Failure Analysis
+  createFailureAnalysis(analysis: SignalFailureAnalysis): Promise<SignalFailureAnalysis>
+  // Missed Opportunity
+  createMissedOpportunity(record: MissedOpportunityRecord): Promise<MissedOpportunityRecord>
+  // Learning Events
+  createLearningEvent(event: LearningEvent): Promise<LearningEvent>
+  listLearningEventsByPattern(patternId: string, limit?: number): Promise<LearningEvent[]>
+  // Aggregate
+  getOverview(): Promise<IntelligenceOverview>
+}
+
 // ─── Aggregate ─────────────────────────────────────────────────────────────
 
 export interface Repositories {
@@ -133,4 +161,5 @@ export interface Repositories {
   telegram: TelegramRepository
   odds: OddsRepository
   performance: PerformanceRepository
+  intelligence: IntelligenceRepository
 }

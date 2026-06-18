@@ -5,6 +5,7 @@
  * Phase E5: Repository-backed (Prisma or Firebase). No direct Prisma import.
  */
 import { createRepositories } from '../../repositories/index.js'
+import { recordAlertResolved } from '../intelligence/memory/intelligenceMemory.service.js'
 
 const DEFAULT_USER = 'default'
 
@@ -389,6 +390,29 @@ export async function resolvePendingAlerts(maxAlerts: number): Promise<Resolutio
         })
       } catch (e: any) {
         console.warn(`[ResolutionWorker] counter applyResolution failed for ${alert.id}: ${e?.message || e}`)
+      }
+
+      // Intelligence Memory (Phase B12): record the outcome + ledger transition +
+      // (failed→) failure analysis + learning event. Non-blocking, never throws.
+      try {
+        const ev = resolution.evidence
+        void recordAlertResolved({
+          alertId: alert.id,
+          fixtureId: (alert as any).fixtureId,
+          patternId: (alert as any).patternId ?? null,
+          createdAt: (alert as any).createdAt,
+          result: resolution.outcome,
+          resolutionType: resolution.resolutionType,
+          windowMinutes: resolution.windowMinutes,
+          outcomeReason: resolution.reason,
+          snapshotsAnalyzed: ev.snapshotsAnalyzed,
+          hasStats: ev.hasStats,
+          hasTimedEvents: ev.hasTimedEvents,
+          momentumSource: null,
+          dataWarnings: ev.dataWarnings,
+        })
+      } catch (e: any) {
+        console.warn(`[ResolutionWorker] intelligence outcome failed for ${alert.id}: ${e?.message || e}`)
       }
 
       result.resolved++

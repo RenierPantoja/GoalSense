@@ -25,6 +25,8 @@ import { FirebaseFixtureRepository } from './firebase/firebaseFixture.repository
 import { FirebaseLiveSnapshotRepository } from './firebase/firebaseLiveSnapshot.repository.js'
 import { FirebaseOddsRepository } from './firebase/firebaseOdds.repository.js'
 import { FirebasePerformanceRepository } from './firebase/firebasePerformance.repository.js'
+import { FirebaseIntelligenceRepository } from './firebase/firebaseIntelligence.repository.js'
+import { NoopIntelligenceRepository } from './noopIntelligence.repository.js'
 
 let cached: Repositories | null = null
 
@@ -46,6 +48,7 @@ export function createRepositories(): Repositories {
       liveSnapshots: new FirebaseLiveSnapshotRepository(),
       odds: new FirebaseOddsRepository(),
       performance: new FirebasePerformanceRepository(),
+      intelligence: new FirebaseIntelligenceRepository(),
     }
     return cached
   }
@@ -61,6 +64,7 @@ export function createRepositories(): Repositories {
     telegram: new PrismaTelegramRepository(),
     odds: new PrismaOddsRepository(),
     performance: new PrismaPerformanceRepository(),
+    intelligence: new NoopIntelligenceRepository(),
   }
   return cached
 }

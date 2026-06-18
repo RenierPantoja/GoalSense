@@ -13,6 +13,7 @@ import { liveMonitorRoutes } from './modules/live/liveMonitor.routes.js'
 import { commandWorkerRoutes } from './modules/command/commandWorker.routes.js'
 import { telegramRoutes } from './modules/telegram/telegram.routes.js'
 import { oddsRoutes } from './modules/odds/odds.routes.js'
+import { intelligenceRoutes } from './modules/intelligence/intelligence.routes.js'
 import { startLiveMonitorWorker } from './workers/liveMonitor.worker.js'
 import { startPatternEvaluationWorker } from './workers/patternEvaluation.worker.js'
 import { startAlertResolutionWorker } from './workers/alertResolution.worker.js'
@@ -46,6 +47,7 @@ app.register(liveMonitorRoutes, { prefix: '/api' })
 app.register(commandWorkerRoutes, { prefix: '/api' })
 app.register(telegramRoutes, { prefix: '/api' })
 app.register(oddsRoutes, { prefix: '/api' })
+app.register(intelligenceRoutes, { prefix: '/api' })
 
 // Start
 const start = async () => {
