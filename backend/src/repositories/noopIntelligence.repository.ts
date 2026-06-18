@@ -18,6 +18,9 @@ import type {
   LearningAggregationRun, PatternLearningProfile, CompetitionLearningProfile,
   TeamLearningProfile, SignalContextStats, LearningRecommendation,
 } from '../modules/intelligence/contracts/learning.types.js'
+import type {
+  BacktestRun, ReplayRun, PersistedBacktestSignalResult,
+} from '../modules/intelligence/backtest/backtest.types.js'
 
 let warned = false
 function warnOnce(): void {
@@ -75,4 +78,15 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
 
   async createLearningRecommendation(r: LearningRecommendation): Promise<LearningRecommendation> { warnOnce(); return r }
   async listLearningRecommendations(): Promise<LearningRecommendation[]> { return [] }
+
+  // ── B14 (Noop): reads empty; writes accepted without persistence ──
+  async createBacktestRun(run: BacktestRun): Promise<BacktestRun> { warnOnce(); return run }
+  async updateBacktestRun(): Promise<{ count: number }> { return { count: 0 } }
+  async getBacktestRun(): Promise<BacktestRun | null> { return null }
+  async listBacktestRuns(): Promise<BacktestRun[]> { return [] }
+  async createBacktestSignalResult(result: PersistedBacktestSignalResult): Promise<PersistedBacktestSignalResult> { warnOnce(); return result }
+  async listBacktestSignalResults(): Promise<PersistedBacktestSignalResult[]> { return [] }
+  async createReplayRun(run: ReplayRun): Promise<ReplayRun> { warnOnce(); return run }
+  async getReplayRun(): Promise<ReplayRun | null> { return null }
+  async listReplayRuns(): Promise<ReplayRun[]> { return [] }
 }

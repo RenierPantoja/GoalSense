@@ -94,3 +94,19 @@ Honest emptiness (null/[] with 200). The B12 read endpoints are untouched.
 - Scheduled aggregation worker (env-gated) + incremental updates.
 - Replay over the ledger to simulate alternative thresholds (offline).
 - Per-team/league/minute confidence calibration proposals (still human-approved).
+
+
+## B14 — Backtest & Replay Foundation
+
+Phase B14 builds on these learning profiles with a read-only **Backtest & Replay**
+engine (see `BACKTEST_REPLAY_FOUNDATION.md`): it re-evaluates a pattern over
+recorded snapshots using the same pure evaluator, estimates honest outcomes
+(`unknown`/`not_evaluable` when data is missing), reports data coverage +
+limitations, and replays a fixture minute-by-minute with explanations. Endpoints
+under `/api/intelligence/backtest/*` and `/api/intelligence/replay/*` are gated by
+`ENABLE_BACKTEST_API=true`; nothing creates alerts or sends Telegram.
+
+B14 also adds the **Learning Aggregation Scheduler** foundation
+(`learning/learningAggregationScheduler.service.ts`) — env-gated
+(`ENABLE_LEARNING_AGGREGATION_SCHEDULER`, default off) periodic re-aggregation, so
+the manual-only limitation of B13 can be lifted safely when desired.

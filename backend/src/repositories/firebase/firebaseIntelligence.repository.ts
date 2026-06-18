@@ -23,6 +23,9 @@ import type {
   LearningAggregationRun, PatternLearningProfile, CompetitionLearningProfile,
   TeamLearningProfile, SignalContextStats, LearningRecommendation,
 } from '../../modules/intelligence/contracts/learning.types.js'
+import type {
+  BacktestRun, ReplayRun, PersistedBacktestSignalResult,
+} from '../../modules/intelligence/backtest/backtest.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -35,6 +38,9 @@ const COMPETITION_PROFILES = 'competitionLearningProfiles'
 const TEAM_PROFILES = 'teamLearningProfiles'
 const CONTEXT_STATS = 'signalContextStats'
 const RECOMMENDATIONS = 'learningRecommendations'
+const BACKTEST_RUNS = 'backtestRuns'
+const BACKTEST_RESULTS = 'backtestSignalResults'
+const REPLAY_RUNS = 'replayRuns'
 
 const READ_CAP = 2000
 
@@ -279,5 +285,58 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     const db = await getFirestore()
     const snap = await db.collection(RECOMMENDATIONS).limit(READ_CAP).get()
     return snap.docs.map((d: any) => docData<LearningRecommendation>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
+  }
+
+  // ── B14: backtest & replay ───────────────────────────────────────────────────
+  async createBacktestRun(run: BacktestRun): Promise<BacktestRun> {
+    const db = await getFirestore()
+    await db.collection(BACKTEST_RUNS).doc(run.id).set(run, { merge: true })
+    return run
+  }
+  async updateBacktestRun(id: string, patch: Partial<BacktestRun>): Promise<{ count: number }> {
+    const db = await getFirestore()
+    const clean: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(patch)) { if (v !== undefined) clean[k] = v }
+    await db.collection(BACKTEST_RUNS).doc(id).set(clean, { merge: true })
+    return { count: 1 }
+  }
+  async getBacktestRun(id: string): Promise<BacktestRun | null> {
+    const db = await getFirestore()
+    const doc = await db.collection(BACKTEST_RUNS).doc(id).get()
+    return doc.exists ? docData<BacktestRun>(doc) : null
+  }
+  async listBacktestRuns(filters: { patternId?: string; limit?: number }): Promise<BacktestRun[]> {
+    const db = await getFirestore()
+    let q: any = db.collection(BACKTEST_RUNS)
+    if (filters.patternId) q = q.where('patternId', '==', filters.patternId)
+    const snap = await q.get()
+    return snap.docs.map((d: any) => docData<BacktestRun>(d)).sort(byCreatedAtDesc).slice(0, filters.limit || 100)
+  }
+  async createBacktestSignalResult(result: PersistedBacktestSignalResult): Promise<PersistedBacktestSignalResult> {
+    const db = await getFirestore()
+    await db.collection(BACKTEST_RESULTS).doc(result.id).set(result, { merge: true })
+    return result
+  }
+  async listBacktestSignalResults(runId: string, limit?: number): Promise<PersistedBacktestSignalResult[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(BACKTEST_RESULTS).where('runId', '==', runId).get()
+    return snap.docs.map((d: any) => docData<PersistedBacktestSignalResult>(d)).slice(0, limit || 500)
+  }
+  async createReplayRun(run: ReplayRun): Promise<ReplayRun> {
+    const db = await getFirestore()
+    await db.collection(REPLAY_RUNS).doc(run.id).set(run, { merge: true })
+    return run
+  }
+  async getReplayRun(id: string): Promise<ReplayRun | null> {
+    const db = await getFirestore()
+    const doc = await db.collection(REPLAY_RUNS).doc(id).get()
+    return doc.exists ? docData<ReplayRun>(doc) : null
+  }
+  async listReplayRuns(filters: { patternId?: string; limit?: number }): Promise<ReplayRun[]> {
+    const db = await getFirestore()
+    let q: any = db.collection(REPLAY_RUNS)
+    if (filters.patternId) q = q.where('patternId', '==', filters.patternId)
+    const snap = await q.get()
+    return snap.docs.map((d: any) => docData<ReplayRun>(d)).sort(byCreatedAtDesc).slice(0, filters.limit || 100)
   }
 }

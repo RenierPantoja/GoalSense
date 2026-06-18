@@ -43,6 +43,10 @@ const envSchema = z.object({
   ODDS_API_KEY: z.string().optional(),
   ODDS_FETCH_TIMEOUT_MS: z.coerce.number().default(8000),
   ODDS_CACHE_TTL_SECONDS: z.coerce.number().default(30),
+  // Intelligence — Backtest & Learning (Phase B14)
+  ENABLE_BACKTEST_API: z.string().default('false'),
+  ENABLE_LEARNING_AGGREGATION_SCHEDULER: z.string().default('false'),
+  LEARNING_AGGREGATION_INTERVAL_MS: z.coerce.number().default(3600000),
 }).superRefine((val, ctx) => {
   // Conditional validation by persistence provider
   if (val.PERSISTENCE_PROVIDER === 'prisma') {

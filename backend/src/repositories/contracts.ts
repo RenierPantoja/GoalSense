@@ -130,6 +130,9 @@ import type {
   LearningAggregationRun, PatternLearningProfile, CompetitionLearningProfile,
   TeamLearningProfile, SignalContextStats, LearningRecommendation,
 } from '../modules/intelligence/contracts/learning.types.js'
+import type {
+  BacktestRun, ReplayRun, PersistedBacktestSignalResult,
+} from '../modules/intelligence/backtest/backtest.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -180,6 +183,17 @@ export interface IntelligenceRepository {
 
   createLearningRecommendation(rec: LearningRecommendation): Promise<LearningRecommendation>
   listLearningRecommendations(limit?: number): Promise<LearningRecommendation[]>
+
+  // ── B14: backtest & replay (read-only simulation; no alerts) ────────────────
+  createBacktestRun(run: BacktestRun): Promise<BacktestRun>
+  updateBacktestRun(id: string, patch: Partial<BacktestRun>): Promise<{ count: number }>
+  getBacktestRun(id: string): Promise<BacktestRun | null>
+  listBacktestRuns(filters: { patternId?: string; limit?: number }): Promise<BacktestRun[]>
+  createBacktestSignalResult(result: PersistedBacktestSignalResult): Promise<PersistedBacktestSignalResult>
+  listBacktestSignalResults(runId: string, limit?: number): Promise<PersistedBacktestSignalResult[]>
+  createReplayRun(run: ReplayRun): Promise<ReplayRun>
+  getReplayRun(id: string): Promise<ReplayRun | null>
+  listReplayRuns(filters: { patternId?: string; limit?: number }): Promise<ReplayRun[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────
