@@ -106,3 +106,15 @@ startup. Started from `server.ts` (no-op unless enabled). No external cron.
 ## Next steps for UI
 - Command Center "Backtest" tab: run config form → coverage + summary + per-fixture
   results + replay timeline viewer. The contracts and endpoints above are ready.
+
+
+## B15 — Command Center Backtest Lab UI
+
+Phase B15 adds the frontend that consumes these endpoints: a **Backtest** tab in
+the Command Center (`src/features/command/components/views/backtest/`) with a
+config panel, summary, data-coverage, per-fixture results (filterable) and a
+wide minute-by-minute **Replay Viewer**. The client (`src/services/backtestApi.ts`)
+distinguishes 403 (API disabled) from other errors and shows honest states.
+See `docs/BACKTEST_LAB_UI_FOUNDATION.md`. The UI is read-only: it never creates
+alerts, sends Telegram, or alters patterns/confidence — and renders `unknown` /
+`not_evaluable` as distinct neutral states (never "failure").
