@@ -11,7 +11,6 @@
 import { useMemo, useState } from 'react'
 import { Search, Clock, Goal, Flame, Activity, Flag, RectangleHorizontal, Star, Crosshair, Timer, Wand2, SlidersHorizontal, type LucideIcon } from 'lucide-react'
 import type { PatternCondition } from '../../../types/commandTypes'
-import { formatConditionHuman } from '../../../utils/commandFormatters'
 import { TRIGGER_BY_TYPE, TRIGGER_CATEGORY_LABELS, TRIGGER_LIBRARY, type TriggerCategory, type TriggerSpec } from '../../../intelligence/triggerLibrary'
 import { TRIGGER_RECIPES } from '../../../intelligence/triggerRecipes'
 import { getCapability } from '../../../intelligence/radarConditionCapabilities'
