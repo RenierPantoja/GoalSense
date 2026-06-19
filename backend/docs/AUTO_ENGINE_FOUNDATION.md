@@ -142,3 +142,14 @@ histórico / Aprendizado). It never creates alerts/odds/bets/Telegram, never wir
 `ENABLE_AUTO_ENGINE_TO_ALERTS`, and never alters patterns/confidence/counters —
 opportunity ≠ alert, score ≠ probability, unknown/missing ≠ failure. See
 `docs/AUTO_ENGINE_COCKPIT_UI_FOUNDATION.md` and `docs/AUTO_ENGINE_COCKPIT_UI_AUDIT.md`.
+
+## B21 — Opportunity actions + promotion (read/observational)
+
+B21 adds auditable human interaction on top of this foundation: save / dismiss /
+feedback / notes and a radar **promotion proposal** (`buildPromotionPlan`, pure), plus a
+read-only fixture-context lookup and server-side opportunity search. New Firestore
+collections `autoOpportunityActions`, `autoOpportunityUserStates`,
+`autoOpportunityPromotionPlans` (Firebase persists; Prisma → Noop). Observational
+learning events use `source=user_feedback` and are NEVER counted as statistical truth.
+Still no alert/odds/bet/Telegram, no pattern/score change, and `ENABLE_AUTO_ENGINE_TO_ALERTS`
+remains unwired. See `backend/docs/AUTO_OPPORTUNITY_ACTIONS.md` and `docs/AUTO_OPPORTUNITY_ACTIONS_UI.md`.

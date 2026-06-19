@@ -5,28 +5,35 @@
  * conservative. Score is signal-quality, never a "chance". No betting colors.
  */
 import { useMemo, useState } from 'react'
-import { Search, SlidersHorizontal } from 'lucide-react'
-import type { AutoOpportunityDto, AutoOpportunityFilters } from '@/features/command/intelligence/autoEngineTypes'
-import { OPP_TYPE_LABEL, STATUS_LABEL, STATUS_TONE, BAND_LABEL, blockReasonLabel } from '@/features/command/intelligence/autoEngineTypes'
+import { Search, SlidersHorizontal, Bookmark, EyeOff, MessageSquare, FlaskConical } from 'lucide-react'
+import type { AutoOpportunityDto, AutoOpportunityFilters, AutoOpportunityUserStateLite } from '@/features/command/intelligence/autoEngineTypes'
+import { OPP_TYPE_LABEL, STATUS_LABEL, STATUS_TONE, BAND_LABEL, FEEDBACK_LABEL, blockReasonLabel } from '@/features/command/intelligence/autoEngineTypes'
 
 interface Props {
   opportunities: AutoOpportunityDto[]
   loading: boolean
   /** Lock the view to blocked-only (the "Bloqueadas" segment). */
   blockedOnly?: boolean
+  /** Per-opportunity human state for badges + saved/dismissed/feedback filters. */
+  userStates?: Record<string, AutoOpportunityUserStateLite>
   onOpen: (o: AutoOpportunityDto) => void
 }
 
+interface StateFilters { saved?: boolean; dismissed?: boolean; withFeedback?: boolean; withNote?: boolean; withPromotion?: boolean }
+
 const norm = (s: string) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
-export function AutoOpportunitiesList({ opportunities, loading, blockedOnly, onOpen }: Props) {
+export function AutoOpportunitiesList({ opportunities, loading, blockedOnly, userStates = {}, onOpen }: Props) {
   const [f, setF] = useState<AutoOpportunityFilters>({})
+  const [sf, setSf] = useState<StateFilters>({})
   const patch = (p: Partial<AutoOpportunityFilters>) => setF(prev => ({ ...prev, ...p }))
+  const patchState = (p: Partial<StateFilters>) => setSf(prev => ({ ...prev, ...p }))
 
   const leagues = useMemo(() => [...new Set(opportunities.map(o => o.leagueName).filter(Boolean))].sort(), [opportunities])
 
   const filtered = useMemo(() => {
     return opportunities.filter(o => {
+      const st = userStates[o.id]
       if (blockedOnly && o.status !== 'blocked') return false
       if (!blockedOnly && f.onlyBlocked && o.status !== 'blocked') return false
       if (f.onlyStrong && o.status !== 'strong') return false
@@ -37,13 +44,18 @@ export function AutoOpportunitiesList({ opportunities, loading, blockedOnly, onO
       if (f.dataQuality && o.evidence?.dataQuality !== f.dataQuality) return false
       if (f.minScore != null && o.score < f.minScore) return false
       if (f.blockReason && !o.riskGate?.blockReasons?.includes(f.blockReason)) return false
+      if (sf.saved && !st?.saved) return false
+      if (sf.dismissed && !st?.dismissed) return false
+      if (sf.withFeedback && !st?.lastFeedback) return false
+      if (sf.withNote && !(st?.noteCount && st.noteCount > 0)) return false
+      if (sf.withPromotion && !st?.hasPromotionPlan) return false
       if (f.query) {
         const q = norm(f.query)
         if (!norm(o.fixtureLabel).includes(q) && !norm(o.homeTeam).includes(q) && !norm(o.awayTeam).includes(q) && !norm(o.leagueName).includes(q)) return false
       }
       return true
     })
-  }, [opportunities, f, blockedOnly])
+  }, [opportunities, f, sf, blockedOnly, userStates])
 
   return (
     <div className="space-y-3">
@@ -70,6 +82,13 @@ export function AutoOpportunitiesList({ opportunities, loading, blockedOnly, onO
             <input type="number" min={0} max={100} value={f.minScore ?? ''} onChange={e => patch({ minScore: e.target.value === '' ? undefined : Number(e.target.value) })} className="w-12 bg-transparent outline-none text-white/90 tabular-nums" />
           </label>
         </div>
+        <div className="flex flex-wrap gap-1.5">
+          <Toggle on={!!sf.saved} onClick={() => patchState({ saved: !sf.saved })} icon={<Bookmark size={11} />} label="Salvas" />
+          <Toggle on={!!sf.dismissed} onClick={() => patchState({ dismissed: !sf.dismissed })} icon={<EyeOff size={11} />} label="Ignoradas" />
+          <Toggle on={!!sf.withFeedback} onClick={() => patchState({ withFeedback: !sf.withFeedback })} label="Com feedback" />
+          <Toggle on={!!sf.withNote} onClick={() => patchState({ withNote: !sf.withNote })} icon={<MessageSquare size={11} />} label="Com nota" />
+          <Toggle on={!!sf.withPromotion} onClick={() => patchState({ withPromotion: !sf.withPromotion })} icon={<FlaskConical size={11} />} label="Com proposta" />
+        </div>
       </div>
 
       {loading
@@ -78,10 +97,18 @@ export function AutoOpportunitiesList({ opportunities, loading, blockedOnly, onO
           ? <p className="text-[12px] text-white/40 px-1 py-8 text-center">{blockedOnly ? 'Nenhuma oportunidade bloqueada no momento.' : 'Nenhuma oportunidade corresponde aos filtros.'}</p>
           : (
             <div className="space-y-2">
-              {filtered.map(o => <Row key={o.id} o={o} onOpen={onOpen} />)}
+              {filtered.map(o => <Row key={o.id} o={o} st={userStates[o.id]} onOpen={onOpen} />)}
             </div>
           )}
     </div>
+  )
+}
+
+function Toggle({ on, onClick, icon, label }: { on: boolean; onClick: () => void; icon?: React.ReactNode; label: string }) {
+  return (
+    <button type="button" onClick={onClick} className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border text-[11px] font-medium transition-colors ${on ? 'bg-[#13B8A6]/12 border-[#2DD4BF]/30 text-[#7FE9DC]' : 'bg-white/[0.03] border-white/[0.08] text-white/50 hover:text-white/75'}`}>
+      {icon}{label}
+    </button>
   )
 }
 
@@ -93,7 +120,7 @@ function Select({ value, onChange, options }: { value: string; onChange: (v: str
   )
 }
 
-function Row({ o, onOpen }: { o: AutoOpportunityDto; onOpen: (o: AutoOpportunityDto) => void }) {
+function Row({ o, st, onOpen }: { o: AutoOpportunityDto; st?: AutoOpportunityUserStateLite; onOpen: (o: AutoOpportunityDto) => void }) {
   const topRisk = o.riskGate?.blockReasons?.[0]
   const topEvidence = o.evidence?.passedSignals?.slice(0, 2) ?? []
   return (
@@ -114,6 +141,11 @@ function Row({ o, onOpen }: { o: AutoOpportunityDto; onOpen: (o: AutoOpportunity
         {o.status === 'blocked' && topRisk
           ? <span className="text-[10.5px] px-1.5 py-0.5 rounded border bg-amber-500/8 border-amber-400/15 text-amber-100/70">bloqueada: {blockReasonLabel(topRisk)}</span>
           : topEvidence.map((e, i) => <span key={i} className="text-[10.5px] px-1.5 py-0.5 rounded border bg-white/[0.04] border-white/[0.08] text-white/55">{e}</span>)}
+        {st?.saved && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#13B8A6]/12 border border-[#2DD4BF]/25 text-[#7FE9DC]">salvo</span>}
+        {st?.dismissed && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.05] border border-white/[0.1] text-white/45">ignorada</span>}
+        {st?.lastFeedback && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-white/55">{FEEDBACK_LABEL[st.lastFeedback]}</span>}
+        {st?.noteCount ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-white/55">{st.noteCount} nota{st.noteCount > 1 ? 's' : ''}</span> : null}
+        {st?.hasPromotionPlan && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-white/55">proposta</span>}
         <span className="ml-auto text-[10.5px] text-[#5EEAD4]/70">Ver análise →</span>
       </div>
     </button>

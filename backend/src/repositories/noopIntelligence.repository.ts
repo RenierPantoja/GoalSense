@@ -22,7 +22,8 @@ import type {
   BacktestRun, ReplayRun, PersistedBacktestSignalResult,
 } from '../modules/intelligence/backtest/backtest.types.js'
 import type {
-  AutoEngineRun, AutoOpportunity,
+  AutoEngineRun, AutoOpportunity, AutoOpportunityAction, AutoOpportunityUserState,
+  AutoOpportunityPromotionPlan,
 } from '../modules/intelligence/autoEngine/autoEngine.types.js'
 
 let warned = false
@@ -106,4 +107,15 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async getAutoOpportunity(): Promise<AutoOpportunity | null> { return null }
   async listAutoOpportunities(): Promise<AutoOpportunity[]> { return [] }
   async listAutoOpportunitiesByFixture(): Promise<AutoOpportunity[]> { return [] }
+
+  // ── B21 (Noop): reads empty; writes accepted without persistence ──
+  async createAutoOpportunityAction(action: AutoOpportunityAction): Promise<AutoOpportunityAction> { warnOnce(); return action }
+  async listAutoOpportunityActions(): Promise<AutoOpportunityAction[]> { return [] }
+  async listAutoOpportunityActionsByOpportunity(): Promise<AutoOpportunityAction[]> { return [] }
+  async upsertAutoOpportunityUserState(state: AutoOpportunityUserState): Promise<AutoOpportunityUserState> { warnOnce(); return state }
+  async getAutoOpportunityUserState(): Promise<AutoOpportunityUserState | null> { return null }
+  async listAutoOpportunityUserStates(): Promise<AutoOpportunityUserState[]> { return [] }
+  async createAutoOpportunityPromotionPlan(plan: AutoOpportunityPromotionPlan): Promise<AutoOpportunityPromotionPlan> { warnOnce(); return plan }
+  async getAutoOpportunityPromotionPlan(): Promise<AutoOpportunityPromotionPlan | null> { return null }
+  async listAutoOpportunityPromotionPlans(): Promise<AutoOpportunityPromotionPlan[]> { return [] }
 }

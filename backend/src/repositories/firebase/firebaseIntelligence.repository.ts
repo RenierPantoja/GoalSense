@@ -27,7 +27,8 @@ import type {
   BacktestRun, ReplayRun, PersistedBacktestSignalResult,
 } from '../../modules/intelligence/backtest/backtest.types.js'
 import type {
-  AutoEngineRun, AutoOpportunity,
+  AutoEngineRun, AutoOpportunity, AutoOpportunityAction, AutoOpportunityUserState,
+  AutoOpportunityPromotionPlan,
 } from '../../modules/intelligence/autoEngine/autoEngine.types.js'
 
 const LEDGER = 'signalLedger'
@@ -46,6 +47,9 @@ const BACKTEST_RESULTS = 'backtestSignalResults'
 const REPLAY_RUNS = 'replayRuns'
 const AUTO_RUNS = 'autoEngineRuns'
 const AUTO_OPPS = 'autoOpportunities'
+const AUTO_ACTIONS = 'autoOpportunityActions'
+const AUTO_USER_STATES = 'autoOpportunityUserStates'
+const AUTO_PROMOTIONS = 'autoOpportunityPromotionPlans'
 
 const READ_CAP = 2000
 
@@ -413,5 +417,52 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     const db = await getFirestore()
     const snap = await db.collection(AUTO_OPPS).where('fixtureId', '==', fixtureId).get()
     return snap.docs.map((d: any) => docData<AutoOpportunity>(d)).sort(byCreatedAtDesc).slice(0, limit || 50)
+  }
+
+  // ── B21: opportunity actions / feedback / notes / user-state / promotion ────
+  async createAutoOpportunityAction(action: AutoOpportunityAction): Promise<AutoOpportunityAction> {
+    const db = await getFirestore()
+    await db.collection(AUTO_ACTIONS).doc(action.id).set(action, { merge: true })
+    return action
+  }
+  async listAutoOpportunityActions(limit?: number): Promise<AutoOpportunityAction[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(AUTO_ACTIONS).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<AutoOpportunityAction>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
+  }
+  async listAutoOpportunityActionsByOpportunity(opportunityId: string, limit?: number): Promise<AutoOpportunityAction[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(AUTO_ACTIONS).where('opportunityId', '==', opportunityId).get()
+    return snap.docs.map((d: any) => docData<AutoOpportunityAction>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
+  }
+  async upsertAutoOpportunityUserState(state: AutoOpportunityUserState): Promise<AutoOpportunityUserState> {
+    const db = await getFirestore()
+    await db.collection(AUTO_USER_STATES).doc(state.id).set(state, { merge: true })
+    return state
+  }
+  async getAutoOpportunityUserState(opportunityId: string): Promise<AutoOpportunityUserState | null> {
+    const db = await getFirestore()
+    const doc = await db.collection(AUTO_USER_STATES).doc(`aus_${opportunityId}`).get()
+    return doc.exists ? docData<AutoOpportunityUserState>(doc) : null
+  }
+  async listAutoOpportunityUserStates(limit?: number): Promise<AutoOpportunityUserState[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(AUTO_USER_STATES).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<AutoOpportunityUserState>(d)).slice(0, limit || 500)
+  }
+  async createAutoOpportunityPromotionPlan(plan: AutoOpportunityPromotionPlan): Promise<AutoOpportunityPromotionPlan> {
+    const db = await getFirestore()
+    await db.collection(AUTO_PROMOTIONS).doc(plan.id).set(plan, { merge: true })
+    return plan
+  }
+  async getAutoOpportunityPromotionPlan(opportunityId: string): Promise<AutoOpportunityPromotionPlan | null> {
+    const db = await getFirestore()
+    const doc = await db.collection(AUTO_PROMOTIONS).doc(`apl_${opportunityId}`).get()
+    return doc.exists ? docData<AutoOpportunityPromotionPlan>(doc) : null
+  }
+  async listAutoOpportunityPromotionPlans(limit?: number): Promise<AutoOpportunityPromotionPlan[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(AUTO_PROMOTIONS).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<AutoOpportunityPromotionPlan>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
   }
 }

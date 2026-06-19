@@ -1,27 +1,34 @@
 /**
- * AutoEngineCockpit — the Auto Engine ("Motor Automático") cockpit view. (B20)
+ * AutoEngineCockpit — the Auto Engine ("Motor Automático") cockpit view. (B20→B21)
  * ─────────────────────────────────────────────────────────────────────────────
- * Lets the user see whether the engine is on, which flags are enabled, run a
- * manual scan when allowed, and browse/inspect opportunities (including blocked
- * ones). Honest throughout: empty states, limitations visible, no odds, no bet
- * CTA, no Telegram, no "create alert". Opportunity ≠ alert; score ≠ probability.
+ * See the engine state/flags, run a manual scan, browse/inspect opportunities
+ * (including blocked ones), and act on them (save / dismiss / feedback / notes /
+ * promote-to-radar). Honest throughout: empty states, limitations visible, no odds,
+ * no bet CTA, no Telegram, no "create alert". Opportunity ≠ alert; score ≠ probability.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Cpu, RefreshCw, LayoutGrid, ListChecks, ShieldAlert, PlugZap } from 'lucide-react'
 import { autoEngineApi } from '@/services/autoEngineApi'
-import type { AutoEngineStatusDto, AutoEngineRunDto, AutoOpportunityDto, AutoEngineScanRequest } from '@/features/command/intelligence/autoEngineTypes'
+import type {
+  AutoEngineStatusDto, AutoEngineRunDto, AutoOpportunityDto, AutoEngineScanRequest,
+  AutoOpportunityUserStateLite, AutoOpportunityPromotionPlanDto,
+} from '@/features/command/intelligence/autoEngineTypes'
 import { CounterCell } from '../shared/CounterCell'
 import { AutoEngineStatusPanel } from './AutoEngineStatusPanel'
 import { AutoEngineScanPanel } from './AutoEngineScanPanel'
 import { AutoEngineOverviewPanel } from './AutoEngineOverviewPanel'
 import { AutoOpportunitiesList } from './AutoOpportunitiesList'
 import { AutoOpportunityDrawer } from './AutoOpportunityDrawer'
+import { AutoOpportunityPromotionPanel } from './AutoOpportunityPromotionPanel'
 
 interface Props {
   backendOnline: boolean
   onGoToBacktest?: () => void
   onGoToAlerts?: () => void
-  openMatch?: (fixtureId: string) => void
+  /** Open the radar editor pre-filled from a promotion plan (never auto-saves). */
+  onPromoteToRadar?: (plan: AutoOpportunityPromotionPlanDto) => void
+  /** Resolve + open a live fixture; returns whether it was resolved. */
+  onOpenMatch?: (opp: AutoOpportunityDto) => boolean
 }
 
 type Segment = 'overview' | 'oportunidades' | 'bloqueadas'
@@ -42,15 +49,18 @@ function EmptyNote({ title, body }: { title: string; body: string }) {
   )
 }
 
-export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts, openMatch }: Props) {
+export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts, onPromoteToRadar, onOpenMatch }: Props) {
   const backendConfigured = autoEngineApi.isBackendConfigured()
   const [status, setStatus] = useState<AutoEngineStatusDto | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
   const [runs, setRuns] = useState<AutoEngineRunDto[]>([])
   const [opportunities, setOpportunities] = useState<AutoOpportunityDto[]>([])
+  const [userStates, setUserStates] = useState<Record<string, AutoOpportunityUserStateLite>>({})
   const [oppsLoading, setOppsLoading] = useState(true)
   const [segment, setSegment] = useState<Segment>('overview')
   const [drawer, setDrawer] = useState<AutoOpportunityDto | null>(null)
+  const [promotion, setPromotion] = useState<AutoOpportunityPromotionPlanDto | null>(null)
+  const [promotionMsg, setPromotionMsg] = useState<string | null>(null)
 
   const [scanRunning, setScanRunning] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
@@ -59,14 +69,21 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
   const refresh = useCallback(async () => {
     if (!backendConfigured) { setStatusLoading(false); setOppsLoading(false); return }
     setStatusLoading(true); setOppsLoading(true)
-    const [s, r, o] = await Promise.all([
+    const [s, r, search] = await Promise.all([
       autoEngineApi.getStatus(),
       autoEngineApi.listRuns(20),
-      autoEngineApi.listOpportunities({}, 200),
+      autoEngineApi.searchOpportunities({ limit: 300 }),
     ])
     if (s.ok) setStatus(s.data)
     if (r.ok && r.data) setRuns(r.data)
-    if (o.ok && o.data) setOpportunities(o.data)
+    if (search.ok && search.data) {
+      setOpportunities(search.data.items)
+      setUserStates(search.data.userStates || {})
+    } else {
+      // Fallback to the plain list endpoint (older backend / search unavailable).
+      const o = await autoEngineApi.listOpportunities({}, 200)
+      if (o.ok && o.data) setOpportunities(o.data)
+    }
     setStatusLoading(false); setOppsLoading(false)
   }, [backendConfigured])
 
@@ -86,6 +103,30 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
     void refresh()
   }, [refresh])
 
+  const onStateChange = useCallback((opportunityId: string, lite: AutoOpportunityUserStateLite) => {
+    setUserStates(prev => ({ ...prev, [opportunityId]: lite }))
+  }, [])
+
+  const handleCreatePromotion = useCallback(async (opp: AutoOpportunityDto) => {
+    setPromotionMsg(null)
+    const res = await autoEngineApi.createPromotionPlan(opp.id)
+    if (res.ok && res.data) {
+      setPromotion(res.data)
+      setDrawer(null)
+      // Log the proposal as an auditable action (best-effort).
+      const act = await autoEngineApi.createOpportunityAction(opp.id, { actionType: 'radar_proposal_created' })
+      if (act.ok && act.data) onStateChange(opp.id, act.data.userState)
+      if (!res.data.sufficient) setPromotionMsg('A oportunidade não possui evidência suficiente para gerar um radar executável.')
+    } else {
+      setPromotionMsg(res.error || 'Não foi possível gerar a proposta de radar.')
+    }
+  }, [onStateChange])
+
+  const openEditorFromPlan = useCallback((plan: AutoOpportunityPromotionPlanDto) => {
+    setPromotion(null)
+    onPromoteToRadar?.(plan)
+  }, [onPromoteToRadar])
+
   if (!backendConfigured) {
     return (
       <div className="space-y-5">
@@ -103,7 +144,10 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
         <div className="rounded-xl border border-amber-400/18 bg-amber-500/[0.05] px-4 py-3 text-[12px] text-amber-100/75">Backend offline no momento — exibindo o último estado conhecido. Reconecte para atualizar.</div>
       )}
       {status && !status.enabled && (
-        <div className="rounded-xl border border-amber-400/18 bg-amber-500/[0.05] px-4 py-3 text-[12px] text-amber-100/75">Motor Automático desabilitado neste ambiente (ENABLE_AUTO_ENGINE=false). Você ainda pode ver oportunidades já registradas; novos scans ficam indisponíveis.</div>
+        <div className="rounded-xl border border-amber-400/18 bg-amber-500/[0.05] px-4 py-3 text-[12px] text-amber-100/75">Motor Automático desabilitado neste ambiente (ENABLE_AUTO_ENGINE=false). Você ainda pode ver e gerenciar oportunidades já registradas; novos scans ficam indisponíveis.</div>
+      )}
+      {promotionMsg && (
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-[12px] text-white/70">{promotionMsg}</div>
       )}
 
       {/* Counters strip */}
@@ -139,11 +183,11 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
       </div>
 
       {segment === 'overview' && <AutoEngineOverviewPanel status={status} runs={runs} onOpenOpportunity={setDrawer} />}
-      {segment === 'oportunidades' && <AutoOpportunitiesList opportunities={opportunities} loading={oppsLoading} onOpen={setDrawer} />}
+      {segment === 'oportunidades' && <AutoOpportunitiesList opportunities={opportunities} loading={oppsLoading} userStates={userStates} onOpen={setDrawer} />}
       {segment === 'bloqueadas' && (
         <>
           <p className="text-[12px] text-white/45 px-1">O que o motor recusou e por quê — bloqueio é evidência de inteligência conservadora, não erro.</p>
-          <AutoOpportunitiesList opportunities={opportunities} loading={oppsLoading} blockedOnly onOpen={setDrawer} />
+          <AutoOpportunitiesList opportunities={opportunities} loading={oppsLoading} userStates={userStates} blockedOnly onOpen={setDrawer} />
         </>
       )}
 
@@ -153,8 +197,14 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
           onClose={() => setDrawer(null)}
           onGoToBacktest={onGoToBacktest}
           onGoToAlerts={onGoToAlerts}
-          onOpenMatch={openMatch}
+          onCreatePromotion={handleCreatePromotion}
+          onOpenMatch={onOpenMatch}
+          onStateChange={onStateChange}
         />
+      )}
+
+      {promotion && (
+        <AutoOpportunityPromotionPanel plan={promotion} onOpenEditor={openEditorFromPlan} onCancel={() => setPromotion(null)} />
       )}
     </div>
   )

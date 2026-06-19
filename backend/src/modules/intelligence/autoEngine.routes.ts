@@ -7,8 +7,24 @@
  */
 import type { FastifyInstance } from 'fastify'
 import { createRepositories } from '../../repositories/index.js'
-import { ok, badRequest } from '../../utils/apiResponse.js'
+import { ok, badRequest, notFound } from '../../utils/apiResponse.js'
 import { runAutoEngineScan, getAutoEngineOverview, isAutoEngineEnabled } from './autoEngine/autoEngine.service.js'
+import {
+  createOpportunityAction, recordFeedback, addNote, getActionSummary, listActions,
+  searchAutoOpportunities, getFixtureContext, type CreateActionInput, type OpportunitySearchFilters,
+} from './autoEngine/autoOpportunityActions.service.js'
+import { createPromotionPlanForOpportunity, getPromotionPlan } from './autoEngine/autoOpportunityPromotion.service.js'
+import type { AutoOpportunityActionType, AutoOpportunityFeedbackType } from './autoEngine/autoEngine.types.js'
+
+const VALID_ACTIONS: AutoOpportunityActionType[] = [
+  'saved', 'unsaved', 'dismissed', 'restored', 'marked_useful', 'marked_not_useful',
+  'feedback_recorded', 'note_added', 'note_removed', 'radar_proposal_created',
+  'opened_in_backtest', 'opened_related_alerts', 'opened_fixture', 'ignored_for_now',
+]
+const VALID_FEEDBACK: AutoOpportunityFeedbackType[] = [
+  'useful', 'not_useful', 'too_early', 'too_late', 'data_poor', 'context_wrong',
+  'already_seen', 'interesting_but_weak', 'strong_signal', 'irrelevant', 'unknown',
+]
 
 function clampLimit(raw: string | undefined, def: number, max: number): number {
   const n = raw ? parseInt(raw, 10) : def
@@ -67,5 +83,94 @@ export async function autoEngineRoutes(app: FastifyInstance) {
     const { limit } = req.query as { limit?: string }
     try { return ok(await repos.intelligence.listAutoOpportunitiesByFixture(fixtureId, clampLimit(limit, 50, 100))) }
     catch (e: any) { app.log.warn(`auto-engine fixture opportunities failed: ${e?.message || e}`); return ok([]) }
+  })
+
+  // ── B21: server-side search (richer filters; back-compat /opportunities kept) ──
+  app.get('/intelligence/auto-engine/opportunities/search', async (req) => {
+    const q = req.query as Record<string, string>
+    const filters: OpportunitySearchFilters = {
+      status: q.status, type: q.type, league: q.league, team: q.team,
+      minScore: q.minScore ? Number(q.minScore) : undefined,
+      confidenceBand: q.confidenceBand, dataQuality: q.dataQuality, blockReason: q.blockReason,
+      q: q.q, saved: q.saved === 'true', dismissed: q.dismissed === 'true', feedbackType: q.feedbackType,
+      limit: q.limit ? Number(q.limit) : undefined, cursor: q.cursor,
+    }
+    try { return ok(await searchAutoOpportunities(filters)) }
+    catch (e: any) { app.log.warn(`auto-engine search failed: ${e?.message || e}`); return ok({ items: [], total: 0, appliedFilters: [], unsupportedFilters: [], userStates: {} }) }
+  })
+
+  // ── B21: read-only fixture context (resolves the B20 "open match" limitation) ──
+  app.get('/intelligence/auto-engine/fixtures/:fixtureId/context', async (req) => {
+    const { fixtureId } = req.params as { fixtureId: string }
+    try { return ok(await getFixtureContext(fixtureId)) }
+    catch (e: any) { app.log.warn(`auto-engine fixture context failed: ${e?.message || e}`); return ok(null) }
+  })
+
+  // ── B21: opportunity actions / feedback / notes ──────────────────────────────
+  // These never create an alert, never send Telegram, never alter a pattern/score.
+  app.post('/intelligence/auto-engine/opportunities/:id/actions', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const body = (req.body || {}) as Partial<CreateActionInput>
+    if (!body.actionType || !VALID_ACTIONS.includes(body.actionType)) {
+      return reply.status(400).send(badRequest('actionType inválido', { allowed: VALID_ACTIONS }))
+    }
+    if (body.feedbackType && !VALID_FEEDBACK.includes(body.feedbackType)) {
+      return reply.status(400).send(badRequest('feedbackType inválido', { allowed: VALID_FEEDBACK }))
+    }
+    const res = await createOpportunityAction(id, {
+      actionType: body.actionType, feedbackType: body.feedbackType ?? null,
+      note: typeof body.note === 'string' ? body.note : null,
+      reason: typeof body.reason === 'string' ? body.reason : null,
+      metadata: body.metadata ?? null,
+    })
+    if (!res.ok) return reply.status(404).send(notFound(res.error || 'Oportunidade não encontrada.'))
+    return ok({ action: res.action, summary: res.summary, userState: res.userState })
+  })
+
+  app.get('/intelligence/auto-engine/opportunities/:id/actions', async (req) => {
+    const { id } = req.params as { id: string }
+    const { limit } = req.query as { limit?: string }
+    try { return ok(await listActions(id, clampLimit(limit, 100, 300))) }
+    catch (e: any) { app.log.warn(`auto-engine actions failed: ${e?.message || e}`); return ok([]) }
+  })
+
+  app.get('/intelligence/auto-engine/opportunities/:id/action-summary', async (req) => {
+    const { id } = req.params as { id: string }
+    try { return ok(await getActionSummary(id)) }
+    catch (e: any) { app.log.warn(`auto-engine action-summary failed: ${e?.message || e}`); return ok(null) }
+  })
+
+  app.post('/intelligence/auto-engine/opportunities/:id/feedback', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const body = (req.body || {}) as { feedbackType?: AutoOpportunityFeedbackType; note?: string }
+    if (!body.feedbackType || !VALID_FEEDBACK.includes(body.feedbackType)) {
+      return reply.status(400).send(badRequest('feedbackType inválido', { allowed: VALID_FEEDBACK }))
+    }
+    const res = await recordFeedback(id, body.feedbackType, typeof body.note === 'string' ? body.note : undefined)
+    if (!res.ok) return reply.status(404).send(notFound(res.error || 'Oportunidade não encontrada.'))
+    return ok({ action: res.action, summary: res.summary, userState: res.userState })
+  })
+
+  app.post('/intelligence/auto-engine/opportunities/:id/notes', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const body = (req.body || {}) as { note?: string }
+    if (!body.note || !body.note.trim()) return reply.status(400).send(badRequest('Nota vazia.'))
+    const res = await addNote(id, body.note)
+    if (!res.ok) return reply.status(404).send(notFound(res.error || 'Oportunidade não encontrada.'))
+    return ok({ action: res.action, summary: res.summary, userState: res.userState })
+  })
+
+  // ── B21: promotion plan (proposal only — never saves/activates a radar) ──────
+  app.post('/intelligence/auto-engine/opportunities/:id/promotion-plan', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const res = await createPromotionPlanForOpportunity(id)
+    if (!res.ok) return reply.status(404).send(notFound(res.error || 'Oportunidade não encontrada.'))
+    return ok(res.plan)
+  })
+
+  app.get('/intelligence/auto-engine/opportunities/:id/promotion-plan', async (req) => {
+    const { id } = req.params as { id: string }
+    try { return ok(await getPromotionPlan(id)) }
+    catch (e: any) { app.log.warn(`auto-engine promotion-plan failed: ${e?.message || e}`); return ok(null) }
   })
 }

@@ -33,6 +33,8 @@ const explain = await load('../dist/modules/intelligence/autoEngine/autoSignalEx
 const ctxUtil = await load('../dist/modules/intelligence/autoEngine/utils/autoSignalContext.util.js')
 const idUtil = await load('../dist/modules/intelligence/autoEngine/utils/autoSignalId.util.js')
 const noop = await load('../dist/repositories/noopIntelligence.repository.js')
+const promotion = await load('../dist/modules/intelligence/autoEngine/utils/autoOpportunityPromotion.util.js')
+const actions = await load('../dist/modules/intelligence/autoEngine/utils/autoOpportunityActions.util.js')
 
 // ── Deterministic ids ────────────────────────────────────────────────────────
 console.log('[smoke] deterministic opportunity id:')
@@ -143,5 +145,60 @@ await repo.createAutoEngineRun({ id: 'aer_x' })
 await repo.updateAutoEngineRun('aer_x', {})
 await repo.upsertAutoOpportunity({ id: 'aop_x' })
 assert(true, 'Noop create/update/upsert accept writes without throwing (no persistence)')
+
+// ── B21: promotion plan builder (PURE, only real evidence) ───────────────────
+console.log('[smoke] B21 promotion plan honesty:')
+function mkOpp(over = {}) {
+  return {
+    id: 'aop_test', runId: 'aer_x', fixtureId: 'fx_1', fixtureLabel: 'A vs B', leagueName: 'Serie A',
+    homeTeam: 'A', awayTeam: 'B', minute: 78, scoreState: { home: 1, away: 1 },
+    opportunityType: 'late_goal_pressure', status: 'watch', score: 64, confidenceBand: 'medium',
+    scoreBreakdown: {}, evidence: { liveStatsUsed: { shotsOnTargetHome: 4, shotsOnTargetAway: 2 }, minute: 78, scoreState: { home: 1, away: 1 }, recentOffensiveEvents: 2, passedSignals: ["Reta final (≥70')"], missingData: [], dataQuality: 'partial', provider: 'espn' },
+    contextFit: { competitionType: 'league', importanceLabel: 'média', minuteWindow: '70-80', matchedLearningContexts: [], sampleQuality: 'moderate', source: 'observed', notes: [] },
+    riskGate: { allowed: true, blockReasons: [], penalties: [], warnings: [], finalDecision: 'allow' },
+    relatedPatternIds: [], learningProfileRefs: [], dataAvailability: {}, explanation: { headline: 'Pressão por gol na reta final', whyNow: [], evidenceUsed: [], historicalContext: [], risks: [], relatedPatternNote: null },
+    createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', ...over,
+  }
+}
+const plan = promotion.buildPromotionPlan(mkOpp())
+assert(plan.id === 'apl_aop_test', 'promotion plan id is deterministic (apl_<oppId>)')
+assert(plan.sufficient === true, 'late_goal_pressure with SOT → has signal conditions (sufficient)')
+assert(plan.suggestedEligibilityConditions.some(c => c.type === 'is_live'), 'always includes is_live eligibility')
+assert(plan.suggestedSignalConditions.some(c => c.type === 'score_diff_lte'), 'derives score_diff_lte from tight score')
+assert(plan.suggestedSignalConditions.some(c => c.type === 'shots_on_target_gte'), 'derives SOT signal only because SOT present')
+assert(plan.suggestedConfidence >= 50 && plan.suggestedConfidence <= 75, 'suggestedConfidence clamped to a sane range (not a probability)')
+
+const thinPlan = promotion.buildPromotionPlan(mkOpp({ opportunityType: 'pattern_similarity', evidence: { liveStatsUsed: null, minute: 80, scoreState: { home: 1, away: 1 }, recentOffensiveEvents: 0, passedSignals: [], missingData: [], dataQuality: 'partial', provider: 'espn' } }))
+assert(thinPlan.sufficient === false, 'pattern_similarity without derivable signals → sufficient=false')
+assert(thinPlan.limitations[0].includes('evidência suficiente'), 'thin plan flags "evidência suficiente para gerar radar" limitation')
+
+const heurPlan = promotion.buildPromotionPlan(mkOpp({ contextFit: { competitionType: 'cup', importanceLabel: 'alta', minuteWindow: '70-80', matchedLearningContexts: [], sampleQuality: 'insufficient', source: 'heuristic', notes: [] } }))
+assert(heurPlan.limitations.some(l => l.includes('heurístico')), 'heuristic context is flagged in limitations')
+assert(heurPlan.limitations.some(l => l.includes('insuficiente')), 'insufficient sample is flagged in limitations')
+
+// ── B21: action summary reducer (PURE) ───────────────────────────────────────
+console.log('[smoke] B21 action summary reducer:')
+const acts = [
+  { id: 'a1', opportunityId: 'o', fixtureId: 'f', userId: null, actionType: 'saved', feedbackType: null, note: null, reason: null, metadata: null, createdAt: '2026-01-01T00:00:00Z' },
+  { id: 'a2', opportunityId: 'o', fixtureId: 'f', userId: null, actionType: 'note_added', feedbackType: null, note: 'olho nisso', reason: null, metadata: null, createdAt: '2026-01-01T00:01:00Z' },
+  { id: 'a3', opportunityId: 'o', fixtureId: 'f', userId: null, actionType: 'marked_useful', feedbackType: 'useful', note: null, reason: null, metadata: null, createdAt: '2026-01-01T00:02:00Z' },
+  { id: 'a4', opportunityId: 'o', fixtureId: 'f', userId: null, actionType: 'unsaved', feedbackType: null, note: null, reason: null, metadata: null, createdAt: '2026-01-01T00:03:00Z' },
+]
+const sum = actions.summarizeActions('o', acts)
+assert(sum.saved === false, 'saved then unsaved → final saved=false (last write wins)')
+assert(sum.noteCount === 1 && sum.notes[0].note === 'olho nisso', 'notes folded from note_added actions')
+assert(sum.lastFeedback === 'useful' && sum.feedbackCounts.useful === 1, 'feedback folded; lastFeedback tracked')
+assert(sum.totalActions === 4, 'totalActions counts the full log')
+const emptySum = actions.summarizeActions('o', [])
+assert(emptySum.saved === false && emptySum.totalActions === 0 && emptySum.lastFeedback === null, 'empty log → honest empty summary')
+
+console.log('[smoke] B21 Noop action/promotion safety:')
+assert((await repo.listAutoOpportunityActions()).length === 0, 'Noop listAutoOpportunityActions → []')
+assert((await repo.getAutoOpportunityUserState('x')) === null, 'Noop getAutoOpportunityUserState → null')
+assert((await repo.getAutoOpportunityPromotionPlan('x')) === null, 'Noop getAutoOpportunityPromotionPlan → null')
+await repo.createAutoOpportunityAction({ id: 'aoa_x' })
+await repo.upsertAutoOpportunityUserState({ id: 'aus_x' })
+await repo.createAutoOpportunityPromotionPlan({ id: 'apl_x' })
+assert(true, 'Noop B21 writes accepted without throwing (no persistence)')
 
 console.log(process.exitCode ? '[smoke] FAILED' : '[smoke] OK')

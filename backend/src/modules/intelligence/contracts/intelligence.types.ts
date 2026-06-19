@@ -222,6 +222,13 @@ export type LearningEventType =
   | 'possible_threshold_issue'
   | 'scope_effect_observed'
   | 'competition_context_observed'
+  // B21 — observational events from human feedback on auto opportunities.
+  // These are NEVER counted as statistical truth and NEVER auto-tune anything.
+  | 'auto_opportunity_saved'
+  | 'auto_opportunity_dismissed'
+  | 'auto_opportunity_marked_useful'
+  | 'auto_opportunity_marked_not_useful'
+  | 'auto_opportunity_radar_proposal_created'
 
 export interface LearningEvent {
   id: string
@@ -233,6 +240,8 @@ export interface LearningEvent {
   message: string
   evidenceRef: string | null
   confidence: Confidence
+  /** B21: 'user_feedback' marks human-originated, non-statistical observations. */
+  source?: 'system' | 'user_feedback'
   createdAt: string
 }
 

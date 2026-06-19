@@ -36,6 +36,7 @@ import { recordScopeEntities } from '@/services/intelligence/scopeKnowledgeBase'
 import { isLiveFx, detectChanges, type ChangeEvent } from './commandHelpers'
 import { getCommandCenterPollingInterval } from '@/lib/liveFreshness'
 import type { Pattern, FixtureStatsForPattern, ScannerEntry } from './types/commandTypes'
+import type { AutoOpportunityPromotionPlanDto, AutoOpportunityDto } from './intelligence/autoEngineTypes'
 import { useCommandAlertNotifications } from '@/features/notifications/useCommandAlertNotifications'
 import { CockpitView } from './components/views/cockpit/CockpitView'
 import { PatternsView } from './components/views/patterns/PatternsView'
@@ -463,6 +464,39 @@ export function CommandCenterPage() {
   ]
 
   const openMatch = (fx: LiveFixture) => { storeFixtureForNavigation(fx); navigate(`/app/matches/${fx.id}`, { state: { fixture: fx } }) }
+
+  // ─── B21: Auto Engine cross-links ──────────────────────────────────────────
+  // Resolve an opportunity (backend fixtureId + team names) to a live fixture by
+  // team-name match, then open it. Returns whether it was resolved (honest).
+  const normName = (s: string) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const resolveAndOpenMatch = (opp: AutoOpportunityDto): boolean => {
+    const home = normName(opp.homeTeam), away = normName(opp.awayTeam)
+    const fx = fixtures.find(f => normName(f.homeTeam.name) === home && normName(f.awayTeam.name) === away)
+      || fixtures.find(f => normName(f.homeTeam.name).includes(home) && normName(f.awayTeam.name).includes(away))
+    if (fx) { openMatch(fx); return true }
+    return false
+  }
+  // Open the radar editor PRE-FILLED from a promotion plan — never auto-saves.
+  const promoteToRadar = (plan: AutoOpportunityPromotionPlanDto) => {
+    const now = new Date().toISOString()
+    const draft: Pattern = {
+      id: 'draft',
+      name: plan.suggestedRadarName,
+      description: plan.suggestedDescription,
+      conditions: [...plan.suggestedEligibilityConditions, ...plan.suggestedSignalConditions] as Pattern['conditions'],
+      severity: 'attention',
+      status: 'paused',
+      isTemplate: false,
+      scope: plan.suggestedScope,
+      minConfidence: plan.suggestedConfidence,
+      action: plan.suggestedAction,
+      maxTriggersPerMatch: 2,
+      antiDuplicateWindow: 5,
+      createdAt: now,
+      updatedAt: now,
+    }
+    setPrefilledDraft(draft); setActiveTab('patterns'); setShowBuilder(true)
+  }
   const timeSince = lastUpdate ? Math.round((Date.now() - lastUpdate.getTime()) / 1000) : null
 
   if (loading) return <div className="max-w-[1680px] mx-auto px-6 xl:px-10 flex items-center justify-center min-h-[50vh]"><div className="flex flex-col items-center gap-4"><div className="relative h-11 w-11"><div className="absolute inset-0 rounded-full border-2 border-white/[0.08]" /><div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyan-400/70 animate-spin" /></div><span className="text-[13px] text-white/35">Inicializando motor</span></div></div>
@@ -641,7 +675,7 @@ export function CommandCenterPage() {
       {activeTab === 'alerts' && <AlertsIntelligencePanel triggeredAlerts={getRecentTriggered(30)} isAdvanced={isAdvanced} openMatch={openMatch} fixtures={fixtures} navigate={navigate} hybridAlerts={hybridMerge?.alerts} hybridDiagnostics={hybridMerge?.diagnostics} backendOnline={backendSync.online} telegramEnabled={telegram.enabled && telegram.configured} telegramChannels={telegram.channels} onSendTelegram={telegram.sendAlert} getAlertTelegramStatus={telegram.getAlertTelegramStatus} getSentChannelIds={telegram.getSentChannelIds} loadDeliveriesForAlerts={telegram.loadDeliveriesForAlerts} getEligibilityForAlert={telegram.getEligibilityForAlert} eligibilityByAlertId={telegram.eligibilityByAlertId} onGoToBacktest={() => setActiveTab('backtest')} />}
       {activeTab === 'performance' && <PerformanceView patterns={patterns} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} isAdvanced={isAdvanced} backendReports={backendPerf.reports} performanceSource={backendPerf.source} />}
       {activeTab === 'backtest' && <BacktestLab patterns={patterns} backendOnline={backendSync.online} />}
-      {activeTab === 'autoengine' && <AutoEngineCockpit backendOnline={backendSync.online} onGoToBacktest={() => setActiveTab('backtest')} onGoToAlerts={() => setActiveTab('alerts')} />}
+      {activeTab === 'autoengine' && <AutoEngineCockpit backendOnline={backendSync.online} onGoToBacktest={() => setActiveTab('backtest')} onGoToAlerts={() => setActiveTab('alerts')} onPromoteToRadar={promoteToRadar} onOpenMatch={resolveAndOpenMatch} />}
     </div>
   )
 }

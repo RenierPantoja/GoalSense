@@ -134,7 +134,8 @@ import type {
   BacktestRun, ReplayRun, PersistedBacktestSignalResult,
 } from '../modules/intelligence/backtest/backtest.types.js'
 import type {
-  AutoEngineRun, AutoOpportunity,
+  AutoEngineRun, AutoOpportunity, AutoOpportunityAction, AutoOpportunityUserState,
+  AutoOpportunityPromotionPlan,
 } from '../modules/intelligence/autoEngine/autoEngine.types.js'
 
 export interface IntelligenceRepository {
@@ -211,6 +212,17 @@ export interface IntelligenceRepository {
   getAutoOpportunity(id: string): Promise<AutoOpportunity | null>
   listAutoOpportunities(filters: { status?: string; type?: string; limit?: number }): Promise<AutoOpportunity[]>
   listAutoOpportunitiesByFixture(fixtureId: string, limit?: number): Promise<AutoOpportunity[]>
+
+  // ── B21: opportunity actions / feedback / notes / user-state / promotion ────
+  createAutoOpportunityAction(action: AutoOpportunityAction): Promise<AutoOpportunityAction>
+  listAutoOpportunityActions(limit?: number): Promise<AutoOpportunityAction[]>
+  listAutoOpportunityActionsByOpportunity(opportunityId: string, limit?: number): Promise<AutoOpportunityAction[]>
+  upsertAutoOpportunityUserState(state: AutoOpportunityUserState): Promise<AutoOpportunityUserState>
+  getAutoOpportunityUserState(opportunityId: string): Promise<AutoOpportunityUserState | null>
+  listAutoOpportunityUserStates(limit?: number): Promise<AutoOpportunityUserState[]>
+  createAutoOpportunityPromotionPlan(plan: AutoOpportunityPromotionPlan): Promise<AutoOpportunityPromotionPlan>
+  getAutoOpportunityPromotionPlan(opportunityId: string): Promise<AutoOpportunityPromotionPlan | null>
+  listAutoOpportunityPromotionPlans(limit?: number): Promise<AutoOpportunityPromotionPlan[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

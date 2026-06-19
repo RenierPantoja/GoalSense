@@ -84,3 +84,14 @@ não foi tocado nesta fase.
 ## Próximos passos
 Auto → Alertas com confirmação humana (B21), auth nas rotas do Auto Engine, contexto
 de competição estruturado (tier de liga) quando houver fonte confiável.
+
+## B21 — Opportunity actions + promotion workflow
+
+The cockpit is now interactive: an action bar in the drawer (save / dismiss / useful /
+not-useful / create-radar), a feedback + notes panel, saved/ignored/feedback/note/proposal
+badges and filters in the list, and an Opportunity Promotion Panel that opens
+`CustomPatternModal` PRE-FILLED (never auto-saving). "Abrir jogo no Command Center" is
+resolved via the new fixture-context lookup + team-name matching. Server-side search
+(`/opportunities/search`) backs the list with a client fallback. Feedback is observational
+("não altera o motor automaticamente"); no alert/odds/bet/Telegram; opportunity ≠ alert.
+See `docs/AUTO_OPPORTUNITY_ACTIONS_UI.md` and `backend/docs/AUTO_OPPORTUNITY_ACTIONS.md`.

@@ -240,3 +240,132 @@ export const BLOCK_REASON_LABEL: Record<string, string> = {
 export function blockReasonLabel(reason: string): string {
   return BLOCK_REASON_LABEL[reason] || reason.replace(/_/g, ' ')
 }
+
+// ─── B21: actions, feedback, notes, promotion, fixture context ───────────────
+
+export type AutoOpportunityActionType =
+  | 'saved' | 'unsaved' | 'dismissed' | 'restored' | 'marked_useful' | 'marked_not_useful'
+  | 'feedback_recorded' | 'note_added' | 'note_removed' | 'radar_proposal_created'
+  | 'opened_in_backtest' | 'opened_related_alerts' | 'opened_fixture' | 'ignored_for_now'
+
+export type AutoOpportunityFeedbackType =
+  | 'useful' | 'not_useful' | 'too_early' | 'too_late' | 'data_poor' | 'context_wrong'
+  | 'already_seen' | 'interesting_but_weak' | 'strong_signal' | 'irrelevant' | 'unknown'
+
+export interface AutoOpportunityActionDto {
+  id: string
+  opportunityId: string
+  fixtureId: string
+  userId: string | null
+  actionType: AutoOpportunityActionType
+  feedbackType: AutoOpportunityFeedbackType | null
+  note: string | null
+  reason: string | null
+  metadata: Record<string, unknown> | null
+  createdAt: string
+}
+
+export interface AutoOpportunityNoteDto { note: string; createdAt: string }
+
+export interface AutoOpportunityActionSummaryDto {
+  opportunityId: string
+  totalActions: number
+  saved: boolean
+  dismissed: boolean
+  lastFeedback: AutoOpportunityFeedbackType | null
+  feedbackCounts: Record<string, number>
+  noteCount: number
+  notes: AutoOpportunityNoteDto[]
+  hasPromotionPlan: boolean
+  lastActionAt: string | null
+}
+
+export interface AutoOpportunityUserStateLite {
+  saved: boolean
+  dismissed: boolean
+  lastFeedback: AutoOpportunityFeedbackType | null
+  noteCount: number
+  hasPromotionPlan: boolean
+}
+
+export interface SuggestedRadarConditionDto {
+  type: string
+  params: Record<string, number | string | boolean>
+}
+
+export interface AutoOpportunityPromotionPlanDto {
+  id: string
+  opportunityId: string
+  fixtureId: string
+  sufficient: boolean
+  suggestedRadarName: string
+  suggestedDescription: string
+  suggestedScope: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches'
+  suggestedEligibilityConditions: SuggestedRadarConditionDto[]
+  suggestedSignalConditions: SuggestedRadarConditionDto[]
+  suggestedAction: 'register_alert' | 'suggest_only' | 'highlight'
+  suggestedConfidence: number
+  sourceEvidence: string[]
+  limitations: string[]
+  createdAt: string
+}
+
+export interface AutoOpportunityFixtureContextDto {
+  fixtureId: string
+  found: boolean
+  fixtureLabel: string | null
+  homeTeam: string | null
+  awayTeam: string | null
+  league: string | null
+  status: string | null
+  minute: number | null
+  score: { home: number; away: number } | null
+  hasSnapshot: boolean
+  snapshotAgeMs: number | null
+  canOpenInCommandCenter: boolean
+  limitations: string[]
+}
+
+export interface AutoOpportunitySearchFilters {
+  status?: string
+  type?: string
+  league?: string
+  team?: string
+  minScore?: number
+  confidenceBand?: string
+  dataQuality?: string
+  blockReason?: string
+  q?: string
+  saved?: boolean
+  dismissed?: boolean
+  feedbackType?: string
+  limit?: number
+}
+
+export interface AutoOpportunitySearchResponse {
+  items: AutoOpportunityDto[]
+  total: number
+  appliedFilters: string[]
+  unsupportedFilters: string[]
+  userStates: Record<string, AutoOpportunityUserStateLite>
+}
+
+export interface ActionMutationResponse {
+  action: AutoOpportunityActionDto
+  summary: AutoOpportunityActionSummaryDto
+  userState: { saved: boolean; dismissed: boolean; lastFeedback: AutoOpportunityFeedbackType | null; noteCount: number; hasPromotionPlan: boolean }
+}
+
+export const FEEDBACK_LABEL: Record<AutoOpportunityFeedbackType, string> = {
+  useful: 'Útil',
+  not_useful: 'Não útil',
+  too_early: 'Cedo demais',
+  too_late: 'Tarde demais',
+  data_poor: 'Dados pobres',
+  context_wrong: 'Contexto errado',
+  already_seen: 'Já vista',
+  interesting_but_weak: 'Interessante, mas fraca',
+  strong_signal: 'Forte sinal',
+  irrelevant: 'Irrelevante',
+  unknown: 'Sem opinião',
+}

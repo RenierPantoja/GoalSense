@@ -9,6 +9,10 @@ import { getBackendUrl } from './commandBackendClient'
 import type {
   AutoEngineStatusDto, AutoEngineRunDto, AutoOpportunityDto,
   AutoEngineScanRequest, AutoOpportunityFilters,
+  AutoOpportunityActionType, AutoOpportunityFeedbackType,
+  AutoOpportunityActionDto, AutoOpportunityActionSummaryDto, AutoOpportunityPromotionPlanDto,
+  AutoOpportunityFixtureContextDto, AutoOpportunitySearchFilters, AutoOpportunitySearchResponse,
+  ActionMutationResponse,
 } from '@/features/command/intelligence/autoEngineTypes'
 
 export interface ApiResult<T> {
@@ -92,5 +96,42 @@ export const autoEngineApi = {
 
   listFixtureOpportunities(fixtureId: string, limit = 50) {
     return request<AutoOpportunityDto[]>(`${BASE}/fixtures/${encodeURIComponent(fixtureId)}/opportunities?limit=${limit}`)
+  },
+
+  // ── B21: actions / feedback / notes / promotion / fixture context / search ──
+  searchOpportunities(filters: AutoOpportunitySearchFilters = {}) {
+    return request<AutoOpportunitySearchResponse>(`${BASE}/opportunities/search${buildQuery({ ...filters })}`)
+  },
+
+  getFixtureContext(fixtureId: string) {
+    return request<AutoOpportunityFixtureContextDto>(`${BASE}/fixtures/${encodeURIComponent(fixtureId)}/context`)
+  },
+
+  createOpportunityAction(opportunityId: string, payload: { actionType: AutoOpportunityActionType; feedbackType?: AutoOpportunityFeedbackType; note?: string; reason?: string; metadata?: Record<string, unknown> }) {
+    return request<ActionMutationResponse>(`${BASE}/opportunities/${encodeURIComponent(opportunityId)}/actions`, { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  listOpportunityActions(opportunityId: string, limit = 100) {
+    return request<AutoOpportunityActionDto[]>(`${BASE}/opportunities/${encodeURIComponent(opportunityId)}/actions?limit=${limit}`)
+  },
+
+  getOpportunityActionSummary(opportunityId: string) {
+    return request<AutoOpportunityActionSummaryDto>(`${BASE}/opportunities/${encodeURIComponent(opportunityId)}/action-summary`)
+  },
+
+  sendOpportunityFeedback(opportunityId: string, feedbackType: AutoOpportunityFeedbackType, note?: string) {
+    return request<ActionMutationResponse>(`${BASE}/opportunities/${encodeURIComponent(opportunityId)}/feedback`, { method: 'POST', body: JSON.stringify({ feedbackType, note }) })
+  },
+
+  addOpportunityNote(opportunityId: string, note: string) {
+    return request<ActionMutationResponse>(`${BASE}/opportunities/${encodeURIComponent(opportunityId)}/notes`, { method: 'POST', body: JSON.stringify({ note }) })
+  },
+
+  createPromotionPlan(opportunityId: string) {
+    return request<AutoOpportunityPromotionPlanDto>(`${BASE}/opportunities/${encodeURIComponent(opportunityId)}/promotion-plan`, { method: 'POST', body: '{}' })
+  },
+
+  getPromotionPlan(opportunityId: string) {
+    return request<AutoOpportunityPromotionPlanDto>(`${BASE}/opportunities/${encodeURIComponent(opportunityId)}/promotion-plan`)
   },
 }

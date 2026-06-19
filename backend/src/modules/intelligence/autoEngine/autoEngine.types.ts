@@ -159,3 +159,121 @@ export interface AutoEngineOverview {
   latestOpportunities: AutoOpportunity[]
   generatedAt: string
 }
+
+// ─── B21: Opportunity Actions, Feedback, Notes, Promotion ────────────────────
+// Human interaction with auto opportunities. Auditable, observational. NEVER
+// creates an alert, alters a pattern, changes a score, or auto-tunes the engine.
+
+export type AutoOpportunityActionType =
+  | 'saved'
+  | 'unsaved'
+  | 'dismissed'
+  | 'restored'
+  | 'marked_useful'
+  | 'marked_not_useful'
+  | 'feedback_recorded'
+  | 'note_added'
+  | 'note_removed'
+  | 'radar_proposal_created'
+  | 'opened_in_backtest'
+  | 'opened_related_alerts'
+  | 'opened_fixture'
+  | 'ignored_for_now'
+
+export type AutoOpportunityFeedbackType =
+  | 'useful'
+  | 'not_useful'
+  | 'too_early'
+  | 'too_late'
+  | 'data_poor'
+  | 'context_wrong'
+  | 'already_seen'
+  | 'interesting_but_weak'
+  | 'strong_signal'
+  | 'irrelevant'
+  | 'unknown'
+
+export interface AutoOpportunityAction {
+  id: string
+  opportunityId: string
+  fixtureId: string
+  userId: string | null
+  actionType: AutoOpportunityActionType
+  feedbackType: AutoOpportunityFeedbackType | null
+  note: string | null
+  reason: string | null
+  metadata: Record<string, unknown> | null
+  createdAt: string
+}
+
+export interface AutoOpportunityNote {
+  note: string
+  createdAt: string
+}
+
+/** Fast per-opportunity state for list badges (derived, deterministic id). */
+export interface AutoOpportunityUserState {
+  id: string
+  opportunityId: string
+  fixtureId: string
+  saved: boolean
+  dismissed: boolean
+  lastFeedback: AutoOpportunityFeedbackType | null
+  noteCount: number
+  hasPromotionPlan: boolean
+  updatedAt: string
+}
+
+export interface AutoOpportunityActionSummary {
+  opportunityId: string
+  totalActions: number
+  saved: boolean
+  dismissed: boolean
+  lastFeedback: AutoOpportunityFeedbackType | null
+  feedbackCounts: Record<string, number>
+  noteCount: number
+  notes: AutoOpportunityNote[]
+  hasPromotionPlan: boolean
+  lastActionAt: string | null
+}
+
+/** A suggested radar condition derived from real opportunity evidence. */
+export interface SuggestedRadarCondition {
+  type: string
+  params: Record<string, number | string | boolean>
+}
+
+export interface AutoOpportunityPromotionPlan {
+  id: string
+  opportunityId: string
+  fixtureId: string
+  /** false when the opportunity has no evidence beyond is_live. */
+  sufficient: boolean
+  suggestedRadarName: string
+  suggestedDescription: string
+  suggestedScope: 'all' | 'favorites_only' | 'specific_leagues' | 'specific_teams' | 'specific_matches'
+  suggestedEligibilityConditions: SuggestedRadarCondition[]
+  suggestedSignalConditions: SuggestedRadarCondition[]
+  suggestedAction: 'register_alert' | 'suggest_only' | 'highlight'
+  suggestedConfidence: number
+  sourceEvidence: string[]
+  limitations: string[]
+  createdAt: string
+}
+
+/** Read-only fixture context for "open match" / inspector enrichment. */
+export interface AutoOpportunityFixtureContext {
+  fixtureId: string
+  found: boolean
+  fixtureLabel: string | null
+  homeTeam: string | null
+  awayTeam: string | null
+  league: string | null
+  status: string | null
+  minute: number | null
+  score: { home: number; away: number } | null
+  hasSnapshot: boolean
+  snapshotAgeMs: number | null
+  canOpenInCommandCenter: boolean
+  limitations: string[]
+}
