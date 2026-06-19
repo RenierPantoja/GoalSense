@@ -130,3 +130,15 @@ No real alerts · no odds · no auto-bet/stake · no automatic Telegram · no ML
 no invented data · patterns/confidence/performance counters untouched · earlier
 phases (B12–B18) intact · Firebase mode preserved · Prisma fallback preserved
 (Noop) · honest empty states · limitations always visible.
+
+## B20 — Cockpit UI consumes this foundation (read-only)
+
+The B20 "Motor Automático" tab in the Command Center consumes these endpoints
+read-only via `src/services/autoEngineApi.ts` (403 → honest "disabled" state). It
+shows the engine flags, a controlled manual scan, ranked opportunities (including
+**blocked** ones, as evidence of conservative intelligence) and an Opportunity
+Inspector drawer (Resumo / Evidências / Score Ledger / Riscos-Bloqueios / Contexto
+histórico / Aprendizado). It never creates alerts/odds/bets/Telegram, never wires
+`ENABLE_AUTO_ENGINE_TO_ALERTS`, and never alters patterns/confidence/counters —
+opportunity ≠ alert, score ≠ probability, unknown/missing ≠ failure. See
+`docs/AUTO_ENGINE_COCKPIT_UI_FOUNDATION.md` and `docs/AUTO_ENGINE_COCKPIT_UI_AUDIT.md`.

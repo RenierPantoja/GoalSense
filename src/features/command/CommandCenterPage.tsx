@@ -8,7 +8,7 @@
  */
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { RefreshCw, Zap, AlertCircle, Activity, Target, Eye, BarChart3, Database, FlaskConical } from 'lucide-react'
+import { RefreshCw, Zap, AlertCircle, Activity, Target, Eye, BarChart3, Database, FlaskConical, Cpu } from 'lucide-react'
 import { getLiveFixtures, type LiveFixture } from '@/lib/apiClient'
 import { storeFixtureForNavigation } from '@/lib/matchNavigation'
 import { useFavorites } from '@/context/FavoritesContext'
@@ -43,9 +43,10 @@ import { ScannerView } from './components/views/scanner/ScannerView'
 import { AlertsIntelligencePanel } from './components/views/alerts/AlertsIntelligencePanel'
 import { PerformanceView } from './components/views/performance/PerformanceView'
 import { BacktestLab } from './components/views/backtest/BacktestLab'
+import { AutoEngineCockpit } from './components/views/autoengine/AutoEngineCockpit'
 import { TelegramConfigPanel } from './components/telegram/TelegramConfigPanel'
 
-type Tab = 'cockpit' | 'patterns' | 'scanner' | 'alerts' | 'performance' | 'backtest'
+type Tab = 'cockpit' | 'patterns' | 'scanner' | 'alerts' | 'performance' | 'backtest' | 'autoengine'
 
 export function CommandCenterPage() {
   const navigate = useNavigate()
@@ -624,6 +625,7 @@ export function CommandCenterPage() {
           { id: 'alerts' as Tab, label: 'Alertas', icon: Zap, badge: triggeredTodayCount },
           { id: 'performance' as Tab, label: 'Performance', icon: BarChart3, badge: 0 },
           { id: 'backtest' as Tab, label: 'Backtest', icon: FlaskConical, badge: 0 },
+          { id: 'autoengine' as Tab, label: 'Motor Automático', icon: Cpu, badge: 0 },
         ]).map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-5 py-3 rounded-xl text-[13px] font-medium transition-all ${activeTab === tab.id ? 'text-white bg-white/[0.06] border border-white/[0.1]' : 'text-white/45 hover:text-white/70 border border-transparent hover:bg-white/[0.025]'}`} type="button">
             <tab.icon size={15} />{tab.label}
@@ -639,6 +641,7 @@ export function CommandCenterPage() {
       {activeTab === 'alerts' && <AlertsIntelligencePanel triggeredAlerts={getRecentTriggered(30)} isAdvanced={isAdvanced} openMatch={openMatch} fixtures={fixtures} navigate={navigate} hybridAlerts={hybridMerge?.alerts} hybridDiagnostics={hybridMerge?.diagnostics} backendOnline={backendSync.online} telegramEnabled={telegram.enabled && telegram.configured} telegramChannels={telegram.channels} onSendTelegram={telegram.sendAlert} getAlertTelegramStatus={telegram.getAlertTelegramStatus} getSentChannelIds={telegram.getSentChannelIds} loadDeliveriesForAlerts={telegram.loadDeliveriesForAlerts} getEligibilityForAlert={telegram.getEligibilityForAlert} eligibilityByAlertId={telegram.eligibilityByAlertId} onGoToBacktest={() => setActiveTab('backtest')} />}
       {activeTab === 'performance' && <PerformanceView patterns={patterns} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} isAdvanced={isAdvanced} backendReports={backendPerf.reports} performanceSource={backendPerf.source} />}
       {activeTab === 'backtest' && <BacktestLab patterns={patterns} backendOnline={backendSync.online} />}
+      {activeTab === 'autoengine' && <AutoEngineCockpit backendOnline={backendSync.online} onGoToBacktest={() => setActiveTab('backtest')} onGoToAlerts={() => setActiveTab('alerts')} />}
     </div>
   )
 }
