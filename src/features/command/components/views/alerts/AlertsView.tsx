@@ -39,6 +39,8 @@ export interface AlertsViewProps {
   loadDeliveriesForAlerts?: (alertIds: string[]) => Promise<void>
   getEligibilityForAlert?: (alertId: string) => Promise<any>
   eligibilityByAlertId?: Record<string, any[]>
+  /** B16: open the Signal Ledger drawer for a (backend) alert. */
+  onOpenAnalysis?: (alertId: string | null, headline: { patternName: string; matchLabel: string; minute: number | null; score: { home: number; away: number }; confidence: number; status: string }) => void
 }
 
 // ─── Source Badge ────────────────────────────────────────────────────────────
@@ -58,7 +60,7 @@ function SourceBadge({ source }: { source: string }) {
 
 // ─── Hybrid Alert Row ────────────────────────────────────────────────────────
 
-function HybridAlertRow({ alert, isAdvanced, canSendTelegram, onTelegramClick, telegramStatus, oddsData, onLoadOdds, onRefreshOdds }: { alert: HybridCommandAlert; isAdvanced: boolean; canSendTelegram?: boolean; onTelegramClick?: () => void; telegramStatus?: 'not_sent' | 'sent' | 'failed' | 'pending'; oddsData?: AlertOddsResponse; onLoadOdds?: () => void; onRefreshOdds?: () => void }) {
+function HybridAlertRow({ alert, isAdvanced, canSendTelegram, onTelegramClick, telegramStatus, oddsData, onLoadOdds, onRefreshOdds, onOpenAnalysis }: { alert: HybridCommandAlert; isAdvanced: boolean; canSendTelegram?: boolean; onTelegramClick?: () => void; telegramStatus?: 'not_sent' | 'sent' | 'failed' | 'pending'; oddsData?: AlertOddsResponse; onLoadOdds?: () => void; onRefreshOdds?: () => void; onOpenAnalysis?: () => void }) {
   const statusColor: Record<string, string> = {
     pending: 'text-amber-300 bg-amber-500/10 border-amber-400/15',
     confirmed: 'text-emerald-300 bg-emerald-500/10 border-emerald-400/15',
@@ -92,6 +94,9 @@ function HybridAlertRow({ alert, isAdvanced, canSendTelegram, onTelegramClick, t
       </div>
       {alert.evidences.length > 0 && (
         <div className="mt-1.5 text-[10px] text-white/40 truncate">{alert.evidences[0]}</div>
+      )}
+      {onOpenAnalysis && (
+        <button onClick={onOpenAnalysis} type="button" className="mt-2 inline-flex items-center gap-1 text-[10.5px] font-medium text-[#5EEAD4] hover:text-[#7FE9DC] transition-colors">Ver análise →</button>
       )}
       {isAdvanced && alert.hasConflict && alert.conflictFields && (
         <div className="mt-1.5 text-[10px] text-amber-300/60">⚠ Conflito: {alert.conflictFields.join(', ')}</div>
@@ -165,7 +170,7 @@ function HybridAlertRow({ alert, isAdvanced, canSendTelegram, onTelegramClick, t
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, navigate, hybridAlerts, hybridDiagnostics, backendOnline = false, telegramEnabled = false, telegramChannels, onSendTelegram, getAlertTelegramStatus, getSentChannelIds, loadDeliveriesForAlerts, getEligibilityForAlert, eligibilityByAlertId }: AlertsViewProps) {
+export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, navigate, hybridAlerts, hybridDiagnostics, backendOnline = false, telegramEnabled = false, telegramChannels, onSendTelegram, getAlertTelegramStatus, getSentChannelIds, loadDeliveriesForAlerts, getEligibilityForAlert, eligibilityByAlertId, onOpenAnalysis }: AlertsViewProps) {
   const [filter, setFilter] = useState<AlertFilter>('all')
   const [sourceMode, setSourceMode] = useState<AlertSourceMode>(() => backendOnline && hybridAlerts ? 'hybrid' : 'local')
   const [telegramModal, setTelegramModal] = useState<HybridCommandAlert | null>(null)
@@ -353,7 +358,7 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
             <div className="space-y-2">
               {visibleHybrid.map(a => {
                 const alertBackendId = a.backendAlert?.id || a.id
-                return <HybridAlertRow key={a.id} alert={a} isAdvanced={isAdvanced} canSendTelegram={telegramEnabled && !!onSendTelegram} onTelegramClick={() => setTelegramModal(a)} telegramStatus={getAlertTelegramStatus?.(alertBackendId)} oddsData={oddsHook.oddsByAlertId[alertBackendId]} onLoadOdds={() => oddsHook.loadOdds(alertBackendId)} onRefreshOdds={() => oddsHook.refreshOdds(alertBackendId)} />
+                return <HybridAlertRow key={a.id} alert={a} isAdvanced={isAdvanced} canSendTelegram={telegramEnabled && !!onSendTelegram} onTelegramClick={() => setTelegramModal(a)} telegramStatus={getAlertTelegramStatus?.(alertBackendId)} oddsData={oddsHook.oddsByAlertId[alertBackendId]} onLoadOdds={() => oddsHook.loadOdds(alertBackendId)} onRefreshOdds={() => oddsHook.refreshOdds(alertBackendId)} onOpenAnalysis={onOpenAnalysis ? () => onOpenAnalysis(a.backendAlert?.id || null, { patternName: a.patternName, matchLabel: `${a.homeTeam} vs ${a.awayTeam}`, minute: a.minuteAtTrigger ?? null, score: a.scoreAtTrigger, confidence: a.confidence, status: a.status }) : undefined} />
               })}
             </div>
           )
@@ -368,7 +373,7 @@ export function AlertsView({ triggeredAlerts, isAdvanced, openMatch, fixtures, n
             <div className="space-y-2">
               {visibleBackendOnly.map(a => {
                 const alertBackendId = a.backendAlert?.id || a.id
-                return <HybridAlertRow key={a.id} alert={a} isAdvanced={isAdvanced} canSendTelegram={telegramEnabled && !!onSendTelegram} onTelegramClick={() => setTelegramModal(a)} telegramStatus={getAlertTelegramStatus?.(alertBackendId)} oddsData={oddsHook.oddsByAlertId[alertBackendId]} onLoadOdds={() => oddsHook.loadOdds(alertBackendId)} onRefreshOdds={() => oddsHook.refreshOdds(alertBackendId)} />
+                return <HybridAlertRow key={a.id} alert={a} isAdvanced={isAdvanced} canSendTelegram={telegramEnabled && !!onSendTelegram} onTelegramClick={() => setTelegramModal(a)} telegramStatus={getAlertTelegramStatus?.(alertBackendId)} oddsData={oddsHook.oddsByAlertId[alertBackendId]} onLoadOdds={() => oddsHook.loadOdds(alertBackendId)} onRefreshOdds={() => oddsHook.refreshOdds(alertBackendId)} onOpenAnalysis={onOpenAnalysis ? () => onOpenAnalysis(a.backendAlert?.id || null, { patternName: a.patternName, matchLabel: `${a.homeTeam} vs ${a.awayTeam}`, minute: a.minuteAtTrigger ?? null, score: a.scoreAtTrigger, confidence: a.confidence, status: a.status }) : undefined} />
               })}
             </div>
           )

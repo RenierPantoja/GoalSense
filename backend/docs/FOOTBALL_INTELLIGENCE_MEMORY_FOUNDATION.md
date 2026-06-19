@@ -138,3 +138,15 @@ Key guarantees carried over: `unknown` is never a failure, `confirmed_partial`
 counts as partial usefulness, rates are computed over resolved alerts only, small
 samples are gated by `sampleQuality`, nothing auto-tunes patterns or confidence.
 Firebase persists the profiles; Prisma mode uses the Noop adapter.
+
+
+## B16 — Alertas 2.0 / Signal Ledger UI
+
+Phase B16 turns the Command Center "Alertas" tab into a visual **Signal Ledger**
+that consumes these B12 endpoints (`/api/intelligence/alerts/:id/ledger` and
+`/outcome`) plus the B13 learning endpoints. A wide drawer explains each alert
+across 5 tabs (Resumo / Evidências / Resultado / Linha do tempo / Aprendizado),
+and two extra views surface pattern quality and the engine's learning feed. The
+UI is read-only and honest — `unknown`/`not_evaluable` are neutral states, never
+failure; missing ledger/outcome/learning render explicit empty states. See
+`docs/ALERTAS_2_SIGNAL_LEDGER_UI_FOUNDATION.md`.
