@@ -78,7 +78,8 @@ function safeParse(s: any): any { if (!s) return {}; try { return typeof s === '
 export function isPromotedAlert(alert: { patternId?: string | null; evidenceJson?: string | null }): boolean {
   if (alert.patternId === AUTO_ENGINE_PATTERN_ID) return true
   const ev = safeParse(alert.evidenceJson)
-  return ev?.source === 'auto_opportunity_manual' || ev?.provenance?.source === 'auto_opportunity_manual'
+  const src = ev?.source || ev?.provenance?.source
+  return src === 'auto_opportunity_manual' || src === 'auto_alert_policy'
 }
 
 /** Read opportunity provenance from a promoted alert's evidenceJson. */

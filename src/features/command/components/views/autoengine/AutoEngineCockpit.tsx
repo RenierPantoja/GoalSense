@@ -7,7 +7,7 @@
  * no bet CTA, no Telegram, no "create alert". Opportunity ≠ alert; score ≠ probability.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { Cpu, RefreshCw, LayoutGrid, ListChecks, ShieldAlert, PlugZap, Gauge } from 'lucide-react'
+import { Cpu, RefreshCw, LayoutGrid, ListChecks, ShieldAlert, PlugZap, Gauge, ScrollText } from 'lucide-react'
 import { autoEngineApi } from '@/services/autoEngineApi'
 import type {
   AutoEngineStatusDto, AutoEngineRunDto, AutoOpportunityDto, AutoEngineScanRequest,
@@ -23,6 +23,7 @@ import { AutoOpportunityDrawer } from './AutoOpportunityDrawer'
 import { AutoOpportunityPromotionPanel } from './AutoOpportunityPromotionPanel'
 import { AutoOpportunityAlertPromotionPanel } from './AutoOpportunityAlertPromotionPanel'
 import { AutoEngineCalibrationPanel } from './AutoEngineCalibrationPanel'
+import { AutoAlertPolicyPanel } from './AutoAlertPolicyPanel'
 
 interface Props {
   backendOnline: boolean
@@ -34,13 +35,14 @@ interface Props {
   onOpenMatch?: (opp: AutoOpportunityDto) => boolean
 }
 
-type Segment = 'overview' | 'oportunidades' | 'bloqueadas' | 'calibracao'
+type Segment = 'overview' | 'oportunidades' | 'bloqueadas' | 'calibracao' | 'politicas'
 
 const SEGMENTS: { id: Segment; label: string; icon: typeof Cpu }[] = [
   { id: 'overview', label: 'Visão geral', icon: LayoutGrid },
   { id: 'oportunidades', label: 'Oportunidades', icon: ListChecks },
   { id: 'bloqueadas', label: 'Bloqueadas', icon: ShieldAlert },
   { id: 'calibracao', label: 'Calibração', icon: Gauge },
+  { id: 'politicas', label: 'Políticas', icon: ScrollText },
 ]
 
 function EmptyNote({ title, body }: { title: string; body: string }) {
@@ -214,6 +216,7 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
         </>
       )}
       {segment === 'calibracao' && <AutoEngineCalibrationPanel rebuildEnabled={!!status?.enabled} />}
+      {segment === 'politicas' && <AutoAlertPolicyPanel />}
 
       {drawer && (
         <AutoOpportunityDrawer

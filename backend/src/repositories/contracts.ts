@@ -142,6 +142,9 @@ import type {
   AutoEngineLearningRun, AutoEngineLearningProfile, AutoOpportunityTypeProfile,
   AutoEngineLearningRecommendation,
 } from '../modules/intelligence/autoEngine/autoEngineLearning.types.js'
+import type {
+  AutoAlertPolicy, AutoAlertPolicyEvaluation,
+} from '../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -251,6 +254,17 @@ export interface IntelligenceRepository {
   getLatestAutoEngineLearningProfile(): Promise<AutoEngineLearningProfile | null>
   getAutoOpportunityTypeProfile(type: string): Promise<AutoOpportunityTypeProfile | null>
   listAutoEngineLearningRecommendations(limit?: number): Promise<AutoEngineLearningRecommendation[]>
+
+  // ── B25: Auto Alert Policy Engine (shadow-first; auto-create gated) ──────────
+  createAutoAlertPolicy(policy: AutoAlertPolicy): Promise<AutoAlertPolicy>
+  updateAutoAlertPolicy(id: string, patch: Partial<AutoAlertPolicy>): Promise<{ count: number }>
+  getAutoAlertPolicy(id: string): Promise<AutoAlertPolicy | null>
+  listAutoAlertPolicies(limit?: number): Promise<AutoAlertPolicy[]>
+  createAutoAlertPolicyEvaluation(evaluation: AutoAlertPolicyEvaluation): Promise<AutoAlertPolicyEvaluation>
+  getAutoAlertPolicyEvaluation(id: string): Promise<AutoAlertPolicyEvaluation | null>
+  listAutoAlertPolicyEvaluations(limit?: number): Promise<AutoAlertPolicyEvaluation[]>
+  listAutoAlertPolicyEvaluationsByOpportunity(opportunityId: string, limit?: number): Promise<AutoAlertPolicyEvaluation[]>
+  listAutoAlertPolicyEvaluationsByPolicy(policyId: string, limit?: number): Promise<AutoAlertPolicyEvaluation[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

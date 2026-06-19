@@ -19,6 +19,7 @@ import type {
   PromotedAlertResolutionStatusDto,
   AutoEngineLearningProfileDto, AutoEngineLearningRunDto, AutoOpportunityTypeProfileDto,
   AutoEngineLearningRecommendationDto, AutoEngineCalibrationOverviewDto,
+  AutoAlertPolicyDto, AutoAlertPolicyTemplateDto, AutoAlertPolicyEvaluationDto, AutoAlertPolicyOverviewDto,
 } from '@/features/command/intelligence/autoEngineTypes'
 
 export interface ApiResult<T> {
@@ -194,5 +195,42 @@ export const autoEngineApi = {
 
   rebuildAutoEngineLearning(payload: { dryRun?: boolean; from?: string; to?: string } = {}) {
     return request<{ run: AutoEngineLearningRunDto; profile: AutoEngineLearningProfileDto | null }>(`${BASE}/learning/rebuild`, { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  // ── B25: Auto Alert Policy Engine ──
+  listAutoAlertPolicies() {
+    return request<AutoAlertPolicyDto[]>(`${BASE}/auto-alert-policies`)
+  },
+
+  getDefaultAutoAlertPolicyTemplate() {
+    return request<AutoAlertPolicyTemplateDto>(`${BASE}/auto-alert-policies/templates/default`)
+  },
+
+  getAutoAlertPolicy(id: string) {
+    return request<AutoAlertPolicyDto>(`${BASE}/auto-alert-policies/${encodeURIComponent(id)}`)
+  },
+
+  createAutoAlertPolicy(payload: Partial<AutoAlertPolicyDto>) {
+    return request<AutoAlertPolicyDto>(`${BASE}/auto-alert-policies`, { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  updateAutoAlertPolicy(id: string, payload: Partial<AutoAlertPolicyDto>) {
+    return request<AutoAlertPolicyDto>(`${BASE}/auto-alert-policies/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) })
+  },
+
+  evaluateOpportunityAutoAlertPolicy(opportunityId: string) {
+    return request<{ opportunityId: string; evaluations: AutoAlertPolicyEvaluationDto[] }>(`${BASE}/opportunities/${encodeURIComponent(opportunityId)}/evaluate-auto-alert-policy`, { method: 'POST', body: JSON.stringify({}) })
+  },
+
+  listOpportunityPolicyEvaluations(opportunityId: string, limit = 50) {
+    return request<AutoAlertPolicyEvaluationDto[]>(`${BASE}/opportunities/${encodeURIComponent(opportunityId)}/policy-evaluations?limit=${limit}`)
+  },
+
+  listAutoAlertPolicyEvaluations(limit = 100) {
+    return request<AutoAlertPolicyEvaluationDto[]>(`${BASE}/auto-alert-policy/evaluations?limit=${limit}`)
+  },
+
+  getAutoAlertPolicyOverview() {
+    return request<AutoAlertPolicyOverviewDto>(`${BASE}/auto-alert-policy/overview`)
   },
 }

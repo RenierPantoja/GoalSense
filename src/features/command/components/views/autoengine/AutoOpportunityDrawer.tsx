@@ -16,11 +16,12 @@ import {
 import type {
   AutoOpportunityDto, AutoOpportunityActionSummaryDto, AutoOpportunityUserStateLite,
   AutoOpportunityFeedbackType, AutoOpportunityFixtureContextDto, AutoOpportunityOutcomeSummaryDto,
-  AutoOpportunityTypeProfileDto,
+  AutoOpportunityTypeProfileDto, AutoAlertPolicyEvaluationDto,
 } from '@/features/command/intelligence/autoEngineTypes'
 import {
   OPP_TYPE_LABEL, STATUS_LABEL, STATUS_TONE, BAND_LABEL, SAMPLE_LABEL, DATA_QUALITY_LABEL, blockReasonLabel, FEEDBACK_LABEL,
   PROMOTED_RESULT_LABEL, PROMOTED_RESULT_TONE, AUTO_SAMPLE_QUALITY_LABEL,
+  AUTO_ALERT_DECISION_LABEL, AUTO_ALERT_DECISION_TONE,
 } from '@/features/command/intelligence/autoEngineTypes'
 import { autoEngineApi } from '@/services/autoEngineApi'
 import { alertIntelligenceApi, isAlertIntelligenceConfigured } from '@/services/alertIntelligenceApi'
@@ -78,6 +79,8 @@ export function AutoOpportunityDrawer({ opportunity: o, onClose, onGoToBacktest,
   const [fixtureCtx, setFixtureCtx] = useState<AutoOpportunityFixtureContextDto | null>(null)
   const [outcome, setOutcome] = useState<AutoOpportunityOutcomeSummaryDto | null>(null)
   const [typeProfile, setTypeProfile] = useState<AutoOpportunityTypeProfileDto | null>(null)
+  const [policyEvals, setPolicyEvals] = useState<AutoAlertPolicyEvaluationDto[]>([])
+  const [policyBusy, setPolicyBusy] = useState(false)
   const [openMatchMsg, setOpenMatchMsg] = useState<string | null>(null)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
   const relatedPatternId = o.relatedPatternIds?.[0] || null
@@ -95,8 +98,16 @@ export function AutoOpportunityDrawer({ opportunity: o, onClose, onGoToBacktest,
     autoEngineApi.getFixtureContext(o.fixtureId).then(r => { if (alive && r.ok) setFixtureCtx(r.data) })
     autoEngineApi.getOpportunityOutcomeSummary(o.id).then(r => { if (alive && r.ok) setOutcome(r.data) })
     autoEngineApi.getAutoOpportunityTypeProfile(o.opportunityType).then(r => { if (alive && r.ok) setTypeProfile(r.data) })
+    autoEngineApi.listOpportunityPolicyEvaluations(o.id).then(r => { if (alive && r.ok && r.data) setPolicyEvals(r.data) })
     return () => { alive = false }
   }, [o.id, o.fixtureId])
+
+  const evaluatePolicy = async () => {
+    setPolicyBusy(true)
+    const r = await autoEngineApi.evaluateOpportunityAutoAlertPolicy(o.id)
+    if (r.ok && r.data) setPolicyEvals(r.data.evaluations)
+    setPolicyBusy(false)
+  }
 
   useEffect(() => {
     let alive = true
@@ -336,6 +347,34 @@ export function AutoOpportunityDrawer({ opportunity: o, onClose, onGoToBacktest,
                   <LinkRow icon={<FlaskConical size={14} />} label="Criar radar baseado nisso" onClick={() => onCreatePromotion(o)} />
                 </div>
                 <p className="text-[11px] text-white/40 mt-3">Nenhuma ação aqui cria alerta, altera radar ou aplica recomendação. "Criar radar" abre o editor pré-preenchido para revisão.</p>
+              </Section>
+              <Section title="Política automática">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <p className="text-[11px] text-white/45">Avaliação shadow-first. Avaliar não cria alerta, exceto se as flags + política permitirem.</p>
+                  <button type="button" disabled={policyBusy} onClick={evaluatePolicy} className="px-3 py-1.5 rounded-lg text-[11.5px] font-medium text-white/75 border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] transition-colors disabled:opacity-40 shrink-0">{policyBusy ? 'Avaliando…' : 'Avaliar política agora'}</button>
+                </div>
+                {policyEvals.length === 0
+                  ? <p className="text-[11px] text-white/40">Nenhuma avaliação de política para esta oportunidade ainda.</p>
+                  : (
+                    <div className="space-y-2">
+                      {policyEvals.slice(0, 5).map(e => (
+                        <div key={e.id} className="rounded-lg border border-white/[0.06] bg-white/[0.01] px-3 py-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${AUTO_ALERT_DECISION_TONE[e.decision]}`}>{AUTO_ALERT_DECISION_LABEL[e.decision]}</span>
+                            <span className="text-[11.5px] text-white/70 truncate">{e.policyName}</span>
+                            {e.promotedAlertId && onGoToAlerts && <button type="button" onClick={() => onGoToAlerts()} className="ml-auto text-[11px] text-[#5EEAD4] hover:text-[#7FE9DC]">Abrir alerta →</button>}
+                          </div>
+                          {e.reasons.length > 0 && <p className="text-[11px] text-white/50 mt-1">{e.reasons[0]}</p>}
+                          {e.decision === 'shadow_would_create' && <p className="text-[10.5px] text-sky-200/70 mt-1">Teria criado um alerta monitorado, mas nada foi criado (shadow).</p>}
+                          {e.decision === 'suggest_manual_review' && <p className="text-[10.5px] text-amber-100/70 mt-1">Sugerida revisão manual — você pode promover manualmente pela barra de ações.</p>}
+                          {e.gates.filter(g => !g.passed).slice(0, 3).length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1.5">{e.gates.filter(g => !g.passed).slice(0, 3).map((g, i) => <span key={i} className="text-[10px] px-1.5 py-0.5 rounded border bg-white/[0.04] border-white/[0.08] text-white/50">{g.name}</span>)}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                <p className="text-[11px] text-white/40 mt-2">Decisão automática é rastreável. Shadow nunca é alerta real. Sem Telegram, sem odds.</p>
               </Section>
               {summary && (
                 <Section title="Histórico de ações">

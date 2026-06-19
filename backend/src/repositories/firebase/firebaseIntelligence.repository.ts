@@ -35,6 +35,9 @@ import type {
   AutoEngineLearningRun, AutoEngineLearningProfile, AutoOpportunityTypeProfile,
   AutoEngineLearningRecommendation,
 } from '../../modules/intelligence/autoEngine/autoEngineLearning.types.js'
+import type {
+  AutoAlertPolicy, AutoAlertPolicyEvaluation,
+} from '../../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -60,6 +63,8 @@ const AUTO_PROMOTED_OUTCOME_LINKS = 'autoPromotedAlertOutcomeLinks'
 const AUTO_OUTCOME_SUMMARIES = 'autoOpportunityOutcomeSummaries'
 const AUTO_LEARNING_RUNS = 'autoEngineLearningRuns'
 const AUTO_LEARNING_PROFILES = 'autoEngineLearningProfiles'
+const AUTO_ALERT_POLICIES = 'autoAlertPolicies'
+const AUTO_ALERT_POLICY_EVALS = 'autoAlertPolicyEvaluations'
 
 const READ_CAP = 2000
 
@@ -570,5 +575,59 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
   async listAutoEngineLearningRecommendations(limit?: number): Promise<AutoEngineLearningRecommendation[]> {
     const profile = await this.getLatestAutoEngineLearningProfile()
     return profile?.recommendations.slice(0, limit || 50) ?? []
+  }
+
+  // ── B25: Auto Alert Policy Engine ───────────────────────────────────────────
+  async createAutoAlertPolicy(policy: AutoAlertPolicy): Promise<AutoAlertPolicy> {
+    const db = await getFirestore()
+    await db.collection(AUTO_ALERT_POLICIES).doc(policy.id).set(policy, { merge: true })
+    return policy
+  }
+  async updateAutoAlertPolicy(id: string, patch: Partial<AutoAlertPolicy>): Promise<{ count: number }> {
+    const db = await getFirestore()
+    const ref = db.collection(AUTO_ALERT_POLICIES).doc(id)
+    const doc = await ref.get()
+    if (!doc.exists) return { count: 0 }
+    await ref.set(patch, { merge: true })
+    return { count: 1 }
+  }
+  async getAutoAlertPolicy(id: string): Promise<AutoAlertPolicy | null> {
+    const db = await getFirestore()
+    const doc = await db.collection(AUTO_ALERT_POLICIES).doc(id).get()
+    return doc.exists ? docData<AutoAlertPolicy>(doc) : null
+  }
+  async listAutoAlertPolicies(limit?: number): Promise<AutoAlertPolicy[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(AUTO_ALERT_POLICIES).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<AutoAlertPolicy>(d))
+      .sort((a: any, b: any) => (b.updatedAt || '').localeCompare(a.updatedAt || '')).slice(0, limit || 200)
+  }
+  async createAutoAlertPolicyEvaluation(evaluation: AutoAlertPolicyEvaluation): Promise<AutoAlertPolicyEvaluation> {
+    const db = await getFirestore()
+    await db.collection(AUTO_ALERT_POLICY_EVALS).doc(evaluation.id).set(evaluation, { merge: true })
+    return evaluation
+  }
+  async getAutoAlertPolicyEvaluation(id: string): Promise<AutoAlertPolicyEvaluation | null> {
+    const db = await getFirestore()
+    const doc = await db.collection(AUTO_ALERT_POLICY_EVALS).doc(id).get()
+    return doc.exists ? docData<AutoAlertPolicyEvaluation>(doc) : null
+  }
+  async listAutoAlertPolicyEvaluations(limit?: number): Promise<AutoAlertPolicyEvaluation[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(AUTO_ALERT_POLICY_EVALS).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<AutoAlertPolicyEvaluation>(d))
+      .sort((a: any, b: any) => (b.evaluatedAt || '').localeCompare(a.evaluatedAt || '')).slice(0, limit || 100)
+  }
+  async listAutoAlertPolicyEvaluationsByOpportunity(opportunityId: string, limit?: number): Promise<AutoAlertPolicyEvaluation[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(AUTO_ALERT_POLICY_EVALS).where('opportunityId', '==', opportunityId).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<AutoAlertPolicyEvaluation>(d))
+      .sort((a: any, b: any) => (b.evaluatedAt || '').localeCompare(a.evaluatedAt || '')).slice(0, limit || 50)
+  }
+  async listAutoAlertPolicyEvaluationsByPolicy(policyId: string, limit?: number): Promise<AutoAlertPolicyEvaluation[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(AUTO_ALERT_POLICY_EVALS).where('policyId', '==', policyId).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<AutoAlertPolicyEvaluation>(d))
+      .sort((a: any, b: any) => (b.evaluatedAt || '').localeCompare(a.evaluatedAt || '')).slice(0, limit || 100)
   }
 }

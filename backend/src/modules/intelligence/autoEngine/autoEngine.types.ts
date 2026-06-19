@@ -297,7 +297,7 @@ export interface AutoOpportunityFixtureContext {
 // is mandatory; opportunity stays distinct from alert; score ≠ probability.
 
 export interface PromotedAlertProvenance {
-  source: 'auto_opportunity_manual'
+  source: 'auto_opportunity_manual' | 'auto_alert_policy'
   opportunityId: string
   autoEngineRunId: string | null
   opportunityType: OpportunityType
@@ -308,6 +308,9 @@ export interface PromotedAlertProvenance {
   riskGateSnapshot: AutoSignalRiskGateResult
   promotionNote: string | null
   promotedAt: string
+  /** B25: set when the alert was auto-created by a policy. */
+  policyId?: string | null
+  evaluationId?: string | null
 }
 
 /** Persistent opportunity → alert link (deterministic id `mpa_${opportunityId}`). */

@@ -678,3 +678,120 @@ export const AUTO_SAMPLE_QUALITY_LABEL: Record<AutoSampleQuality, string> = {
   moderate: 'Amostra moderada',
   strong: 'Amostra forte',
 }
+
+// ─── B25: Auto Alert Policy Engine ───────────────────────────────────────────
+
+export type AutoAlertPolicyMode = 'disabled' | 'shadow_only' | 'suggest_manual' | 'auto_create_monitored'
+export type AutoAlertPolicyDecision =
+  | 'blocked' | 'shadow_would_create' | 'suggest_manual_review' | 'auto_created'
+  | 'skipped_duplicate' | 'skipped_policy_disabled' | 'skipped_engine_disabled'
+export type AutoAlertGateSeverity = 'info' | 'warning' | 'critical'
+
+export interface AutoAlertPolicyDto {
+  id: string
+  name: string
+  enabled: boolean
+  mode: AutoAlertPolicyMode
+  opportunityTypes: OpportunityType[]
+  minScore: number
+  minSampleQuality: AutoSampleQuality
+  allowedConfidenceBands: ConfidenceBand[]
+  allowedDataQuality: string[]
+  allowedLeagues: string[]
+  blockedLeagues: string[]
+  allowedTeams: string[]
+  blockedTeams: string[]
+  minuteWindows: string[]
+  maxPerFixture: number
+  maxPerRun: number
+  requireCalibration: boolean
+  requireNoCriticalBlockers: boolean
+  requireLearningProfile: boolean
+  allowUnknownData: boolean
+  allowPoorData: boolean
+  createdAt: string
+  updatedAt: string
+  createdByUserId: string | null
+}
+
+export type AutoAlertPolicyTemplateDto = AutoAlertPolicyDto
+
+export interface AutoAlertPolicyGateDto {
+  name: string
+  passed: boolean
+  severity: AutoAlertGateSeverity
+  reason: string
+  evidence: string | null
+}
+
+export interface AutoAlertPolicyEvaluationDto {
+  id: string
+  policyId: string
+  policyName: string
+  opportunityId: string
+  runId: string | null
+  fixtureId: string
+  evaluatedAt: string
+  mode: AutoAlertPolicyMode
+  decision: AutoAlertPolicyDecision
+  gates: AutoAlertPolicyGateDto[]
+  scoreSnapshot: { score: number; confidenceBand: ConfidenceBand; status: string; opportunityType: OpportunityType }
+  calibrationSnapshot: { hasTypeProfile: boolean; sampleQuality: AutoSampleQuality | null; usefulRate: number | null; unknownRate: number | null; failedRate: number | null; scoreBucketInsufficient: boolean }
+  riskGateSnapshot: { allowed: boolean; blockReasons: string[]; warnings: string[] }
+  reasons: string[]
+  limitations: string[]
+  promotedAlertId: string | null
+  source: 'auto_alert_policy'
+}
+
+export interface AutoAlertPolicyOverviewDto {
+  flags: {
+    policyEnabled: boolean
+    shadowMode: boolean
+    createEnabled: boolean
+    telegramEnabled: boolean
+    toAlertsEnabled: boolean
+    configEnabled: boolean
+  }
+  policies: number
+  enabledPolicies: number
+  totalEvaluations: number
+  blocked: number
+  shadowWouldCreate: number
+  suggestedManual: number
+  autoCreated: number
+  skipped: number
+  topBlockReasons: { reason: string; count: number }[]
+  topBlockedOpportunityTypes: { opportunityType: string; count: number }[]
+  mostRestrictivePolicies: { policyId: string; name: string; blocked: number }[]
+  lastEvaluationAt: string | null
+  limitations: string[]
+  generatedAt: string
+}
+
+export const AUTO_ALERT_MODE_LABEL: Record<AutoAlertPolicyMode, string> = {
+  disabled: 'Desabilitada',
+  shadow_only: 'Shadow (só registra)',
+  suggest_manual: 'Sugerir revisão manual',
+  auto_create_monitored: 'Criar alerta automático',
+}
+
+export const AUTO_ALERT_DECISION_LABEL: Record<AutoAlertPolicyDecision, string> = {
+  blocked: 'Bloqueada',
+  shadow_would_create: 'Criaria (shadow)',
+  suggest_manual_review: 'Sugerir revisão',
+  auto_created: 'Auto-criada',
+  skipped_duplicate: 'Pulada (duplicada)',
+  skipped_policy_disabled: 'Pulada (política off)',
+  skipped_engine_disabled: 'Pulada (motor off)',
+}
+
+export const AUTO_ALERT_DECISION_TONE: Record<AutoAlertPolicyDecision, string> = {
+  blocked: 'bg-white/[0.04] border-white/[0.1] text-white/55',
+  shadow_would_create: 'bg-sky-500/10 border-sky-400/20 text-sky-200/85',
+  suggest_manual_review: 'bg-amber-500/8 border-amber-400/15 text-amber-100/75',
+  auto_created: 'bg-[#13B8A6]/12 border-[#2DD4BF]/25 text-[#7FE9DC]',
+  skipped_duplicate: 'bg-white/[0.04] border-white/[0.08] text-white/45',
+  skipped_policy_disabled: 'bg-white/[0.04] border-white/[0.08] text-white/45',
+  skipped_engine_disabled: 'bg-white/[0.04] border-white/[0.08] text-white/45',
+}

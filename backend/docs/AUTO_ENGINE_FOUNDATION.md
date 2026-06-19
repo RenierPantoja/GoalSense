@@ -204,3 +204,18 @@ default, wired in `server.ts`). New collections `autoEngineLearningRuns` /
 `/calibration/overview`. Script `runAutoEngineLearningAggregation.mjs`; smoke
 `smokeAutoEngineLearning.mjs`. Observational only — never auto-tunes the engine, never rewrites
 opportunity scores. See [`AUTO_ENGINE_LEARNING_CALIBRATION.md`](./AUTO_ENGINE_LEARNING_CALIBRATION.md).
+
+---
+
+## B25 — Auto Alert Policy Engine + Shadow Mode (extension)
+
+A controlled-automation policy layer decides whether an opportunity may become a monitored alert.
+Shadow-first: default creates nothing. Modules `autoEngine/autoAlertPolicy.types.ts` +
+`utils/autoAlertPolicyGuard.util.ts` + `utils/autoAlertPolicyTemplate.util.ts` +
+`autoAlertPolicyConfig.service.ts` + `autoAlertPolicyEvaluation.service.ts`. Auto-create reuses the
+B22 machinery (sentinel patternId; provenance `source='auto_alert_policy'`) so B23/B24 pick it up.
+New collections `autoAlertPolicies` / `autoAlertPolicyEvaluations`. Scanner evaluates strong/watch
+opportunities after persistence only when `ENABLE_AUTO_ALERT_POLICY=true` (non-fatal). Flags all
+shadow-first (`ENABLE_AUTO_ALERT_POLICY=false`, `ENABLE_AUTO_ALERT_CREATE=false`,
+`ENABLE_AUTO_ALERT_TELEGRAM=false`, …). Smoke `smokeAutoAlertPolicy.mjs`. See
+[`AUTO_ALERT_POLICY_ENGINE.md`](./AUTO_ALERT_POLICY_ENGINE.md).

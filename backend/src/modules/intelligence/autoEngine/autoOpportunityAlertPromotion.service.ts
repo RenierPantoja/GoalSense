@@ -206,3 +206,86 @@ export async function promoteOpportunityToManualAlert(request: ManualAlertPromot
 
   return { success: true, alertId, ledgerId, opportunityId, created: true, duplicate: false, reason: null, promotedAt }
 }
+
+// ─── B25: auto-create from policy (gated; never human-confirmed) ─────────────
+
+export function isAutoAlertCreateEnabled(): boolean {
+  return String(env.ENABLE_AUTO_ALERT_CREATE).toLowerCase() === 'true'
+    && String(env.ENABLE_AUTO_ALERT_POLICY).toLowerCase() === 'true'
+    && String(env.ENABLE_AUTO_ENGINE_TO_ALERTS).toLowerCase() === 'true'
+}
+
+/**
+ * Create a monitored alert from an APPROVED policy evaluation. Mirrors the manual
+ * promotion machinery but provenance.source='auto_alert_policy'. Idempotent per
+ * opportunity. NO Telegram, NO odds, NO performance counter (sentinel patternId).
+ * The caller (policy evaluation service) is responsible for gate/flag checks; this
+ * re-checks the create flags defensively.
+ */
+export async function createAutoAlertFromPolicy(input: {
+  opp: AutoOpportunity; policyId: string; evaluationId: string; severity: 'critical' | 'attention' | 'info'; confidence: number
+}): Promise<{ created: boolean; alertId: string | null; ledgerId: string | null; reason: string | null }> {
+  const { opp } = input
+  if (!isAutoAlertCreateEnabled()) return { created: false, alertId: null, ledgerId: null, reason: 'auto_create_flags_disabled' }
+
+  const repos = createRepositories()
+  const existing = await repos.intelligence.getManualPromotedAlertLink(opp.id).catch(() => null)
+  if (existing) return { created: false, alertId: existing.alertId, ledgerId: existing.ledgerId, reason: 'duplicate' }
+
+  const promotedAt = new Date().toISOString()
+  const typeLabel = OPP_TYPE_LABEL[opp.opportunityType] || 'Oportunidade'
+  const scopeReason = `Criado automaticamente por política (policy ${input.policyId}; evaluation ${input.evaluationId}; oportunidade ${opp.id}; score ${opp.score}). Origem rastreável — não é alerta de radar configurado.`
+
+  const provenance: PromotedAlertProvenance = {
+    source: 'auto_alert_policy', opportunityId: opp.id, autoEngineRunId: opp.runId ?? null,
+    opportunityType: opp.opportunityType, originalScore: opp.score, originalConfidenceBand: opp.confidenceBand,
+    promotedByUserId: null, evidenceSnapshotRef: null, riskGateSnapshot: opp.riskGate, promotionNote: null,
+    promotedAt, policyId: input.policyId, evaluationId: input.evaluationId,
+  }
+  const evidenceJson = JSON.stringify({
+    source: 'auto_alert_policy', patternName: `Motor Automático — Política`,
+    homeTeam: opp.homeTeam, awayTeam: opp.awayTeam, competition: opp.leagueName,
+    severity: input.severity, evidences: opp.evidence?.passedSignals ?? [],
+    scope: { resolved: scopeReason }, provenance, autoAlertPolicy: true,
+    telegramEligible: false, oddsEligible: false,
+  })
+
+  let createdAlert: any
+  try {
+    createdAlert = await repos.alerts.create({
+      patternId: AUTO_ENGINE_PATTERN_ID, fixtureId: opp.fixtureId, status: 'pending',
+      confidence: input.confidence, signalState: 'ready_to_alert', triggerMinute: opp.minute,
+      triggerScoreHome: opp.scoreState.home, triggerScoreAway: opp.scoreState.away,
+      evidenceJson, temporalEvidenceJson: null, duplicateSignature: `auto_opportunity_${opp.id}`,
+    }, DEFAULT_USER)
+  } catch (e: any) { return { created: false, alertId: null, ledgerId: null, reason: `alert_create_failed:${e?.message || e}` } }
+  const alertId = createdAlert.id
+
+  let ledgerId: string | null = null
+  try {
+    const entry = buildLedgerEntry({
+      alertId, patternId: null, userId: DEFAULT_USER, radarName: 'Motor Automático — Política',
+      fixtureId: opp.fixtureId, fixtureLabel: opp.fixtureLabel, leagueName: opp.leagueName,
+      homeTeam: opp.homeTeam, awayTeam: opp.awayTeam, minute: opp.minute, score: opp.scoreState,
+      signalStatus: 'alerted', signalType: opp.opportunityType, confidence: input.confidence, severity: input.severity,
+      evidence: buildEvidenceSnapshot(opp, scopeReason), scopeReason,
+      matchContext: opp.contextFit ? { competitionType: opp.contextFit.competitionType || 'unknown', stage: 'unknown', isKnockout: false, importance: 0, importanceLabel: opp.contextFit.importanceLabel || 'média' } : null,
+      dataAvailability: buildAvailabilityMap(opp),
+    })
+    await repos.intelligence.createSignalLedgerEntry(entry)
+    ledgerId = entry.id
+  } catch (e: any) { console.warn(`[B25] ledger write failed for auto alert ${alertId} (non-blocking): ${e?.message || e}`) }
+
+  try {
+    const link: ManualPromotedAlertLink = {
+      id: `mpa_${opp.id}`, opportunityId: opp.id, fixtureId: opp.fixtureId, alertId, ledgerId,
+      opportunityType: opp.opportunityType, originalScore: opp.score, originalConfidenceBand: opp.confidenceBand,
+      provenance, promotedAt,
+    }
+    await repos.intelligence.createManualPromotedAlertLink(link)
+  } catch (e: any) { console.warn(`[B25] auto-alert link write failed for ${opp.id} (non-blocking): ${e?.message || e}`) }
+
+  try { await createOpportunityAction(opp.id, { actionType: 'manual_alert_promoted', metadata: { alertId, ledgerId, autoAlertPolicy: true, policyId: input.policyId } }) } catch { /* never block */ }
+
+  return { created: true, alertId, ledgerId, reason: null }
+}

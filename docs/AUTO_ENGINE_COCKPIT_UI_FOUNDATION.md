@@ -117,3 +117,14 @@ per-opportunity-type useful/unknown rates, score-bucket calibration, data-qualit
 breakdowns, recommendations (by strength), and limitations — plus an env-gated "Recalcular"
 button. The overview also gains an engine-maturity card. Observational only; never auto-tunes the
 engine or rewrites scores. See [`AUTO_ENGINE_CALIBRATION_UI.md`](./AUTO_ENGINE_CALIBRATION_UI.md).
+
+---
+
+## B25 — "Políticas" segment (extension)
+
+A fifth cockpit segment, **Políticas** (`AutoAlertPolicyPanel` + `AutoAlertPolicyOverviewPanel` +
+`AutoAlertPolicyEditor`), exposes the Auto Alert Policy Engine: automation flags, decision tallies,
+policy CRUD (config-flag gated), and recent shadow/blocked/auto decisions. The opportunity drawer
+gains a "Política automática" section with an "Avaliar política agora" action. Shadow-first: the UI
+never implies a real alert unless the decision is `auto_created`. See
+[`AUTO_ALERT_POLICY_UI.md`](./AUTO_ALERT_POLICY_UI.md).

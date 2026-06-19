@@ -27,6 +27,13 @@ import {
   getLatestAutoEngineLearningProfile, getAutoOpportunityTypeProfile,
   listAutoEngineLearningRecommendations, getAutoEngineCalibrationOverview,
 } from './autoEngine/autoEngineCalibration.service.js'
+import {
+  listPolicies, getPolicy, createPolicy, updatePolicy, getDefaultPolicyTemplate,
+  getAutoAlertPolicyOverview, isAutoAlertPolicyConfigEnabled,
+} from './autoEngine/autoAlertPolicyConfig.service.js'
+import {
+  evaluateOpportunityPolicies, listOpportunityPolicyEvaluations, listPolicyEvaluations,
+} from './autoEngine/autoAlertPolicyEvaluation.service.js'
 import type { AutoOpportunityActionType, AutoOpportunityFeedbackType, ManualAlertPromotionRequest } from './autoEngine/autoEngine.types.js'
 
 const VALID_ACTIONS: AutoOpportunityActionType[] = [
@@ -304,5 +311,65 @@ export async function autoEngineRoutes(app: FastifyInstance) {
   app.get('/intelligence/auto-engine/calibration/overview', async () => {
     try { return ok(await getAutoEngineCalibrationOverview()) }
     catch (e: any) { app.log.warn(`auto-engine calibration overview failed: ${e?.message || e}`); return ok(null) }
+  })
+
+  // ── B25: Auto Alert Policy Engine (shadow-first; auto-create gated) ──────────
+  app.get('/intelligence/auto-engine/auto-alert-policies', async () => {
+    try { return ok(await listPolicies()) }
+    catch (e: any) { app.log.warn(`auto-alert policies failed: ${e?.message || e}`); return ok([]) }
+  })
+
+  app.get('/intelligence/auto-engine/auto-alert-policies/templates/default', async () => {
+    return ok(getDefaultPolicyTemplate())
+  })
+
+  app.get('/intelligence/auto-engine/auto-alert-policies/:id', async (req) => {
+    const { id } = req.params as { id: string }
+    try { return ok(await getPolicy(id)) }
+    catch (e: any) { app.log.warn(`auto-alert policy get failed: ${e?.message || e}`); return ok(null) }
+  })
+
+  app.post('/intelligence/auto-engine/auto-alert-policies', async (req, reply) => {
+    if (!isAutoAlertPolicyConfigEnabled()) {
+      return reply.status(403).send({ success: false, error: { message: 'Configuração de política desabilitada. Defina ENABLE_AUTO_ALERT_POLICY_CONFIG=true no backend.' } })
+    }
+    try { return ok(await createPolicy((req.body || {}) as any)) }
+    catch (e: any) { return reply.status(400).send(badRequest('Falha ao criar política', e?.message)) }
+  })
+
+  app.patch('/intelligence/auto-engine/auto-alert-policies/:id', async (req, reply) => {
+    if (!isAutoAlertPolicyConfigEnabled()) {
+      return reply.status(403).send({ success: false, error: { message: 'Configuração de política desabilitada. Defina ENABLE_AUTO_ALERT_POLICY_CONFIG=true no backend.' } })
+    }
+    const { id } = req.params as { id: string }
+    const updated = await updatePolicy(id, (req.body || {}) as any)
+    if (!updated) return reply.status(404).send(notFound('Política não encontrada.'))
+    return ok(updated)
+  })
+
+  app.post('/intelligence/auto-engine/opportunities/:id/evaluate-auto-alert-policy', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    try {
+      const res = await evaluateOpportunityPolicies(id)
+      return ok(res)
+    } catch (e: any) { app.log.error(`auto-alert evaluate failed: ${e?.message || e}`); return reply.status(400).send(badRequest('Avaliação falhou', e?.message)) }
+  })
+
+  app.get('/intelligence/auto-engine/opportunities/:id/policy-evaluations', async (req) => {
+    const { id } = req.params as { id: string }
+    const { limit } = req.query as { limit?: string }
+    try { return ok(await listOpportunityPolicyEvaluations(id, clampLimit(limit, 50, 200))) }
+    catch (e: any) { app.log.warn(`auto-alert opp evaluations failed: ${e?.message || e}`); return ok([]) }
+  })
+
+  app.get('/intelligence/auto-engine/auto-alert-policy/evaluations', async (req) => {
+    const { limit } = req.query as { limit?: string }
+    try { return ok(await listPolicyEvaluations(clampLimit(limit, 100, 500))) }
+    catch (e: any) { app.log.warn(`auto-alert evaluations failed: ${e?.message || e}`); return ok([]) }
+  })
+
+  app.get('/intelligence/auto-engine/auto-alert-policy/overview', async () => {
+    try { return ok(await getAutoAlertPolicyOverview()) }
+    catch (e: any) { app.log.warn(`auto-alert overview failed: ${e?.message || e}`); return ok(null) }
   })
 }

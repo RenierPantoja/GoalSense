@@ -118,3 +118,12 @@ addressed in B24. The `AutoOpportunityOutcomeSummary` + `ManualPromotedAlertLink
 here are aggregated into a SEPARATE Auto Engine learning/calibration profile (never blended into
 B13 manual-pattern profiles, never fed back into runtime scoring). See
 [`AUTO_ENGINE_LEARNING_CALIBRATION.md`](./AUTO_ENGINE_LEARNING_CALIBRATION.md).
+
+---
+
+## B25 — policy-created alerts resolve through the same cycle (extension)
+
+Alerts auto-created by the B25 Auto Alert Policy use the sentinel `patternId='auto_engine_manual'`
+and `evidenceJson.source='auto_alert_policy'`, so `isPromotedAlert` detects them and they resolve
+through this exact honest cycle (and feed B24 calibration). They are still default-off (shadow). See
+[`AUTO_ALERT_POLICY_ENGINE.md`](./AUTO_ALERT_POLICY_ENGINE.md).

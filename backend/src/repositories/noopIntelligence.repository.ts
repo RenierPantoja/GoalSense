@@ -30,6 +30,9 @@ import type {
   AutoEngineLearningRun, AutoEngineLearningProfile, AutoOpportunityTypeProfile,
   AutoEngineLearningRecommendation,
 } from '../modules/intelligence/autoEngine/autoEngineLearning.types.js'
+import type {
+  AutoAlertPolicy, AutoAlertPolicyEvaluation,
+} from '../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
 
 let warned = false
 function warnOnce(): void {
@@ -146,4 +149,15 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async getLatestAutoEngineLearningProfile(): Promise<AutoEngineLearningProfile | null> { return null }
   async getAutoOpportunityTypeProfile(): Promise<AutoOpportunityTypeProfile | null> { return null }
   async listAutoEngineLearningRecommendations(): Promise<AutoEngineLearningRecommendation[]> { return [] }
+
+  // ── B25 (Noop): reads empty; writes accepted without persistence ──
+  async createAutoAlertPolicy(policy: AutoAlertPolicy): Promise<AutoAlertPolicy> { warnOnce(); return policy }
+  async updateAutoAlertPolicy(): Promise<{ count: number }> { return { count: 0 } }
+  async getAutoAlertPolicy(): Promise<AutoAlertPolicy | null> { return null }
+  async listAutoAlertPolicies(): Promise<AutoAlertPolicy[]> { return [] }
+  async createAutoAlertPolicyEvaluation(evaluation: AutoAlertPolicyEvaluation): Promise<AutoAlertPolicyEvaluation> { warnOnce(); return evaluation }
+  async getAutoAlertPolicyEvaluation(): Promise<AutoAlertPolicyEvaluation | null> { return null }
+  async listAutoAlertPolicyEvaluations(): Promise<AutoAlertPolicyEvaluation[]> { return [] }
+  async listAutoAlertPolicyEvaluationsByOpportunity(): Promise<AutoAlertPolicyEvaluation[]> { return [] }
+  async listAutoAlertPolicyEvaluationsByPolicy(): Promise<AutoAlertPolicyEvaluation[]> { return [] }
 }

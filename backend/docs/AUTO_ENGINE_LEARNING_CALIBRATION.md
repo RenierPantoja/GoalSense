@@ -92,3 +92,13 @@ top opportunity types, and top limitations.
 - `npm run typecheck` ✓ · `npm run build` ✓
 - `node scripts/smokeAutoEngine.mjs` ✓ · `node scripts/smokePromotedAlertResolution.mjs` ✓
 - `node scripts/smokeAutoEngineLearning.mjs` ✓ (bucketing, unknown≠failed, sample gating, Noop)
+
+---
+
+## B25 — calibration feeds the policy guard (extension)
+
+The B24 calibration profile is now consumed (read-only) by the B25 Auto Alert Policy guard:
+`getAutoOpportunityTypeProfile(type)` gates auto-alert decisions (require calibration, min sample
+quality, bounded unknown/failed rates). Calibration remains observational and is never auto-applied
+to scoring — the policy only reads it to decide whether to (shadow) create. See
+[`AUTO_ALERT_POLICY_ENGINE.md`](./AUTO_ALERT_POLICY_ENGINE.md).

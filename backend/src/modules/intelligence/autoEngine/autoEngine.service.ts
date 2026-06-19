@@ -11,6 +11,8 @@ import { buildPatternInput } from '../../command/snapshotToPatternInput.js'
 import { deriveMatchContext } from '../../command/matchContext.service.js'
 import { normalizeKeyPart } from '../learning/contextKey.util.js'
 import { scanFixture, type ProfileMaps } from './autoOpportunityScanner.service.js'
+import { evaluateOpportunitiesForRun } from './autoAlertPolicyEvaluation.service.js'
+import { isAutoAlertPolicyEnabled } from './autoAlertPolicyConfig.service.js'
 import { rankOpportunities } from './utils/autoSignalRanking.util.js'
 import { autoRunId } from './utils/autoSignalId.util.js'
 import type { AutoEngineRun, AutoEngineRunConfig, AutoOpportunity, AutoEngineOverview } from './autoEngine.types.js'
@@ -107,6 +109,17 @@ export async function runAutoEngineScan(opts: ScanOptions = {}): Promise<AutoEng
       for (const o of ranked) { try { await repos.intelligence.upsertAutoOpportunity(o) } catch { /* never block */ } }
     } else {
       run.notes.push('Dry-run / WRITE=false — nada persistido.')
+    }
+
+    // ── B25: optional Auto Alert Policy evaluation (shadow-first; never fatal) ──
+    if (write && isAutoAlertPolicyEnabled()) {
+      try {
+        const ids = ranked.filter(o => o.status === 'strong' || o.status === 'watch').map(o => o.id)
+        const pol = await evaluateOpportunitiesForRun(ids)
+        run.notes.push(`Política avaliada: ${pol.evaluated} (auto:${pol.autoCreated} shadow:${pol.shadow} bloq:${pol.blocked}).`)
+      } catch (e: any) {
+        run.notes.push(`Avaliação de política falhou (não bloqueante): ${e?.message || e}`)
+      }
     }
 
     run.status = 'completed'

@@ -46,3 +46,12 @@ Labeled "não é taxa de acerto, não autoajusta o motor".
 
 ## Verification
 - `npm run check:encoding` ✓ · `npx tsc --noEmit` ✓ · `npx vite build` ✓
+
+---
+
+## B25 — Políticas segment (extension)
+
+The cockpit gains a sixth-area "Políticas" segment (`AutoAlertPolicyPanel`) for the Auto Alert
+Policy Engine: automation flags, decision tallies (shadow never counted as a real alert), the
+policy list + editor, and recent decisions. The opportunity drawer shows a "Política automática"
+section. Shadow-first throughout. See [`AUTO_ALERT_POLICY_UI.md`](./AUTO_ALERT_POLICY_UI.md).
