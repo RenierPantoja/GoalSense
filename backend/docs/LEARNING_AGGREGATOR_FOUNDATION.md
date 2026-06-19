@@ -110,3 +110,15 @@ B14 also adds the **Learning Aggregation Scheduler** foundation
 (`learning/learningAggregationScheduler.service.ts`) — env-gated
 (`ENABLE_LEARNING_AGGREGATION_SCHEDULER`, default off) periodic re-aggregation, so
 the manual-only limitation of B13 can be lifted safely when desired.
+
+
+## B19 — Automatic Engine consumes these profiles
+
+The B19 Automatic Engine (Intelligent Opportunity Scanner) reads the
+pattern/competition/team learning profiles produced here to weight and gate live
+opportunities. The `pattern_similarity` strategy only fires when a radar's profile
+has a moderate/strong sample and `usefulRate ≥ 0.5` matching the live
+minute-window/competition; scoring adds bounded learning terms only when a real
+sample exists, and the risk gate blocks learning-dependent opportunities below
+`AUTO_ENGINE_MIN_SAMPLE_QUALITY`. Read-only — it never writes back to profiles,
+patterns, confidence or counters. See `backend/docs/AUTO_ENGINE_FOUNDATION.md`.

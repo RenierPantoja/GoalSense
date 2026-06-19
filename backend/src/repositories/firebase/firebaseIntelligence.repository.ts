@@ -26,6 +26,9 @@ import type {
 import type {
   BacktestRun, ReplayRun, PersistedBacktestSignalResult,
 } from '../../modules/intelligence/backtest/backtest.types.js'
+import type {
+  AutoEngineRun, AutoOpportunity,
+} from '../../modules/intelligence/autoEngine/autoEngine.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -41,6 +44,8 @@ const RECOMMENDATIONS = 'learningRecommendations'
 const BACKTEST_RUNS = 'backtestRuns'
 const BACKTEST_RESULTS = 'backtestSignalResults'
 const REPLAY_RUNS = 'replayRuns'
+const AUTO_RUNS = 'autoEngineRuns'
+const AUTO_OPPS = 'autoOpportunities'
 
 const READ_CAP = 2000
 
@@ -356,5 +361,57 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     if (filters.patternId) q = q.where('patternId', '==', filters.patternId)
     const snap = await q.get()
     return snap.docs.map((d: any) => docData<ReplayRun>(d)).sort(byCreatedAtDesc).slice(0, filters.limit || 100)
+  }
+
+  // ── B19: Automatic Engine ────────────────────────────────────────────────────
+  async createAutoEngineRun(run: AutoEngineRun): Promise<AutoEngineRun> {
+    const db = await getFirestore()
+    await db.collection(AUTO_RUNS).doc(run.id).set(run, { merge: true })
+    return run
+  }
+  async updateAutoEngineRun(id: string, patch: Partial<AutoEngineRun>): Promise<{ count: number }> {
+    const db = await getFirestore()
+    const clean: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(patch)) { if (v !== undefined) clean[k] = v }
+    await db.collection(AUTO_RUNS).doc(id).set(clean, { merge: true })
+    return { count: 1 }
+  }
+  async getAutoEngineRun(id: string): Promise<AutoEngineRun | null> {
+    const db = await getFirestore()
+    const doc = await db.collection(AUTO_RUNS).doc(id).get()
+    return doc.exists ? docData<AutoEngineRun>(doc) : null
+  }
+  async getLatestAutoEngineRun(): Promise<AutoEngineRun | null> {
+    const db = await getFirestore()
+    const snap = await db.collection(AUTO_RUNS).limit(READ_CAP).get()
+    const rows = snap.docs.map((d: any) => docData<AutoEngineRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || ''))
+    return rows.length > 0 ? rows[0] : null
+  }
+  async listAutoEngineRuns(limit?: number): Promise<AutoEngineRun[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(AUTO_RUNS).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<AutoEngineRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 100)
+  }
+  async upsertAutoOpportunity(opp: AutoOpportunity): Promise<AutoOpportunity> {
+    const db = await getFirestore()
+    await db.collection(AUTO_OPPS).doc(opp.id).set(opp, { merge: true })
+    return opp
+  }
+  async getAutoOpportunity(id: string): Promise<AutoOpportunity | null> {
+    const db = await getFirestore()
+    const doc = await db.collection(AUTO_OPPS).doc(id).get()
+    return doc.exists ? docData<AutoOpportunity>(doc) : null
+  }
+  async listAutoOpportunities(filters: { status?: string; type?: string; limit?: number }): Promise<AutoOpportunity[]> {
+    const db = await getFirestore()
+    let rows = (await db.collection(AUTO_OPPS).limit(READ_CAP).get()).docs.map((d: any) => docData<AutoOpportunity>(d))
+    if (filters.status) rows = rows.filter((o: any) => o.status === filters.status)
+    if (filters.type) rows = rows.filter((o: any) => o.opportunityType === filters.type)
+    return rows.sort(byCreatedAtDesc).slice(0, filters.limit || 100)
+  }
+  async listAutoOpportunitiesByFixture(fixtureId: string, limit?: number): Promise<AutoOpportunity[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(AUTO_OPPS).where('fixtureId', '==', fixtureId).get()
+    return snap.docs.map((d: any) => docData<AutoOpportunity>(d)).sort(byCreatedAtDesc).slice(0, limit || 50)
   }
 }

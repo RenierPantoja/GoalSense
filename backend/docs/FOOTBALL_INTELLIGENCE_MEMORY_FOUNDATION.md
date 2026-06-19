@@ -165,3 +165,15 @@ explainable related alerts (`…/alerts/:id/related`, `…/patterns/:id/related-
 `alertIntelligence.service.ts` + `relatedAlerts.service.ts` (in-memory joins over
 capped reads). Honest throughout; Firebase persists, Noop safe under Prisma. See
 `backend/docs/ALERT_INTELLIGENCE_API_HARDENING.md`.
+
+
+## B19 — Automatic Engine builds on this memory
+
+The B19 Automatic Engine (Intelligent Opportunity Scanner) is a read-only
+consumer of this intelligence memory and the B13 learning profiles. It scans live
+fixtures and produces explainable, ranked **opportunities** (never alerts), honors
+the same invariants — `unknown` ≠ `failed`, missing data is a block reason not a
+failure, `confirmed_partial` stays partial, scores are signal-quality not
+probabilities — and never creates alerts, odds, bets or Telegram. New Firestore
+collections `autoEngineRuns` / `autoOpportunities`; Firebase persists, Noop safe
+under Prisma. All OFF by default. See `backend/docs/AUTO_ENGINE_FOUNDATION.md`.

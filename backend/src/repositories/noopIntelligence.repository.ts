@@ -21,6 +21,9 @@ import type {
 import type {
   BacktestRun, ReplayRun, PersistedBacktestSignalResult,
 } from '../modules/intelligence/backtest/backtest.types.js'
+import type {
+  AutoEngineRun, AutoOpportunity,
+} from '../modules/intelligence/autoEngine/autoEngine.types.js'
 
 let warned = false
 function warnOnce(): void {
@@ -92,4 +95,15 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async createReplayRun(run: ReplayRun): Promise<ReplayRun> { warnOnce(); return run }
   async getReplayRun(): Promise<ReplayRun | null> { return null }
   async listReplayRuns(): Promise<ReplayRun[]> { return [] }
+
+  // ── B19 (Noop): reads empty; writes accepted without persistence ──
+  async createAutoEngineRun(run: AutoEngineRun): Promise<AutoEngineRun> { warnOnce(); return run }
+  async updateAutoEngineRun(): Promise<{ count: number }> { return { count: 0 } }
+  async getAutoEngineRun(): Promise<AutoEngineRun | null> { return null }
+  async getLatestAutoEngineRun(): Promise<AutoEngineRun | null> { return null }
+  async listAutoEngineRuns(): Promise<AutoEngineRun[]> { return [] }
+  async upsertAutoOpportunity(opp: AutoOpportunity): Promise<AutoOpportunity> { warnOnce(); return opp }
+  async getAutoOpportunity(): Promise<AutoOpportunity | null> { return null }
+  async listAutoOpportunities(): Promise<AutoOpportunity[]> { return [] }
+  async listAutoOpportunitiesByFixture(): Promise<AutoOpportunity[]> { return [] }
 }

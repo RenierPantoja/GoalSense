@@ -133,6 +133,9 @@ import type {
 import type {
   BacktestRun, ReplayRun, PersistedBacktestSignalResult,
 } from '../modules/intelligence/backtest/backtest.types.js'
+import type {
+  AutoEngineRun, AutoOpportunity,
+} from '../modules/intelligence/autoEngine/autoEngine.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -197,6 +200,17 @@ export interface IntelligenceRepository {
   createReplayRun(run: ReplayRun): Promise<ReplayRun>
   getReplayRun(id: string): Promise<ReplayRun | null>
   listReplayRuns(filters: { patternId?: string; limit?: number }): Promise<ReplayRun[]>
+
+  // ── B19: Automatic Engine (opportunities, not alerts) ───────────────────────
+  createAutoEngineRun(run: AutoEngineRun): Promise<AutoEngineRun>
+  updateAutoEngineRun(id: string, patch: Partial<AutoEngineRun>): Promise<{ count: number }>
+  getAutoEngineRun(id: string): Promise<AutoEngineRun | null>
+  getLatestAutoEngineRun(): Promise<AutoEngineRun | null>
+  listAutoEngineRuns(limit?: number): Promise<AutoEngineRun[]>
+  upsertAutoOpportunity(opp: AutoOpportunity): Promise<AutoOpportunity>
+  getAutoOpportunity(id: string): Promise<AutoOpportunity | null>
+  listAutoOpportunities(filters: { status?: string; type?: string; limit?: number }): Promise<AutoOpportunity[]>
+  listAutoOpportunitiesByFixture(fixtureId: string, limit?: number): Promise<AutoOpportunity[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

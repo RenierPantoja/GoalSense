@@ -16,10 +16,12 @@ import { oddsRoutes } from './modules/odds/odds.routes.js'
 import { intelligenceRoutes } from './modules/intelligence/intelligence.routes.js'
 import { learningRoutes } from './modules/intelligence/learning.routes.js'
 import { backtestRoutes } from './modules/intelligence/backtest.routes.js'
+import { autoEngineRoutes } from './modules/intelligence/autoEngine.routes.js'
 import { startLiveMonitorWorker } from './workers/liveMonitor.worker.js'
 import { startPatternEvaluationWorker } from './workers/patternEvaluation.worker.js'
 import { startAlertResolutionWorker } from './workers/alertResolution.worker.js'
 import { startLearningAggregationScheduler } from './modules/intelligence/learning/learningAggregationScheduler.service.js'
+import { startAutoEngineScheduler } from './modules/intelligence/autoEngine/autoEngineScheduler.service.js'
 
 const app = Fastify({ logger: true })
 
@@ -53,6 +55,7 @@ app.register(oddsRoutes, { prefix: '/api' })
 app.register(intelligenceRoutes, { prefix: '/api' })
 app.register(learningRoutes, { prefix: '/api' })
 app.register(backtestRoutes, { prefix: '/api' })
+app.register(autoEngineRoutes, { prefix: '/api' })
 
 // Start
 const start = async () => {
@@ -67,6 +70,8 @@ const start = async () => {
     startAlertResolutionWorker()
     // Start learning aggregation scheduler (disabled by default; env-gated)
     startLearningAggregationScheduler()
+    // Start auto engine scheduler (B19; disabled by default; env-gated)
+    startAutoEngineScheduler()
   } catch (err) {
     app.log.error(err)
     process.exit(1)
