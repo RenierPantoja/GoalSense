@@ -10,6 +10,7 @@ import { useState } from 'react'
 import { Zap, BarChart3, GraduationCap } from 'lucide-react'
 import { AlertsView, type AlertsViewProps } from './AlertsView'
 import { AlertSignalDrawer } from './intelligence/AlertSignalDrawer'
+import { AlertOverviewStrip } from './intelligence/AlertOverviewStrip'
 import { PatternSignalQualityView } from './intelligence/PatternSignalQualityView'
 import { AlertLearningFeed } from './intelligence/AlertLearningFeed'
 
@@ -62,10 +63,13 @@ export function AlertsIntelligencePanel(props: AlertsIntelligencePanelProps) {
       </header>
 
       {segment === 'sinais' && (
-        <AlertsView {...alertsViewProps} onOpenAnalysis={(alertId, headline) => setDrawer({ alertId, ...headline })} />
+        <>
+          <AlertOverviewStrip />
+          <AlertsView {...alertsViewProps} onOpenAnalysis={(alertId, headline) => setDrawer({ alertId, ...headline })} />
+        </>
       )}
       {segment === 'qualidade' && <PatternSignalQualityView />}
-      {segment === 'aprendizados' && <AlertLearningFeed />}
+      {segment === 'aprendizados' && <AlertLearningFeed onGoToBacktest={onGoToBacktest} />}
 
       {drawer && (
         <AlertSignalDrawer

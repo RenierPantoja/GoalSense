@@ -41,10 +41,13 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async listAlertOutcomesByPattern(): Promise<AlertOutcomeRecord[]> { return [] }
 
   async createFailureAnalysis(analysis: SignalFailureAnalysis): Promise<SignalFailureAnalysis> { warnOnce(); return analysis }
+  async getFailureAnalysisByAlertId(): Promise<SignalFailureAnalysis | null> { return null }
+  async listFailureAnalysesByPattern(): Promise<SignalFailureAnalysis[]> { return [] }
   async createMissedOpportunity(record: MissedOpportunityRecord): Promise<MissedOpportunityRecord> { warnOnce(); return record }
 
   async createLearningEvent(event: LearningEvent): Promise<LearningEvent> { warnOnce(); return event }
   async listLearningEventsByPattern(): Promise<LearningEvent[]> { return [] }
+  async getLearningEventById(): Promise<LearningEvent | null> { return null }
 
   async getOverview(): Promise<IntelligenceOverview> {
     const outcomeBreakdown: Record<AlertResult, number> = { pending: 0, confirmed: 0, confirmed_partial: 0, failed: 0, unknown: 0, expired: 0 }

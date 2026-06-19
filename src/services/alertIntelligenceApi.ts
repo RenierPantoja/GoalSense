@@ -7,6 +7,8 @@ import { getBackendUrl } from './commandBackendClient'
 import type {
   SignalLedgerEntry, AlertOutcomeRecord, PatternLearningProfile,
   LearningEvent, LearningRecommendation, LearningOverview,
+  SignalFailureAnalysis, AlertIntelligenceOverview, AlertSearchResponse,
+  RelatedAlertsResponse, LearningEventDetail, AlertIntelFilters,
 } from '@/features/command/intelligence/alertIntelligenceTypes'
 
 async function get<T>(path: string): Promise<T | null> {
@@ -23,6 +25,17 @@ async function get<T>(path: string): Promise<T | null> {
 }
 
 export function isAlertIntelligenceConfigured(): boolean { return getBackendUrl().length > 0 }
+
+/** Build a query string from a flat filter object (skips empty/undefined). */
+function buildQuery(filters: Record<string, unknown> | object): string {
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(filters as Record<string, unknown>)) {
+    if (v === undefined || v === null || v === '') continue
+    qs.set(k, String(v))
+  }
+  const s = qs.toString()
+  return s ? `?${s}` : ''
+}
 
 export const alertIntelligenceApi = {
   getAlertLedger(alertId: string) {
@@ -45,6 +58,33 @@ export const alertIntelligenceApi = {
   },
   getLearningOverview() {
     return get<LearningOverview>(`/api/intelligence/learning/overview`)
+  },
+
+  // ── B17: hardened endpoints ────────────────────────────────────────────────
+  getFailureAnalysis(alertId: string) {
+    return get<SignalFailureAnalysis>(`/api/intelligence/alerts/${encodeURIComponent(alertId)}/failure-analysis`)
+  },
+  getPatternFailureAnalyses(patternId: string, limit = 100) {
+    return get<SignalFailureAnalysis[]>(`/api/intelligence/patterns/${encodeURIComponent(patternId)}/failure-analyses?limit=${limit}`)
+  },
+  getAlertIntelligenceOverview(filters: AlertIntelFilters = {}) {
+    return get<AlertIntelligenceOverview>(`/api/intelligence/alerts/overview${buildQuery(filters)}`)
+  },
+  searchAlertIntelligence(filters: AlertIntelFilters = {}, limit = 50, cursor?: number) {
+    const extra: Record<string, unknown> = { limit, ...(cursor != null ? { cursor } : {}) }
+    return get<AlertSearchResponse>(`/api/intelligence/alerts/search${buildQuery({ ...filters, ...extra } as any)}`)
+  },
+  getRelatedAlerts(alertId: string, limit = 20) {
+    return get<RelatedAlertsResponse>(`/api/intelligence/alerts/${encodeURIComponent(alertId)}/related?limit=${limit}`)
+  },
+  getRelatedAlertsForPattern(patternId: string, limit = 30) {
+    return get<RelatedAlertsResponse>(`/api/intelligence/patterns/${encodeURIComponent(patternId)}/related-alerts?limit=${limit}`)
+  },
+  getRelatedAlertsForLearningEvent(eventId: string, limit = 20) {
+    return get<RelatedAlertsResponse & { eventId: string; basis?: string }>(`/api/intelligence/learning/events/${encodeURIComponent(eventId)}/related-alerts?limit=${limit}`)
+  },
+  getLearningEventDetail(eventId: string) {
+    return get<LearningEventDetail>(`/api/intelligence/learning/events/${encodeURIComponent(eventId)}`)
   },
 
   /** Compose the full intelligence bundle for one alert (no backend bundle endpoint). */

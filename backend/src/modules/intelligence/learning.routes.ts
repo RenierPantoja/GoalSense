@@ -13,6 +13,7 @@ import type { FastifyInstance } from 'fastify'
 import { createRepositories } from '../../repositories/index.js'
 import { ok, badRequest } from '../../utils/apiResponse.js'
 import { aggregateAll, aggregatePattern, getLearningOverview } from './learning/learningAggregator.service.js'
+import { learningEventDetail, relatedForLearningEvent } from './relatedAlerts.service.js'
 
 function clampLimit(raw: string | undefined, def: number, max: number): number {
   const n = raw ? parseInt(raw, 10) : def
@@ -74,6 +75,20 @@ export async function learningRoutes(app: FastifyInstance) {
     const { limit } = req.query as { limit?: string }
     try { return ok(await repos.intelligence.listLearningRecommendations(clampLimit(limit, 100, 500))) }
     catch (e: any) { app.log.warn(`learning recommendations failed: ${e?.message || e}`); return ok([]) }
+  })
+
+  // ── B17: learning event drill-down ──────────────────────────────────────────
+  app.get('/intelligence/learning/events/:eventId', async (req) => {
+    const { eventId } = req.params as { eventId: string }
+    try { return ok(await learningEventDetail(eventId)) }
+    catch (e: any) { app.log.warn(`learning event detail failed: ${e?.message || e}`); return ok({ found: false, event: null, relatedPattern: null, relatedRecommendations: [], relatedAlertsSummary: null, relatedAlertsLinkParams: null }) }
+  })
+
+  app.get('/intelligence/learning/events/:eventId/related-alerts', async (req) => {
+    const { eventId } = req.params as { eventId: string }
+    const { limit } = req.query as { limit?: string }
+    try { return ok(await relatedForLearningEvent(eventId, clampLimit(limit, 20, 100))) }
+    catch (e: any) { app.log.warn(`learning event related alerts failed: ${e?.message || e}`); return ok({ eventId, found: false, total: 0, appliedFilters: [], relatedAlerts: [] }) }
   })
 
   app.post('/intelligence/learning/rebuild', async (req, reply) => {

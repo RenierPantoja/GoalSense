@@ -182,3 +182,114 @@ export const SAMPLE_QUALITY_LABEL: Record<SampleQuality, string> = {
 }
 
 export function pct(v: number | null | undefined): string { return v == null ? '—' : `${Math.round(v * 100)}%` }
+
+
+// ─── B17: server-side overview / search / related ──────────────────────────────
+
+export interface AlertIntelligenceOverview {
+  totalAlerts: number
+  pending: number
+  confirmed: number
+  confirmedPartial: number
+  failed: number
+  unknown: number
+  expired: number
+  usefulSignals: number
+  usefulRate: number | null
+  failedRate: number | null
+  unknownRate: number | null
+  avgConfidence: number | null
+  avgTimeToResolutionMinutes: number | null
+  sampleQuality: SampleQuality
+  byPattern: ContextBreakdownSample[]
+  byLeague: ContextBreakdownSample[]
+  byTeam: ContextBreakdownSample[]
+  byMinuteWindow: ContextBreakdownSample[]
+  byDataQuality: ContextBreakdownSample[]
+  byProvider: ContextBreakdownSample[]
+  topFailureReasons: { reason: string; count: number }[]
+  highUnknownContexts: ContextBreakdownSample[]
+  latestLearningEvents: Array<{ id: string; type: string; message: string; createdAt: string }>
+  latestAggregationRun: { status: string; finishedAt: string | null } | null
+  generatedAt: string
+}
+
+export interface AlertSearchItem {
+  alertId: string
+  patternId: string
+  radarName: string
+  fixtureLabel: string
+  league: string
+  minute: number | null
+  scoreState: { home: number; away: number }
+  confidence: number | null
+  result: AlertResult
+  resolutionType: string | null
+  dataQuality: DataQuality
+  hasFailureAnalysis: boolean
+  failureReason: string | null
+  learningEventCount: number
+  createdAt: string
+  outcomeReason: string | null
+}
+
+export interface AlertSearchResponse {
+  total: number
+  nextCursor: number | null
+  items: AlertSearchItem[]
+}
+
+export type RelationStrength = 'weak' | 'moderate' | 'strong'
+
+export interface RelatedAlertItem {
+  alertId: string
+  patternId: string
+  radarName: string
+  fixtureLabel: string
+  league: string
+  minute: number | null
+  result: AlertResult
+  confidence: number | null
+  dataQuality: DataQuality
+  createdAt: string
+  relationReasons: string[]
+  strength: RelationStrength
+}
+
+export interface RelatedAlertsResponse {
+  found?: boolean
+  total: number
+  appliedFilters: string[]
+  relatedAlerts: RelatedAlertItem[]
+}
+
+export interface LearningEventDetail {
+  found: boolean
+  event: LearningEvent | null
+  relatedPattern: PatternLearningProfile | null
+  relatedRecommendations: LearningRecommendation[]
+  relatedAlertsSummary: { total: number; confirmed: number; failed: number; unknown: number } | null
+  relatedAlertsLinkParams: { patternId?: string; alertId?: string } | null
+}
+
+export const RELATION_STRENGTH_LABEL: Record<RelationStrength, string> = {
+  weak: 'Relação fraca', moderate: 'Relação moderada', strong: 'Relação forte',
+}
+
+export interface AlertIntelFilters {
+  dateFrom?: string
+  dateTo?: string
+  patternId?: string
+  league?: string
+  team?: string
+  result?: string
+  dataQuality?: string
+  provider?: string
+  minuteWindow?: string
+  failureReason?: string
+  minConfidence?: number
+  maxConfidence?: number
+  hasFailureAnalysis?: boolean
+  hasLearningEvent?: boolean
+  q?: string
+}

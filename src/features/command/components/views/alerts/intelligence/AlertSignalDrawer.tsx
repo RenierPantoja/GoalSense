@@ -7,8 +7,9 @@ import { useEffect, useState } from 'react'
 import { X, FileText, Layers, Flag, Clock, GraduationCap, PlayCircle, FlaskConical, Info } from 'lucide-react'
 import { alertIntelligenceApi } from '@/services/alertIntelligenceApi'
 import { ReplayViewer } from '../../backtest/ReplayViewer'
+import { RelatedAlertsPanel } from './RelatedAlertsPanel'
 import type {
-  SignalLedgerEntry, AlertOutcomeRecord, PatternLearningProfile, LearningEvent, AlertResult,
+  SignalLedgerEntry, AlertOutcomeRecord, PatternLearningProfile, LearningEvent, AlertResult, SignalFailureAnalysis,
 } from '../../../../intelligence/alertIntelligenceTypes'
 import { RESULT_LABEL, RESULT_TONE, SAMPLE_QUALITY_LABEL, pct } from '../../../../intelligence/alertIntelligenceTypes'
 
@@ -56,15 +57,20 @@ export function AlertSignalDrawer({ alertId, headline, onClose, onGoToBacktest }
   const [outcome, setOutcome] = useState<AlertOutcomeRecord | null>(null)
   const [profile, setProfile] = useState<PatternLearningProfile | null>(null)
   const [events, setEvents] = useState<LearningEvent[]>([])
+  const [failure, setFailure] = useState<SignalFailureAnalysis | null>(null)
   const [showReplay, setShowReplay] = useState(false)
 
   useEffect(() => {
     let alive = true
     if (!alertId) { setLoading(false); return }
     setLoading(true)
-    alertIntelligenceApi.getAlertIntelligenceBundle(alertId).then(b => {
+    Promise.all([
+      alertIntelligenceApi.getAlertIntelligenceBundle(alertId),
+      alertIntelligenceApi.getFailureAnalysis(alertId),
+    ]).then(([b, fa]) => {
       if (!alive) return
-      setLedger(b.ledger); setOutcome(b.outcome); setProfile(b.profile); setEvents(b.learningEvents); setLoading(false)
+      setLedger(b.ledger); setOutcome(b.outcome); setProfile(b.profile); setEvents(b.learningEvents)
+      setFailure(fa); setLoading(false)
     })
     return () => { alive = false }
   }, [alertId])
@@ -190,6 +196,21 @@ export function AlertSignalDrawer({ alertId, headline, onClose, onGoToBacktest }
                     {(result === 'unknown' || result === 'expired') && (
                       <p className="text-[11px] text-white/45 leading-relaxed px-1">Sem dados suficientes para classificar como falha — isto não conta como erro do radar.</p>
                     )}
+                    {result === 'failed' && (
+                      failure ? (
+                        <Section title="Análise da falha">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-[11px] font-semibold text-rose-200/85">{failure.failureReason.replace(/_/g, ' ')}</span>
+                            <span className="text-[9.5px] uppercase tracking-wider text-white/40">diagnóstico {failure.confidenceInDiagnosis}</span>
+                          </div>
+                          {failure.contributingFactors.length > 0 && <Chips items={failure.contributingFactors} tone="block" />}
+                          {failure.suggestedReview && <p className="text-[11.5px] text-white/60 mt-2 leading-relaxed">{failure.suggestedReview}</p>}
+                          <p className="text-[10px] text-white/30 mt-2">Linguagem de possibilidade — não é causa confirmada.</p>
+                        </Section>
+                      ) : (
+                        <p className="text-[11px] text-amber-100/65 leading-relaxed px-1">Análise da falha ainda não registrada para este alerta.</p>
+                      )
+                    )}
                   </>
                 ) : (
                   <div className="rounded-xl border border-amber-400/15 bg-amber-500/[0.05] px-4 py-6 text-center">
@@ -255,6 +276,7 @@ export function AlertSignalDrawer({ alertId, headline, onClose, onGoToBacktest }
                       {events.slice(0, 6).map(e => <p key={e.id} className="text-[11px] text-white/60 leading-relaxed py-1 border-b border-white/[0.04] last:border-0">{e.message}</p>)}
                     </Section>
                   )}
+                  {alertId && <RelatedAlertsPanel source={{ kind: 'alert', alertId }} />}
                   {onGoToBacktest && ledger.patternId && (
                     <button onClick={onGoToBacktest} type="button" className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#5EEAD4] hover:text-[#7FE9DC] transition-colors"><FlaskConical size={14} />Rodar backtest deste radar</button>
                   )}

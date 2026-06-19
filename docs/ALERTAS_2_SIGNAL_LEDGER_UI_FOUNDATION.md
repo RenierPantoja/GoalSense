@@ -62,3 +62,15 @@ open the drawer's honest "sem ledger" state.
 - Expose `SignalFailureAnalysis` via API for a richer "why failed" panel.
 - Per-period alert metrics strip from a dedicated backend aggregate.
 - "Ver alertas relacionados" cross-links from a learning event to its pattern's alerts.
+
+
+## B17 — API Hardening + Related Signals
+
+Phase B17 hardens this UI with dedicated backend endpoints (see
+`docs/ALERTAS_2_SIGNAL_LEDGER_UI_B17.md` and
+`backend/docs/ALERT_INTELLIGENCE_API_HARDENING.md`): real `FailureAnalysis` in the
+Resultado tab, server-side period metrics (`AlertOverviewStrip`), explainable
+related alerts (`RelatedAlertsPanel`) across the drawer / pattern quality /
+learning views, and a learning-event drill-down (`LearningEventDrawer`). The B16
+limitation "FailureAnalysis derived indirectly" is resolved; metrics are now
+server-side instead of client-only.

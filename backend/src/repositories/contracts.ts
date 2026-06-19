@@ -147,11 +147,14 @@ export interface IntelligenceRepository {
   listAlertOutcomesByPattern(patternId: string, limit?: number): Promise<AlertOutcomeRecord[]>
   // Failure Analysis
   createFailureAnalysis(analysis: SignalFailureAnalysis): Promise<SignalFailureAnalysis>
+  getFailureAnalysisByAlertId(alertId: string): Promise<SignalFailureAnalysis | null>
+  listFailureAnalysesByPattern(patternId: string, limit?: number): Promise<SignalFailureAnalysis[]>
   // Missed Opportunity
   createMissedOpportunity(record: MissedOpportunityRecord): Promise<MissedOpportunityRecord>
   // Learning Events
   createLearningEvent(event: LearningEvent): Promise<LearningEvent>
   listLearningEventsByPattern(patternId: string, limit?: number): Promise<LearningEvent[]>
+  getLearningEventById(id: string): Promise<LearningEvent | null>
   // Aggregate
   getOverview(): Promise<IntelligenceOverview>
 

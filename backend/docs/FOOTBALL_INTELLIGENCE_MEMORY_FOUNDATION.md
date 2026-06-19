@@ -150,3 +150,18 @@ and two extra views surface pattern quality and the engine's learning feed. The
 UI is read-only and honest — `unknown`/`not_evaluable` are neutral states, never
 failure; missing ledger/outcome/learning render explicit empty states. See
 `docs/ALERTAS_2_SIGNAL_LEDGER_UI_FOUNDATION.md`.
+
+
+## B17 — Alert Intelligence API Hardening + Related Signals
+
+Phase B17 adds dedicated read endpoints so Alertas 2.0 stops improvising on the
+client: real `FailureAnalysis` via `GET /api/intelligence/alerts/:id/failure-analysis`
+(+ `…/patterns/:id/failure-analyses`), server-side metrics
+`GET /api/intelligence/alerts/overview` and `…/search` (period + filters),
+explainable related alerts (`…/alerts/:id/related`, `…/patterns/:id/related-alerts`,
+`…/learning/events/:id/related-alerts`) and a learning-event drill-down
+(`…/learning/events/:id`). New repository methods: `getFailureAnalysisByAlertId`,
+`listFailureAnalysesByPattern`, `getLearningEventById`. Services:
+`alertIntelligence.service.ts` + `relatedAlerts.service.ts` (in-memory joins over
+capped reads). Honest throughout; Firebase persists, Noop safe under Prisma. See
+`backend/docs/ALERT_INTELLIGENCE_API_HARDENING.md`.

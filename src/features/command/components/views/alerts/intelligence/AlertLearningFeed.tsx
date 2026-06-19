@@ -7,6 +7,7 @@ import { GraduationCap, Lightbulb } from 'lucide-react'
 import { alertIntelligenceApi, isAlertIntelligenceConfigured } from '@/services/alertIntelligenceApi'
 import type { LearningRecommendation, LearningOverview } from '../../../../intelligence/alertIntelligenceTypes'
 import { SAMPLE_QUALITY_LABEL } from '../../../../intelligence/alertIntelligenceTypes'
+import { LearningEventDrawer } from './LearningEventDrawer'
 
 const STRENGTH_TONE: Record<string, string> = {
   high: 'text-emerald-200/85 bg-emerald-500/[0.08] border-emerald-400/20',
@@ -14,11 +15,12 @@ const STRENGTH_TONE: Record<string, string> = {
   low: 'text-white/55 bg-white/[0.03] border-white/[0.08]',
 }
 
-export function AlertLearningFeed() {
+export function AlertLearningFeed({ onGoToBacktest }: { onGoToBacktest?: () => void }) {
   const configured = isAlertIntelligenceConfigured()
   const [loading, setLoading] = useState(true)
   const [overview, setOverview] = useState<LearningOverview | null>(null)
   const [recs, setRecs] = useState<LearningRecommendation[]>([])
+  const [openEventId, setOpenEventId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!configured) { setLoading(false); return }
@@ -78,10 +80,11 @@ export function AlertLearningFeed() {
           <h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45 mb-2.5">Eventos recentes</h4>
           <div className="space-y-1.5">
             {overview.recentLearningEvents.map(e => (
-              <div key={e.id} className="flex items-start gap-2 py-1 border-b border-white/[0.04] last:border-0">
+              <button key={e.id} onClick={() => setOpenEventId(e.id)} type="button" className="w-full text-left flex items-start gap-2 py-1.5 px-2 -mx-2 rounded-lg border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors">
                 <span className="text-[9.5px] uppercase tracking-wider text-white/35 font-semibold shrink-0 mt-0.5 w-[110px] truncate">{e.type.replace(/_/g, ' ')}</span>
                 <span className="text-[11.5px] text-white/65 leading-snug flex-1">{e.message}</span>
-              </div>
+                <span className="text-[10px] text-[#5EEAD4]/70 shrink-0">→</span>
+              </button>
             ))}
           </div>
         </div>
@@ -95,6 +98,8 @@ export function AlertLearningFeed() {
           </div>
         </div>
       )}
+
+      {openEventId && <LearningEventDrawer eventId={openEventId} onClose={() => setOpenEventId(null)} onGoToBacktest={onGoToBacktest} />}
     </div>
   )
 }

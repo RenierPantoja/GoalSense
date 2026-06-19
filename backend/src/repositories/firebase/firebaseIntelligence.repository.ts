@@ -127,6 +127,19 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     await db.collection(FAILURES).doc(analysis.id).set(analysis, { merge: true })
     return analysis
   }
+  async getFailureAnalysisByAlertId(alertId: string): Promise<SignalFailureAnalysis | null> {
+    const db = await getFirestore()
+    // Deterministic id from B12 (fail_${alertId}) makes this a direct lookup.
+    const direct = await db.collection(FAILURES).doc(`fail_${alertId}`).get()
+    if (direct.exists) return docData<SignalFailureAnalysis>(direct)
+    const snap = await db.collection(FAILURES).where('alertId', '==', alertId).limit(1).get()
+    return snap.empty ? null : docData<SignalFailureAnalysis>(snap.docs[0])
+  }
+  async listFailureAnalysesByPattern(patternId: string, limit?: number): Promise<SignalFailureAnalysis[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(FAILURES).where('patternId', '==', patternId).get()
+    return snap.docs.map((d: any) => docData<SignalFailureAnalysis>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
+  }
 
   // ── Missed Opportunity ────────────────────────────────────────────────────────
   async createMissedOpportunity(record: MissedOpportunityRecord): Promise<MissedOpportunityRecord> {
@@ -147,6 +160,11 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     const snap = await db.collection(LEARNING).where('patternId', '==', patternId).get()
     const rows = snap.docs.map((d: any) => docData<LearningEvent>(d)).sort(byCreatedAtDesc)
     return rows.slice(0, limit || 200)
+  }
+  async getLearningEventById(id: string): Promise<LearningEvent | null> {
+    const db = await getFirestore()
+    const doc = await db.collection(LEARNING).doc(id).get()
+    return doc.exists ? docData<LearningEvent>(doc) : null
   }
 
   // ── Overview ────────────────────────────────────────────────────────────────────
