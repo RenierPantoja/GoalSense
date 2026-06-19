@@ -23,6 +23,7 @@ export function summarizeActions(opportunityId: string, actions: AutoOpportunity
   const sorted = [...actions].sort((a, b) => toDate(a.createdAt) - toDate(b.createdAt))
   let saved = false, dismissed = false, hasPromotionPlan = false
   let lastFeedback: AutoOpportunityFeedbackType | null = null
+  let promotedAlertId: string | null = null
   const feedbackCounts: Record<string, number> = {}
   const notes: { note: string; createdAt: string }[] = []
 
@@ -33,6 +34,7 @@ export function summarizeActions(opportunityId: string, actions: AutoOpportunity
       case 'dismissed': case 'ignored_for_now': dismissed = true; break
       case 'restored': dismissed = false; break
       case 'radar_proposal_created': hasPromotionPlan = true; break
+      case 'manual_alert_promoted': { const id = a.metadata && typeof a.metadata.alertId === 'string' ? a.metadata.alertId : null; if (id) promotedAlertId = id; break }
       case 'note_added': if (a.note) notes.push({ note: a.note, createdAt: a.createdAt }); break
       case 'note_removed': if (a.note) { const i = notes.findIndex(n => n.note === a.note); if (i >= 0) notes.splice(i, 1) } break
       default: break
@@ -46,6 +48,7 @@ export function summarizeActions(opportunityId: string, actions: AutoOpportunity
     saved, dismissed, lastFeedback, feedbackCounts,
     noteCount: notes.length, notes: notes.slice(-20),
     hasPromotionPlan,
+    promotedAlertId,
     lastActionAt: sorted.length > 0 ? sorted[sorted.length - 1].createdAt : null,
   }
 }
@@ -54,6 +57,7 @@ export function userStateFromSummary(opportunityId: string, fixtureId: string, s
   return {
     id: `aus_${opportunityId}`, opportunityId, fixtureId,
     saved: s.saved, dismissed: s.dismissed, lastFeedback: s.lastFeedback,
-    noteCount: s.noteCount, hasPromotionPlan: s.hasPromotionPlan, updatedAt: new Date().toISOString(),
+    noteCount: s.noteCount, hasPromotionPlan: s.hasPromotionPlan, promotedAlertId: s.promotedAlertId,
+    updatedAt: new Date().toISOString(),
   }
 }

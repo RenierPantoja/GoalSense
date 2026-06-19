@@ -135,7 +135,7 @@ import type {
 } from '../modules/intelligence/backtest/backtest.types.js'
 import type {
   AutoEngineRun, AutoOpportunity, AutoOpportunityAction, AutoOpportunityUserState,
-  AutoOpportunityPromotionPlan,
+  AutoOpportunityPromotionPlan, ManualPromotedAlertLink,
 } from '../modules/intelligence/autoEngine/autoEngine.types.js'
 
 export interface IntelligenceRepository {
@@ -223,6 +223,11 @@ export interface IntelligenceRepository {
   createAutoOpportunityPromotionPlan(plan: AutoOpportunityPromotionPlan): Promise<AutoOpportunityPromotionPlan>
   getAutoOpportunityPromotionPlan(opportunityId: string): Promise<AutoOpportunityPromotionPlan | null>
   listAutoOpportunityPromotionPlans(limit?: number): Promise<AutoOpportunityPromotionPlan[]>
+
+  // ── B22: manual opportunity → alert promotion links ─────────────────────────
+  createManualPromotedAlertLink(link: ManualPromotedAlertLink): Promise<ManualPromotedAlertLink>
+  getManualPromotedAlertLink(opportunityId: string): Promise<ManualPromotedAlertLink | null>
+  listManualPromotedAlertLinks(limit?: number): Promise<ManualPromotedAlertLink[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

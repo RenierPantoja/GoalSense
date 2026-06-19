@@ -133,6 +133,9 @@ export function ServerAlertList({ filters, onFiltersChange, onClearFilters, onOp
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[13px] font-semibold text-white/90 truncate">{it.fixtureLabel}</span>
                         <span className="text-[10px] text-white/40">{it.leagueName}</span>
+                        {it.patternName?.startsWith('Motor Automático') && (
+                          <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full border text-[#7FE9DC]/85 bg-[#13B8A6]/[0.08] border-[#2DD4BF]/20">Motor Automático</span>
+                        )}
                       </div>
                       <div className="flex items-center gap-x-2.5 text-[11px] text-white/45 mt-0.5 flex-wrap">
                         <span className="text-white/60">{it.patternName}</span>

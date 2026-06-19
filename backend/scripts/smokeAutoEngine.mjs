@@ -35,6 +35,7 @@ const idUtil = await load('../dist/modules/intelligence/autoEngine/utils/autoSig
 const noop = await load('../dist/repositories/noopIntelligence.repository.js')
 const promotion = await load('../dist/modules/intelligence/autoEngine/utils/autoOpportunityPromotion.util.js')
 const actions = await load('../dist/modules/intelligence/autoEngine/utils/autoOpportunityActions.util.js')
+const alertPromo = await load('../dist/modules/intelligence/autoEngine/utils/autoOpportunityAlertPromotion.util.js')
 
 // ── Deterministic ids ────────────────────────────────────────────────────────
 console.log('[smoke] deterministic opportunity id:')
@@ -200,5 +201,47 @@ await repo.createAutoOpportunityAction({ id: 'aoa_x' })
 await repo.upsertAutoOpportunityUserState({ id: 'aus_x' })
 await repo.createAutoOpportunityPromotionPlan({ id: 'apl_x' })
 assert(true, 'Noop B21 writes accepted without throwing (no persistence)')
+
+// ── B22: manual alert promotion guard + preview (PURE) ───────────────────────
+console.log('[smoke] B22 manual alert promotion guard:')
+const strongOpp = mkOpp({ status: 'strong', score: 78 })
+const g1 = alertPromo.evaluatePromotionGuard(strongOpp, false)
+assert(g1.canPromote === true, 'strong + risk-allowed + partial data + score≥50 → promotable')
+assert(g1.proposedSeverity === 'attention', 'strong → proposed severity attention')
+
+const blockedOpp = mkOpp({ status: 'blocked', riskGate: { allowed: false, blockReasons: ['missing_required_data'], penalties: [], warnings: [], finalDecision: 'block' } })
+const g2 = alertPromo.evaluatePromotionGuard(blockedOpp, false)
+assert(g2.canPromote === false && g2.blockedReasons.includes('status_not_promotable') && g2.blockedReasons.includes('risk_gate_blocked'), 'blocked opportunity → not promotable (status + risk gate)')
+
+const candidateOpp = mkOpp({ status: 'candidate', score: 40 })
+const g3 = alertPromo.evaluatePromotionGuard(candidateOpp, false)
+assert(g3.canPromote === false && g3.blockedReasons.includes('score_below_minimum'), 'weak candidate below min score → not promotable')
+
+const poorOpp = mkOpp({ status: 'watch', evidence: { liveStatsUsed: null, minute: 78, scoreState: { home: 1, away: 1 }, recentOffensiveEvents: 0, passedSignals: [], missingData: ['estatísticas'], dataQuality: 'poor', provider: 'espn' } })
+assert(alertPromo.evaluatePromotionGuard(poorOpp, false).blockedReasons.includes('data_quality_insufficient'), 'poor data quality → blocked')
+
+const alreadyG = alertPromo.evaluatePromotionGuard(strongOpp, true)
+assert(alreadyG.canPromote === false && alreadyG.blockedReasons.includes('already_promoted'), 'already promoted → not promotable again (idempotent guard)')
+
+const preview = alertPromo.buildPromotionPreview(strongOpp, null)
+assert(preview.canPromote === true && preview.duplicateCheck.alreadyPromoted === false, 'preview for promotable opp → canPromote, not duplicate')
+assert(preview.requiredAcknowledgements.length === 3, 'preview requires 3 explicit acknowledgements')
+assert(preview.proposedAlertTitle.startsWith('Motor Automático'), 'proposed alert title flags Motor Automático origin')
+const pblob = JSON.stringify(preview).toLowerCase()
+assert(preview.requiredAcknowledgements.some(a => a.toLowerCase().includes('telegram')) && preview.requiredAcknowledgements.some(a => a.toLowerCase().includes('odds')), 'acknowledgements explicitly disclaim Telegram and odds')
+assert(pblob.includes('não é alerta') || pblob.includes('nao e alerta') || preview.limitations.some(l => l.toLowerCase().includes('não é alerta')), 'preview states opportunity is not a configured-radar alert')
+const dupPreview = alertPromo.buildPromotionPreview(strongOpp, { id: 'mpa_aop_test', alertId: 'alr_1', opportunityId: 'aop_test' })
+assert(dupPreview.duplicateCheck.alreadyPromoted === true && dupPreview.duplicateCheck.alertId === 'alr_1', 'preview surfaces existing promoted alert (duplicate)')
+
+// action reducer tracks promotedAlertId from manual_alert_promoted metadata
+const promoActs = [{ id: 'p1', opportunityId: 'o', fixtureId: 'f', userId: null, actionType: 'manual_alert_promoted', feedbackType: null, note: null, reason: null, metadata: { alertId: 'alr_9' }, createdAt: '2026-01-01T00:00:00Z' }]
+const promoSum = actions.summarizeActions('o', promoActs)
+assert(promoSum.promotedAlertId === 'alr_9', 'summarizeActions reads promotedAlertId from manual_alert_promoted metadata')
+
+console.log('[smoke] B22 Noop promoted-link safety:')
+assert((await repo.getManualPromotedAlertLink('x')) === null, 'Noop getManualPromotedAlertLink → null')
+assert((await repo.listManualPromotedAlertLinks()).length === 0, 'Noop listManualPromotedAlertLinks → []')
+await repo.createManualPromotedAlertLink({ id: 'mpa_x' })
+assert(true, 'Noop createManualPromotedAlertLink accepted without throwing')
 
 console.log(process.exitCode ? '[smoke] FAILED' : '[smoke] OK')

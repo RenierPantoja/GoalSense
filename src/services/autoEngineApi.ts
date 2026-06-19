@@ -13,6 +13,8 @@ import type {
   AutoOpportunityActionDto, AutoOpportunityActionSummaryDto, AutoOpportunityPromotionPlanDto,
   AutoOpportunityFixtureContextDto, AutoOpportunitySearchFilters, AutoOpportunitySearchResponse,
   ActionMutationResponse,
+  ManualAlertPromotionPreviewDto, ManualAlertPromotionRequestDto, ManualAlertPromotionResultDto,
+  ManualPromotedAlertLinkDto,
 } from '@/features/command/intelligence/autoEngineTypes'
 
 export interface ApiResult<T> {
@@ -133,5 +135,18 @@ export const autoEngineApi = {
 
   getPromotionPlan(opportunityId: string) {
     return request<AutoOpportunityPromotionPlanDto>(`${BASE}/opportunities/${encodeURIComponent(opportunityId)}/promotion-plan`)
+  },
+
+  // ── B22: manual opportunity → monitored alert ──
+  getAlertPromotionPreview(opportunityId: string) {
+    return request<ManualAlertPromotionPreviewDto>(`${BASE}/opportunities/${encodeURIComponent(opportunityId)}/alert-preview`)
+  },
+
+  promoteOpportunityToAlert(opportunityId: string, payload: ManualAlertPromotionRequestDto) {
+    return request<ManualAlertPromotionResultDto>(`${BASE}/opportunities/${encodeURIComponent(opportunityId)}/promote-to-alert`, { method: 'POST', body: JSON.stringify(payload) })
+  },
+
+  getPromotedAlert(opportunityId: string) {
+    return request<ManualPromotedAlertLinkDto>(`${BASE}/opportunities/${encodeURIComponent(opportunityId)}/promoted-alert`)
   },
 }

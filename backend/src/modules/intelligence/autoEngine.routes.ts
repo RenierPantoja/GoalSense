@@ -14,7 +14,10 @@ import {
   searchAutoOpportunities, getFixtureContext, type CreateActionInput, type OpportunitySearchFilters,
 } from './autoEngine/autoOpportunityActions.service.js'
 import { createPromotionPlanForOpportunity, getPromotionPlan } from './autoEngine/autoOpportunityPromotion.service.js'
-import type { AutoOpportunityActionType, AutoOpportunityFeedbackType } from './autoEngine/autoEngine.types.js'
+import {
+  createManualAlertPromotionPreview, promoteOpportunityToManualAlert, getPromotedAlertLink, isManualPromotionEnabled,
+} from './autoEngine/autoOpportunityAlertPromotion.service.js'
+import type { AutoOpportunityActionType, AutoOpportunityFeedbackType, ManualAlertPromotionRequest } from './autoEngine/autoEngine.types.js'
 
 const VALID_ACTIONS: AutoOpportunityActionType[] = [
   'saved', 'unsaved', 'dismissed', 'restored', 'marked_useful', 'marked_not_useful',
@@ -172,5 +175,44 @@ export async function autoEngineRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string }
     try { return ok(await getPromotionPlan(id)) }
     catch (e: any) { app.log.warn(`auto-engine promotion-plan failed: ${e?.message || e}`); return ok(null) }
+  })
+
+  // ── B22: manual opportunity → monitored alert (human-confirmed only) ─────────
+  app.get('/intelligence/auto-engine/opportunities/:id/alert-preview', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    try {
+      const preview = await createManualAlertPromotionPreview(id)
+      if (!preview) return reply.status(404).send(notFound('Oportunidade não encontrada.'))
+      return ok(preview)
+    } catch (e: any) { app.log.warn(`auto-engine alert-preview failed: ${e?.message || e}`); return ok(null) }
+  })
+
+  app.post('/intelligence/auto-engine/opportunities/:id/promote-to-alert', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    if (!isManualPromotionEnabled()) {
+      return reply.status(403).send({ success: false, error: { message: 'Promoção manual para alerta desabilitada. Defina ENABLE_MANUAL_AUTO_OPPORTUNITY_PROMOTION=true no backend.' } })
+    }
+    const body = (req.body || {}) as Partial<ManualAlertPromotionRequest>
+    if (body.userConfirmed !== true || !body.acknowledgeNoTelegram || !body.acknowledgeNoOdds || !body.acknowledgeNotGuaranteed) {
+      return reply.status(400).send(badRequest('Confirmação humana explícita obrigatória (userConfirmed + acknowledgements).'))
+    }
+    const result = await promoteOpportunityToManualAlert({
+      opportunityId: id,
+      userConfirmed: true,
+      confirmationMode: body.confirmationMode === 'typed_confirmation' ? 'typed_confirmation' : 'explicit_click',
+      note: typeof body.note === 'string' ? body.note : null,
+      acknowledgeNoTelegram: true, acknowledgeNoOdds: true, acknowledgeNotGuaranteed: true,
+    })
+    if (!result.success) {
+      if (result.reason === 'opportunity_not_found') return reply.status(404).send(notFound('Oportunidade não encontrada.'))
+      return reply.status(400).send(badRequest('Não foi possível promover a oportunidade.', { reason: result.reason }))
+    }
+    return ok(result)
+  })
+
+  app.get('/intelligence/auto-engine/opportunities/:id/promoted-alert', async (req) => {
+    const { id } = req.params as { id: string }
+    try { return ok(await getPromotedAlertLink(id)) }
+    catch (e: any) { app.log.warn(`auto-engine promoted-alert failed: ${e?.message || e}`); return ok(null) }
   })
 }

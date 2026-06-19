@@ -58,3 +58,14 @@ the API still responds and the badge reflects the returned state.
 ## Next
 Auto → Alerts with human confirmation (`ENABLE_AUTO_ENGINE_TO_ALERTS`), route auth,
 structured league-tier scope, true cursor pagination for very large volumes.
+
+---
+
+## B22 — Promotion to monitored alert (extension)
+
+A new auditable action `manual_alert_promoted` joins the action set. It is produced by the
+B22 promotion flow (not a button in the actions panel) and carries the resulting `alertId`/
+`ledgerId`; the reducer sets `promotedAlertId` on the opportunity's user-state. The drawer
+surfaces this as "Abrir alerta" + a confirmation line, and the list shows a "promovida"
+badge and a "Promovidas" filter. See
+[`AUTO_OPPORTUNITY_ALERT_PROMOTION_UI.md`](./AUTO_OPPORTUNITY_ALERT_PROMOTION_UI.md).

@@ -175,6 +175,8 @@ export type AutoOpportunityActionType =
   | 'note_added'
   | 'note_removed'
   | 'radar_proposal_created'
+  | 'manual_alert_promoted'
+  | 'opened_promoted_alert'
   | 'opened_in_backtest'
   | 'opened_related_alerts'
   | 'opened_fixture'
@@ -221,6 +223,8 @@ export interface AutoOpportunityUserState {
   lastFeedback: AutoOpportunityFeedbackType | null
   noteCount: number
   hasPromotionPlan: boolean
+  /** B22: set when the opportunity was manually promoted to a monitored alert. */
+  promotedAlertId: string | null
   updatedAt: string
 }
 
@@ -234,6 +238,8 @@ export interface AutoOpportunityActionSummary {
   noteCount: number
   notes: AutoOpportunityNote[]
   hasPromotionPlan: boolean
+  /** B22: alertId of the monitored alert promoted from this opportunity, if any. */
+  promotedAlertId: string | null
   lastActionAt: string | null
 }
 
@@ -276,4 +282,84 @@ export interface AutoOpportunityFixtureContext {
   snapshotAgeMs: number | null
   canOpenInCommandCenter: boolean
   limitations: string[]
+}
+
+// ─── B22: Manual promotion of an opportunity → monitored alert ───────────────
+// Human-confirmed only. Never automatic. No Telegram, no odds, no bet. Provenance
+// is mandatory; opportunity stays distinct from alert; score ≠ probability.
+
+export interface PromotedAlertProvenance {
+  source: 'auto_opportunity_manual'
+  opportunityId: string
+  autoEngineRunId: string | null
+  opportunityType: OpportunityType
+  originalScore: number
+  originalConfidenceBand: ConfidenceBand
+  promotedByUserId: string | null
+  evidenceSnapshotRef: string | null
+  riskGateSnapshot: AutoSignalRiskGateResult
+  promotionNote: string | null
+  promotedAt: string
+}
+
+/** Persistent opportunity → alert link (deterministic id `mpa_${opportunityId}`). */
+export interface ManualPromotedAlertLink {
+  id: string
+  opportunityId: string
+  fixtureId: string
+  alertId: string
+  ledgerId: string | null
+  opportunityType: OpportunityType
+  originalScore: number
+  originalConfidenceBand: ConfidenceBand
+  provenance: PromotedAlertProvenance
+  promotedAt: string
+}
+
+export interface ManualAlertPromotionPreview {
+  opportunityId: string
+  fixtureId: string
+  fixtureLabel: string
+  opportunityType: OpportunityType
+  proposedAlertTitle: string
+  proposedAlertReason: string
+  proposedSeverity: 'critical' | 'attention' | 'info'
+  proposedConfidence: number
+  evidence: string[]
+  risks: string[]
+  dataAvailability: Record<string, boolean>
+  limitations: string[]
+  canPromote: boolean
+  blockedReasons: string[]
+  duplicateCheck: { alreadyPromoted: boolean; alertId: string | null }
+  requiredConfirmationText: string | null
+  requiredAcknowledgements: string[]
+}
+
+export interface ManualAlertPromotionRequest {
+  opportunityId: string
+  userConfirmed: boolean
+  confirmationMode: 'explicit_click' | 'typed_confirmation'
+  note?: string | null
+  acknowledgeNoTelegram: boolean
+  acknowledgeNoOdds: boolean
+  acknowledgeNotGuaranteed: boolean
+}
+
+export interface ManualAlertPromotionResult {
+  success: boolean
+  alertId: string | null
+  ledgerId: string | null
+  opportunityId: string
+  created: boolean
+  duplicate: boolean
+  reason: string | null
+  promotedAt: string | null
+}
+
+export interface PromotedAlertGuardResult {
+  canPromote: boolean
+  blockedReasons: string[]
+  proposedSeverity: 'critical' | 'attention' | 'info'
+  proposedConfidence: number
 }

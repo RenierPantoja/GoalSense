@@ -229,6 +229,7 @@ export type LearningEventType =
   | 'auto_opportunity_marked_useful'
   | 'auto_opportunity_marked_not_useful'
   | 'auto_opportunity_radar_proposal_created'
+  | 'auto_opportunity_promoted_to_alert'
 
 export interface LearningEvent {
   id: string
@@ -240,8 +241,8 @@ export interface LearningEvent {
   message: string
   evidenceRef: string | null
   confidence: Confidence
-  /** B21: 'user_feedback' marks human-originated, non-statistical observations. */
-  source?: 'system' | 'user_feedback'
+  /** B21/B22: provenance of human-originated, non-statistical observations. */
+  source?: 'system' | 'user_feedback' | 'user_action'
   createdAt: string
 }
 

@@ -74,3 +74,15 @@ related alerts (`RelatedAlertsPanel`) across the drawer / pattern quality /
 learning views, and a learning-event drill-down (`LearningEventDrawer`). The B16
 limitation "FailureAnalysis derived indirectly" is resolved; metrics are now
 server-side instead of client-only.
+
+---
+
+## B22 — "Motor Automático" origin badge (extension)
+
+Alerts promoted from automatic opportunities appear in the Sinais list like any other
+ledger-backed signal. `ServerAlertList` renders a client-derived **"Motor Automático"**
+badge on rows whose `patternName` starts with "Motor Automático" (the promoted alert's
+`radarName`). No backend search-shape change. The `AlertSignalDrawer` Resumo already shows
+the promotion provenance via `scopeDecision.reason`. These alerts use a sentinel patternId
+and do not affect any real radar's counters/profile. See
+[`AUTO_OPPORTUNITY_ALERT_PROMOTION_UI.md`](./AUTO_OPPORTUNITY_ALERT_PROMOTION_UI.md).

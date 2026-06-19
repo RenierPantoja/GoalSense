@@ -277,6 +277,8 @@ export interface AutoOpportunityActionSummaryDto {
   noteCount: number
   notes: AutoOpportunityNoteDto[]
   hasPromotionPlan: boolean
+  /** B22: alertId of the monitored alert promoted from this opportunity, if any. */
+  promotedAlertId?: string | null
   lastActionAt: string | null
 }
 
@@ -286,6 +288,8 @@ export interface AutoOpportunityUserStateLite {
   lastFeedback: AutoOpportunityFeedbackType | null
   noteCount: number
   hasPromotionPlan: boolean
+  /** B22: alertId of the monitored alert promoted from this opportunity, if any. */
+  promotedAlertId?: string | null
 }
 
 export interface SuggestedRadarConditionDto {
@@ -368,4 +372,81 @@ export const FEEDBACK_LABEL: Record<AutoOpportunityFeedbackType, string> = {
   strong_signal: 'Forte sinal',
   irrelevant: 'Irrelevante',
   unknown: 'Sem opinião',
+}
+
+// ─── B22: manual opportunity → monitored alert promotion ─────────────────────
+
+export interface PromotedAlertProvenanceDto {
+  source: 'auto_opportunity_manual'
+  opportunityId: string
+  autoEngineRunId: string | null
+  opportunityType: OpportunityType
+  originalScore: number
+  originalConfidenceBand: ConfidenceBand
+  promotedByUserId: string | null
+  riskGateSnapshot: AutoSignalRiskGateDto
+  promotionNote: string | null
+  promotedAt: string
+}
+
+export interface ManualAlertPromotionPreviewDto {
+  opportunityId: string
+  fixtureId: string
+  fixtureLabel: string
+  opportunityType: OpportunityType
+  proposedAlertTitle: string
+  proposedAlertReason: string
+  proposedSeverity: 'critical' | 'attention' | 'info'
+  proposedConfidence: number
+  evidence: string[]
+  risks: string[]
+  dataAvailability: Record<string, boolean>
+  limitations: string[]
+  canPromote: boolean
+  blockedReasons: string[]
+  duplicateCheck: { alreadyPromoted: boolean; alertId: string | null }
+  requiredConfirmationText: string | null
+  requiredAcknowledgements: string[]
+}
+
+export interface ManualAlertPromotionRequestDto {
+  userConfirmed: boolean
+  confirmationMode: 'explicit_click' | 'typed_confirmation'
+  note?: string | null
+  acknowledgeNoTelegram: boolean
+  acknowledgeNoOdds: boolean
+  acknowledgeNotGuaranteed: boolean
+}
+
+export interface ManualAlertPromotionResultDto {
+  success: boolean
+  alertId: string | null
+  ledgerId: string | null
+  opportunityId: string
+  created: boolean
+  duplicate: boolean
+  reason: string | null
+  promotedAt: string | null
+}
+
+export interface ManualPromotedAlertLinkDto {
+  id: string
+  opportunityId: string
+  fixtureId: string
+  alertId: string
+  ledgerId: string | null
+  opportunityType: OpportunityType
+  originalScore: number
+  originalConfidenceBand: ConfidenceBand
+  provenance: PromotedAlertProvenanceDto
+  promotedAt: string
+}
+
+/** Human-readable labels for promotion block reasons. */
+export const PROMOTION_BLOCK_LABEL: Record<string, string> = {
+  already_promoted: 'já promovida para alerta',
+  status_not_promotable: 'só oportunidades fortes ou em observação podem ser promovidas',
+  risk_gate_blocked: 'o filtro de risco bloqueou esta oportunidade',
+  data_quality_insufficient: 'qualidade de dados insuficiente',
+  score_below_minimum: 'score abaixo do mínimo para promoção',
 }

@@ -153,3 +153,23 @@ collections `autoOpportunityActions`, `autoOpportunityUserStates`,
 learning events use `source=user_feedback` and are NEVER counted as statistical truth.
 Still no alert/odds/bet/Telegram, no pattern/score change, and `ENABLE_AUTO_ENGINE_TO_ALERTS`
 remains unwired. See `backend/docs/AUTO_OPPORTUNITY_ACTIONS.md` and `docs/AUTO_OPPORTUNITY_ACTIONS_UI.md`.
+
+---
+
+## B22 — Manual Alert Promotion (extension)
+
+The Auto Engine can now hand a **strong**/**watch** opportunity to the manual-alert
+promotion workflow (human-confirmed only). See
+[`AUTO_OPPORTUNITY_MANUAL_ALERT_PROMOTION.md`](./AUTO_OPPORTUNITY_MANUAL_ALERT_PROMOTION.md)
+for the full contract. Highlights:
+
+- New routes on `autoEngine.routes.ts`: `GET …/opportunities/:id/alert-preview`,
+  `POST …/opportunities/:id/promote-to-alert` (403 when `ENABLE_MANUAL_AUTO_OPPORTUNITY_PROMOTION=false`,
+  400 without explicit confirmation), `GET …/opportunities/:id/promoted-alert`.
+- Service `autoOpportunityAlertPromotion.service.ts` + pure utils
+  `utils/autoOpportunityAlertPromotion.util.ts` and `utils/autoSignalLabels.util.ts`.
+- New flags (all OFF except resolution governance): `ENABLE_MANUAL_AUTO_OPPORTUNITY_PROMOTION`,
+  `ENABLE_PROMOTED_ALERT_RESOLUTION=true`, `ENABLE_PROMOTED_ALERT_TELEGRAM`.
+- Sentinel patternId `auto_engine_manual`, **no** performance counter, ledger `patternId=null`,
+  idempotent link `mpa_${opportunityId}` in `autoPromotedAlertLinks`.
+- `ENABLE_AUTO_ENGINE_TO_ALERTS` remains present but is **not** wired to automatic alert creation.

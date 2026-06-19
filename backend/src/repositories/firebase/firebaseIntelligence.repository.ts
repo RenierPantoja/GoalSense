@@ -28,7 +28,7 @@ import type {
 } from '../../modules/intelligence/backtest/backtest.types.js'
 import type {
   AutoEngineRun, AutoOpportunity, AutoOpportunityAction, AutoOpportunityUserState,
-  AutoOpportunityPromotionPlan,
+  AutoOpportunityPromotionPlan, ManualPromotedAlertLink,
 } from '../../modules/intelligence/autoEngine/autoEngine.types.js'
 
 const LEDGER = 'signalLedger'
@@ -50,6 +50,7 @@ const AUTO_OPPS = 'autoOpportunities'
 const AUTO_ACTIONS = 'autoOpportunityActions'
 const AUTO_USER_STATES = 'autoOpportunityUserStates'
 const AUTO_PROMOTIONS = 'autoOpportunityPromotionPlans'
+const AUTO_PROMOTED_LINKS = 'autoPromotedAlertLinks'
 
 const READ_CAP = 2000
 
@@ -464,5 +465,22 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     const db = await getFirestore()
     const snap = await db.collection(AUTO_PROMOTIONS).limit(READ_CAP).get()
     return snap.docs.map((d: any) => docData<AutoOpportunityPromotionPlan>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
+  }
+
+  // ── B22: manual opportunity → alert promotion links ─────────────────────────
+  async createManualPromotedAlertLink(link: ManualPromotedAlertLink): Promise<ManualPromotedAlertLink> {
+    const db = await getFirestore()
+    await db.collection(AUTO_PROMOTED_LINKS).doc(link.id).set(link, { merge: true })
+    return link
+  }
+  async getManualPromotedAlertLink(opportunityId: string): Promise<ManualPromotedAlertLink | null> {
+    const db = await getFirestore()
+    const doc = await db.collection(AUTO_PROMOTED_LINKS).doc(`mpa_${opportunityId}`).get()
+    return doc.exists ? docData<ManualPromotedAlertLink>(doc) : null
+  }
+  async listManualPromotedAlertLinks(limit?: number): Promise<ManualPromotedAlertLink[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(AUTO_PROMOTED_LINKS).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<ManualPromotedAlertLink>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
   }
 }

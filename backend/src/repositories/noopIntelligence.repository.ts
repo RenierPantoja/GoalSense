@@ -23,7 +23,7 @@ import type {
 } from '../modules/intelligence/backtest/backtest.types.js'
 import type {
   AutoEngineRun, AutoOpportunity, AutoOpportunityAction, AutoOpportunityUserState,
-  AutoOpportunityPromotionPlan,
+  AutoOpportunityPromotionPlan, ManualPromotedAlertLink,
 } from '../modules/intelligence/autoEngine/autoEngine.types.js'
 
 let warned = false
@@ -118,4 +118,9 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async createAutoOpportunityPromotionPlan(plan: AutoOpportunityPromotionPlan): Promise<AutoOpportunityPromotionPlan> { warnOnce(); return plan }
   async getAutoOpportunityPromotionPlan(): Promise<AutoOpportunityPromotionPlan | null> { return null }
   async listAutoOpportunityPromotionPlans(): Promise<AutoOpportunityPromotionPlan[]> { return [] }
+
+  // ── B22 (Noop): reads empty; writes accepted without persistence ──
+  async createManualPromotedAlertLink(link: ManualPromotedAlertLink): Promise<ManualPromotedAlertLink> { warnOnce(); return link }
+  async getManualPromotedAlertLink(): Promise<ManualPromotedAlertLink | null> { return null }
+  async listManualPromotedAlertLinks(): Promise<ManualPromotedAlertLink[]> { return [] }
 }

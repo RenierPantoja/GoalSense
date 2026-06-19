@@ -20,6 +20,7 @@ import { AutoEngineOverviewPanel } from './AutoEngineOverviewPanel'
 import { AutoOpportunitiesList } from './AutoOpportunitiesList'
 import { AutoOpportunityDrawer } from './AutoOpportunityDrawer'
 import { AutoOpportunityPromotionPanel } from './AutoOpportunityPromotionPanel'
+import { AutoOpportunityAlertPromotionPanel } from './AutoOpportunityAlertPromotionPanel'
 
 interface Props {
   backendOnline: boolean
@@ -61,6 +62,7 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
   const [drawer, setDrawer] = useState<AutoOpportunityDto | null>(null)
   const [promotion, setPromotion] = useState<AutoOpportunityPromotionPlanDto | null>(null)
   const [promotionMsg, setPromotionMsg] = useState<string | null>(null)
+  const [alertPromotionOppId, setAlertPromotionOppId] = useState<string | null>(null)
 
   const [scanRunning, setScanRunning] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
@@ -126,6 +128,18 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
     setPromotion(null)
     onPromoteToRadar?.(plan)
   }, [onPromoteToRadar])
+
+  const handlePromoteToAlert = useCallback((opp: AutoOpportunityDto) => {
+    setDrawer(null)
+    setAlertPromotionOppId(opp.id)
+  }, [])
+
+  const handlePromoted = useCallback((opportunityId: string, alertId: string) => {
+    setUserStates(prev => {
+      const cur = prev[opportunityId] || { saved: false, dismissed: false, lastFeedback: null, noteCount: 0, hasPromotionPlan: false }
+      return { ...prev, [opportunityId]: { ...cur, promotedAlertId: alertId } }
+    })
+  }, [])
 
   if (!backendConfigured) {
     return (
@@ -198,6 +212,7 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
           onGoToBacktest={onGoToBacktest}
           onGoToAlerts={onGoToAlerts}
           onCreatePromotion={handleCreatePromotion}
+          onPromoteToAlert={handlePromoteToAlert}
           onOpenMatch={onOpenMatch}
           onStateChange={onStateChange}
         />
@@ -205,6 +220,15 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
 
       {promotion && (
         <AutoOpportunityPromotionPanel plan={promotion} onOpenEditor={openEditorFromPlan} onCancel={() => setPromotion(null)} />
+      )}
+
+      {alertPromotionOppId && (
+        <AutoOpportunityAlertPromotionPanel
+          opportunityId={alertPromotionOppId}
+          onClose={() => setAlertPromotionOppId(null)}
+          onPromoted={handlePromoted}
+          onGoToAlerts={onGoToAlerts}
+        />
       )}
     </div>
   )

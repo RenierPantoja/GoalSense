@@ -95,3 +95,14 @@ resolved via the new fixture-context lookup + team-name matching. Server-side se
 (`/opportunities/search`) backs the list with a client fallback. Feedback is observational
 ("não altera o motor automaticamente"); no alert/odds/bet/Telegram; opportunity ≠ alert.
 See `docs/AUTO_OPPORTUNITY_ACTIONS_UI.md` and `backend/docs/AUTO_OPPORTUNITY_ACTIONS.md`.
+
+---
+
+## B22 — Promote to monitored alert (extension)
+
+The cockpit now hosts the manual alert-promotion flow. The opportunity drawer's action bar
+shows **"Promover p/ alerta"** for strong/watch opportunities (or **"Abrir alerta"** once
+promoted); the cockpit opens `AutoOpportunityAlertPromotionPanel`, and `userStates` are
+updated with `promotedAlertId` on success so list badges/filters refresh immediately.
+Full UI contract: [`AUTO_OPPORTUNITY_ALERT_PROMOTION_UI.md`](./AUTO_OPPORTUNITY_ALERT_PROMOTION_UI.md).
+Human-confirmed only — no automatic alert, no Telegram, no odds.

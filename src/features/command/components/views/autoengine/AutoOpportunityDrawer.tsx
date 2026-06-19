@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   X, FileText, Layers, Gauge, ShieldAlert, History, GraduationCap, FlaskConical, Zap, ExternalLink,
-  Bookmark, BookmarkCheck, EyeOff, Eye, ThumbsUp, ThumbsDown, Loader2,
+  Bookmark, BookmarkCheck, EyeOff, Eye, ThumbsUp, ThumbsDown, Loader2, BellRing,
 } from 'lucide-react'
 import type {
   AutoOpportunityDto, AutoOpportunityActionSummaryDto, AutoOpportunityUserStateLite,
@@ -29,6 +29,7 @@ interface Props {
   onGoToBacktest?: () => void
   onGoToAlerts?: () => void
   onCreatePromotion: (opp: AutoOpportunityDto) => void
+  onPromoteToAlert: (opp: AutoOpportunityDto) => void
   onOpenMatch?: (opp: AutoOpportunityDto) => boolean
   onStateChange?: (opportunityId: string, lite: AutoOpportunityUserStateLite) => void
 }
@@ -61,7 +62,7 @@ function KV({ k, v }: { k: string; v: React.ReactNode }) {
 }
 function pct(n: number | null | undefined): string { return n == null ? '—' : `${Math.round(n * 100)}%` }
 
-export function AutoOpportunityDrawer({ opportunity: o, onClose, onGoToBacktest, onGoToAlerts, onCreatePromotion, onOpenMatch, onStateChange }: Props) {
+export function AutoOpportunityDrawer({ opportunity: o, onClose, onGoToBacktest, onGoToAlerts, onCreatePromotion, onPromoteToAlert, onOpenMatch, onStateChange }: Props) {
   const [tab, setTab] = useState<DrawerTab>('resumo')
   const [profile, setProfile] = useState<RelatedProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(false)
@@ -101,6 +102,8 @@ export function AutoOpportunityDrawer({ opportunity: o, onClose, onGoToBacktest,
   const liveStats = useMemo(() => Object.entries(o.evidence?.liveStatsUsed || {}), [o])
   const saved = summary?.saved ?? false
   const dismissed = summary?.dismissed ?? false
+  const promotedAlertId = summary?.promotedAlertId ?? null
+  const promotable = o.status === 'strong' || o.status === 'watch'
 
   const applyResult = (res: { ok: boolean; data: { summary: AutoOpportunityActionSummaryDto; userState: AutoOpportunityUserStateLite } | null; disabled: boolean; error: string | null }, okMsg: string) => {
     if (res.ok && res.data) {
@@ -154,7 +157,11 @@ export function AutoOpportunityDrawer({ opportunity: o, onClose, onGoToBacktest,
             <ActBtn onClick={() => feedback('useful')} busy={busy === 'fb_useful'} icon={<ThumbsUp size={13} />} label="Útil" />
             <ActBtn onClick={() => feedback('not_useful')} busy={busy === 'fb_not_useful'} icon={<ThumbsDown size={13} />} label="Não útil" />
             <ActBtn onClick={() => onCreatePromotion(o)} icon={<FlaskConical size={13} />} label="Criar radar" highlight />
+            {promotedAlertId
+              ? <ActBtn onClick={() => onGoToAlerts?.()} icon={<BellRing size={13} />} label="Abrir alerta" active />
+              : promotable && <ActBtn onClick={() => onPromoteToAlert(o)} icon={<BellRing size={13} />} label="Promover p/ alerta" />}
           </div>
+          {promotedAlertId && <p className="text-[11px] text-[#7FE9DC]/70 mt-2">Alerta monitorado criado a partir desta oportunidade.</p>}
           {actionMsg && <p className="text-[11px] text-[#7FE9DC]/70 mt-2">{actionMsg}</p>}
 
           {/* Tab strip */}
