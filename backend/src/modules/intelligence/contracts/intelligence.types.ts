@@ -124,6 +124,15 @@ export interface SignalLedgerEntry {
   dataAvailability: DataAvailabilityMap
   createdAt: string
   updatedAt: string
+  // ── B23 (optional): outcome layer for resolved signals (esp. promoted alerts) ──
+  /** Terminal outcome when the signal was resolved (mirror of AlertOutcomeRecord.result). */
+  outcomeResult?: AlertResult
+  outcomeReason?: string
+  /** Where the resolution came from. `promoted_alert_resolution` for B22→B23 alerts. */
+  resolutionSource?: 'alert_resolution' | 'promoted_alert_resolution'
+  resolvedAt?: string | null
+  dataQualityAtResolution?: DataQuality
+  missingDataAtResolution?: string[]
 }
 
 export interface SignalEvidenceSnapshot {
@@ -230,6 +239,13 @@ export type LearningEventType =
   | 'auto_opportunity_marked_not_useful'
   | 'auto_opportunity_radar_proposal_created'
   | 'auto_opportunity_promoted_to_alert'
+  // B23 — observational outcomes of a manually-promoted alert's honest resolution.
+  // source = 'promoted_alert_resolution'. NEVER auto-tunes; unknown ≠ failed.
+  | 'auto_opportunity_promoted_alert_confirmed'
+  | 'auto_opportunity_promoted_alert_partial'
+  | 'auto_opportunity_promoted_alert_failed'
+  | 'auto_opportunity_promoted_alert_unknown'
+  | 'auto_opportunity_promoted_alert_resolution_limited'
 
 export interface LearningEvent {
   id: string
@@ -242,7 +258,7 @@ export interface LearningEvent {
   evidenceRef: string | null
   confidence: Confidence
   /** B21/B22: provenance of human-originated, non-statistical observations. */
-  source?: 'system' | 'user_feedback' | 'user_action'
+  source?: 'system' | 'user_feedback' | 'user_action' | 'promoted_alert_resolution'
   createdAt: string
 }
 

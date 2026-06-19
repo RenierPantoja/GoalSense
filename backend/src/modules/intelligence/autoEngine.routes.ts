@@ -17,6 +17,11 @@ import { createPromotionPlanForOpportunity, getPromotionPlan } from './autoEngin
 import {
   createManualAlertPromotionPreview, promoteOpportunityToManualAlert, getPromotedAlertLink, isManualPromotionEnabled,
 } from './autoEngine/autoOpportunityAlertPromotion.service.js'
+import {
+  getOpportunityOutcomeSummary, getPromotedAlertOutcomeLink, listPromotedAlertsWithOutcome,
+  isPromotedAlertManualResolveEnabled,
+} from './autoEngine/promotedAlertResolution.service.js'
+import { resolveSinglePromotedAlertNow } from '../command/alertResolution.service.js'
 import type { AutoOpportunityActionType, AutoOpportunityFeedbackType, ManualAlertPromotionRequest } from './autoEngine/autoEngine.types.js'
 
 const VALID_ACTIONS: AutoOpportunityActionType[] = [
@@ -214,5 +219,39 @@ export async function autoEngineRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string }
     try { return ok(await getPromotedAlertLink(id)) }
     catch (e: any) { app.log.warn(`auto-engine promoted-alert failed: ${e?.message || e}`); return ok(null) }
+  })
+
+  // ── B23: promoted alert resolution + opportunity outcome loop ────────────────
+  app.get('/intelligence/auto-engine/opportunities/:id/outcome-summary', async (req) => {
+    const { id } = req.params as { id: string }
+    try { return ok(await getOpportunityOutcomeSummary(id)) }
+    catch (e: any) { app.log.warn(`auto-engine outcome-summary failed: ${e?.message || e}`); return ok(null) }
+  })
+
+  app.get('/intelligence/auto-engine/promoted-alerts/:alertId/outcome-link', async (req) => {
+    const { alertId } = req.params as { alertId: string }
+    try { return ok(await getPromotedAlertOutcomeLink(alertId)) }
+    catch (e: any) { app.log.warn(`auto-engine outcome-link failed: ${e?.message || e}`); return ok(null) }
+  })
+
+  app.get('/intelligence/auto-engine/promoted-alerts', async (req) => {
+    const { limit } = req.query as { limit?: string }
+    try { return ok(await listPromotedAlertsWithOutcome(clampLimit(limit, 100, 300))) }
+    catch (e: any) { app.log.warn(`auto-engine promoted-alerts list failed: ${e?.message || e}`); return ok([]) }
+  })
+
+  app.post('/intelligence/auto-engine/promoted-alerts/:alertId/resolve-now', async (req, reply) => {
+    const { alertId } = req.params as { alertId: string }
+    if (!isPromotedAlertManualResolveEnabled()) {
+      return reply.status(403).send({ success: false, error: { message: 'Resolução manual de alerta promovido desabilitada. Defina ENABLE_PROMOTED_ALERT_MANUAL_RESOLVE=true no backend.' } })
+    }
+    try {
+      const res = await resolveSinglePromotedAlertNow(alertId)
+      if (!res.ok) {
+        if (res.reason === 'alert_not_found') return reply.status(404).send(notFound('Alerta não encontrado.'))
+        return reply.status(400).send(badRequest('Não foi possível resolver agora.', { reason: res.reason }))
+      }
+      return ok(res.result)
+    } catch (e: any) { app.log.error(`auto-engine resolve-now failed: ${e?.message || e}`); return reply.status(400).send(badRequest('Resolução falhou', e?.message)) }
   })
 }

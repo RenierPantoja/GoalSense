@@ -59,3 +59,13 @@ change. Provenance detail is already visible in the `AlertSignalDrawer` Resumo v
 
 ## Verification
 - `npm run check:encoding` ✓ · `npx tsc --noEmit` ✓ · `npx vite build` ✓
+
+---
+
+## B23 — outcome surfacing (extension)
+
+Once a promoted alert resolves, the opportunity drawer shows a "Resultado do alerta promovido"
+section, the opportunities list shows a neutral outcome badge + a "Resultado promovido" filter,
+and the cockpit overview shows promoted-alert metrics. Outcome is a posterior layer that never
+changes the opportunity score; `unknown` is neutral, never a failure. Full UI contract:
+[`PROMOTED_ALERT_RESOLUTION_UI.md`](./PROMOTED_ALERT_RESOLUTION_UI.md).

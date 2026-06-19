@@ -279,6 +279,9 @@ export interface AutoOpportunityActionSummaryDto {
   hasPromotionPlan: boolean
   /** B22: alertId of the monitored alert promoted from this opportunity, if any. */
   promotedAlertId?: string | null
+  /** B23: terminal outcome of the promoted alert once resolved (separate layer). */
+  promotedAlertOutcome?: PromotedAlertResult | null
+  promotedAlertResolvedAt?: string | null
   lastActionAt: string | null
 }
 
@@ -290,6 +293,8 @@ export interface AutoOpportunityUserStateLite {
   hasPromotionPlan: boolean
   /** B22: alertId of the monitored alert promoted from this opportunity, if any. */
   promotedAlertId?: string | null
+  /** B23: terminal outcome of the promoted alert once resolved (separate layer). */
+  promotedAlertOutcome?: PromotedAlertResult | null
 }
 
 export interface SuggestedRadarConditionDto {
@@ -449,4 +454,79 @@ export const PROMOTION_BLOCK_LABEL: Record<string, string> = {
   risk_gate_blocked: 'o filtro de risco bloqueou esta oportunidade',
   data_quality_insufficient: 'qualidade de dados insuficiente',
   score_below_minimum: 'score abaixo do mínimo para promoção',
+}
+
+// ─── B23: promoted alert resolution + opportunity outcome loop ───────────────
+
+export type PromotedAlertResult = 'pending' | 'confirmed' | 'confirmed_partial' | 'failed' | 'unknown' | 'expired'
+
+export interface AutoOpportunityOutcomeSummaryDto {
+  opportunityId: string
+  promotedAlertId: string
+  result: PromotedAlertResult
+  resultLabel: string
+  outcomeReason: string
+  confirmedAt: string | null
+  failedAt: string | null
+  unknownReason: string | null
+  timeToResolutionMinutes: number | null
+  learningEventIds: string[]
+  updatedAt: string
+}
+
+export interface PromotedAlertOutcomeLinkDto {
+  id: string
+  opportunityId: string
+  promotedAlertId: string
+  ledgerId: string | null
+  outcomeId: string | null
+  result: PromotedAlertResult
+  resolutionType: string | null
+  outcomeReason: string
+  dataQualityAtResolution: string
+  resolvedAt: string | null
+  source: 'promoted_alert_resolution'
+}
+
+export interface PromotedAlertListItemDto {
+  opportunityId: string
+  alertId: string
+  ledgerId: string | null
+  opportunityType: OpportunityType
+  originalScore: number
+  promotedAt: string
+  result: PromotedAlertResult
+  outcomeReason: string | null
+  resolvedAt: string | null
+}
+
+export interface PromotedAlertResolutionStatusDto {
+  resolved: boolean
+  skipped: boolean
+  reason: string | null
+  alertId: string
+  opportunityId: string | null
+  result: PromotedAlertResult
+  resolutionType: string | null
+  outcomeReason: string
+  resolvedAt: string | null
+}
+
+export const PROMOTED_RESULT_LABEL: Record<PromotedAlertResult, string> = {
+  pending: 'Pendente',
+  confirmed: 'Confirmado',
+  confirmed_partial: 'Parcial (útil)',
+  failed: 'Não confirmado',
+  unknown: 'Sem dados',
+  expired: 'Expirado',
+}
+
+/** Neutral tones — outcome is informational, NEVER betting language. */
+export const PROMOTED_RESULT_TONE: Record<PromotedAlertResult, string> = {
+  pending: 'bg-white/[0.05] border-white/[0.1] text-white/55',
+  confirmed: 'bg-[#13B8A6]/12 border-[#2DD4BF]/25 text-[#7FE9DC]',
+  confirmed_partial: 'bg-[#13B8A6]/8 border-[#2DD4BF]/18 text-[#7FE9DC]/85',
+  failed: 'bg-white/[0.04] border-white/[0.1] text-white/55',
+  unknown: 'bg-amber-500/8 border-amber-400/15 text-amber-100/70',
+  expired: 'bg-white/[0.04] border-white/[0.08] text-white/45',
 }

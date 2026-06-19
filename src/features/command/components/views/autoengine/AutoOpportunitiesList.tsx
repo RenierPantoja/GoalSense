@@ -6,8 +6,8 @@
  */
 import { useMemo, useState } from 'react'
 import { Search, SlidersHorizontal, Bookmark, EyeOff, MessageSquare, FlaskConical, BellRing } from 'lucide-react'
-import type { AutoOpportunityDto, AutoOpportunityFilters, AutoOpportunityUserStateLite } from '@/features/command/intelligence/autoEngineTypes'
-import { OPP_TYPE_LABEL, STATUS_LABEL, STATUS_TONE, BAND_LABEL, FEEDBACK_LABEL, blockReasonLabel } from '@/features/command/intelligence/autoEngineTypes'
+import type { AutoOpportunityDto, AutoOpportunityFilters, AutoOpportunityUserStateLite, PromotedAlertResult } from '@/features/command/intelligence/autoEngineTypes'
+import { OPP_TYPE_LABEL, STATUS_LABEL, STATUS_TONE, BAND_LABEL, FEEDBACK_LABEL, blockReasonLabel, PROMOTED_RESULT_LABEL, PROMOTED_RESULT_TONE } from '@/features/command/intelligence/autoEngineTypes'
 
 interface Props {
   opportunities: AutoOpportunityDto[]
@@ -19,7 +19,7 @@ interface Props {
   onOpen: (o: AutoOpportunityDto) => void
 }
 
-interface StateFilters { saved?: boolean; dismissed?: boolean; withFeedback?: boolean; withNote?: boolean; withPromotion?: boolean; promoted?: boolean }
+interface StateFilters { saved?: boolean; dismissed?: boolean; withFeedback?: boolean; withNote?: boolean; withPromotion?: boolean; promoted?: boolean; promotedOutcome?: PromotedAlertResult | '' }
 
 const norm = (s: string) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
@@ -50,6 +50,10 @@ export function AutoOpportunitiesList({ opportunities, loading, blockedOnly, use
       if (sf.withNote && !(st?.noteCount && st.noteCount > 0)) return false
       if (sf.withPromotion && !st?.hasPromotionPlan) return false
       if (sf.promoted && !st?.promotedAlertId) return false
+      if (sf.promotedOutcome) {
+        const oc = st?.promotedAlertOutcome ?? (st?.promotedAlertId ? 'pending' : null)
+        if (oc !== sf.promotedOutcome) return false
+      }
       if (f.query) {
         const q = norm(f.query)
         if (!norm(o.fixtureLabel).includes(q) && !norm(o.homeTeam).includes(q) && !norm(o.awayTeam).includes(q) && !norm(o.leagueName).includes(q)) return false
@@ -90,6 +94,7 @@ export function AutoOpportunitiesList({ opportunities, loading, blockedOnly, use
           <Toggle on={!!sf.withNote} onClick={() => patchState({ withNote: !sf.withNote })} icon={<MessageSquare size={11} />} label="Com nota" />
           <Toggle on={!!sf.withPromotion} onClick={() => patchState({ withPromotion: !sf.withPromotion })} icon={<FlaskConical size={11} />} label="Com proposta" />
           <Toggle on={!!sf.promoted} onClick={() => patchState({ promoted: !sf.promoted })} icon={<BellRing size={11} />} label="Promovidas" />
+          <Select value={sf.promotedOutcome || ''} onChange={v => patchState({ promotedOutcome: v as PromotedAlertResult | '' })} options={[['', 'Resultado promovido'], ['pending', PROMOTED_RESULT_LABEL.pending], ['confirmed', PROMOTED_RESULT_LABEL.confirmed], ['confirmed_partial', PROMOTED_RESULT_LABEL.confirmed_partial], ['failed', PROMOTED_RESULT_LABEL.failed], ['unknown', PROMOTED_RESULT_LABEL.unknown]]} />
         </div>
       </div>
 
@@ -149,6 +154,10 @@ function Row({ o, st, onOpen }: { o: AutoOpportunityDto; st?: AutoOpportunityUse
         {st?.noteCount ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-white/55">{st.noteCount} nota{st.noteCount > 1 ? 's' : ''}</span> : null}
         {st?.hasPromotionPlan && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-white/55">proposta</span>}
         {st?.promotedAlertId && <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-[#13B8A6]/12 border border-[#2DD4BF]/25 text-[#7FE9DC]"><BellRing size={9} />promovida</span>}
+        {(st?.promotedAlertOutcome || (st?.promotedAlertId && !st?.promotedAlertOutcome)) && (() => {
+          const oc = st?.promotedAlertOutcome ?? 'pending'
+          return <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${PROMOTED_RESULT_TONE[oc]}`}>{PROMOTED_RESULT_LABEL[oc]}</span>
+        })()}
         <span className="ml-auto text-[10.5px] text-[#5EEAD4]/70">Ver análise →</span>
       </div>
     </button>

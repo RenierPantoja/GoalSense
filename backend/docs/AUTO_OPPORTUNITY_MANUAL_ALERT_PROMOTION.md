@@ -84,3 +84,16 @@ The alert/ledger have **no top-level `source` column**. Origin is carried by:
 - `cd backend; npm run typecheck; npm run build` ✓
 - `node scripts/smokeAutoEngine.mjs` — B22 assertions (guard allow/block, preview shape,
   ack requirement, idempotency contract) pass; exit 0.
+
+---
+
+## B23 — the promoted alert now resolves (extension)
+
+The B22 limitation ("`ENABLE_PROMOTED_ALERT_RESOLUTION` exists as governance but the resolver
+is not modified") is closed in B23. A promoted alert is detected by the sentinel patternId /
+evidence source and resolved through the existing honest cycle by a dedicated path that:
+skips real pattern counters, conservatively maps the outcome by opportunity type, updates the
+Signal Ledger + a `PromotedAlertOutcomeLink`, feeds an `AutoOpportunityOutcomeSummary` back to
+the opportunity (as a separate layer — never the score), and emits an observational
+`source:'promoted_alert_resolution'` learning event. Still no Telegram, no odds, no auto-alert.
+Full detail: [`PROMOTED_ALERT_RESOLUTION.md`](./PROMOTED_ALERT_RESOLUTION.md).

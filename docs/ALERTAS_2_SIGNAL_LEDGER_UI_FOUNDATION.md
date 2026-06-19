@@ -86,3 +86,14 @@ badge on rows whose `patternName` starts with "Motor Automático" (the promoted 
 the promotion provenance via `scopeDecision.reason`. These alerts use a sentinel patternId
 and do not affect any real radar's counters/profile. See
 [`AUTO_OPPORTUNITY_ALERT_PROMOTION_UI.md`](./AUTO_OPPORTUNITY_ALERT_PROMOTION_UI.md).
+
+---
+
+## B23 — promoted alert provenance + outcome in the drawer (extension)
+
+`AlertSignalDrawer` now shows, for promoted alerts (`radarName`/`patternName` prefixed "Motor
+Automático"), an origin banner in Resumo (with the scope reason carrying the opportunityId and
+the no-Telegram/no-odds disclaimer) and, in Resultado, a "Fonte da resolução: Motor Automático
+(promoted_alert_resolution)" line plus a limited-resolution note for `unknown`/`expired`.
+The result itself flows through the normal outcome record, so the existing Resultado/Timeline
+tabs populate automatically. See [`PROMOTED_ALERT_RESOLUTION_UI.md`](./PROMOTED_ALERT_RESOLUTION_UI.md).

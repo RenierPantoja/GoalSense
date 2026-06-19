@@ -114,7 +114,7 @@ const norm = (s: string) => (s || '').toLowerCase().normalize('NFD').replace(/[\
 
 export async function searchAutoOpportunities(filters: OpportunitySearchFilters): Promise<{
   items: AutoOpportunity[]; total: number; appliedFilters: string[]; unsupportedFilters: string[]
-  userStates: Record<string, { saved: boolean; dismissed: boolean; lastFeedback: string | null; noteCount: number; hasPromotionPlan: boolean; promotedAlertId: string | null }>
+  userStates: Record<string, { saved: boolean; dismissed: boolean; lastFeedback: string | null; noteCount: number; hasPromotionPlan: boolean; promotedAlertId: string | null; promotedAlertOutcome: string | null }>
 }> {
   const repos = createRepositories()
   const limit = Math.min(Math.max(1, filters.limit || 200), 500)
@@ -143,10 +143,10 @@ export async function searchAutoOpportunities(filters: OpportunitySearchFilters)
 
   const total = rows.length
   const items = rows.slice(0, limit)
-  const userStates: Record<string, { saved: boolean; dismissed: boolean; lastFeedback: string | null; noteCount: number; hasPromotionPlan: boolean; promotedAlertId: string | null }> = {}
+  const userStates: Record<string, { saved: boolean; dismissed: boolean; lastFeedback: string | null; noteCount: number; hasPromotionPlan: boolean; promotedAlertId: string | null; promotedAlertOutcome: string | null }> = {}
   for (const o of items) {
     const s = stateById.get(o.id)
-    if (s) userStates[o.id] = { saved: s.saved, dismissed: s.dismissed, lastFeedback: s.lastFeedback, noteCount: s.noteCount, hasPromotionPlan: s.hasPromotionPlan, promotedAlertId: s.promotedAlertId ?? null }
+    if (s) userStates[o.id] = { saved: s.saved, dismissed: s.dismissed, lastFeedback: s.lastFeedback, noteCount: s.noteCount, hasPromotionPlan: s.hasPromotionPlan, promotedAlertId: s.promotedAlertId ?? null, promotedAlertOutcome: s.promotedAlertOutcome ?? null }
   }
   return { items, total, appliedFilters: applied, unsupportedFilters: unsupported, userStates }
 }

@@ -29,6 +29,7 @@ import type {
 import type {
   AutoEngineRun, AutoOpportunity, AutoOpportunityAction, AutoOpportunityUserState,
   AutoOpportunityPromotionPlan, ManualPromotedAlertLink,
+  PromotedAlertOutcomeLink, AutoOpportunityOutcomeSummary,
 } from '../../modules/intelligence/autoEngine/autoEngine.types.js'
 
 const LEDGER = 'signalLedger'
@@ -51,6 +52,8 @@ const AUTO_ACTIONS = 'autoOpportunityActions'
 const AUTO_USER_STATES = 'autoOpportunityUserStates'
 const AUTO_PROMOTIONS = 'autoOpportunityPromotionPlans'
 const AUTO_PROMOTED_LINKS = 'autoPromotedAlertLinks'
+const AUTO_PROMOTED_OUTCOME_LINKS = 'autoPromotedAlertOutcomeLinks'
+const AUTO_OUTCOME_SUMMARIES = 'autoOpportunityOutcomeSummaries'
 
 const READ_CAP = 2000
 
@@ -482,5 +485,46 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     const db = await getFirestore()
     const snap = await db.collection(AUTO_PROMOTED_LINKS).limit(READ_CAP).get()
     return snap.docs.map((d: any) => docData<ManualPromotedAlertLink>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
+  }
+
+  // ── B23: promoted alert resolution outcome links + opportunity outcome summaries ──
+  async createPromotedAlertOutcomeLink(link: PromotedAlertOutcomeLink): Promise<PromotedAlertOutcomeLink> {
+    const db = await getFirestore()
+    await db.collection(AUTO_PROMOTED_OUTCOME_LINKS).doc(link.id).set(link, { merge: true })
+    return link
+  }
+  async getPromotedAlertOutcomeLinkByAlertId(alertId: string): Promise<PromotedAlertOutcomeLink | null> {
+    const db = await getFirestore()
+    const doc = await db.collection(AUTO_PROMOTED_OUTCOME_LINKS).doc(`pol_${alertId}`).get()
+    return doc.exists ? docData<PromotedAlertOutcomeLink>(doc) : null
+  }
+  async getPromotedAlertOutcomeLinkByOpportunityId(opportunityId: string): Promise<PromotedAlertOutcomeLink | null> {
+    const db = await getFirestore()
+    const snap = await db.collection(AUTO_PROMOTED_OUTCOME_LINKS).where('opportunityId', '==', opportunityId).limit(1).get()
+    return snap.empty ? null : docData<PromotedAlertOutcomeLink>(snap.docs[0])
+  }
+  async updatePromotedAlertOutcomeLink(alertId: string, patch: Partial<PromotedAlertOutcomeLink>): Promise<{ count: number }> {
+    const db = await getFirestore()
+    const ref = db.collection(AUTO_PROMOTED_OUTCOME_LINKS).doc(`pol_${alertId}`)
+    const doc = await ref.get()
+    if (!doc.exists) return { count: 0 }
+    await ref.set(patch, { merge: true })
+    return { count: 1 }
+  }
+  async upsertAutoOpportunityOutcomeSummary(summary: AutoOpportunityOutcomeSummary): Promise<AutoOpportunityOutcomeSummary> {
+    const db = await getFirestore()
+    await db.collection(AUTO_OUTCOME_SUMMARIES).doc(`oos_${summary.opportunityId}`).set(summary, { merge: true })
+    return summary
+  }
+  async getAutoOpportunityOutcomeSummary(opportunityId: string): Promise<AutoOpportunityOutcomeSummary | null> {
+    const db = await getFirestore()
+    const doc = await db.collection(AUTO_OUTCOME_SUMMARIES).doc(`oos_${opportunityId}`).get()
+    return doc.exists ? docData<AutoOpportunityOutcomeSummary>(doc) : null
+  }
+  async listAutoOpportunityOutcomeSummaries(limit?: number): Promise<AutoOpportunityOutcomeSummary[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(AUTO_OUTCOME_SUMMARIES).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<AutoOpportunityOutcomeSummary>(d))
+      .sort((a: any, b: any) => (b.updatedAt || '').localeCompare(a.updatedAt || '')).slice(0, limit || 200)
   }
 }

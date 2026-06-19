@@ -7,6 +7,7 @@
  * partial usefulness; scores are signal-quality, NOT probabilities.
  */
 import type { DataQuality, SampleQuality } from '../contracts/learning.types.js'
+import type { AlertResult } from '../contracts/intelligence.types.js'
 
 export type OpportunityType =
   | 'late_goal_pressure'
@@ -177,6 +178,7 @@ export type AutoOpportunityActionType =
   | 'radar_proposal_created'
   | 'manual_alert_promoted'
   | 'opened_promoted_alert'
+  | 'promoted_alert_resolved'
   | 'opened_in_backtest'
   | 'opened_related_alerts'
   | 'opened_fixture'
@@ -225,6 +227,9 @@ export interface AutoOpportunityUserState {
   hasPromotionPlan: boolean
   /** B22: set when the opportunity was manually promoted to a monitored alert. */
   promotedAlertId: string | null
+  /** B23: terminal outcome of the promoted alert once resolved (separate layer). */
+  promotedAlertOutcome: AlertResult | null
+  promotedAlertResolvedAt: string | null
   updatedAt: string
 }
 
@@ -240,6 +245,9 @@ export interface AutoOpportunityActionSummary {
   hasPromotionPlan: boolean
   /** B22: alertId of the monitored alert promoted from this opportunity, if any. */
   promotedAlertId: string | null
+  /** B23: terminal outcome of the promoted alert once resolved (separate layer). */
+  promotedAlertOutcome: AlertResult | null
+  promotedAlertResolvedAt: string | null
   lastActionAt: string | null
 }
 
@@ -362,4 +370,73 @@ export interface PromotedAlertGuardResult {
   blockedReasons: string[]
   proposedSeverity: 'critical' | 'attention' | 'info'
   proposedConfidence: number
+}
+
+// ─── B23: Promoted alert resolution + auto opportunity outcome loop ──────────
+// A manually-promoted alert (B22) resolves through the EXISTING honest cycle, but
+// outcome is tracked as a SEPARATE layer that never touches the opportunity score,
+// never pollutes real pattern counters, never sends Telegram, never uses odds.
+
+export type PromotedAlertResult = 'pending' | 'confirmed' | 'confirmed_partial' | 'failed' | 'unknown' | 'expired'
+
+/** Link from a resolved promoted alert back to its opportunity (id `pol_${alertId}`). */
+export interface PromotedAlertOutcomeLink {
+  id: string
+  opportunityId: string
+  promotedAlertId: string
+  ledgerId: string | null
+  outcomeId: string | null
+  result: PromotedAlertResult
+  resolutionType: string | null
+  outcomeReason: string
+  dataQualityAtResolution: DataQuality
+  resolvedAt: string | null
+  source: 'promoted_alert_resolution'
+}
+
+/** Opportunity-facing outcome summary (id `oos_${opportunityId}`). */
+export interface AutoOpportunityOutcomeSummary {
+  opportunityId: string
+  promotedAlertId: string
+  result: PromotedAlertResult
+  resultLabel: string
+  outcomeReason: string
+  confirmedAt: string | null
+  failedAt: string | null
+  unknownReason: string | null
+  timeToResolutionMinutes: number | null
+  learningEventIds: string[]
+  updatedAt: string
+}
+
+/** Snapshot-derived inputs the resolver collected (no invented data). */
+export interface PromotedAlertResolutionContext {
+  alertId: string
+  opportunityId: string
+  fixtureId: string
+  opportunityType: OpportunityType
+  goalsInWindow: number
+  cornersInWindow: number
+  cardsInWindow: number
+  hasTimedEvents: boolean
+  hasStats: boolean
+  snapshotsAnalyzed: number
+  scoreDelta: { home: number; away: number }
+  windowMinutes: number
+  createdAt: string | null
+}
+
+export interface PromotedAlertResolutionResult {
+  resolved: boolean
+  skipped: boolean
+  reason: string | null
+  alertId: string
+  opportunityId: string | null
+  result: PromotedAlertResult
+  resolutionType: string | null
+  outcomeReason: string
+  ledgerUpdated: boolean
+  outcomeLinkId: string | null
+  learningEventId: string | null
+  resolvedAt: string | null
 }

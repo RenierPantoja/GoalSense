@@ -6,6 +6,10 @@
  */
 import { createRepositories } from '../../repositories/index.js'
 import { recordAlertResolved } from '../intelligence/memory/intelligenceMemory.service.js'
+import {
+  isPromotedAlert, isPromotedAlertResolutionEnabled, readProvenance, recordPromotedAlertResolved,
+} from '../intelligence/autoEngine/promotedAlertResolution.service.js'
+import type { PromotedAlertResolutionResult } from '../intelligence/autoEngine/autoEngine.types.js'
 
 const DEFAULT_USER = 'default'
 
@@ -370,8 +374,42 @@ export async function resolvePendingAlerts(maxAlerts: number): Promise<Resolutio
       const existing = await repos.alertResolutions.findByAlertId(alert.id)
       if (existing) { result.skipped++; continue }
 
+      // ── B23: manually-promoted alerts are a separate, honest resolution class ──
+      const promoted = isPromotedAlert(alert as any)
+      if (promoted && !isPromotedAlertResolutionEnabled()) {
+        // Governance flag off → leave pending (honest), never coerce to a result.
+        result.skipped++; continue
+      }
+
       const resolution = await resolveSingleAlert(alert as any)
       if (!resolution) { result.skipped++; continue }
+
+      if (promoted) {
+        const prov = readProvenance(alert as any)
+        const ev = resolution.evidence
+        const res = await recordPromotedAlertResolved({
+          alertId: alert.id, fixtureId: (alert as any).fixtureId,
+          opportunityId: prov.opportunityId, opportunityType: prov.opportunityType,
+          createdAt: (alert as any).createdAt,
+          goalsInWindow: ev.goalsInWindow, cornersInWindow: ev.cornersInWindow, cardsInWindow: ev.cardsInWindow,
+          hasTimedEvents: ev.hasTimedEvents, hasStats: ev.hasStats, snapshotsAnalyzed: ev.snapshotsAnalyzed,
+          scoreDelta: ev.scoreDelta, windowMinutes: resolution.windowMinutes,
+        })
+        if (res.resolved) {
+          result.resolved++
+          switch (res.result) {
+            case 'confirmed': result.confirmed++; break
+            case 'confirmed_partial': result.partial++; break
+            case 'failed': result.failed++; break
+            case 'unknown': case 'expired': result.unknown++; break
+          }
+        } else {
+          result.skipped++
+          if (res.reason) result.errors.push(`Promoted ${alert.id}: ${res.reason}`)
+        }
+        // NOTE: no performance counter, no Telegram for promoted alerts.
+        continue
+      }
 
       // Atomic: update alert.status + create resolution (Firestore batch / Prisma transaction).
       // 'unknown' stays 'unknown' — never coerced to 'failed'.
@@ -436,4 +474,28 @@ export async function resolvePendingAlerts(maxAlerts: number): Promise<Resolutio
 function safeParseJson(str: string | null | undefined, fallback: any): any {
   if (!str) return fallback
   try { return JSON.parse(str) } catch { return fallback }
+}
+
+// ─── B23: on-demand resolution of a single promoted alert (env-gated route) ──
+
+export async function resolveSinglePromotedAlertNow(alertId: string): Promise<{ ok: boolean; reason?: string; result?: PromotedAlertResolutionResult }> {
+  const repos = createRepositories()
+  const alert = await repos.alerts.findById(alertId, DEFAULT_USER)
+  if (!alert) return { ok: false, reason: 'alert_not_found' }
+  if (!isPromotedAlert(alert as any)) return { ok: false, reason: 'not_a_promoted_alert' }
+  const existing = await repos.alertResolutions.findByAlertId(alertId)
+  if (existing) return { ok: false, reason: 'already_resolved' }
+  const resolution = await resolveSingleAlert(alert as any)
+  if (!resolution) return { ok: false, reason: 'not_enough_data_yet' }
+  const prov = readProvenance(alert as any)
+  const ev = resolution.evidence
+  const res = await recordPromotedAlertResolved({
+    alertId, fixtureId: (alert as any).fixtureId,
+    opportunityId: prov.opportunityId, opportunityType: prov.opportunityType,
+    createdAt: (alert as any).createdAt,
+    goalsInWindow: ev.goalsInWindow, cornersInWindow: ev.cornersInWindow, cardsInWindow: ev.cardsInWindow,
+    hasTimedEvents: ev.hasTimedEvents, hasStats: ev.hasStats, snapshotsAnalyzed: ev.snapshotsAnalyzed,
+    scoreDelta: ev.scoreDelta, windowMinutes: resolution.windowMinutes,
+  })
+  return { ok: res.resolved, reason: res.reason ?? undefined, result: res }
 }

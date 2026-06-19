@@ -136,6 +136,7 @@ import type {
 import type {
   AutoEngineRun, AutoOpportunity, AutoOpportunityAction, AutoOpportunityUserState,
   AutoOpportunityPromotionPlan, ManualPromotedAlertLink,
+  PromotedAlertOutcomeLink, AutoOpportunityOutcomeSummary,
 } from '../modules/intelligence/autoEngine/autoEngine.types.js'
 
 export interface IntelligenceRepository {
@@ -228,6 +229,15 @@ export interface IntelligenceRepository {
   createManualPromotedAlertLink(link: ManualPromotedAlertLink): Promise<ManualPromotedAlertLink>
   getManualPromotedAlertLink(opportunityId: string): Promise<ManualPromotedAlertLink | null>
   listManualPromotedAlertLinks(limit?: number): Promise<ManualPromotedAlertLink[]>
+
+  // ── B23: promoted alert resolution outcome links + opportunity outcome summaries ──
+  createPromotedAlertOutcomeLink(link: PromotedAlertOutcomeLink): Promise<PromotedAlertOutcomeLink>
+  getPromotedAlertOutcomeLinkByAlertId(alertId: string): Promise<PromotedAlertOutcomeLink | null>
+  getPromotedAlertOutcomeLinkByOpportunityId(opportunityId: string): Promise<PromotedAlertOutcomeLink | null>
+  updatePromotedAlertOutcomeLink(alertId: string, patch: Partial<PromotedAlertOutcomeLink>): Promise<{ count: number }>
+  upsertAutoOpportunityOutcomeSummary(summary: AutoOpportunityOutcomeSummary): Promise<AutoOpportunityOutcomeSummary>
+  getAutoOpportunityOutcomeSummary(opportunityId: string): Promise<AutoOpportunityOutcomeSummary | null>
+  listAutoOpportunityOutcomeSummaries(limit?: number): Promise<AutoOpportunityOutcomeSummary[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

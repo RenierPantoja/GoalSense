@@ -2,14 +2,15 @@
  * AutoEngineOverviewPanel — honest at-a-glance read of what the engine is seeing.
  * Empty states are honest; no fake charts, no odds. (B20)
  */
-import { Layers, ShieldAlert, Database, History } from 'lucide-react'
-import type { AutoEngineStatusDto, AutoEngineRunDto, AutoOpportunityDto } from '@/features/command/intelligence/autoEngineTypes'
-import { OPP_TYPE_LABEL, STATUS_TONE, STATUS_LABEL, DATA_QUALITY_LABEL, blockReasonLabel } from '@/features/command/intelligence/autoEngineTypes'
+import { Layers, ShieldAlert, Database, History, BellRing } from 'lucide-react'
+import type { AutoEngineStatusDto, AutoEngineRunDto, AutoOpportunityDto, PromotedAlertListItemDto, PromotedAlertResult } from '@/features/command/intelligence/autoEngineTypes'
+import { OPP_TYPE_LABEL, STATUS_TONE, STATUS_LABEL, DATA_QUALITY_LABEL, blockReasonLabel, PROMOTED_RESULT_LABEL } from '@/features/command/intelligence/autoEngineTypes'
 import type { OpportunityType, DataQuality } from '@/features/command/intelligence/autoEngineTypes'
 
 interface Props {
   status: AutoEngineStatusDto | null
   runs: AutoEngineRunDto[]
+  promotedAlerts?: PromotedAlertListItemDto[]
   onOpenOpportunity: (o: AutoOpportunityDto) => void
 }
 
@@ -43,16 +44,30 @@ function Card({ title, icon, children }: { title: string; icon: React.ReactNode;
   )
 }
 
+function Metric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="bg-[#080d16] px-2 py-2 text-center">
+      <span className="block text-[15px] font-semibold text-white/85 tabular-nums leading-none">{value}</span>
+      <span className="block text-[9px] text-white/40 uppercase tracking-wider mt-1 truncate">{label}</span>
+    </div>
+  )
+}
+
 function fmtTime(iso: string | null | undefined): string {
   if (!iso) return '—'
   try { return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) } catch { return '—' }
 }
 
-export function AutoEngineOverviewPanel({ status, runs, onOpenOpportunity }: Props) {
+export function AutoEngineOverviewPanel({ status, runs, promotedAlerts = [], onOpenOpportunity }: Props) {
   const latest = status?.latestOpportunities ?? []
   const types = (status?.topOpportunityTypes ?? []).map(t => ({ label: OPP_TYPE_LABEL[t.type as OpportunityType] || t.type, count: t.count }))
   const blocks = Object.entries(status?.blockReasons ?? {}).map(([k, v]) => ({ label: blockReasonLabel(k), count: v })).sort((a, b) => b.count - a.count)
   const dq = Object.entries(status?.dataQualityBreakdown ?? {}).map(([k, v]) => ({ label: DATA_QUALITY_LABEL[k as DataQuality] || k, count: v })).sort((a, b) => b.count - a.count)
+
+  const promoCounts = promotedAlerts.reduce((acc, p) => { acc[p.result] = (acc[p.result] || 0) + 1; return acc }, {} as Record<PromotedAlertResult, number>)
+  const promoTotal = promotedAlerts.length
+  const useful = (promoCounts.confirmed || 0) + (promoCounts.confirmed_partial || 0)
+  const unknownN = (promoCounts.unknown || 0) + (promoCounts.expired || 0)
 
   return (
     <div className="space-y-4">
@@ -76,6 +91,24 @@ export function AutoEngineOverviewPanel({ status, runs, onOpenOpportunity }: Pro
                 </button>
               ))}
             </div>
+          )}
+      </Card>
+
+      <Card title="Alertas promovidos (resultado)" icon={<BellRing size={14} />}>
+        {promoTotal === 0
+          ? <p className="text-[12px] text-white/40">Nenhuma oportunidade foi promovida para alerta ainda. A promoção é manual e exige confirmação humana.</p>
+          : (
+            <>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-px rounded-lg overflow-hidden border border-white/[0.06]">
+                <Metric label="Total" value={promoTotal} />
+                <Metric label={PROMOTED_RESULT_LABEL.pending} value={promoCounts.pending || 0} />
+                <Metric label={PROMOTED_RESULT_LABEL.confirmed} value={promoCounts.confirmed || 0} />
+                <Metric label={PROMOTED_RESULT_LABEL.confirmed_partial} value={promoCounts.confirmed_partial || 0} />
+                <Metric label={PROMOTED_RESULT_LABEL.failed} value={promoCounts.failed || 0} />
+                <Metric label={PROMOTED_RESULT_LABEL.unknown} value={unknownN} />
+              </div>
+              <p className="text-[11px] text-white/40 mt-2">Úteis (confirmado + parcial): <span className="text-white/70">{useful}</span> · Sem dados/unknown: <span className="text-white/70">{unknownN}</span> · Amostra: <span className="text-white/70">{promoTotal}</span>. Isto não é taxa de acerto — unknown nunca é falha e o score não é probabilidade.</p>
+            </>
           )}
       </Card>
 

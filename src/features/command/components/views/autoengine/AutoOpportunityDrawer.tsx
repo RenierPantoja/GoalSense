@@ -15,10 +15,11 @@ import {
 } from 'lucide-react'
 import type {
   AutoOpportunityDto, AutoOpportunityActionSummaryDto, AutoOpportunityUserStateLite,
-  AutoOpportunityFeedbackType, AutoOpportunityFixtureContextDto,
+  AutoOpportunityFeedbackType, AutoOpportunityFixtureContextDto, AutoOpportunityOutcomeSummaryDto,
 } from '@/features/command/intelligence/autoEngineTypes'
 import {
   OPP_TYPE_LABEL, STATUS_LABEL, STATUS_TONE, BAND_LABEL, SAMPLE_LABEL, DATA_QUALITY_LABEL, blockReasonLabel, FEEDBACK_LABEL,
+  PROMOTED_RESULT_LABEL, PROMOTED_RESULT_TONE,
 } from '@/features/command/intelligence/autoEngineTypes'
 import { autoEngineApi } from '@/services/autoEngineApi'
 import { alertIntelligenceApi, isAlertIntelligenceConfigured } from '@/services/alertIntelligenceApi'
@@ -70,6 +71,7 @@ export function AutoOpportunityDrawer({ opportunity: o, onClose, onGoToBacktest,
   const [busy, setBusy] = useState<string | null>(null)
   const [noteText, setNoteText] = useState('')
   const [fixtureCtx, setFixtureCtx] = useState<AutoOpportunityFixtureContextDto | null>(null)
+  const [outcome, setOutcome] = useState<AutoOpportunityOutcomeSummaryDto | null>(null)
   const [openMatchMsg, setOpenMatchMsg] = useState<string | null>(null)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
   const relatedPatternId = o.relatedPatternIds?.[0] || null
@@ -85,6 +87,7 @@ export function AutoOpportunityDrawer({ opportunity: o, onClose, onGoToBacktest,
     let alive = true
     autoEngineApi.getOpportunityActionSummary(o.id).then(r => { if (alive && r.ok) setSummary(r.data) })
     autoEngineApi.getFixtureContext(o.fixtureId).then(r => { if (alive && r.ok) setFixtureCtx(r.data) })
+    autoEngineApi.getOpportunityOutcomeSummary(o.id).then(r => { if (alive && r.ok) setOutcome(r.data) })
     return () => { alive = false }
   }, [o.id, o.fixtureId])
 
@@ -185,6 +188,28 @@ export function AutoOpportunityDrawer({ opportunity: o, onClose, onGoToBacktest,
                 </div>
               </div>
               <Section title="Por que agora"><List items={o.explanation.whyNow} tone="ok" /></Section>
+              {(promotedAlertId || outcome) && (
+                <Section title="Resultado do alerta promovido">
+                  {(() => {
+                    const res = outcome?.result ?? (promotedAlertId ? 'pending' : null)
+                    if (!res) return <p className="text-[11px] text-white/40">Esta oportunidade não foi promovida para alerta.</p>
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${PROMOTED_RESULT_TONE[res]}`}>{PROMOTED_RESULT_LABEL[res]}</span>
+                          {outcome?.timeToResolutionMinutes != null && <span className="text-[11px] text-white/45">em {outcome.timeToResolutionMinutes} min</span>}
+                          {promotedAlertId && onGoToAlerts && <button type="button" onClick={() => onGoToAlerts()} className="text-[11px] text-[#5EEAD4] hover:text-[#7FE9DC] ml-auto">Abrir alerta →</button>}
+                        </div>
+                        {res === 'pending'
+                          ? <p className="text-[11.5px] text-white/55">Alerta monitorado criado. Aguardando dados pós-promoção para resolver de forma honesta.</p>
+                          : <p className="text-[11.5px] text-white/65">{outcome?.outcomeReason}</p>}
+                        {outcome?.unknownReason && res === 'unknown' && <p className="text-[11px] text-amber-100/65">Sem dados suficientes (unknown não é falha): {outcome.unknownReason}</p>}
+                        <p className="text-[11px] text-white/40">Este resultado avalia o alerta monitorado criado manualmente — não altera o score original da oportunidade.</p>
+                      </div>
+                    )
+                  })()}
+                </Section>
+              )}
               {/* Open match */}
               <Section title="Jogo relacionado">
                 {fixtureCtx?.found

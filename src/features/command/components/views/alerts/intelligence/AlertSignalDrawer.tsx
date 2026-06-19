@@ -85,6 +85,8 @@ export function AlertSignalDrawer({ alertId, headline, onClose, onGoToBacktest, 
   const result = (outcome?.result || (headline.status as AlertResult) || 'pending') as AlertResult
   const tone = RESULT_TONE[result] || RESULT_TONE.pending
   const noLedger = !loading && !ledger
+  const isPromoted = !!(ledger?.radarName?.startsWith('Motor Automático')) || !!(headline.patternName?.startsWith('Motor Automático'))
+  const fromPromotedResolution = !!outcome?.resolutionType?.startsWith('promoted')
 
   return (
     <div className="fixed inset-0 z-[130] flex justify-end" role="dialog" aria-label="Análise do sinal">
@@ -129,6 +131,14 @@ export function AlertSignalDrawer({ alertId, headline, onClose, onGoToBacktest, 
             <>
               {tab === 'resumo' && (
                 <>
+                  {isPromoted && (
+                    <div className="rounded-xl border border-[#2DD4BF]/20 bg-[#13B8A6]/[0.06] p-4">
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#7FE9DC]/85">Origem: Motor Automático</span>
+                      <p className="text-[12px] text-white/70 mt-1.5 leading-relaxed">Este alerta foi promovido manualmente de uma oportunidade automática (confirmação humana). O score original é qualidade de sinal, não probabilidade.</p>
+                      {ledger.scopeDecision?.reason && <p className="text-[11px] text-white/50 mt-1.5">{ledger.scopeDecision.reason}</p>}
+                      <p className="text-[10.5px] text-white/40 mt-1.5">O resultado abaixo avalia o alerta monitorado — não altera o score original da oportunidade. Sem Telegram, sem odds.</p>
+                    </div>
+                  )}
                   <Section title="Partida">
                     <KV k="Confronto" v={ledger.fixtureLabel} />
                     <KV k="Competição" v={ledger.leagueName} />
@@ -190,7 +200,11 @@ export function AlertSignalDrawer({ alertId, headline, onClose, onGoToBacktest, 
                       <KV k="Tempo até resolução" v={outcome.timeToResolutionMinutes != null ? `${outcome.timeToResolutionMinutes} min` : '—'} />
                       <KV k="Qualidade na resolução" v={outcome.dataQualityAtResolution} />
                       <KV k="Resolvido em" v={outcome.resolvedAt ? new Date(outcome.resolvedAt).toLocaleString('pt-BR') : '—'} />
+                      {fromPromotedResolution && <KV k="Fonte da resolução" v="Motor Automático (promoted_alert_resolution)" />}
                     </Section>
+                    {fromPromotedResolution && (result === 'unknown' || result === 'expired') && (
+                      <p className="text-[11px] text-amber-100/65 leading-relaxed px-1">Resolução limitada: faltaram dados pós-promoção para confirmar. Unknown nunca é falha.</p>
+                    )}
                     {outcome.whatConfirmed.length > 0 && <Section title="O que confirmou"><Chips items={outcome.whatConfirmed} tone="ok" /></Section>}
                     {outcome.whatFailed.length > 0 && <Section title="O que não confirmou"><Chips items={outcome.whatFailed} tone="miss" /></Section>}
                     {outcome.missingForConfirmation.length > 0 && <Section title="O que faltou"><Chips items={outcome.missingForConfirmation} tone="block" /></Section>}

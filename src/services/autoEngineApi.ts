@@ -15,6 +15,8 @@ import type {
   ActionMutationResponse,
   ManualAlertPromotionPreviewDto, ManualAlertPromotionRequestDto, ManualAlertPromotionResultDto,
   ManualPromotedAlertLinkDto,
+  AutoOpportunityOutcomeSummaryDto, PromotedAlertOutcomeLinkDto, PromotedAlertListItemDto,
+  PromotedAlertResolutionStatusDto,
 } from '@/features/command/intelligence/autoEngineTypes'
 
 export interface ApiResult<T> {
@@ -148,5 +150,22 @@ export const autoEngineApi = {
 
   getPromotedAlert(opportunityId: string) {
     return request<ManualPromotedAlertLinkDto>(`${BASE}/opportunities/${encodeURIComponent(opportunityId)}/promoted-alert`)
+  },
+
+  // ── B23: promoted alert resolution + opportunity outcome loop ──
+  getOpportunityOutcomeSummary(opportunityId: string) {
+    return request<AutoOpportunityOutcomeSummaryDto>(`${BASE}/opportunities/${encodeURIComponent(opportunityId)}/outcome-summary`)
+  },
+
+  getPromotedAlertOutcomeLink(alertId: string) {
+    return request<PromotedAlertOutcomeLinkDto>(`${BASE}/promoted-alerts/${encodeURIComponent(alertId)}/outcome-link`)
+  },
+
+  listPromotedAlerts(limit = 100) {
+    return request<PromotedAlertListItemDto[]>(`${BASE}/promoted-alerts?limit=${limit}`)
+  },
+
+  resolvePromotedAlertNow(alertId: string) {
+    return request<PromotedAlertResolutionStatusDto>(`${BASE}/promoted-alerts/${encodeURIComponent(alertId)}/resolve-now`, { method: 'POST', body: JSON.stringify({}) })
   },
 }

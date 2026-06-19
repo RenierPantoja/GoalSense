@@ -24,6 +24,7 @@ import type {
 import type {
   AutoEngineRun, AutoOpportunity, AutoOpportunityAction, AutoOpportunityUserState,
   AutoOpportunityPromotionPlan, ManualPromotedAlertLink,
+  PromotedAlertOutcomeLink, AutoOpportunityOutcomeSummary,
 } from '../modules/intelligence/autoEngine/autoEngine.types.js'
 
 let warned = false
@@ -123,4 +124,13 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async createManualPromotedAlertLink(link: ManualPromotedAlertLink): Promise<ManualPromotedAlertLink> { warnOnce(); return link }
   async getManualPromotedAlertLink(): Promise<ManualPromotedAlertLink | null> { return null }
   async listManualPromotedAlertLinks(): Promise<ManualPromotedAlertLink[]> { return [] }
+
+  // ── B23 (Noop): reads empty; writes accepted without persistence ──
+  async createPromotedAlertOutcomeLink(link: PromotedAlertOutcomeLink): Promise<PromotedAlertOutcomeLink> { warnOnce(); return link }
+  async getPromotedAlertOutcomeLinkByAlertId(): Promise<PromotedAlertOutcomeLink | null> { return null }
+  async getPromotedAlertOutcomeLinkByOpportunityId(): Promise<PromotedAlertOutcomeLink | null> { return null }
+  async updatePromotedAlertOutcomeLink(): Promise<{ count: number }> { return { count: 0 } }
+  async upsertAutoOpportunityOutcomeSummary(summary: AutoOpportunityOutcomeSummary): Promise<AutoOpportunityOutcomeSummary> { warnOnce(); return summary }
+  async getAutoOpportunityOutcomeSummary(): Promise<AutoOpportunityOutcomeSummary | null> { return null }
+  async listAutoOpportunityOutcomeSummaries(): Promise<AutoOpportunityOutcomeSummary[]> { return [] }
 }

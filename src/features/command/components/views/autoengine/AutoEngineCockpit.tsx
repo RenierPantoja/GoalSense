@@ -11,7 +11,7 @@ import { Cpu, RefreshCw, LayoutGrid, ListChecks, ShieldAlert, PlugZap } from 'lu
 import { autoEngineApi } from '@/services/autoEngineApi'
 import type {
   AutoEngineStatusDto, AutoEngineRunDto, AutoOpportunityDto, AutoEngineScanRequest,
-  AutoOpportunityUserStateLite, AutoOpportunityPromotionPlanDto,
+  AutoOpportunityUserStateLite, AutoOpportunityPromotionPlanDto, PromotedAlertListItemDto,
 } from '@/features/command/intelligence/autoEngineTypes'
 import { CounterCell } from '../shared/CounterCell'
 import { AutoEngineStatusPanel } from './AutoEngineStatusPanel'
@@ -55,6 +55,7 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
   const [status, setStatus] = useState<AutoEngineStatusDto | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
   const [runs, setRuns] = useState<AutoEngineRunDto[]>([])
+  const [promotedAlerts, setPromotedAlerts] = useState<PromotedAlertListItemDto[]>([])
   const [opportunities, setOpportunities] = useState<AutoOpportunityDto[]>([])
   const [userStates, setUserStates] = useState<Record<string, AutoOpportunityUserStateLite>>({})
   const [oppsLoading, setOppsLoading] = useState(true)
@@ -86,6 +87,8 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
       const o = await autoEngineApi.listOpportunities({}, 200)
       if (o.ok && o.data) setOpportunities(o.data)
     }
+    const promo = await autoEngineApi.listPromotedAlerts(200)
+    if (promo.ok && promo.data) setPromotedAlerts(promo.data)
     setStatusLoading(false); setOppsLoading(false)
   }, [backendConfigured])
 
@@ -196,7 +199,7 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
         ))}
       </div>
 
-      {segment === 'overview' && <AutoEngineOverviewPanel status={status} runs={runs} onOpenOpportunity={setDrawer} />}
+      {segment === 'overview' && <AutoEngineOverviewPanel status={status} runs={runs} promotedAlerts={promotedAlerts} onOpenOpportunity={setDrawer} />}
       {segment === 'oportunidades' && <AutoOpportunitiesList opportunities={opportunities} loading={oppsLoading} userStates={userStates} onOpen={setDrawer} />}
       {segment === 'bloqueadas' && (
         <>

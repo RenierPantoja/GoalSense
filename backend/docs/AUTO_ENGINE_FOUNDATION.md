@@ -173,3 +173,18 @@ for the full contract. Highlights:
 - Sentinel patternId `auto_engine_manual`, **no** performance counter, ledger `patternId=null`,
   idempotent link `mpa_${opportunityId}` in `autoPromotedAlertLinks`.
 - `ENABLE_AUTO_ENGINE_TO_ALERTS` remains present but is **not** wired to automatic alert creation.
+
+---
+
+## B23 — Promoted Alert Resolution + Opportunity Outcome Loop (extension)
+
+Promoted alerts (B22) now resolve through the existing honest cycle as a separate class. New
+flags `ENABLE_PROMOTED_ALERT_RESOLUTION` (default true; off ⇒ stays pending) and
+`ENABLE_PROMOTED_ALERT_MANUAL_RESOLVE` (default false; gates resolve-now). New service
+`promotedAlertResolution.service.ts` + pure `utils/promotedAlertResolution.util.ts`; integration
+inside `modules/command/alertResolution.service.ts` (no behavior change for radar alerts; no
+performance counter, no Telegram for promoted alerts). New collections
+`autoPromotedAlertOutcomeLinks` and `autoOpportunityOutcomeSummaries`. New query routes:
+`opportunities/:id/outcome-summary`, `promoted-alerts/:alertId/outcome-link`, `promoted-alerts`,
+and env-gated `promoted-alerts/:alertId/resolve-now`. Smoke: `smokePromotedAlertResolution.mjs`.
+See [`PROMOTED_ALERT_RESOLUTION.md`](./PROMOTED_ALERT_RESOLUTION.md).
