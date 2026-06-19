@@ -31,6 +31,10 @@ import type {
   AutoOpportunityPromotionPlan, ManualPromotedAlertLink,
   PromotedAlertOutcomeLink, AutoOpportunityOutcomeSummary,
 } from '../../modules/intelligence/autoEngine/autoEngine.types.js'
+import type {
+  AutoEngineLearningRun, AutoEngineLearningProfile, AutoOpportunityTypeProfile,
+  AutoEngineLearningRecommendation,
+} from '../../modules/intelligence/autoEngine/autoEngineLearning.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -54,6 +58,8 @@ const AUTO_PROMOTIONS = 'autoOpportunityPromotionPlans'
 const AUTO_PROMOTED_LINKS = 'autoPromotedAlertLinks'
 const AUTO_PROMOTED_OUTCOME_LINKS = 'autoPromotedAlertOutcomeLinks'
 const AUTO_OUTCOME_SUMMARIES = 'autoOpportunityOutcomeSummaries'
+const AUTO_LEARNING_RUNS = 'autoEngineLearningRuns'
+const AUTO_LEARNING_PROFILES = 'autoEngineLearningProfiles'
 
 const READ_CAP = 2000
 
@@ -526,5 +532,43 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     const snap = await db.collection(AUTO_OUTCOME_SUMMARIES).limit(READ_CAP).get()
     return snap.docs.map((d: any) => docData<AutoOpportunityOutcomeSummary>(d))
       .sort((a: any, b: any) => (b.updatedAt || '').localeCompare(a.updatedAt || '')).slice(0, limit || 200)
+  }
+
+  // ── B24: Auto Engine learning & calibration ─────────────────────────────────
+  async createAutoEngineLearningRun(run: AutoEngineLearningRun): Promise<AutoEngineLearningRun> {
+    const db = await getFirestore()
+    await db.collection(AUTO_LEARNING_RUNS).doc(run.id).set(run, { merge: true })
+    return run
+  }
+  async getAutoEngineLearningRun(id: string): Promise<AutoEngineLearningRun | null> {
+    const db = await getFirestore()
+    const doc = await db.collection(AUTO_LEARNING_RUNS).doc(id).get()
+    return doc.exists ? docData<AutoEngineLearningRun>(doc) : null
+  }
+  async listAutoEngineLearningRuns(limit?: number): Promise<AutoEngineLearningRun[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(AUTO_LEARNING_RUNS).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<AutoEngineLearningRun>(d))
+      .sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
+  }
+  async upsertAutoEngineLearningProfile(profile: AutoEngineLearningProfile): Promise<AutoEngineLearningProfile> {
+    const db = await getFirestore()
+    await db.collection(AUTO_LEARNING_PROFILES).doc(profile.id).set(profile, { merge: true })
+    return profile
+  }
+  async getLatestAutoEngineLearningProfile(): Promise<AutoEngineLearningProfile | null> {
+    const db = await getFirestore()
+    const snap = await db.collection(AUTO_LEARNING_PROFILES).limit(READ_CAP).get()
+    const all = snap.docs.map((d: any) => docData<AutoEngineLearningProfile>(d))
+      .sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))
+    return all[0] || null
+  }
+  async getAutoOpportunityTypeProfile(type: string): Promise<AutoOpportunityTypeProfile | null> {
+    const profile = await this.getLatestAutoEngineLearningProfile()
+    return profile?.opportunityTypeProfiles.find(p => p.opportunityType === type) ?? null
+  }
+  async listAutoEngineLearningRecommendations(limit?: number): Promise<AutoEngineLearningRecommendation[]> {
+    const profile = await this.getLatestAutoEngineLearningProfile()
+    return profile?.recommendations.slice(0, limit || 50) ?? []
   }
 }

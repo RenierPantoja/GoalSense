@@ -188,3 +188,19 @@ performance counter, no Telegram for promoted alerts). New collections
 `opportunities/:id/outcome-summary`, `promoted-alerts/:alertId/outcome-link`, `promoted-alerts`,
 and env-gated `promoted-alerts/:alertId/resolve-now`. Smoke: `smokePromotedAlertResolution.mjs`.
 See [`PROMOTED_ALERT_RESOLUTION.md`](./PROMOTED_ALERT_RESOLUTION.md).
+
+---
+
+## B24 — Auto Engine Learning & Calibration (extension)
+
+A separate, observational learning layer built from the closed B22/B23 loop (promoted alerts +
+outcomes). New module `autoEngine/autoEngineLearning.types.ts` + pure
+`utils/autoEngineCalibration.util.ts` + `autoEngineLearningAggregator.service.ts` +
+`autoEngineCalibration.service.ts` + `autoEngineLearningScheduler.service.ts` (disabled by
+default, wired in `server.ts`). New collections `autoEngineLearningRuns` /
+`autoEngineLearningProfiles` (does NOT touch B13 `patternLearningProfiles`). New flags
+`ENABLE_AUTO_ENGINE_LEARNING_REBUILD`, `ENABLE_AUTO_ENGINE_LEARNING_SCHEDULER`,
+`AUTO_ENGINE_LEARNING_INTERVAL_MS`. Routes under `/api/intelligence/auto-engine/learning/*` and
+`/calibration/overview`. Script `runAutoEngineLearningAggregation.mjs`; smoke
+`smokeAutoEngineLearning.mjs`. Observational only — never auto-tunes the engine, never rewrites
+opportunity scores. See [`AUTO_ENGINE_LEARNING_CALIBRATION.md`](./AUTO_ENGINE_LEARNING_CALIBRATION.md).

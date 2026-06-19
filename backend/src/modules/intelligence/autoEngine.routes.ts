@@ -22,6 +22,11 @@ import {
   isPromotedAlertManualResolveEnabled,
 } from './autoEngine/promotedAlertResolution.service.js'
 import { resolveSinglePromotedAlertNow } from '../command/alertResolution.service.js'
+import { rebuildAutoEngineLearningProfiles, isAutoEngineLearningRebuildEnabled } from './autoEngine/autoEngineLearningAggregator.service.js'
+import {
+  getLatestAutoEngineLearningProfile, getAutoOpportunityTypeProfile,
+  listAutoEngineLearningRecommendations, getAutoEngineCalibrationOverview,
+} from './autoEngine/autoEngineCalibration.service.js'
 import type { AutoOpportunityActionType, AutoOpportunityFeedbackType, ManualAlertPromotionRequest } from './autoEngine/autoEngine.types.js'
 
 const VALID_ACTIONS: AutoOpportunityActionType[] = [
@@ -253,5 +258,51 @@ export async function autoEngineRoutes(app: FastifyInstance) {
       }
       return ok(res.result)
     } catch (e: any) { app.log.error(`auto-engine resolve-now failed: ${e?.message || e}`); return reply.status(400).send(badRequest('Resolução falhou', e?.message)) }
+  })
+
+  // ── B24: Auto Engine learning & calibration (observational; never auto-tunes) ──
+  app.post('/intelligence/auto-engine/learning/rebuild', async (req, reply) => {
+    if (!isAutoEngineLearningRebuildEnabled()) {
+      return reply.status(403).send({ success: false, error: { message: 'Recálculo de calibração desabilitado. Defina ENABLE_AUTO_ENGINE_LEARNING_REBUILD=true no backend.' } })
+    }
+    const body = (req.body || {}) as { dryRun?: boolean; from?: string; to?: string }
+    try {
+      const res = await rebuildAutoEngineLearningProfiles({ dryRun: body.dryRun === true, from: body.from, to: body.to })
+      return ok(res)
+    } catch (e: any) { app.log.error(`auto-engine learning rebuild failed: ${e?.message || e}`); return reply.status(400).send(badRequest('Rebuild falhou', e?.message)) }
+  })
+
+  app.get('/intelligence/auto-engine/learning/profile', async (req) => {
+    try { return ok(await getLatestAutoEngineLearningProfile()) }
+    catch (e: any) { app.log.warn(`auto-engine learning profile failed: ${e?.message || e}`); return ok(null) }
+  })
+
+  app.get('/intelligence/auto-engine/learning/runs', async (req) => {
+    const { limit } = req.query as { limit?: string }
+    try { return ok(await repos.intelligence.listAutoEngineLearningRuns(clampLimit(limit, 50, 200))) }
+    catch (e: any) { app.log.warn(`auto-engine learning runs failed: ${e?.message || e}`); return ok([]) }
+  })
+
+  app.get('/intelligence/auto-engine/learning/runs/:runId', async (req) => {
+    const { runId } = req.params as { runId: string }
+    try { return ok(await repos.intelligence.getAutoEngineLearningRun(runId)) }
+    catch (e: any) { app.log.warn(`auto-engine learning run failed: ${e?.message || e}`); return ok(null) }
+  })
+
+  app.get('/intelligence/auto-engine/learning/opportunity-types/:type', async (req) => {
+    const { type } = req.params as { type: string }
+    try { return ok(await getAutoOpportunityTypeProfile(type)) }
+    catch (e: any) { app.log.warn(`auto-engine type profile failed: ${e?.message || e}`); return ok(null) }
+  })
+
+  app.get('/intelligence/auto-engine/learning/recommendations', async (req) => {
+    const { limit } = req.query as { limit?: string }
+    try { return ok(await listAutoEngineLearningRecommendations(clampLimit(limit, 50, 200))) }
+    catch (e: any) { app.log.warn(`auto-engine recommendations failed: ${e?.message || e}`); return ok([]) }
+  })
+
+  app.get('/intelligence/auto-engine/calibration/overview', async () => {
+    try { return ok(await getAutoEngineCalibrationOverview()) }
+    catch (e: any) { app.log.warn(`auto-engine calibration overview failed: ${e?.message || e}`); return ok(null) }
   })
 }

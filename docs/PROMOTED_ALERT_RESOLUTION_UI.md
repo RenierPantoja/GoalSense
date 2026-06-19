@@ -52,3 +52,12 @@ Explicitly labeled **not** a hit-rate; unknown is never a failure; score is not 
 
 ## Verification
 - `npm run check:encoding` ✓ · `npx tsc --noEmit` ✓ · `npx vite build` ✓
+
+---
+
+## B24 — calibration views (extension)
+
+Promoted-alert outcomes now also surface as a calibration layer: a "Calibração" segment in the
+cockpit, a calibration-context section in the opportunity drawer ("Contexto histórico"), and a
+"Maturidade do motor" card in the overview. Observational only; score is never rewritten. See
+[`AUTO_ENGINE_CALIBRATION_UI.md`](./AUTO_ENGINE_CALIBRATION_UI.md).

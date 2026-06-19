@@ -106,3 +106,14 @@ promoted); the cockpit opens `AutoOpportunityAlertPromotionPanel`, and `userStat
 updated with `promotedAlertId` on success so list badges/filters refresh immediately.
 Full UI contract: [`AUTO_OPPORTUNITY_ALERT_PROMOTION_UI.md`](./AUTO_OPPORTUNITY_ALERT_PROMOTION_UI.md).
 Human-confirmed only — no automatic alert, no Telegram, no odds.
+
+---
+
+## B24 — "Calibração" segment (extension)
+
+The cockpit now has a fourth segment, **Calibração** (`AutoEngineCalibrationPanel`), showing the
+Auto Engine's observational learning profile from promoted-alert outcomes: maturity headline,
+per-opportunity-type useful/unknown rates, score-bucket calibration, data-quality and risk-gate
+breakdowns, recommendations (by strength), and limitations — plus an env-gated "Recalcular"
+button. The overview also gains an engine-maturity card. Observational only; never auto-tunes the
+engine or rewrites scores. See [`AUTO_ENGINE_CALIBRATION_UI.md`](./AUTO_ENGINE_CALIBRATION_UI.md).

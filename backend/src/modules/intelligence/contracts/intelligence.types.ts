@@ -246,6 +246,14 @@ export type LearningEventType =
   | 'auto_opportunity_promoted_alert_failed'
   | 'auto_opportunity_promoted_alert_unknown'
   | 'auto_opportunity_promoted_alert_resolution_limited'
+  // B24 — observational Auto Engine calibration events. source = 'auto_engine_calibration'.
+  // NEVER auto-tunes the engine; sampleSize/evidence required; unknown ≠ failure.
+  | 'auto_engine_calibration_rebuilt'
+  | 'auto_engine_opportunity_type_positive_signal'
+  | 'auto_engine_opportunity_type_high_unknown'
+  | 'auto_engine_score_bucket_insufficient_sample'
+  | 'auto_engine_data_quality_limitation'
+  | 'auto_engine_risk_gate_observation'
 
 export interface LearningEvent {
   id: string
@@ -258,7 +266,7 @@ export interface LearningEvent {
   evidenceRef: string | null
   confidence: Confidence
   /** B21/B22: provenance of human-originated, non-statistical observations. */
-  source?: 'system' | 'user_feedback' | 'user_action' | 'promoted_alert_resolution'
+  source?: 'system' | 'user_feedback' | 'user_action' | 'promoted_alert_resolution' | 'auto_engine_calibration'
   createdAt: string
 }
 

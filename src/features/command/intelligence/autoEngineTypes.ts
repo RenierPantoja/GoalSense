@@ -530,3 +530,151 @@ export const PROMOTED_RESULT_TONE: Record<PromotedAlertResult, string> = {
   unknown: 'bg-amber-500/8 border-amber-400/15 text-amber-100/70',
   expired: 'bg-white/[0.04] border-white/[0.08] text-white/45',
 }
+
+// ─── B24: Auto Engine learning & calibration ─────────────────────────────────
+
+export type AutoSampleQuality = 'insufficient' | 'low' | 'moderate' | 'strong'
+export type AutoConfidence = 'low' | 'medium' | 'high'
+export type ScoreBucketLabel = '0-20' | '21-40' | '41-60' | '61-80' | '81-100'
+
+export interface AutoScoreCalibrationBucketDto {
+  label: ScoreBucketLabel
+  minScore: number
+  maxScore: number
+  sampleSize: number
+  usefulRate: number | null
+  failedRate: number | null
+  unknownRate: number | null
+  calibrationNote: string
+}
+
+export interface AutoScoreCalibrationProfileDto {
+  buckets: AutoScoreCalibrationBucketDto[]
+  overallNote: string
+}
+
+export interface AutoRiskGateProfileDto {
+  blockReason: string
+  timesSeen: number
+  laterPromotedCount: number
+  promotedUsefulRate: number | null
+  promotedUnknownRate: number | null
+  interpretation: 'useful_blocker' | 'too_conservative_possible' | 'insufficient_sample' | 'noisy_context' | 'unknown'
+  note: string
+}
+
+export interface AutoDataQualityProfileDto {
+  dataQuality: string
+  sampleSize: number
+  usefulRate: number | null
+  failedRate: number | null
+  unknownRate: number | null
+  note: string
+}
+
+export interface AutoContextProfileSampleDto {
+  key: string
+  label: string
+  sampleSize: number
+  usefulRate: number | null
+  unknownRate: number | null
+  sampleQuality: AutoSampleQuality
+}
+
+export interface AutoOpportunityTypeProfileDto {
+  opportunityType: OpportunityType
+  sampleSize: number
+  confirmed: number
+  confirmedPartial: number
+  failed: number
+  unknown: number
+  usefulRate: number | null
+  failedRate: number | null
+  unknownRate: number | null
+  avgScore: number | null
+  avgOriginalScore: number | null
+  avgTimeToResolutionMinutes: number | null
+  bestMinuteWindows: AutoContextProfileSampleDto[]
+  weakMinuteWindows: AutoContextProfileSampleDto[]
+  topBlockReasonsBeforePromotion: { reason: string; count: number }[]
+  topUnknownReasons: { reason: string; count: number }[]
+  sampleQuality: AutoSampleQuality
+  recommendationStrength: AutoConfidence
+}
+
+export interface AutoEngineLearningRecommendationDto {
+  id: string
+  type: string
+  scopeKey: string
+  message: string
+  strength: AutoConfidence
+  evidence: { sampleSize: number; context: string; sampleQuality: AutoSampleQuality }
+  createdAt: string
+}
+
+export interface AutoEngineLearningProfileDto {
+  id: string
+  generatedAt: string
+  source: 'auto_engine_promoted_alerts'
+  sampleSize: number
+  promotedAlertsTotal: number
+  confirmed: number
+  confirmedPartial: number
+  failed: number
+  unknown: number
+  expired: number
+  usefulRate: number | null
+  failedRate: number | null
+  unknownRate: number | null
+  sampleQuality: AutoSampleQuality
+  opportunityTypeProfiles: AutoOpportunityTypeProfileDto[]
+  scoreCalibration: AutoScoreCalibrationProfileDto
+  riskGateProfile: AutoRiskGateProfileDto[]
+  dataQualityProfile: AutoDataQualityProfileDto[]
+  leagueProfiles: AutoContextProfileSampleDto[]
+  teamProfiles: AutoContextProfileSampleDto[]
+  minuteWindowProfiles: AutoContextProfileSampleDto[]
+  recommendations: AutoEngineLearningRecommendationDto[]
+  limitations: string[]
+}
+
+export interface AutoEngineLearningRunDto {
+  id: string
+  startedAt: string
+  finishedAt: string | null
+  status: 'running' | 'completed' | 'failed'
+  source: 'auto_engine_promoted_alerts'
+  outcomeSummariesScanned: number
+  outcomeLinksScanned: number
+  opportunitiesJoined: number
+  sampleSize: number
+  profileGenerated: boolean
+  recommendations: number
+  learningEventsCreated: number
+  dryRun: boolean
+  notes: string[]
+}
+
+export interface AutoEngineCalibrationOverviewDto {
+  hasData: boolean
+  sampleSize: number
+  promotedAlertsTotal: number
+  usefulRate: number | null
+  failedRate: number | null
+  unknownRate: number | null
+  sampleQuality: AutoSampleQuality
+  topCalibratedOpportunityType: { opportunityType: OpportunityType; usefulRate: number | null; sampleSize: number } | null
+  highestUnknownOpportunityType: { opportunityType: OpportunityType; unknownRate: number | null; sampleSize: number } | null
+  scoreCalibration: AutoScoreCalibrationProfileDto | null
+  topRecommendations: AutoEngineLearningRecommendationDto[]
+  lastRunAt: string | null
+  limitations: string[]
+  generatedAt: string
+}
+
+export const AUTO_SAMPLE_QUALITY_LABEL: Record<AutoSampleQuality, string> = {
+  insufficient: 'Amostra insuficiente',
+  low: 'Amostra baixa',
+  moderate: 'Amostra moderada',
+  strong: 'Amostra forte',
+}

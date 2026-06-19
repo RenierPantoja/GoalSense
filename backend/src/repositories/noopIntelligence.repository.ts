@@ -26,6 +26,10 @@ import type {
   AutoOpportunityPromotionPlan, ManualPromotedAlertLink,
   PromotedAlertOutcomeLink, AutoOpportunityOutcomeSummary,
 } from '../modules/intelligence/autoEngine/autoEngine.types.js'
+import type {
+  AutoEngineLearningRun, AutoEngineLearningProfile, AutoOpportunityTypeProfile,
+  AutoEngineLearningRecommendation,
+} from '../modules/intelligence/autoEngine/autoEngineLearning.types.js'
 
 let warned = false
 function warnOnce(): void {
@@ -133,4 +137,13 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async upsertAutoOpportunityOutcomeSummary(summary: AutoOpportunityOutcomeSummary): Promise<AutoOpportunityOutcomeSummary> { warnOnce(); return summary }
   async getAutoOpportunityOutcomeSummary(): Promise<AutoOpportunityOutcomeSummary | null> { return null }
   async listAutoOpportunityOutcomeSummaries(): Promise<AutoOpportunityOutcomeSummary[]> { return [] }
+
+  // ── B24 (Noop): reads empty; writes accepted without persistence ──
+  async createAutoEngineLearningRun(run: AutoEngineLearningRun): Promise<AutoEngineLearningRun> { warnOnce(); return run }
+  async getAutoEngineLearningRun(): Promise<AutoEngineLearningRun | null> { return null }
+  async listAutoEngineLearningRuns(): Promise<AutoEngineLearningRun[]> { return [] }
+  async upsertAutoEngineLearningProfile(profile: AutoEngineLearningProfile): Promise<AutoEngineLearningProfile> { warnOnce(); return profile }
+  async getLatestAutoEngineLearningProfile(): Promise<AutoEngineLearningProfile | null> { return null }
+  async getAutoOpportunityTypeProfile(): Promise<AutoOpportunityTypeProfile | null> { return null }
+  async listAutoEngineLearningRecommendations(): Promise<AutoEngineLearningRecommendation[]> { return [] }
 }

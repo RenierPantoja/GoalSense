@@ -17,6 +17,8 @@ import type {
   ManualPromotedAlertLinkDto,
   AutoOpportunityOutcomeSummaryDto, PromotedAlertOutcomeLinkDto, PromotedAlertListItemDto,
   PromotedAlertResolutionStatusDto,
+  AutoEngineLearningProfileDto, AutoEngineLearningRunDto, AutoOpportunityTypeProfileDto,
+  AutoEngineLearningRecommendationDto, AutoEngineCalibrationOverviewDto,
 } from '@/features/command/intelligence/autoEngineTypes'
 
 export interface ApiResult<T> {
@@ -167,5 +169,30 @@ export const autoEngineApi = {
 
   resolvePromotedAlertNow(alertId: string) {
     return request<PromotedAlertResolutionStatusDto>(`${BASE}/promoted-alerts/${encodeURIComponent(alertId)}/resolve-now`, { method: 'POST', body: JSON.stringify({}) })
+  },
+
+  // ── B24: Auto Engine learning & calibration ──
+  getAutoEngineLearningProfile() {
+    return request<AutoEngineLearningProfileDto>(`${BASE}/learning/profile`)
+  },
+
+  getAutoEngineLearningRuns(limit = 50) {
+    return request<AutoEngineLearningRunDto[]>(`${BASE}/learning/runs?limit=${limit}`)
+  },
+
+  getAutoOpportunityTypeProfile(type: string) {
+    return request<AutoOpportunityTypeProfileDto>(`${BASE}/learning/opportunity-types/${encodeURIComponent(type)}`)
+  },
+
+  getAutoEngineLearningRecommendations(limit = 50) {
+    return request<AutoEngineLearningRecommendationDto[]>(`${BASE}/learning/recommendations?limit=${limit}`)
+  },
+
+  getAutoEngineCalibrationOverview() {
+    return request<AutoEngineCalibrationOverviewDto>(`${BASE}/calibration/overview`)
+  },
+
+  rebuildAutoEngineLearning(payload: { dryRun?: boolean; from?: string; to?: string } = {}) {
+    return request<{ run: AutoEngineLearningRunDto; profile: AutoEngineLearningProfileDto | null }>(`${BASE}/learning/rebuild`, { method: 'POST', body: JSON.stringify(payload) })
   },
 }

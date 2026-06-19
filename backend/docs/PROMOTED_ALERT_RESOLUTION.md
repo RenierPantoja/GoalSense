@@ -108,3 +108,13 @@ is not implemented.
 - `npm run typecheck` ✓ · `npm run build` ✓
 - `node scripts/smokeAutoEngine.mjs` ✓ (B19–B22 intact)
 - `node scripts/smokePromotedAlertResolution.mjs` ✓ (B23 mapping, reducer, Noop safety)
+
+---
+
+## B24 — outcomes now feed a separate calibration layer (extension)
+
+The B23 limitation ("promoted-alert outcomes are not aggregated into learning profiles yet") is
+addressed in B24. The `AutoOpportunityOutcomeSummary` + `ManualPromotedAlertLink` records produced
+here are aggregated into a SEPARATE Auto Engine learning/calibration profile (never blended into
+B13 manual-pattern profiles, never fed back into runtime scoring). See
+[`AUTO_ENGINE_LEARNING_CALIBRATION.md`](./AUTO_ENGINE_LEARNING_CALIBRATION.md).

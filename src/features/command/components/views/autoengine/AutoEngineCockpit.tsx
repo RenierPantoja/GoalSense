@@ -7,11 +7,12 @@
  * no bet CTA, no Telegram, no "create alert". Opportunity ≠ alert; score ≠ probability.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { Cpu, RefreshCw, LayoutGrid, ListChecks, ShieldAlert, PlugZap } from 'lucide-react'
+import { Cpu, RefreshCw, LayoutGrid, ListChecks, ShieldAlert, PlugZap, Gauge } from 'lucide-react'
 import { autoEngineApi } from '@/services/autoEngineApi'
 import type {
   AutoEngineStatusDto, AutoEngineRunDto, AutoOpportunityDto, AutoEngineScanRequest,
   AutoOpportunityUserStateLite, AutoOpportunityPromotionPlanDto, PromotedAlertListItemDto,
+  AutoEngineCalibrationOverviewDto,
 } from '@/features/command/intelligence/autoEngineTypes'
 import { CounterCell } from '../shared/CounterCell'
 import { AutoEngineStatusPanel } from './AutoEngineStatusPanel'
@@ -21,6 +22,7 @@ import { AutoOpportunitiesList } from './AutoOpportunitiesList'
 import { AutoOpportunityDrawer } from './AutoOpportunityDrawer'
 import { AutoOpportunityPromotionPanel } from './AutoOpportunityPromotionPanel'
 import { AutoOpportunityAlertPromotionPanel } from './AutoOpportunityAlertPromotionPanel'
+import { AutoEngineCalibrationPanel } from './AutoEngineCalibrationPanel'
 
 interface Props {
   backendOnline: boolean
@@ -32,12 +34,13 @@ interface Props {
   onOpenMatch?: (opp: AutoOpportunityDto) => boolean
 }
 
-type Segment = 'overview' | 'oportunidades' | 'bloqueadas'
+type Segment = 'overview' | 'oportunidades' | 'bloqueadas' | 'calibracao'
 
 const SEGMENTS: { id: Segment; label: string; icon: typeof Cpu }[] = [
   { id: 'overview', label: 'Visão geral', icon: LayoutGrid },
   { id: 'oportunidades', label: 'Oportunidades', icon: ListChecks },
   { id: 'bloqueadas', label: 'Bloqueadas', icon: ShieldAlert },
+  { id: 'calibracao', label: 'Calibração', icon: Gauge },
 ]
 
 function EmptyNote({ title, body }: { title: string; body: string }) {
@@ -56,6 +59,7 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
   const [statusLoading, setStatusLoading] = useState(true)
   const [runs, setRuns] = useState<AutoEngineRunDto[]>([])
   const [promotedAlerts, setPromotedAlerts] = useState<PromotedAlertListItemDto[]>([])
+  const [calibration, setCalibration] = useState<AutoEngineCalibrationOverviewDto | null>(null)
   const [opportunities, setOpportunities] = useState<AutoOpportunityDto[]>([])
   const [userStates, setUserStates] = useState<Record<string, AutoOpportunityUserStateLite>>({})
   const [oppsLoading, setOppsLoading] = useState(true)
@@ -89,6 +93,8 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
     }
     const promo = await autoEngineApi.listPromotedAlerts(200)
     if (promo.ok && promo.data) setPromotedAlerts(promo.data)
+    const calib = await autoEngineApi.getAutoEngineCalibrationOverview()
+    if (calib.ok) setCalibration(calib.data)
     setStatusLoading(false); setOppsLoading(false)
   }, [backendConfigured])
 
@@ -199,7 +205,7 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
         ))}
       </div>
 
-      {segment === 'overview' && <AutoEngineOverviewPanel status={status} runs={runs} promotedAlerts={promotedAlerts} onOpenOpportunity={setDrawer} />}
+      {segment === 'overview' && <AutoEngineOverviewPanel status={status} runs={runs} promotedAlerts={promotedAlerts} calibration={calibration} onOpenOpportunity={setDrawer} />}
       {segment === 'oportunidades' && <AutoOpportunitiesList opportunities={opportunities} loading={oppsLoading} userStates={userStates} onOpen={setDrawer} />}
       {segment === 'bloqueadas' && (
         <>
@@ -207,6 +213,7 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
           <AutoOpportunitiesList opportunities={opportunities} loading={oppsLoading} userStates={userStates} blockedOnly onOpen={setDrawer} />
         </>
       )}
+      {segment === 'calibracao' && <AutoEngineCalibrationPanel rebuildEnabled={!!status?.enabled} />}
 
       {drawer && (
         <AutoOpportunityDrawer

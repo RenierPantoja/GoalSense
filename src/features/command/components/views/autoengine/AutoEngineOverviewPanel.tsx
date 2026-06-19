@@ -2,15 +2,16 @@
  * AutoEngineOverviewPanel — honest at-a-glance read of what the engine is seeing.
  * Empty states are honest; no fake charts, no odds. (B20)
  */
-import { Layers, ShieldAlert, Database, History, BellRing } from 'lucide-react'
-import type { AutoEngineStatusDto, AutoEngineRunDto, AutoOpportunityDto, PromotedAlertListItemDto, PromotedAlertResult } from '@/features/command/intelligence/autoEngineTypes'
-import { OPP_TYPE_LABEL, STATUS_TONE, STATUS_LABEL, DATA_QUALITY_LABEL, blockReasonLabel, PROMOTED_RESULT_LABEL } from '@/features/command/intelligence/autoEngineTypes'
+import { Layers, ShieldAlert, Database, History, BellRing, Gauge } from 'lucide-react'
+import type { AutoEngineStatusDto, AutoEngineRunDto, AutoOpportunityDto, PromotedAlertListItemDto, PromotedAlertResult, AutoEngineCalibrationOverviewDto } from '@/features/command/intelligence/autoEngineTypes'
+import { OPP_TYPE_LABEL, STATUS_TONE, STATUS_LABEL, DATA_QUALITY_LABEL, blockReasonLabel, PROMOTED_RESULT_LABEL, AUTO_SAMPLE_QUALITY_LABEL } from '@/features/command/intelligence/autoEngineTypes'
 import type { OpportunityType, DataQuality } from '@/features/command/intelligence/autoEngineTypes'
 
 interface Props {
   status: AutoEngineStatusDto | null
   runs: AutoEngineRunDto[]
   promotedAlerts?: PromotedAlertListItemDto[]
+  calibration?: AutoEngineCalibrationOverviewDto | null
   onOpenOpportunity: (o: AutoOpportunityDto) => void
 }
 
@@ -44,7 +45,7 @@ function Card({ title, icon, children }: { title: string; icon: React.ReactNode;
   )
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="bg-[#080d16] px-2 py-2 text-center">
       <span className="block text-[15px] font-semibold text-white/85 tabular-nums leading-none">{value}</span>
@@ -58,7 +59,7 @@ function fmtTime(iso: string | null | undefined): string {
   try { return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) } catch { return '—' }
 }
 
-export function AutoEngineOverviewPanel({ status, runs, promotedAlerts = [], onOpenOpportunity }: Props) {
+export function AutoEngineOverviewPanel({ status, runs, promotedAlerts = [], calibration = null, onOpenOpportunity }: Props) {
   const latest = status?.latestOpportunities ?? []
   const types = (status?.topOpportunityTypes ?? []).map(t => ({ label: OPP_TYPE_LABEL[t.type as OpportunityType] || t.type, count: t.count }))
   const blocks = Object.entries(status?.blockReasons ?? {}).map(([k, v]) => ({ label: blockReasonLabel(k), count: v })).sort((a, b) => b.count - a.count)
@@ -111,6 +112,23 @@ export function AutoEngineOverviewPanel({ status, runs, promotedAlerts = [], onO
             </>
           )}
       </Card>
+
+      {calibration?.hasData && (
+        <Card title="Maturidade do motor (calibração)" icon={<Gauge size={14} />}>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-px rounded-lg overflow-hidden border border-white/[0.06]">
+            <Metric label="Amostra resolvida" value={calibration.sampleSize} />
+            <Metric label="Úteis" value={calibration.usefulRate == null ? '—' : `${Math.round(calibration.usefulRate * 100)}%`} />
+            <Metric label="Sem dados" value={calibration.unknownRate == null ? '—' : `${Math.round(calibration.unknownRate * 100)}%`} />
+            <Metric label="Qualidade" value={AUTO_SAMPLE_QUALITY_LABEL[calibration.sampleQuality]} />
+          </div>
+          <div className="mt-2 space-y-1 text-[11.5px] text-white/55">
+            {calibration.topCalibratedOpportunityType && <p>Tipo mais calibrado: <span className="text-white/80">{OPP_TYPE_LABEL[calibration.topCalibratedOpportunityType.opportunityType] || calibration.topCalibratedOpportunityType.opportunityType}</span> ({calibration.topCalibratedOpportunityType.usefulRate == null ? '—' : Math.round(calibration.topCalibratedOpportunityType.usefulRate * 100) + '%'} úteis · n={calibration.topCalibratedOpportunityType.sampleSize})</p>}
+            {calibration.highestUnknownOpportunityType && <p>Maior unknown: <span className="text-white/80">{OPP_TYPE_LABEL[calibration.highestUnknownOpportunityType.opportunityType] || calibration.highestUnknownOpportunityType.opportunityType}</span> ({calibration.highestUnknownOpportunityType.unknownRate == null ? '—' : Math.round(calibration.highestUnknownOpportunityType.unknownRate * 100) + '%'})</p>}
+            {calibration.lastRunAt && <p className="text-white/40">Última calibração: {new Date(calibration.lastRunAt).toLocaleString('pt-BR')}</p>}
+          </div>
+          <p className="text-[10px] text-white/35 mt-2">Observacional — não é taxa de acerto, não autoajusta o motor. Score é qualidade de sinal, não probabilidade.</p>
+        </Card>
+      )}
 
       <Card title="Execuções recentes" icon={<History size={14} />}>
         {runs.length === 0

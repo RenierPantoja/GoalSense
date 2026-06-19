@@ -22,6 +22,7 @@ import { startPatternEvaluationWorker } from './workers/patternEvaluation.worker
 import { startAlertResolutionWorker } from './workers/alertResolution.worker.js'
 import { startLearningAggregationScheduler } from './modules/intelligence/learning/learningAggregationScheduler.service.js'
 import { startAutoEngineScheduler } from './modules/intelligence/autoEngine/autoEngineScheduler.service.js'
+import { startAutoEngineLearningScheduler } from './modules/intelligence/autoEngine/autoEngineLearningScheduler.service.js'
 
 const app = Fastify({ logger: true })
 
@@ -72,6 +73,8 @@ const start = async () => {
     startLearningAggregationScheduler()
     // Start auto engine scheduler (B19; disabled by default; env-gated)
     startAutoEngineScheduler()
+    // Start auto engine learning/calibration scheduler (B24; disabled by default; env-gated)
+    startAutoEngineLearningScheduler()
   } catch (err) {
     app.log.error(err)
     process.exit(1)

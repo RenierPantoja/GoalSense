@@ -16,10 +16,11 @@ import {
 import type {
   AutoOpportunityDto, AutoOpportunityActionSummaryDto, AutoOpportunityUserStateLite,
   AutoOpportunityFeedbackType, AutoOpportunityFixtureContextDto, AutoOpportunityOutcomeSummaryDto,
+  AutoOpportunityTypeProfileDto,
 } from '@/features/command/intelligence/autoEngineTypes'
 import {
   OPP_TYPE_LABEL, STATUS_LABEL, STATUS_TONE, BAND_LABEL, SAMPLE_LABEL, DATA_QUALITY_LABEL, blockReasonLabel, FEEDBACK_LABEL,
-  PROMOTED_RESULT_LABEL, PROMOTED_RESULT_TONE,
+  PROMOTED_RESULT_LABEL, PROMOTED_RESULT_TONE, AUTO_SAMPLE_QUALITY_LABEL,
 } from '@/features/command/intelligence/autoEngineTypes'
 import { autoEngineApi } from '@/services/autoEngineApi'
 import { alertIntelligenceApi, isAlertIntelligenceConfigured } from '@/services/alertIntelligenceApi'
@@ -62,6 +63,10 @@ function KV({ k, v }: { k: string; v: React.ReactNode }) {
   return <div className="flex items-baseline justify-between gap-3 py-1"><span className="text-[11px] text-white/45">{k}</span><span className="text-[12px] text-white/85 text-right">{v}</span></div>
 }
 function pct(n: number | null | undefined): string { return n == null ? '—' : `${Math.round(n * 100)}%` }
+function scoreBucketLabel(score: number): string {
+  const s = Math.max(0, Math.min(100, Math.round(score)))
+  if (s <= 20) return '0-20'; if (s <= 40) return '21-40'; if (s <= 60) return '41-60'; if (s <= 80) return '61-80'; return '81-100'
+}
 
 export function AutoOpportunityDrawer({ opportunity: o, onClose, onGoToBacktest, onGoToAlerts, onCreatePromotion, onPromoteToAlert, onOpenMatch, onStateChange }: Props) {
   const [tab, setTab] = useState<DrawerTab>('resumo')
@@ -72,6 +77,7 @@ export function AutoOpportunityDrawer({ opportunity: o, onClose, onGoToBacktest,
   const [noteText, setNoteText] = useState('')
   const [fixtureCtx, setFixtureCtx] = useState<AutoOpportunityFixtureContextDto | null>(null)
   const [outcome, setOutcome] = useState<AutoOpportunityOutcomeSummaryDto | null>(null)
+  const [typeProfile, setTypeProfile] = useState<AutoOpportunityTypeProfileDto | null>(null)
   const [openMatchMsg, setOpenMatchMsg] = useState<string | null>(null)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
   const relatedPatternId = o.relatedPatternIds?.[0] || null
@@ -88,6 +94,7 @@ export function AutoOpportunityDrawer({ opportunity: o, onClose, onGoToBacktest,
     autoEngineApi.getOpportunityActionSummary(o.id).then(r => { if (alive && r.ok) setSummary(r.data) })
     autoEngineApi.getFixtureContext(o.fixtureId).then(r => { if (alive && r.ok) setFixtureCtx(r.data) })
     autoEngineApi.getOpportunityOutcomeSummary(o.id).then(r => { if (alive && r.ok) setOutcome(r.data) })
+    autoEngineApi.getAutoOpportunityTypeProfile(o.opportunityType).then(r => { if (alive && r.ok) setTypeProfile(r.data) })
     return () => { alive = false }
   }, [o.id, o.fixtureId])
 
@@ -289,6 +296,18 @@ export function AutoOpportunityDrawer({ opportunity: o, onClose, onGoToBacktest,
                 </Section>
               )}
               {o.contextFit.notes.length > 0 && <Section title="Notas de contexto"><List items={o.contextFit.notes} /></Section>}
+              <Section title="Calibração do tipo (alertas promovidos)">
+                {typeProfile && typeProfile.sampleSize > 0
+                  ? <>
+                      <KV k="Tipo" v={OPP_TYPE_LABEL[o.opportunityType]} />
+                      <KV k="Amostra resolvida" v={`${typeProfile.sampleSize} (${AUTO_SAMPLE_QUALITY_LABEL[typeProfile.sampleQuality]})`} />
+                      <KV k="Úteis" v={pct(typeProfile.usefulRate)} />
+                      <KV k="Sem dados (unknown)" v={pct(typeProfile.unknownRate)} />
+                      <KV k="Faixa de score desta oportunidade" v={scoreBucketLabel(o.score)} />
+                      <p className="text-[11px] text-white/40 mt-2">{typeProfile.sampleQuality === 'insufficient' ? 'Amostra insuficiente — trate como indício inicial, não conclusão.' : 'Calibração observacional. Score é qualidade de sinal, não probabilidade; unknown não é falha.'}</p>
+                    </>
+                  : <p className="text-[11px] text-white/40">Sem calibração para este tipo ainda — outcomes de alertas promovidos vão alimentar esta visão.</p>}
+              </Section>
             </>
           )}
 

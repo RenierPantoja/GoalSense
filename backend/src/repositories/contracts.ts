@@ -138,6 +138,10 @@ import type {
   AutoOpportunityPromotionPlan, ManualPromotedAlertLink,
   PromotedAlertOutcomeLink, AutoOpportunityOutcomeSummary,
 } from '../modules/intelligence/autoEngine/autoEngine.types.js'
+import type {
+  AutoEngineLearningRun, AutoEngineLearningProfile, AutoOpportunityTypeProfile,
+  AutoEngineLearningRecommendation,
+} from '../modules/intelligence/autoEngine/autoEngineLearning.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -238,6 +242,15 @@ export interface IntelligenceRepository {
   upsertAutoOpportunityOutcomeSummary(summary: AutoOpportunityOutcomeSummary): Promise<AutoOpportunityOutcomeSummary>
   getAutoOpportunityOutcomeSummary(opportunityId: string): Promise<AutoOpportunityOutcomeSummary | null>
   listAutoOpportunityOutcomeSummaries(limit?: number): Promise<AutoOpportunityOutcomeSummary[]>
+
+  // ── B24: Auto Engine learning & calibration (separate from manual-pattern learning) ──
+  createAutoEngineLearningRun(run: AutoEngineLearningRun): Promise<AutoEngineLearningRun>
+  getAutoEngineLearningRun(id: string): Promise<AutoEngineLearningRun | null>
+  listAutoEngineLearningRuns(limit?: number): Promise<AutoEngineLearningRun[]>
+  upsertAutoEngineLearningProfile(profile: AutoEngineLearningProfile): Promise<AutoEngineLearningProfile>
+  getLatestAutoEngineLearningProfile(): Promise<AutoEngineLearningProfile | null>
+  getAutoOpportunityTypeProfile(type: string): Promise<AutoOpportunityTypeProfile | null>
+  listAutoEngineLearningRecommendations(limit?: number): Promise<AutoEngineLearningRecommendation[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────
