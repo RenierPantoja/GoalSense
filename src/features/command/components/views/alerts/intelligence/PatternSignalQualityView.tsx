@@ -13,7 +13,7 @@ function Mini({ k, v, tone }: { k: string; v: string; tone: string }) {
   return <div className="rounded-lg border border-white/[0.06] bg-white/[0.015] px-2.5 py-2 text-center min-w-[64px]"><span className={`text-[15px] font-bold tabular-nums block ${tone}`}>{v}</span><span className="text-[9px] uppercase tracking-wider text-white/40 mt-0.5 block">{k}</span></div>
 }
 
-export function PatternSignalQualityView() {
+export function PatternSignalQualityView({ onOpenInList }: { onOpenInList?: (patternId: string) => void } = {}) {
   const configured = isAlertIntelligenceConfigured()
   const [loading, setLoading] = useState(true)
   const [profiles, setProfiles] = useState<PatternLearningProfile[]>([])
@@ -85,7 +85,7 @@ export function PatternSignalQualityView() {
             <button onClick={() => setExpanded(expanded === p.scopeKey ? null : p.scopeKey)} type="button" className="mt-2 text-[11px] font-medium text-[#5EEAD4] hover:text-[#7FE9DC] transition-colors">
               {expanded === p.scopeKey ? 'Ocultar alertas' : 'Ver alertas relacionados →'}
             </button>
-            {expanded === p.scopeKey && <div className="mt-2"><RelatedAlertsPanel source={{ kind: 'pattern', patternId: p.scopeKey }} /></div>}
+            {expanded === p.scopeKey && <div className="mt-2"><RelatedAlertsPanel source={{ kind: 'pattern', patternId: p.scopeKey }} onOpenInList={onOpenInList ? () => onOpenInList(p.scopeKey) : undefined} /></div>}
           </div>
         )
       })}

@@ -7,16 +7,17 @@ import { useEffect, useState } from 'react'
 import { X, GraduationCap, FlaskConical } from 'lucide-react'
 import { alertIntelligenceApi } from '@/services/alertIntelligenceApi'
 import { RelatedAlertsPanel } from './RelatedAlertsPanel'
-import type { LearningEventDetail } from '../../../../intelligence/alertIntelligenceTypes'
+import type { LearningEventDetail, AlertIntelFilters } from '../../../../intelligence/alertIntelligenceTypes'
 import { SAMPLE_QUALITY_LABEL, pct } from '../../../../intelligence/alertIntelligenceTypes'
 
 interface Props {
   eventId: string
   onClose: () => void
   onGoToBacktest?: () => void
+  onOpenFilteredList?: (filters: AlertIntelFilters) => void
 }
 
-export function LearningEventDrawer({ eventId, onClose, onGoToBacktest }: Props) {
+export function LearningEventDrawer({ eventId, onClose, onGoToBacktest, onOpenFilteredList }: Props) {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<LearningEventDetail | null>(null)
 
@@ -97,7 +98,7 @@ export function LearningEventDrawer({ eventId, onClose, onGoToBacktest }: Props)
                 </div>
               )}
 
-              <RelatedAlertsPanel source={{ kind: 'event', eventId }} />
+              <RelatedAlertsPanel source={{ kind: 'event', eventId }} onOpenInList={onOpenFilteredList && data!.relatedAlertsLinkParams?.patternId ? () => onOpenFilteredList({ patternId: data!.relatedAlertsLinkParams!.patternId }) : undefined} />
 
               {onGoToBacktest && data!.relatedAlertsLinkParams?.patternId && (
                 <button onClick={onGoToBacktest} type="button" className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#5EEAD4] hover:text-[#7FE9DC] transition-colors"><FlaskConical size={14} />Rodar backtest do radar relacionado</button>

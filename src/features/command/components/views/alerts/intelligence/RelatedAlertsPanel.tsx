@@ -13,9 +13,10 @@ type Source = { kind: 'alert'; alertId: string } | { kind: 'pattern'; patternId:
 interface Props {
   source: Source
   onOpenAlert?: (item: RelatedAlertItem) => void
+  onOpenInList?: () => void
 }
 
-export function RelatedAlertsPanel({ source, onOpenAlert }: Props) {
+export function RelatedAlertsPanel({ source, onOpenAlert, onOpenInList }: Props) {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<RelatedAlertsResponse | null>(null)
 
@@ -45,6 +46,7 @@ export function RelatedAlertsPanel({ source, onOpenAlert }: Props) {
         <Link2 size={13} className="text-white/45" />
         <h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">Alertas com contexto parecido</h4>
         <span className="text-[10px] text-white/35 tabular-nums">{data.total}</span>
+        {onOpenInList && <button onClick={onOpenInList} type="button" className="ml-auto text-[10.5px] font-medium text-[#5EEAD4] hover:text-[#7FE9DC] transition-colors">Abrir na lista filtrada →</button>}
       </div>
       {data.appliedFilters.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2.5">

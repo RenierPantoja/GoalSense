@@ -48,3 +48,13 @@ offline, the strip hides and the local AlertsView counts remain.
 ## Next steps
 - Switch the alert list to the server-side `search` endpoint with cursor paging.
 - Cache the overview per period; add CSV export.
+
+
+## B18 — Scale (server-side list + cache + CSV)
+
+The B17 limitation "the list still uses local AlertsView filters" is addressed in
+B18: `ServerAlertList` (server-side `/alerts/search`, paginated + filtered) is now
+the primary Sinais view, with the preserved `AlertsView` as the "Sinais locais"
+toggle / no-backend fallback. Overview is cached (cacheHit shown), CSV export added
+(env-gated), and related-alerts / learning-event cross-links open a pre-filtered
+server list. See `docs/ALERTAS_2_SCALE_UI_B18.md`.

@@ -70,9 +70,40 @@ export const alertIntelligenceApi = {
   getAlertIntelligenceOverview(filters: AlertIntelFilters = {}) {
     return get<AlertIntelligenceOverview>(`/api/intelligence/alerts/overview${buildQuery(filters)}`)
   },
-  searchAlertIntelligence(filters: AlertIntelFilters = {}, limit = 50, cursor?: number) {
-    const extra: Record<string, unknown> = { limit, ...(cursor != null ? { cursor } : {}) }
+  searchAlertIntelligence(filters: AlertIntelFilters = {}, opts: { limit?: number; cursor?: number; sortBy?: string; sortDirection?: 'asc' | 'desc' } = {}) {
+    const extra: Record<string, unknown> = {
+      limit: opts.limit ?? 50,
+      ...(opts.cursor != null ? { cursor: opts.cursor } : {}),
+      ...(opts.sortBy ? { sortBy: opts.sortBy } : {}),
+      ...(opts.sortDirection ? { sortDirection: opts.sortDirection } : {}),
+    }
     return get<AlertSearchResponse>(`/api/intelligence/alerts/search${buildQuery({ ...filters, ...extra } as any)}`)
+  },
+
+  /** CSV export. Triggers a browser download. Honest on disabled (403) / offline. */
+  async exportAlertsCsv(filters: AlertIntelFilters = {}, limit = 5000): Promise<{ ok: boolean; disabled: boolean; error: string | null }> {
+    const base = getBackendUrl()
+    if (!base) return { ok: false, disabled: false, error: 'no_backend' }
+    try {
+      const url = `${base}/api/intelligence/alerts/export.csv${buildQuery({ ...filters, limit } as any)}`
+      const res = await fetch(url)
+      if (res.status === 403) {
+        let msg = 'Exportação desabilitada neste ambiente.'
+        try { const j = await res.json(); msg = j?.error?.message || msg } catch { /* */ }
+        return { ok: false, disabled: true, error: msg }
+      }
+      if (!res.ok) return { ok: false, disabled: false, error: `Backend respondeu ${res.status}` }
+      const blob = await res.blob()
+      const href = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = href
+      a.download = `goalsense-alerts-${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(href)
+      return { ok: true, disabled: false, error: null }
+    } catch (e: any) {
+      return { ok: false, disabled: false, error: e?.message || 'network_error' }
+    }
   },
   getRelatedAlerts(alertId: string, limit = 20) {
     return get<RelatedAlertsResponse>(`/api/intelligence/alerts/${encodeURIComponent(alertId)}/related?limit=${limit}`)

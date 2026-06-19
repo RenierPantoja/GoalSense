@@ -8,7 +8,9 @@
 import type { FastifyInstance } from 'fastify'
 import { createRepositories } from '../../repositories/index.js'
 import { ok } from '../../utils/apiResponse.js'
-import { buildAlertOverview, searchAlerts, type AlertIntelFilters } from './alertIntelligence.service.js'
+import { env } from '../../env.js'
+import { searchAlerts, exportAlerts, type AlertIntelFilters, type AlertSearchItem } from './alertIntelligence.service.js'
+import { getAlertOverviewCached } from './alertIntelligenceCache.service.js'
 import { relatedForAlert, relatedForPattern } from './relatedAlerts.service.js'
 
 function clampLimit(raw: string | undefined, def: number, max: number): number {
@@ -28,6 +30,8 @@ function parseFilters(q: Record<string, any>): AlertIntelFilters {
     team: q.team || undefined,
     result: q.result || undefined,
     status: q.status || undefined,
+    severity: q.severity || undefined,
+    patternName: q.patternName || undefined,
     dataQuality: q.dataQuality || undefined,
     provider: q.provider || undefined,
     minuteWindow: q.minuteWindow || undefined,
@@ -40,21 +44,73 @@ function parseFilters(q: Record<string, any>): AlertIntelFilters {
   }
 }
 
+const CSV_COLUMNS: { key: keyof AlertSearchItem | 'score'; label: string }[] = [
+  { key: 'createdAt', label: 'createdAt' }, { key: 'alertId', label: 'alertId' },
+  { key: 'patternName', label: 'patternName' }, { key: 'fixtureLabel', label: 'fixtureLabel' },
+  { key: 'leagueName', label: 'leagueName' }, { key: 'homeTeam', label: 'homeTeam' }, { key: 'awayTeam', label: 'awayTeam' },
+  { key: 'minute', label: 'minute' }, { key: 'score', label: 'scoreState' }, { key: 'severity', label: 'severity' },
+  { key: 'confidence', label: 'confidence' }, { key: 'result', label: 'result' }, { key: 'status', label: 'status' },
+  { key: 'dataQuality', label: 'dataQuality' }, { key: 'provider', label: 'provider' },
+  { key: 'failureReason', label: 'failureReason' }, { key: 'hasFailureAnalysis', label: 'hasFailureAnalysis' },
+  { key: 'learningEventCount', label: 'learningEventCount' }, { key: 'summaryReason', label: 'summaryReason' },
+]
+
+/** Sanitize a CSV cell (prevent formula injection; quote-escape). */
+function csvCell(v: unknown): string {
+  let s = v == null ? '' : String(v)
+  if (/^[=+\-@]/.test(s)) s = `'${s}'`
+  return `"${s.replace(/"/g, '""')}"`
+}
+
+function buildAlertsCsv(items: AlertSearchItem[]): string {
+  const header = CSV_COLUMNS.map(c => c.label).join(',')
+  const lines = items.map(it => CSV_COLUMNS.map(c => {
+    if (c.key === 'score') return csvCell(`${it.scoreState.home}-${it.scoreState.away}`)
+    return csvCell((it as any)[c.key])
+  }).join(','))
+  return [header, ...lines].join('\r\n')
+}
+
 export async function intelligenceRoutes(app: FastifyInstance) {
   const repos = createRepositories()
 
-  // ── B17: alert intelligence overview (server-side metrics) ──────────────────
+  // ── B17/B18: alert intelligence overview (server-side, cached) ──────────────
   app.get('/intelligence/alerts/overview', async (req) => {
-    try { return ok(await buildAlertOverview(parseFilters(req.query as any))) }
+    try { return ok(await getAlertOverviewCached(parseFilters(req.query as any))) }
     catch (e: any) { app.log.warn(`alert overview failed: ${e?.message || e}`); return ok(null) }
   })
 
-  // ── B17: alert intelligence search (server-side filtered list) ──────────────
+  // ── B17/B18: alert search (server-side, paginated) ──────────────────────────
   app.get('/intelligence/alerts/search', async (req) => {
     const q = req.query as any
     try {
-      return ok(await searchAlerts(parseFilters(q), clampLimit(q.limit, 50, 200), q.cursor ? parseInt(q.cursor, 10) : undefined))
-    } catch (e: any) { app.log.warn(`alert search failed: ${e?.message || e}`); return ok({ total: 0, nextCursor: null, items: [] }) }
+      return ok(await searchAlerts(parseFilters(q), {
+        limit: clampLimit(q.limit, 50, 100),
+        cursor: q.cursor ? parseInt(q.cursor, 10) : undefined,
+        sortBy: q.sortBy === 'confidence' || q.sortBy === 'minute' ? q.sortBy : 'createdAt',
+        sortDirection: q.sortDirection === 'asc' ? 'asc' : 'desc',
+      }))
+    } catch (e: any) { app.log.warn(`alert search failed: ${e?.message || e}`); return ok({ items: [], total: 0, totalApprox: 0, nextCursor: null, hasMore: false, appliedFilters: [] }) }
+  })
+
+  // ── B18: CSV export (env-gated) ─────────────────────────────────────────────
+  app.get('/intelligence/alerts/export.csv', async (req, reply) => {
+    if (String(env.ENABLE_ALERT_EXPORT).toLowerCase() !== 'true') {
+      return reply.status(403).send({ success: false, error: { message: 'Exportação desabilitada. Defina ENABLE_ALERT_EXPORT=true no backend.' } })
+    }
+    const q = req.query as any
+    try {
+      const max = Math.min(parseInt(q.limit, 10) || 5000, 5000)
+      const items = await exportAlerts(parseFilters(q), max)
+      const csv = buildAlertsCsv(items)
+      const filename = `goalsense-alerts-${new Date().toISOString().slice(0, 10)}.csv`
+      reply.header('Content-Type', 'text/csv; charset=utf-8')
+      reply.header('Content-Disposition', `attachment; filename="${filename}"`)
+      return reply.send(csv)
+    } catch (e: any) {
+      app.log.error(`alert export failed: ${e?.message || e}`)
+      return reply.status(500).send({ success: false, error: { message: 'Falha ao gerar CSV' } })
+    }
   })
 
   app.get('/intelligence/alerts/:alertId/ledger', async (req) => {

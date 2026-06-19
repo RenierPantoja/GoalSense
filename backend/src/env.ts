@@ -47,6 +47,11 @@ const envSchema = z.object({
   ENABLE_BACKTEST_API: z.string().default('false'),
   ENABLE_LEARNING_AGGREGATION_SCHEDULER: z.string().default('false'),
   LEARNING_AGGREGATION_INTERVAL_MS: z.coerce.number().default(3600000),
+  // Alert Intelligence Scale (Phase B18)
+  ENABLE_ALERT_INTELLIGENCE_CACHE: z.string().default('false'),
+  ALERT_INTELLIGENCE_CACHE_TTL_SECONDS: z.coerce.number().default(60),
+  ALERT_INTELLIGENCE_CACHE_MAX_KEYS: z.coerce.number().default(64),
+  ENABLE_ALERT_EXPORT: z.string().default('false'),
 }).superRefine((val, ctx) => {
   // Conditional validation by persistence provider
   if (val.PERSISTENCE_PROVIDER === 'prisma') {

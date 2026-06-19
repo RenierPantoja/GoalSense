@@ -9,7 +9,7 @@ import { alertIntelligenceApi } from '@/services/alertIntelligenceApi'
 import { ReplayViewer } from '../../backtest/ReplayViewer'
 import { RelatedAlertsPanel } from './RelatedAlertsPanel'
 import type {
-  SignalLedgerEntry, AlertOutcomeRecord, PatternLearningProfile, LearningEvent, AlertResult, SignalFailureAnalysis,
+  SignalLedgerEntry, AlertOutcomeRecord, PatternLearningProfile, LearningEvent, AlertResult, SignalFailureAnalysis, AlertIntelFilters,
 } from '../../../../intelligence/alertIntelligenceTypes'
 import { RESULT_LABEL, RESULT_TONE, SAMPLE_QUALITY_LABEL, pct } from '../../../../intelligence/alertIntelligenceTypes'
 
@@ -18,6 +18,7 @@ interface Props {
   headline: { patternName: string; matchLabel: string; minute: number | null; score: { home: number; away: number }; confidence: number; status: string }
   onClose: () => void
   onGoToBacktest?: () => void
+  onOpenFilteredList?: (filters: AlertIntelFilters) => void
 }
 
 type DrawerTab = 'resumo' | 'evidencias' | 'resultado' | 'timeline' | 'aprendizado'
@@ -50,7 +51,7 @@ function KV({ k, v }: { k: string; v: React.ReactNode }) {
   return <div className="flex items-baseline justify-between gap-3 py-1"><span className="text-[11px] text-white/45">{k}</span><span className="text-[12px] text-white/85 text-right">{v}</span></div>
 }
 
-export function AlertSignalDrawer({ alertId, headline, onClose, onGoToBacktest }: Props) {
+export function AlertSignalDrawer({ alertId, headline, onClose, onGoToBacktest, onOpenFilteredList }: Props) {
   const [tab, setTab] = useState<DrawerTab>('resumo')
   const [loading, setLoading] = useState(true)
   const [ledger, setLedger] = useState<SignalLedgerEntry | null>(null)
@@ -276,7 +277,7 @@ export function AlertSignalDrawer({ alertId, headline, onClose, onGoToBacktest }
                       {events.slice(0, 6).map(e => <p key={e.id} className="text-[11px] text-white/60 leading-relaxed py-1 border-b border-white/[0.04] last:border-0">{e.message}</p>)}
                     </Section>
                   )}
-                  {alertId && <RelatedAlertsPanel source={{ kind: 'alert', alertId }} />}
+                  {alertId && <RelatedAlertsPanel source={{ kind: 'alert', alertId }} onOpenInList={onOpenFilteredList && ledger.patternId ? () => onOpenFilteredList({ patternId: ledger.patternId! }) : undefined} />}
                   {onGoToBacktest && ledger.patternId && (
                     <button onClick={onGoToBacktest} type="button" className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#5EEAD4] hover:text-[#7FE9DC] transition-colors"><FlaskConical size={14} />Rodar backtest deste radar</button>
                   )}

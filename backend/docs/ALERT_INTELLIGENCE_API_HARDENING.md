@@ -64,3 +64,16 @@ null/[] (Prisma mode safe).
   paginated/aggregated store would be needed at large scale.
 - `relatedForLearningEvent` relies on the event carrying `alertId` or `patternId`.
 - Overview/search compute on each request (no caching layer yet).
+
+
+## B18 — Scale (server-side search, cached overview, CSV export)
+
+Phase B18 builds on these endpoints: `search` gains a normalized `AlertSearchItem`
++ real pagination (`limit/cursor/sortBy/sortDirection` → `items/total/totalApprox/
+nextCursor/hasMore/appliedFilters`) and `severity`/`patternName` filters; `overview`
+is wrapped by an env-gated in-memory TTL cache (`cacheHit/generatedAt/ttlSeconds`);
+and a new env-gated `GET /api/intelligence/alerts/export.csv` exports the filtered
+set (capped 5000, formula-injection-sanitized). See
+`backend/docs/ALERT_INTELLIGENCE_SCALE_API.md`. Env flags:
+`ENABLE_ALERT_INTELLIGENCE_CACHE`, `ALERT_INTELLIGENCE_CACHE_TTL_SECONDS`,
+`ALERT_INTELLIGENCE_CACHE_MAX_KEYS`, `ENABLE_ALERT_EXPORT`.

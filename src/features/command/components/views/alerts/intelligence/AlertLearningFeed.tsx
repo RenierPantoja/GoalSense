@@ -8,6 +8,7 @@ import { alertIntelligenceApi, isAlertIntelligenceConfigured } from '@/services/
 import type { LearningRecommendation, LearningOverview } from '../../../../intelligence/alertIntelligenceTypes'
 import { SAMPLE_QUALITY_LABEL } from '../../../../intelligence/alertIntelligenceTypes'
 import { LearningEventDrawer } from './LearningEventDrawer'
+import type { AlertIntelFilters } from '../../../../intelligence/alertIntelligenceTypes'
 
 const STRENGTH_TONE: Record<string, string> = {
   high: 'text-emerald-200/85 bg-emerald-500/[0.08] border-emerald-400/20',
@@ -15,7 +16,7 @@ const STRENGTH_TONE: Record<string, string> = {
   low: 'text-white/55 bg-white/[0.03] border-white/[0.08]',
 }
 
-export function AlertLearningFeed({ onGoToBacktest }: { onGoToBacktest?: () => void }) {
+export function AlertLearningFeed({ onGoToBacktest, onOpenFilteredList }: { onGoToBacktest?: () => void; onOpenFilteredList?: (filters: AlertIntelFilters) => void }) {
   const configured = isAlertIntelligenceConfigured()
   const [loading, setLoading] = useState(true)
   const [overview, setOverview] = useState<LearningOverview | null>(null)
@@ -99,7 +100,7 @@ export function AlertLearningFeed({ onGoToBacktest }: { onGoToBacktest?: () => v
         </div>
       )}
 
-      {openEventId && <LearningEventDrawer eventId={openEventId} onClose={() => setOpenEventId(null)} onGoToBacktest={onGoToBacktest} />}
+      {openEventId && <LearningEventDrawer eventId={openEventId} onClose={() => setOpenEventId(null)} onGoToBacktest={onGoToBacktest} onOpenFilteredList={onOpenFilteredList} />}
     </div>
   )
 }

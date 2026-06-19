@@ -212,31 +212,48 @@ export interface AlertIntelligenceOverview {
   latestLearningEvents: Array<{ id: string; type: string; message: string; createdAt: string }>
   latestAggregationRun: { status: string; finishedAt: string | null } | null
   generatedAt: string
+  cacheHit?: boolean
+  ttlSeconds?: number
 }
 
 export interface AlertSearchItem {
+  id: string
   alertId: string
-  patternId: string
-  radarName: string
+  source: 'backend' | 'ledger' | 'legacy' | 'unknown'
+  fixtureId: string | null
+  patternId: string | null
+  patternName: string
   fixtureLabel: string
-  league: string
+  leagueName: string
+  homeTeam: string
+  awayTeam: string
   minute: number | null
   scoreState: { home: number; away: number }
+  severity: string
   confidence: number | null
   result: AlertResult
-  resolutionType: string | null
+  status: AlertResult
   dataQuality: DataQuality
-  hasFailureAnalysis: boolean
-  failureReason: string | null
-  learningEventCount: number
+  provider: string
   createdAt: string
-  outcomeReason: string | null
+  resolvedAt: string | null
+  hasLedger: boolean
+  hasOutcome: boolean
+  hasFailureAnalysis: boolean
+  learningEventCount: number
+  failureReason: string | null
+  summaryReason: string | null
+  canOpenAnalysis: boolean
+  limitations: string[]
 }
 
 export interface AlertSearchResponse {
-  total: number
-  nextCursor: number | null
   items: AlertSearchItem[]
+  total: number
+  totalApprox: number
+  nextCursor: number | null
+  hasMore: boolean
+  appliedFilters: string[]
 }
 
 export type RelationStrength = 'weak' | 'moderate' | 'strong'
@@ -280,9 +297,11 @@ export interface AlertIntelFilters {
   dateFrom?: string
   dateTo?: string
   patternId?: string
+  patternName?: string
   league?: string
   team?: string
   result?: string
+  severity?: string
   dataQuality?: string
   provider?: string
   minuteWindow?: string

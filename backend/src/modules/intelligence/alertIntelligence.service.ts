@@ -25,6 +25,8 @@ export interface AlertIntelFilters {
   team?: string
   result?: string
   status?: string
+  severity?: string
+  patternName?: string
   dataQuality?: string
   provider?: string
   minuteWindow?: string
@@ -62,6 +64,10 @@ export interface JoinedAlert {
   failureReason: string | null
   hasFailureAnalysis: boolean
   learningEventCount: number
+  severity: string
+  fixtureId: string
+  resolvedAt: string | null
+  hasOutcome: boolean
 }
 
 function norm(s: string): string {
@@ -123,6 +129,10 @@ export async function loadJoinedAlerts(): Promise<JoinedAlert[]> {
       failureReason: failure?.failureReason ?? null,
       hasFailureAnalysis: !!failure,
       learningEventCount: learningCountByAlert.get(e.alertId) || 0,
+      severity: e.severity || 'attention',
+      fixtureId: e.fixtureId || '',
+      resolvedAt: outcome?.resolvedAt ?? null,
+      hasOutcome: !!outcome,
     })
   }
   return out
@@ -138,6 +148,8 @@ export function applyFilters(rows: JoinedAlert[], f: AlertIntelFilters): JoinedA
     if (f.team && !(nameHit(f.team, r.home) || nameHit(f.team, r.away))) return false
     const resultFilter = f.result || f.status
     if (resultFilter && r.result !== resultFilter) return false
+    if (f.severity && r.severity !== f.severity) return false
+    if (f.patternName && !nameHit(f.patternName, r.radarName)) return false
     if (f.dataQuality && r.signalQuality !== f.dataQuality) return false
     if (f.provider && r.provider !== f.provider) return false
     if (f.minuteWindow && r.window !== f.minuteWindow) return false
@@ -240,35 +252,111 @@ export async function buildAlertOverview(filters: AlertIntelFilters) {
   }
 }
 
-// ─── Search ──────────────────────────────────────────────────────────────────
+// ─── Search (normalized + paginated) ───────────────────────────────────────────
 
-export async function searchAlerts(filters: AlertIntelFilters, limit: number, cursor?: number) {
-  const all = await loadJoinedAlerts()
-  const rows = applyFilters(all, filters).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-  const start = Number.isFinite(cursor) && (cursor as number) > 0 ? (cursor as number) : 0
-  const page = rows.slice(start, start + limit)
+export interface AlertSearchItem {
+  id: string
+  alertId: string
+  source: 'backend' | 'ledger' | 'legacy' | 'unknown'
+  fixtureId: string | null
+  patternId: string | null
+  patternName: string
+  fixtureLabel: string
+  leagueName: string
+  homeTeam: string
+  awayTeam: string
+  minute: number | null
+  scoreState: { home: number; away: number }
+  severity: string
+  confidence: number | null
+  result: AlertResult
+  status: AlertResult
+  dataQuality: DataQuality
+  provider: string
+  createdAt: string
+  resolvedAt: string | null
+  hasLedger: boolean
+  hasOutcome: boolean
+  hasFailureAnalysis: boolean
+  learningEventCount: number
+  failureReason: string | null
+  summaryReason: string | null
+  canOpenAnalysis: boolean
+  limitations: string[]
+}
+
+export function toSearchItem(r: JoinedAlert): AlertSearchItem {
+  const limitations: string[] = []
+  if (!r.hasOutcome) limitations.push('sem resultado registrado')
+  if (r.result === 'unknown' || r.result === 'expired') limitations.push('sem dados suficientes')
   return {
-    total: rows.length,
-    nextCursor: start + limit < rows.length ? start + limit : null,
-    items: page.map(r => ({
-      alertId: r.alertId,
-      patternId: r.patternId,
-      radarName: r.radarName,
-      fixtureLabel: `${r.home} vs ${r.away}`,
-      league: r.league,
-      minute: r.minute,
-      scoreState: r.scoreState,
-      confidence: r.confidence,
-      result: r.result,
-      resolutionType: r.resolutionType,
-      dataQuality: r.signalQuality,
-      hasFailureAnalysis: r.hasFailureAnalysis,
-      failureReason: r.failureReason,
-      learningEventCount: r.learningEventCount,
-      createdAt: r.createdAt,
-      outcomeReason: r.outcomeReason,
-    })),
+    id: r.alertId,
+    alertId: r.alertId,
+    source: 'ledger', // every searchable row comes from the Signal Ledger
+    fixtureId: r.fixtureId || null,
+    patternId: r.patternId || null,
+    patternName: r.radarName,
+    fixtureLabel: `${r.home} vs ${r.away}`,
+    leagueName: r.league,
+    homeTeam: r.home,
+    awayTeam: r.away,
+    minute: r.minute,
+    scoreState: r.scoreState,
+    severity: r.severity,
+    confidence: r.confidence,
+    result: r.result,
+    status: r.result,
+    dataQuality: r.signalQuality,
+    provider: r.provider,
+    createdAt: r.createdAt,
+    resolvedAt: r.resolvedAt,
+    hasLedger: true,
+    hasOutcome: r.hasOutcome,
+    hasFailureAnalysis: r.hasFailureAnalysis,
+    learningEventCount: r.learningEventCount,
+    failureReason: r.failureReason,
+    summaryReason: r.outcomeReason ?? null,
+    canOpenAnalysis: true,
+    limitations,
   }
+}
+
+export interface SearchOptions { limit: number; cursor?: number; sortBy?: 'createdAt' | 'confidence' | 'minute'; sortDirection?: 'asc' | 'desc' }
+
+export async function searchAlerts(filters: AlertIntelFilters, opts: SearchOptions) {
+  const all = await loadJoinedAlerts()
+  const filtered = applyFilters(all, filters)
+  const sortBy = opts.sortBy || 'createdAt'
+  const dir = opts.sortDirection === 'asc' ? 1 : -1
+  filtered.sort((a, b) => {
+    let cmp = 0
+    if (sortBy === 'confidence') cmp = (a.confidence ?? -1) - (b.confidence ?? -1)
+    else if (sortBy === 'minute') cmp = (a.minute ?? -1) - (b.minute ?? -1)
+    else cmp = (a.createdAt || '').localeCompare(b.createdAt || '')
+    if (cmp !== 0) return cmp * dir
+    return (a.alertId || '').localeCompare(b.alertId || '') * dir // stable tiebreak
+  })
+  const limit = Math.min(Math.max(1, opts.limit || 50), 100)
+  const start = Number.isFinite(opts.cursor) && (opts.cursor as number) > 0 ? (opts.cursor as number) : 0
+  const page = filtered.slice(start, start + limit)
+  const appliedFilters = Object.entries(filters)
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([k, v]) => `${k}=${v}`)
+  return {
+    items: page.map(toSearchItem),
+    total: filtered.length,
+    totalApprox: filtered.length,
+    nextCursor: start + limit < filtered.length ? start + limit : null,
+    hasMore: start + limit < filtered.length,
+    appliedFilters,
+  }
+}
+
+/** Rows for CSV export (capped). Reuses the same filters as search. */
+export async function exportAlerts(filters: AlertIntelFilters, max: number): Promise<AlertSearchItem[]> {
+  const all = await loadJoinedAlerts()
+  const filtered = applyFilters(all, filters).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+  return filtered.slice(0, Math.min(max, filtered.length)).map(toSearchItem)
 }
 
 export { normalizeKeyPart }
