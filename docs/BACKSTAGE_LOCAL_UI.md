@@ -39,3 +39,10 @@ prediction, never odds, never stake.
 `src/services/matchIntelligenceApi.ts` (token-aware) →
 `/api/match-intelligence/*`. Types in
 `src/features/matchIntelligence/matchIntelligenceTypes.ts`.
+
+## B40 — pre-match acquisition card
+
+Backstage now includes a "Aquisição pré-jogo & janela de escalação (B40)" card with
+provider reliability, lineup window, domain snapshots (with freshness/availability),
+Readiness V2 and Precheck V2, plus admin "Buscar" / "Escalação" actions. See
+`BACKSTAGE_PRE_MATCH_INTELLIGENCE_UI.md`.

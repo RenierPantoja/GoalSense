@@ -74,3 +74,14 @@ Firebase + Prisma(Noop) preserved; builds pass.
   (`insufficient_history`, never a negative finding).
 - Live tactical reads are LOW-reliability estimates from team-level stats.
 - The precheck is advisory only; it is not wired into the alert engine.
+
+## B40 — Multi-provider pre-match acquisition (additive)
+
+The fabric now has a multi-provider acquisition layer (registry + per-domain router +
+honest skeleton adapters), a temporal acquisition planner/runner (T-24h … T-15min …
+live … post), a persisted pre-match data store, a Lineup Window Engine, a Player
+Importance foundation, and V2 versions of readiness, precheck, post-match and the match
+package. ESPN remains the only wired source; every other domain reports
+`provider_not_configured` until credentials are supplied. Nothing is fabricated. See
+`PRE_MATCH_ACQUISITION.md`, `LINEUP_WINDOW_ENGINE.md`, `PLAYER_IMPORTANCE_FOUNDATION.md`,
+`ALERT_DECISION_PRECHECK_V2.md`, `POST_MATCH_EXPLANATION_V2.md`.

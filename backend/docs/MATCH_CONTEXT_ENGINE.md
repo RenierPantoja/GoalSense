@@ -28,3 +28,9 @@ not collect rivalry/standings/lineups, so those are honestly `unknown`.
 Rivalry, table position, title/relegation stakes, and rotation are not derivable from
 the data collected. They are surfaced as `unknown` with explicit limitations, which is
 itself a valid decision input (uncertainty).
+
+## B40 note
+
+Competition context can now also be acquired via the pre-match acquisition layer
+(`competition_context` domain) when a provider is configured; without one it stays the
+heuristic described above. See `PRE_MATCH_ACQUISITION.md`.

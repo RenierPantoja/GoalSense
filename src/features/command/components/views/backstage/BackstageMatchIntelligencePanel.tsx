@@ -8,13 +8,14 @@
  * invented prediction, no odds, no stake.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw, Brain, ListChecks, Gauge, AlertTriangle, Clock, ShieldQuestion, Microscope } from 'lucide-react'
+import { RefreshCw, Brain, ListChecks, Gauge, AlertTriangle, Clock, ShieldQuestion, Microscope, Database, DownloadCloud, Users } from 'lucide-react'
 import { matchIntelligenceApi } from '@/services/matchIntelligenceApi'
 import { useAuth } from '@/auth/useAuth'
 import type {
   MatchDayScopeDto, ScopedFixtureDto, MatchIntelligencePackageDto, AlertPrecheckDto, PostMatchExplanationDto,
+  MatchIntelligencePackageV2Dto,
 } from '@/features/matchIntelligence/matchIntelligenceTypes'
-import { PRECHECK_LABEL, READINESS_LABEL } from '@/features/matchIntelligence/matchIntelligenceTypes'
+import { PRECHECK_LABEL, READINESS_LABEL, PRECHECK_V2_LABEL, READINESS_V2_LABEL } from '@/features/matchIntelligence/matchIntelligenceTypes'
 
 function Card({ title, icon, children, action }: { title: string; icon?: React.ReactNode; children: React.ReactNode; action?: React.ReactNode }) {
   return <div className="rounded-2xl border border-white/[0.07] bg-white/[0.012] p-4"><div className="flex items-center gap-2 mb-3"><span className="text-white/35">{icon}</span><h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45 flex-1">{title}</h4>{action}</div>{children}</div>
@@ -33,6 +34,7 @@ export function BackstageMatchIntelligencePanel() {
   const [pkg, setPkg] = useState<MatchIntelligencePackageDto | null>(null)
   const [precheck, setPrecheck] = useState<AlertPrecheckDto | null>(null)
   const [postMatch, setPostMatch] = useState<PostMatchExplanationDto | null>(null)
+  const [pkgV2, setPkgV2] = useState<MatchIntelligencePackageV2Dto | null>(null)
   const [loading, setLoading] = useState(true)
   const [disabled, setDisabled] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -49,15 +51,17 @@ export function BackstageMatchIntelligencePanel() {
   useEffect(() => { void loadScope() }, [loadScope])
 
   const openFixture = useCallback(async (id: string) => {
-    setSelected(id); setPkg(null); setPrecheck(null); setPostMatch(null)
-    const [p, pc, pm] = await Promise.all([
+    setSelected(id); setPkg(null); setPrecheck(null); setPostMatch(null); setPkgV2(null)
+    const [p, pc, pm, v2] = await Promise.all([
       matchIntelligenceApi.getMatchIntelligencePackage(id),
       matchIntelligenceApi.getAlertPrecheck(id),
       matchIntelligenceApi.getPostMatchExplanation(id),
+      matchIntelligenceApi.getMatchIntelligencePackageV2(id),
     ])
     if (p.ok) setPkg(p.data)
     if (pc.ok) setPrecheck(pc.data)
     if (pm.ok) setPostMatch(pm.data)
+    if (v2.ok) setPkgV2(v2.data)
   }, [])
 
   const refresh = async () => {
@@ -65,6 +69,20 @@ export function BackstageMatchIntelligencePanel() {
     const r = await matchIntelligenceApi.refreshMatchIntelligence(selected)
     if (r.ok) { setMsg('Pacote atualizado (respeitando orçamento de provider).'); await openFixture(selected) }
     else setMsg(r.reason === 'forbidden' ? 'Sem permissão para atualizar.' : r.error || 'Falha ao atualizar.')
+  }
+
+  const runAcquisition = async () => {
+    if (!selected) return
+    const r = await matchIntelligenceApi.runFixtureAcquisition(selected)
+    if (r.ok) { setMsg(`Aquisição executada (${r.data?.status ?? 'ok'}).`); await openFixture(selected) }
+    else setMsg(r.reason === 'forbidden' ? 'Sem permissão.' : r.error || 'Falha na aquisição.')
+  }
+
+  const refreshLineup = async () => {
+    if (!selected) return
+    const r = await matchIntelligenceApi.refreshLineupWindow(selected)
+    if (r.ok) { setMsg('Janela de escalação atualizada.'); await openFixture(selected) }
+    else setMsg(r.reason === 'forbidden' ? 'Sem permissão.' : r.error || 'Falha ao atualizar escalação.')
   }
 
   if (loading) return <p className="text-[12px] text-white/40 px-1 py-8 text-center">Carregando Backstage…</p>
@@ -175,6 +193,71 @@ export function BackstageMatchIntelligencePanel() {
                 </div>
                 {pkg.stayOutReasons.length > 0 && <p className="text-[10.5px] text-amber-100/70 mt-2 inline-flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5" />Ficar fora: {pkg.stayOutReasons.join('; ')}</p>}
               </Card>
+
+              {/* B40: pre-match acquisition + lineup window + readiness/precheck V2 */}
+              {pkgV2 && (
+                <Card title="Aquisição pré-jogo & janela de escalação (B40)" icon={<DownloadCloud size={14} />} action={isAdmin ? (
+                  <span className="flex items-center gap-1">
+                    <button type="button" onClick={runAcquisition} className="h-7 px-2 rounded-lg border border-[#2DD4BF]/25 bg-[#13B8A6]/[0.08] hover:bg-[#13B8A6]/[0.15] text-[11px] text-[#7FE9DC] inline-flex items-center gap-1"><DownloadCloud size={11} />Buscar</button>
+                    <button type="button" onClick={refreshLineup} className="h-7 px-2 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-[11px] text-white/70 inline-flex items-center gap-1"><Users size={11} />Escalação</button>
+                  </span>
+                ) : undefined}>
+                  {/* Provider reliability */}
+                  <div className="flex items-center gap-2 flex-wrap text-[10.5px] text-white/55 mb-2">
+                    <Database size={12} />
+                    <span className="text-emerald-200/75">providers: {pkgV2.providerReliability.configured.join(', ') || 'apenas espn'}</span>
+                    {pkgV2.missingCriticalDomains.length > 0 && <span className="text-amber-100/70">· domínios críticos sem provider: {pkgV2.missingCriticalDomains.join(', ')}</span>}
+                  </div>
+
+                  {/* Lineup window */}
+                  {pkgV2.lineupWindow && (
+                    <div className="rounded-lg border border-white/[0.06] bg-white/[0.01] px-3 py-2 mb-2">
+                      <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                        <Users size={12} className="text-white/40" />
+                        <span className="text-white/80 font-medium">Escalação: {pkgV2.lineupWindow.status}</span>
+                        {pkgV2.lineupWindow.minutesToKickoff != null && <span className="text-white/45">· {pkgV2.lineupWindow.minutesToKickoff}min p/ início</span>}
+                        {pkgV2.lineupWindow.shouldWait && <span className="text-amber-100/75">· esperar</span>}
+                        {pkgV2.lineupWindow.shouldRefreshNow && <span className="text-[#7FE9DC]">· atualizar agora</span>}
+                      </div>
+                      {pkgV2.lineupWindow.limitations.slice(0, 1).map((l, i) => <p key={i} className="text-[10px] text-white/30 mt-0.5">{l}</p>)}
+                    </div>
+                  )}
+
+                  {/* Domain snapshots */}
+                  {pkgV2.domainSnapshots.length > 0 ? (
+                    <div className="space-y-0.5 max-h-40 overflow-y-auto sidebar-scroll mb-2">
+                      {pkgV2.domainSnapshots.map((s, i) => (
+                        <div key={i} className="flex items-center gap-2 text-[10.5px] border-b border-white/[0.04] pb-0.5">
+                          <span className="text-white/70 w-32 truncate">{s.domain}</span>
+                          <span className="text-white/45">{s.provider ?? '—'}</span>
+                          <span className={`${s.availability === 'available' ? 'text-emerald-200/75' : s.availability.startsWith('provider_not') ? 'text-white/40' : 'text-amber-100/70'}`}>{s.availability}</span>
+                          <span className="text-white/30 ml-auto">{s.stale ? 'stale' : s.freshness}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="text-[11px] text-white/40 mb-2">Nenhum snapshot pré-jogo ainda. {isAdmin ? 'Use "Buscar".' : 'Aquisição desabilitada/sem provider.'}</p>}
+
+                  {/* Readiness V2 + Precheck V2 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {pkgV2.readinessV2 && (
+                      <div className="rounded-lg border border-white/[0.06] bg-white/[0.01] px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-wide text-white/35 mb-1">Readiness V2</p>
+                        <p className="text-[12px] text-white/85">{READINESS_V2_LABEL[pkgV2.readinessV2.status] || pkgV2.readinessV2.status} ({pkgV2.readinessV2.score})</p>
+                        <p className="text-[10px] text-white/45 mt-0.5">cobertura provider {pkgV2.readinessV2.providerCoverageScore}%</p>
+                        {pkgV2.readinessV2.stayOutReasons.slice(0, 1).map((r, i) => <p key={i} className="text-[10px] text-amber-100/70">· {r}</p>)}
+                      </div>
+                    )}
+                    {pkgV2.precheckV2 && (
+                      <div className="rounded-lg border border-white/[0.06] bg-white/[0.01] px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-wide text-white/35 mb-1">Precheck V2 <span className="text-white/25">({pkgV2.precheckV2.mode}{pkgV2.precheckV2.enabled ? '' : ', off'})</span></p>
+                        <p className="text-[12px] text-white/85">{PRECHECK_V2_LABEL[pkgV2.precheckV2.decision] || pkgV2.precheckV2.decision}</p>
+                        {pkgV2.precheckV2.reasons.slice(0, 3).map((r, i) => <p key={i} className="text-[10px] text-white/50">· {r}</p>)}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-white/30 mt-2">Lesão/suspensão ausente = unknown (não "sem lesão"); escalação antes da janela = not_available_yet; provider sem env não é chamado. Precheck V2 observe não bloqueia alerta real.</p>
+                </Card>
+              )}
 
               {/* Post-match */}
               {pkg.phase === 'post_match' && postMatch && (

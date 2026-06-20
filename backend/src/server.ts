@@ -33,6 +33,7 @@ import { startAutoEngineScheduler } from './modules/intelligence/autoEngine/auto
 import { startAutoEngineLearningScheduler } from './modules/intelligence/autoEngine/autoEngineLearningScheduler.service.js'
 import { startSessionMetricsFlush } from './modules/validation/liveValidationSessionMetrics.service.js'
 import { startDynamicFixtureAttachScheduler } from './modules/validation/liveValidationDynamicAttach.scheduler.js'
+import { startPreMatchAcquisitionScheduler } from './modules/footballIntelligence/preMatchAcquisition.scheduler.js'
 
 const app = Fastify({ logger: true })
 
@@ -109,6 +110,7 @@ const start = async () => {
     startLocalOpsMetricsCapture() // B32: optional, only runs when persistence is enabled
     startSessionMetricsFlush() // B39: debounced scoped session metric flush (flag-gated)
     startDynamicFixtureAttachScheduler() // B39: attach newly-live fixtures to running sessions (flag-gated)
+    startPreMatchAcquisitionScheduler() // B40: optional pre-match acquisition (manual-first; off by default)
   } catch (err) {
     app.log.error(err)
     process.exit(1)

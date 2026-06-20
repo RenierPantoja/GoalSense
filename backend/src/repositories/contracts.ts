@@ -163,6 +163,9 @@ import type {
 import type {
   LiveValidationRecordLink, LiveValidationSessionMetricCounter, DynamicFixtureAttachRun,
 } from '../modules/validation/liveValidationIndex.types.js'
+import type {
+  PreMatchDomainSnapshot, PreMatchAcquisitionRun,
+} from '../modules/footballIntelligence/preMatchAcquisition.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -343,6 +346,15 @@ export interface IntelligenceRepository {
   updateDynamicFixtureAttachRun(id: string, patch: Partial<DynamicFixtureAttachRun>): Promise<{ count: number }>
   listDynamicFixtureAttachRuns(validationSessionId: string, limit?: number): Promise<DynamicFixtureAttachRun[]>
   getDynamicFixtureAttachRun(id: string): Promise<DynamicFixtureAttachRun | null>
+
+  // ── B40: pre-match acquisition store (domain snapshots + runs) ──────────────
+  savePreMatchDomainSnapshot(snapshot: PreMatchDomainSnapshot): Promise<PreMatchDomainSnapshot>
+  getPreMatchDomainSnapshot(fixtureId: string, domain: string): Promise<PreMatchDomainSnapshot | null>
+  listPreMatchDomainSnapshots(fixtureId: string, limit?: number): Promise<PreMatchDomainSnapshot[]>
+  createPreMatchAcquisitionRun(run: PreMatchAcquisitionRun): Promise<PreMatchAcquisitionRun>
+  updatePreMatchAcquisitionRun(id: string, patch: Partial<PreMatchAcquisitionRun>): Promise<{ count: number }>
+  getPreMatchAcquisitionRun(id: string): Promise<PreMatchAcquisitionRun | null>
+  listPreMatchAcquisitionRuns(filters: { fixtureId?: string; limit?: number }): Promise<PreMatchAcquisitionRun[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

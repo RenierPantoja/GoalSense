@@ -117,3 +117,64 @@ export async function buildPostMatchExplanation(fixtureId: string): Promise<Post
     learningNotes, limitations, generatedAt: new Date().toISOString(),
   }
 }
+
+// ─── Post-Match V2 (B40) — lineup/provider/context-aware learning ──────────────
+import { getLineupWindowStatus } from './lineupWindowEngine.service.js'
+import { getBestProviderForDomain } from './providers/providerRegistry.service.js'
+
+export type PostMatchCauseCategory = 'game_state_shock' | 'data_limitation' | 'decision_flaw' | 'variance_shock' | 'confirmed_read' | 'inconclusive'
+
+export interface PostMatchExplanationV2 extends PostMatchExplanation {
+  causeCategory: PostMatchCauseCategory
+  lineupConfirmedRead: boolean | 'unknown'
+  lineupInvalidatedRead: boolean | 'unknown'
+  keyAbsenceWeighed: boolean | 'unknown'
+  suspensionOrInjuryAffected: boolean | 'unknown'
+  redCardChangedGame: boolean
+  substitutionChangedTempo: boolean | 'unknown'
+  competitionContextChangedBehavior: boolean | 'unknown'
+  classicOrKnockoutVolatility: boolean | 'unknown'
+  providerWasLimited: boolean
+  shouldHaveWaitedLineup: boolean
+  shouldHaveWaitedLiveConfirmation: boolean
+}
+
+export async function buildPostMatchExplanationV2(fixtureId: string): Promise<PostMatchExplanationV2 | null> {
+  const v1 = await buildPostMatchExplanation(fixtureId)
+  if (!v1) return null
+  const pkg = await buildMatchIntelligencePackage(fixtureId).catch(() => null)
+  const lineupWindow = await getLineupWindowStatus(fixtureId).catch(() => null)
+
+  const events = pkg?.postMatch?.events ?? []
+  const redCardChangedGame = events.some(e => e.type === 'red_card')
+  const providerWasLimited = v1.wasProviderLimited || (!getBestProviderForDomain('confirmed_lineups') && !getBestProviderForDomain('injuries'))
+  const isKnockout = pkg?.context?.competitionContext.isKnockout === true
+
+  let causeCategory: PostMatchCauseCategory
+  if (v1.outcome === 'confirmed' || v1.outcome === 'confirmed_partial') causeCategory = 'confirmed_read'
+  else if (v1.outcome === 'failed') {
+    if (redCardChangedGame || v1.unexpectedEvents.length > 0) causeCategory = v1.wasAnalysisWeak ? 'decision_flaw' : 'variance_shock'
+    else if (v1.wasAnalysisWeak) causeCategory = 'decision_flaw'
+    else if (providerWasLimited) causeCategory = 'data_limitation'
+    else causeCategory = 'inconclusive'
+  } else causeCategory = 'inconclusive'
+
+  // game_state_shock is reserved for clear in-match shocks with evidence.
+  if (v1.outcome === 'failed' && redCardChangedGame) causeCategory = 'game_state_shock'
+
+  return {
+    ...v1,
+    causeCategory,
+    lineupConfirmedRead: lineupWindow?.status === 'confirmed_available' ? 'unknown' : 'unknown', // we lack structured lineup → honest unknown
+    lineupInvalidatedRead: 'unknown',
+    keyAbsenceWeighed: 'unknown',
+    suspensionOrInjuryAffected: 'unknown',
+    redCardChangedGame,
+    substitutionChangedTempo: 'unknown',
+    competitionContextChangedBehavior: isKnockout ? 'unknown' : 'unknown',
+    classicOrKnockoutVolatility: isKnockout ? true : 'unknown',
+    providerWasLimited,
+    shouldHaveWaitedLineup: !!lineupWindow?.shouldWait && v1.outcome === 'failed',
+    shouldHaveWaitedLiveConfirmation: pkg?.phase !== 'post_match' ? false : (v1.outcome === 'failed' && !(pkg?.live?.hasStats)),
+  }
+}

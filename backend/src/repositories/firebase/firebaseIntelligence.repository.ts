@@ -47,6 +47,9 @@ import type {
 import type {
   LiveValidationRecordLink, LiveValidationSessionMetricCounter, DynamicFixtureAttachRun,
 } from '../../modules/validation/liveValidationIndex.types.js'
+import type {
+  PreMatchDomainSnapshot, PreMatchAcquisitionRun,
+} from '../../modules/footballIntelligence/preMatchAcquisition.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -86,6 +89,8 @@ const LV_REPORTS = 'liveValidationSessionReports'
 const LV_RECORD_LINKS = 'liveValidationRecordLinks'
 const LV_METRIC_COUNTERS = 'liveValidationSessionMetricCounters'
 const LV_ATTACH_RUNS = 'dynamicFixtureAttachRuns'
+const PM_DOMAIN_SNAPSHOTS = 'preMatchDomainSnapshots'
+const PM_ACQUISITION_RUNS = 'preMatchAcquisitionRuns'
 
 const READ_CAP = 2000
 
@@ -905,5 +910,40 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
   async getDynamicFixtureAttachRun(id: string): Promise<DynamicFixtureAttachRun | null> {
     const db = await getFirestore(); const doc = await db.collection(LV_ATTACH_RUNS).doc(id).get()
     return doc.exists ? docData<DynamicFixtureAttachRun>(doc) : null
+  }
+
+  // ── B40: pre-match acquisition store ──
+  async savePreMatchDomainSnapshot(snapshot: PreMatchDomainSnapshot): Promise<PreMatchDomainSnapshot> {
+    const db = await getFirestore(); await db.collection(PM_DOMAIN_SNAPSHOTS).doc(snapshot.id).set(snapshot, { merge: true }); return snapshot
+  }
+  async getPreMatchDomainSnapshot(fixtureId: string, domain: string): Promise<PreMatchDomainSnapshot | null> {
+    const db = await getFirestore()
+    const snap = await db.collection(PM_DOMAIN_SNAPSHOTS).where('fixtureId', '==', fixtureId).where('domain', '==', domain).get()
+    if (snap.empty) return null
+    return snap.docs.map((d: any) => docData<PreMatchDomainSnapshot>(d)).sort((a: any, b: any) => (b.fetchedAt || '').localeCompare(a.fetchedAt || ''))[0]
+  }
+  async listPreMatchDomainSnapshots(fixtureId: string, limit?: number): Promise<PreMatchDomainSnapshot[]> {
+    const db = await getFirestore(); const snap = await db.collection(PM_DOMAIN_SNAPSHOTS).where('fixtureId', '==', fixtureId).get()
+    return snap.docs.map((d: any) => docData<PreMatchDomainSnapshot>(d)).sort((a: any, b: any) => (b.fetchedAt || '').localeCompare(a.fetchedAt || '')).slice(0, limit || 100)
+  }
+  async createPreMatchAcquisitionRun(run: PreMatchAcquisitionRun): Promise<PreMatchAcquisitionRun> {
+    const db = await getFirestore(); await db.collection(PM_ACQUISITION_RUNS).doc(run.id).set(run, { merge: true }); return run
+  }
+  async updatePreMatchAcquisitionRun(id: string, patch: Partial<PreMatchAcquisitionRun>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(PM_ACQUISITION_RUNS).doc(id); const doc = await ref.get()
+    if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async getPreMatchAcquisitionRun(id: string): Promise<PreMatchAcquisitionRun | null> {
+    const db = await getFirestore(); const doc = await db.collection(PM_ACQUISITION_RUNS).doc(id).get()
+    return doc.exists ? docData<PreMatchAcquisitionRun>(doc) : null
+  }
+  async listPreMatchAcquisitionRuns(filters: { fixtureId?: string; limit?: number }): Promise<PreMatchAcquisitionRun[]> {
+    const db = await getFirestore()
+    let q: any = db.collection(PM_ACQUISITION_RUNS)
+    if (filters.fixtureId) q = q.where('fixtureId', '==', filters.fixtureId)
+    const snap = await q.get()
+    return snap.docs.map((d: any) => docData<PreMatchAcquisitionRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, filters.limit || 50)
   }
 }

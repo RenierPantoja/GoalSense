@@ -13,6 +13,7 @@ import { getSchedulerState } from '../intelligence/learning/learningAggregationS
 import { getAutoEngineSchedulerState } from '../intelligence/autoEngine/autoEngineScheduler.service.js'
 import { getAutoEngineLearningSchedulerState } from '../intelligence/autoEngine/autoEngineLearningScheduler.service.js'
 import { startDynamicFixtureAttachScheduler, stopDynamicFixtureAttachScheduler, getDynamicAttachSchedulerState } from '../validation/liveValidationDynamicAttach.scheduler.js'
+import { startPreMatchAcquisitionScheduler, stopPreMatchAcquisitionScheduler, getPreMatchAcquisitionSchedulerState } from '../footballIntelligence/preMatchAcquisition.scheduler.js'
 import { getGuardMetrics } from './livePipelineGuard.service.js'
 
 const flag = (v: unknown) => String(v).toLowerCase() === 'true'
@@ -38,6 +39,7 @@ const WORKERS: WorkerEntry[] = [
   { name: 'autoEngineScheduler', enabledByEnv: () => flag(env.ENABLE_AUTO_ENGINE_SCHEDULER), status: getAutoEngineSchedulerState, writesEnabled: true, dangerous: true, recommendedLocalState: 'off' },
   { name: 'autoEngineLearningScheduler', enabledByEnv: () => flag(env.ENABLE_AUTO_ENGINE_LEARNING_SCHEDULER), status: getAutoEngineLearningSchedulerState, writesEnabled: true, dangerous: false, recommendedLocalState: 'off' },
   { name: 'dynamicFixtureAttach', enabledByEnv: () => flag(env.ENABLE_LIVE_VALIDATION_DYNAMIC_ATTACH), status: getDynamicAttachSchedulerState, start: startDynamicFixtureAttachScheduler, stop: stopDynamicFixtureAttachScheduler, writesEnabled: true, dangerous: false, recommendedLocalState: 'limited' },
+  { name: 'preMatchAcquisition', enabledByEnv: () => flag(env.ENABLE_PRE_MATCH_ACQUISITION) && flag(env.ENABLE_PRE_MATCH_ACQUISITION_SCHEDULER), status: getPreMatchAcquisitionSchedulerState, start: startPreMatchAcquisitionScheduler, stop: stopPreMatchAcquisitionScheduler, writesEnabled: true, dangerous: false, recommendedLocalState: 'off' },
 ]
 
 function entry(name: string): WorkerEntry | undefined { return WORKERS.find(w => w.name === name) }

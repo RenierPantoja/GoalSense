@@ -39,6 +39,9 @@ import type {
   LiveValidationRecordLink, LiveValidationSessionMetricCounter, DynamicFixtureAttachRun,
 } from '../modules/validation/liveValidationIndex.types.js'
 import type {
+  PreMatchDomainSnapshot, PreMatchAcquisitionRun,
+} from '../modules/footballIntelligence/preMatchAcquisition.types.js'
+import type {
   AutoAlertPolicy, AutoAlertPolicyEvaluation,
 } from '../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
 import type { AdminAuditEntry } from '../modules/audit/adminAudit.types.js'
@@ -228,4 +231,13 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async updateDynamicFixtureAttachRun(): Promise<{ count: number }> { return { count: 0 } }
   async listDynamicFixtureAttachRuns(): Promise<DynamicFixtureAttachRun[]> { return [] }
   async getDynamicFixtureAttachRun(): Promise<DynamicFixtureAttachRun | null> { return null }
+
+  // ── B40 (Noop): pre-match acquisition store not persisted ──
+  async savePreMatchDomainSnapshot(s: PreMatchDomainSnapshot): Promise<PreMatchDomainSnapshot> { return s }
+  async getPreMatchDomainSnapshot(): Promise<PreMatchDomainSnapshot | null> { return null }
+  async listPreMatchDomainSnapshots(): Promise<PreMatchDomainSnapshot[]> { return [] }
+  async createPreMatchAcquisitionRun(r: PreMatchAcquisitionRun): Promise<PreMatchAcquisitionRun> { return r }
+  async updatePreMatchAcquisitionRun(): Promise<{ count: number }> { return { count: 0 } }
+  async getPreMatchAcquisitionRun(): Promise<PreMatchAcquisitionRun | null> { return null }
+  async listPreMatchAcquisitionRuns(): Promise<PreMatchAcquisitionRun[]> { return [] }
 }

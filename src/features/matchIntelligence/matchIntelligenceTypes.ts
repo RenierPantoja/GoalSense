@@ -195,3 +195,139 @@ export const READINESS_LABEL: Record<string, string> = {
   provider_limited: 'Limitado por provider',
   insufficient_history: 'Histórico insuficiente',
 }
+
+// ─── B40: pre-match acquisition + lineup window + V2 ───────────────────────────
+
+export interface ProviderRegistryEntryDto {
+  providerName: string
+  enabled: boolean
+  configured: boolean
+  priority: number
+  domains: string[]
+  requiresApiKey: boolean
+  costRisk: string
+  supportsLineups: boolean
+  supportsInjuries: boolean
+  supportsSuspensions: boolean
+  supportsStandings: boolean
+  limitations: string[]
+}
+
+export interface ProviderStackReportDto {
+  generatedAt: string
+  registered: ProviderRegistryEntryDto[]
+  configured: string[]
+  unconfigured: string[]
+  domainCoverage: Record<string, { providers: string[]; bestProvider: string | null; supported: boolean }>
+  limitations: string[]
+}
+
+export interface AcquisitionRunDto {
+  id: string
+  scope: 'today' | 'fixture'
+  fixtureId: string | null
+  startedAt: string
+  completedAt: string | null
+  mode: 'manual' | 'scheduled'
+  tasksPlanned: number
+  tasksRan: number
+  tasksSkipped: number
+  domainsAvailable: number
+  domainsUnavailable: number
+  domainsUnsupported: number
+  providerCallsBlocked: number
+  status: string
+  limitations: string[]
+}
+
+export interface LineupWindowDto {
+  fixtureId: string
+  status: 'too_early' | 'probable_expected' | 'confirmed_expected_soon' | 'confirmed_available' | 'confirmed_unavailable' | 'provider_not_supported' | 'stale' | 'unknown'
+  minutesToKickoff: number | null
+  lineupSnapshotAt: string | null
+  shouldWait: boolean
+  shouldRefreshNow: boolean
+  nextRecommendedCheckAt: string | null
+  limitations: string[]
+}
+
+export interface PlayerImportanceFixtureDto {
+  fixtureId: string
+  home: Array<{ playerName: string; position: string | null; importanceLevel: string; evidence: string[] }>
+  away: Array<{ playerName: string; position: string | null; importanceLevel: string; evidence: string[] }>
+  limitations: string[]
+}
+
+export interface ReadinessV2Dto {
+  status: 'ready_for_pre_match_analysis' | 'wait_for_lineup' | 'wait_for_injury_suspension_update' | 'wait_for_live_confirmation' | 'provider_limited' | 'insufficient_context' | 'stay_out'
+  score: number
+  providerCoverageScore: number
+  lineupReadiness: string
+  injurySuspensionReadiness: string
+  contextReadiness: string
+  memoryReadiness: string
+  criticalMissingDomains: string[]
+  stayOutReasons: string[]
+  waitReasons: string[]
+  limitations: string[]
+}
+
+export interface PrecheckV2Dto {
+  fixtureId: string
+  mode: 'observe' | 'enforce'
+  enabled: boolean
+  enforced: boolean
+  decision: 'avoid' | 'wait_for_lineup' | 'wait_for_injury_suspension_update' | 'wait_for_live_confirmation' | 'monitor' | 'alert_candidate' | 'strong_alert' | 'post_match_learning_only'
+  reasons: string[]
+  positiveFactors: string[]
+  negativeFactors: string[]
+  uncertaintyFactors: string[]
+  stayOutReasons: string[]
+  limitations: string[]
+}
+
+export interface PostMatchV2Dto extends PostMatchExplanationDto {
+  causeCategory: string
+  redCardChangedGame: boolean
+  providerWasLimited: boolean
+  shouldHaveWaitedLineup: boolean
+  shouldHaveWaitedLiveConfirmation: boolean
+  classicOrKnockoutVolatility: boolean | 'unknown'
+}
+
+export interface MatchIntelligencePackageV2Dto {
+  base: MatchIntelligencePackageDto
+  acquisitionStatus: { lastRunAt: string | null; runs: number }
+  domainSnapshots: Array<{ domain: string; provider: string | null; availability: string; freshness: string; fetchedAt: string; stale: boolean }>
+  lineupWindow: LineupWindowDto | null
+  playerImportance: { home: PlayerImportanceFixtureDto['home']; away: PlayerImportanceFixtureDto['away'] }
+  readinessV2: ReadinessV2Dto | null
+  precheckV2: PrecheckV2Dto | null
+  missingCriticalDomains: string[]
+  lastRefreshAt: string | null
+  nextRecommendedRefreshAt: string | null
+  providerReliability: { configured: string[]; unconfigured: string[] }
+  shouldRefreshNow: boolean
+  limitations: string[]
+}
+
+export const PRECHECK_V2_LABEL: Record<string, string> = {
+  avoid: 'Ficar fora',
+  wait_for_lineup: 'Esperar escalação',
+  wait_for_injury_suspension_update: 'Esperar lesões/suspensões',
+  wait_for_live_confirmation: 'Esperar confirmação ao vivo',
+  monitor: 'Monitorar',
+  alert_candidate: 'Candidato a alerta',
+  strong_alert: 'Alerta forte',
+  post_match_learning_only: 'Apenas pós-jogo',
+}
+
+export const READINESS_V2_LABEL: Record<string, string> = {
+  ready_for_pre_match_analysis: 'Pronto p/ análise pré-jogo',
+  wait_for_lineup: 'Esperar escalação',
+  wait_for_injury_suspension_update: 'Esperar lesões/suspensões',
+  wait_for_live_confirmation: 'Esperar confirmação ao vivo',
+  provider_limited: 'Limitado por provider',
+  insufficient_context: 'Contexto insuficiente',
+  stay_out: 'Ficar fora',
+}

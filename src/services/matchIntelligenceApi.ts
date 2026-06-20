@@ -8,7 +8,8 @@ import { apiFetch } from './apiClient'
 import type {
   ProviderCapabilitiesDto, MatchDayScopeDto, MatchIntelligencePackageDto, ReadinessDto,
   DecisionInputBundleDto, AlertPrecheckDto, PostMatchExplanationDto, TeamMemoryDto,
-  SquadAvailabilityDto,
+  SquadAvailabilityDto, ProviderStackReportDto, AcquisitionRunDto, LineupWindowDto,
+  PlayerImportanceFixtureDto, ReadinessV2Dto, PrecheckV2Dto, PostMatchV2Dto, MatchIntelligencePackageV2Dto,
 } from '@/features/matchIntelligence/matchIntelligenceTypes'
 
 const BASE = '/api/match-intelligence'
@@ -29,4 +30,17 @@ export const matchIntelligenceApi = {
   getAlertPrecheck(id: string) { return apiFetch<AlertPrecheckDto>(`${fx(id)}/alert-precheck`) },
   getPostMatchExplanation(id: string) { return apiFetch<PostMatchExplanationDto>(`${fx(id)}/post-match-explanation`) },
   refreshMatchIntelligence(id: string) { return apiFetch<{ package: MatchIntelligencePackageDto; providerBudget: unknown }>(`${fx(id)}/refresh`, { method: 'POST', body: '{}' }) },
+  // ── B40 ──
+  getProviderStack() { return apiFetch<ProviderStackReportDto>(`${BASE}/provider-stack`) },
+  getAcquisitionToday() { return apiFetch<{ plans: unknown[]; generatedAt: string }>(`${BASE}/acquisition/today`) },
+  runAcquisitionToday() { return apiFetch<AcquisitionRunDto>(`${BASE}/acquisition/today/run`, { method: 'POST', body: '{}' }) },
+  getFixtureAcquisition(id: string) { return apiFetch<{ plan: unknown[]; report: { snapshots: unknown[]; runs: unknown[] } }>(`${fx(id)}/acquisition`) },
+  runFixtureAcquisition(id: string) { return apiFetch<AcquisitionRunDto>(`${fx(id)}/acquisition/run`, { method: 'POST', body: '{}' }) },
+  getLineupWindow(id: string) { return apiFetch<LineupWindowDto>(`${fx(id)}/lineup-window`) },
+  refreshLineupWindow(id: string) { return apiFetch<{ run: AcquisitionRunDto; window: LineupWindowDto }>(`${fx(id)}/lineup-window/refresh`, { method: 'POST', body: '{}' }) },
+  getPlayerImportance(id: string) { return apiFetch<PlayerImportanceFixtureDto>(`${fx(id)}/player-importance`) },
+  getReadinessV2(id: string) { return apiFetch<ReadinessV2Dto>(`${fx(id)}/readiness-v2`) },
+  getPrecheckV2(id: string) { return apiFetch<PrecheckV2Dto>(`${fx(id)}/precheck-v2`) },
+  getPostMatchExplanationV2(id: string) { return apiFetch<PostMatchV2Dto>(`${fx(id)}/post-match-explanation-v2`) },
+  getMatchIntelligencePackageV2(id: string) { return apiFetch<MatchIntelligencePackageV2Dto>(`${fx(id)}/package-v2`) },
 }

@@ -84,3 +84,91 @@ export async function runAlertDecisionPrecheck(fixtureId: string): Promise<Alert
   const enforced = enabled && mode === 'enforce' && evald.decision !== 'allow_alert'
   return { fixtureId, mode, enabled, enforced, ...evald, generatedAt: new Date().toISOString() }
 }
+
+// ─── Precheck V2 (B40) — provider/lineup/injury-aware, still observe-first ─────
+import { buildFundamentalReadinessV2 } from './fundamentalReadinessEngine.service.js'
+import { getLineupWindowStatus } from './lineupWindowEngine.service.js'
+import { getBestProviderForDomain } from './providers/providerRegistry.service.js'
+
+export type PrecheckV2Decision =
+  | 'avoid' | 'wait_for_lineup' | 'wait_for_injury_suspension_update' | 'wait_for_live_confirmation'
+  | 'monitor' | 'alert_candidate' | 'strong_alert' | 'post_match_learning_only'
+
+export interface AlertDecisionPrecheckV2Result {
+  fixtureId: string
+  mode: 'observe' | 'enforce'
+  enabled: boolean
+  enforced: boolean
+  decision: PrecheckV2Decision
+  reasons: string[]
+  positiveFactors: string[]
+  negativeFactors: string[]
+  uncertaintyFactors: string[]
+  stayOutReasons: string[]
+  limitations: string[]
+  generatedAt: string
+}
+
+export async function runAlertDecisionPrecheckV2(fixtureId: string): Promise<AlertDecisionPrecheckV2Result> {
+  const enabled = isPrecheckEnabled()
+  const mode = precheckMode()
+  const base: AlertDecisionPrecheckV2Result = {
+    fixtureId, mode, enabled, enforced: false, decision: 'monitor', reasons: [],
+    positiveFactors: [], negativeFactors: [], uncertaintyFactors: [], stayOutReasons: [],
+    limitations: ['Precheck V2 observacional: nunca bloqueia alerta real em observe; não altera score/confiança/resultado.'], generatedAt: new Date().toISOString(),
+  }
+  const pkg = await buildMatchIntelligencePackage(fixtureId).catch(() => null)
+  if (!pkg) { base.decision = 'monitor'; base.reasons.push('Pacote indisponível — não aplicável (não bloqueia).'); return base }
+
+  const [readinessV2, lineupWindow] = await Promise.all([
+    buildFundamentalReadinessV2(fixtureId).catch(() => null),
+    getLineupWindowStatus(fixtureId).catch(() => null),
+  ])
+
+  const reasons: string[] = []
+  const positive: string[] = []
+  const negative: string[] = []
+  const uncertain: string[] = []
+  const stayOut: string[] = [...pkg.stayOutReasons]
+
+  // Reason flags.
+  if (lineupWindow?.shouldWait) reasons.push('lineup_pending')
+  if (!getBestProviderForDomain('injuries')) reasons.push('provider_missing_injuries')
+  if (!getBestProviderForDomain('suspensions')) reasons.push('provider_missing_suspensions')
+  if (pkg.squads?.waitForLineupRecommended) uncertain.push('key_absence_unknown')
+  if (pkg.h2h?.h2hReliability === 'insufficient_data') reasons.push('h2h_insufficient')
+  if (pkg.context?.volatilityRisk === 'high') { reasons.push('context_high_volatility'); negative.push('alta volatilidade de contexto') }
+  if (pkg.context?.competitionContext.isKnockout === true) reasons.push('knockout_context_requires_caution')
+
+  const hasMemory = (pkg.teams.home?.sampleSize ?? 0) + (pkg.teams.away?.sampleSize ?? 0) > 0
+  if (hasMemory) {
+    const conf = (pkg.teams.home?.patternsConfirmed ?? 0) + (pkg.teams.away?.patternsConfirmed ?? 0)
+    const fail = (pkg.teams.home?.patternsFailed ?? 0) + (pkg.teams.away?.patternsFailed ?? 0)
+    if (conf > fail) { reasons.push('memory_supports_pattern'); positive.push('memória interna favorável') }
+    else if (fail > conf) { reasons.push('memory_contradicts_pattern'); negative.push('memória interna desfavorável') }
+  }
+
+  // Decision logic (advisory).
+  let decision: PrecheckV2Decision
+  if (pkg.phase === 'post_match') decision = 'post_match_learning_only'
+  else if (lineupWindow?.shouldWait || readinessV2?.status === 'wait_for_lineup') decision = 'wait_for_lineup'
+  else if (readinessV2?.status === 'wait_for_injury_suspension_update') decision = 'wait_for_injury_suspension_update'
+  else if (pkg.phase === 'live' && !(pkg.live?.hasStats)) decision = 'wait_for_live_confirmation'
+  else if (readinessV2?.status === 'stay_out' || (stayOut.length > 0 && !hasMemory)) decision = 'avoid'
+  else if (readinessV2?.status === 'provider_limited' || pkg.context?.volatilityRisk === 'high') decision = 'monitor'
+  else if (hasMemory && positive.length > 0 && negative.length === 0) decision = 'alert_candidate'
+  else decision = 'monitor'
+
+  if (decision === 'avoid') reasons.push('fundamentals_contradict_pattern')
+  if (decision === 'alert_candidate') reasons.push('fundamentals_support_pattern')
+
+  base.decision = decision
+  base.reasons = reasons
+  base.positiveFactors = [...new Set([...positive, ...pkg.positiveFactors])]
+  base.negativeFactors = [...new Set([...negative, ...pkg.negativeFactors])]
+  base.uncertaintyFactors = [...new Set([...uncertain, ...pkg.uncertaintyFactors])]
+  base.stayOutReasons = stayOut
+  base.enforced = enabled && mode === 'enforce' && (decision === 'avoid' || decision.startsWith('wait'))
+  if (readinessV2) base.limitations.push(`Cobertura de provider: ${readinessV2.providerCoverageScore}%.`)
+  return base
+}

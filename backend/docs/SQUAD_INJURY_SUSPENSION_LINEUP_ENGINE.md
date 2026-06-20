@@ -34,3 +34,11 @@ engine can recommend waiting instead of alerting on a thin pre-match base.
 Everything here is structural honesty about absent data. When/if lineup/injury/
 suspension collection is added (e.g. via a dedicated provider), this engine becomes the
 integration point — the contracts already exist in `footballIntelligence.types.ts`.
+
+## B40 — acquisition + lineup window
+
+Lineups/injuries/suspensions can now be acquired via the multi-provider layer when a
+provider is configured (`PRE_MATCH_ACQUISITION.md`), and the dedicated
+`lineupWindowEngine.service.ts` (`LINEUP_WINDOW_ENGINE.md`) manages the lineup-drop
+moment (wait / refresh / impact). Without a configured provider these remain
+`provider_not_configured`/`unavailable` — never "no injury"/"empty lineup".
