@@ -108,3 +108,12 @@ high-unknown-as-warning, default-template safety, Noop safety. All pass.
 
 ## Verification
 - `npm run typecheck` ✓ · `npm run build` ✓ · all four auto-engine smokes ✓
+
+---
+
+## B26 — policy routes are now permission-guarded (extension)
+
+Policy config (`POST`/`PATCH`) requires `policy:config` + admin/owner + `ENABLE_AUTO_ALERT_POLICY_CONFIG`;
+policy evaluate requires `policy:evaluate` (+ rate limit). Env gates are unchanged and are checked
+first by the guard (env off ⇒ 403 even for owner). Denials and successes are recorded in the admin
+audit. See [`AUTH_ADMIN_GUARDRAILS.md`](./AUTH_ADMIN_GUARDRAILS.md).

@@ -33,6 +33,7 @@ import type {
 import type {
   AutoAlertPolicy, AutoAlertPolicyEvaluation,
 } from '../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
+import type { AdminAuditEntry } from '../modules/audit/adminAudit.types.js'
 
 let warned = false
 function warnOnce(): void {
@@ -160,4 +161,8 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async listAutoAlertPolicyEvaluations(): Promise<AutoAlertPolicyEvaluation[]> { return [] }
   async listAutoAlertPolicyEvaluationsByOpportunity(): Promise<AutoAlertPolicyEvaluation[]> { return [] }
   async listAutoAlertPolicyEvaluationsByPolicy(): Promise<AutoAlertPolicyEvaluation[]> { return [] }
+
+  // ── B26 (Noop): audit accepted without persistence; reads empty ──
+  async createAdminAuditEntry(entry: AdminAuditEntry): Promise<AdminAuditEntry> { return entry }
+  async listAdminAuditEntries(): Promise<AdminAuditEntry[]> { return [] }
 }

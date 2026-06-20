@@ -145,6 +145,7 @@ import type {
 import type {
   AutoAlertPolicy, AutoAlertPolicyEvaluation,
 } from '../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
+import type { AdminAuditEntry } from '../modules/audit/adminAudit.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -265,6 +266,10 @@ export interface IntelligenceRepository {
   listAutoAlertPolicyEvaluations(limit?: number): Promise<AutoAlertPolicyEvaluation[]>
   listAutoAlertPolicyEvaluationsByOpportunity(opportunityId: string, limit?: number): Promise<AutoAlertPolicyEvaluation[]>
   listAutoAlertPolicyEvaluationsByPolicy(policyId: string, limit?: number): Promise<AutoAlertPolicyEvaluation[]>
+
+  // ── B26: admin audit trail (never stores tokens/secrets) ────────────────────
+  createAdminAuditEntry(entry: AdminAuditEntry): Promise<AdminAuditEntry>
+  listAdminAuditEntries(limit?: number): Promise<AdminAuditEntry[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

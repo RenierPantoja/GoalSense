@@ -38,6 +38,7 @@ import type {
 import type {
   AutoAlertPolicy, AutoAlertPolicyEvaluation,
 } from '../../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
+import type { AdminAuditEntry } from '../../modules/audit/adminAudit.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -65,6 +66,7 @@ const AUTO_LEARNING_RUNS = 'autoEngineLearningRuns'
 const AUTO_LEARNING_PROFILES = 'autoEngineLearningProfiles'
 const AUTO_ALERT_POLICIES = 'autoAlertPolicies'
 const AUTO_ALERT_POLICY_EVALS = 'autoAlertPolicyEvaluations'
+const ADMIN_AUDIT = 'adminAuditTrail'
 
 const READ_CAP = 2000
 
@@ -629,5 +631,18 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     const snap = await db.collection(AUTO_ALERT_POLICY_EVALS).where('policyId', '==', policyId).limit(READ_CAP).get()
     return snap.docs.map((d: any) => docData<AutoAlertPolicyEvaluation>(d))
       .sort((a: any, b: any) => (b.evaluatedAt || '').localeCompare(a.evaluatedAt || '')).slice(0, limit || 100)
+  }
+
+  // ── B26: admin audit trail ──────────────────────────────────────────────────
+  async createAdminAuditEntry(entry: AdminAuditEntry): Promise<AdminAuditEntry> {
+    const db = await getFirestore()
+    await db.collection(ADMIN_AUDIT).doc(entry.id).set(entry, { merge: true })
+    return entry
+  }
+  async listAdminAuditEntries(limit?: number): Promise<AdminAuditEntry[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(ADMIN_AUDIT).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<AdminAuditEntry>(d))
+      .sort(byCreatedAtDesc).slice(0, limit || 100)
   }
 }

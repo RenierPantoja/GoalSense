@@ -54,3 +54,12 @@ The scope reason carries `policyId`/`evaluationId`/`opportunityId` for full trac
 
 ## Verification
 - `npm run check:encoding` ✓ · `npx tsc --noEmit` ✓ · `npx vite build` ✓
+
+---
+
+## B26 — policy UI is role-gated (extension)
+
+The "Políticas" panel uses `useAuth`: creating/editing a policy requires admin/owner + the config
+flag (honest tooltip + `AdminOnlyBadge` otherwise), and the editor only offers `auto_create_monitored`
+when `ENABLE_AUTO_ALERT_CREATE` is on AND the user is admin/owner. The backend remains the
+authority. See [`AUTH_GUARDRAILS_UI.md`](./AUTH_GUARDRAILS_UI.md).

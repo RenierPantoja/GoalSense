@@ -35,6 +35,10 @@ import {
   evaluateOpportunityPolicies, listOpportunityPolicyEvaluations, listPolicyEvaluations,
 } from './autoEngine/autoAlertPolicyEvaluation.service.js'
 import type { AutoOpportunityActionType, AutoOpportunityFeedbackType, ManualAlertPromotionRequest } from './autoEngine/autoEngine.types.js'
+import { requirePermission } from '../../middleware/requirePermission.middleware.js'
+import { rateLimit } from '../../middleware/rateLimit.middleware.js'
+import { ROUTE_ACCESS } from '../auth/routeAccess.policy.js'
+import { recordAdminAudit } from '../audit/adminAudit.service.js'
 
 const VALID_ACTIONS: AutoOpportunityActionType[] = [
   'saved', 'unsaved', 'dismissed', 'restored', 'marked_useful', 'marked_not_useful',
@@ -60,13 +64,16 @@ export async function autoEngineRoutes(app: FastifyInstance) {
     catch (e: any) { app.log.warn(`auto-engine status failed: ${e?.message || e}`); return ok(null) }
   })
 
-  app.post('/intelligence/auto-engine/scan', async (req, reply) => {
+  app.post('/intelligence/auto-engine/scan', {
+    preHandler: [requirePermission(ROUTE_ACCESS.auto_scan), rateLimit({ key: 'auto_scan', max: 'dangerous' })],
+  }, async (req, reply) => {
     if (!isAutoEngineEnabled()) {
       return reply.status(403).send({ success: false, error: { message: 'Motor automático desabilitado. Defina ENABLE_AUTO_ENGINE=true no backend.' } })
     }
     const body = (req.body || {}) as { dryRun?: boolean; limit?: number; persist?: boolean }
     try {
       const run = await runAutoEngineScan({ dryRun: !!body.dryRun, limit: body.limit, persist: body.persist === true })
+      void recordAdminAudit({ auth: req.auth, action: 'auto_engine_scan', route: req.url, method: req.method, result: 'success', resourceType: 'auto_engine_run', resourceId: (run as any)?.id ?? null })
       return ok(run)
     } catch (e: any) {
       app.log.error(`auto-engine scan failed: ${e?.message || e}`)
@@ -128,7 +135,9 @@ export async function autoEngineRoutes(app: FastifyInstance) {
 
   // ── B21: opportunity actions / feedback / notes ──────────────────────────────
   // These never create an alert, never send Telegram, never alter a pattern/score.
-  app.post('/intelligence/auto-engine/opportunities/:id/actions', async (req, reply) => {
+  app.post('/intelligence/auto-engine/opportunities/:id/actions', {
+    preHandler: [requirePermission(ROUTE_ACCESS.opportunity_action)],
+  }, async (req, reply) => {
     const { id } = req.params as { id: string }
     const body = (req.body || {}) as Partial<CreateActionInput>
     if (!body.actionType || !VALID_ACTIONS.includes(body.actionType)) {
@@ -160,7 +169,9 @@ export async function autoEngineRoutes(app: FastifyInstance) {
     catch (e: any) { app.log.warn(`auto-engine action-summary failed: ${e?.message || e}`); return ok(null) }
   })
 
-  app.post('/intelligence/auto-engine/opportunities/:id/feedback', async (req, reply) => {
+  app.post('/intelligence/auto-engine/opportunities/:id/feedback', {
+    preHandler: [requirePermission(ROUTE_ACCESS.opportunity_feedback)],
+  }, async (req, reply) => {
     const { id } = req.params as { id: string }
     const body = (req.body || {}) as { feedbackType?: AutoOpportunityFeedbackType; note?: string }
     if (!body.feedbackType || !VALID_FEEDBACK.includes(body.feedbackType)) {
@@ -171,7 +182,9 @@ export async function autoEngineRoutes(app: FastifyInstance) {
     return ok({ action: res.action, summary: res.summary, userState: res.userState })
   })
 
-  app.post('/intelligence/auto-engine/opportunities/:id/notes', async (req, reply) => {
+  app.post('/intelligence/auto-engine/opportunities/:id/notes', {
+    preHandler: [requirePermission(ROUTE_ACCESS.opportunity_action)],
+  }, async (req, reply) => {
     const { id } = req.params as { id: string }
     const body = (req.body || {}) as { note?: string }
     if (!body.note || !body.note.trim()) return reply.status(400).send(badRequest('Nota vazia.'))
@@ -181,7 +194,9 @@ export async function autoEngineRoutes(app: FastifyInstance) {
   })
 
   // ── B21: promotion plan (proposal only — never saves/activates a radar) ──────
-  app.post('/intelligence/auto-engine/opportunities/:id/promotion-plan', async (req, reply) => {
+  app.post('/intelligence/auto-engine/opportunities/:id/promotion-plan', {
+    preHandler: [requirePermission(ROUTE_ACCESS.promotion_plan)],
+  }, async (req, reply) => {
     const { id } = req.params as { id: string }
     const res = await createPromotionPlanForOpportunity(id)
     if (!res.ok) return reply.status(404).send(notFound(res.error || 'Oportunidade não encontrada.'))
@@ -204,7 +219,9 @@ export async function autoEngineRoutes(app: FastifyInstance) {
     } catch (e: any) { app.log.warn(`auto-engine alert-preview failed: ${e?.message || e}`); return ok(null) }
   })
 
-  app.post('/intelligence/auto-engine/opportunities/:id/promote-to-alert', async (req, reply) => {
+  app.post('/intelligence/auto-engine/opportunities/:id/promote-to-alert', {
+    preHandler: [requirePermission(ROUTE_ACCESS.promote_to_alert), rateLimit({ key: 'promote_to_alert', max: 'dangerous' })],
+  }, async (req, reply) => {
     const { id } = req.params as { id: string }
     if (!isManualPromotionEnabled()) {
       return reply.status(403).send({ success: false, error: { message: 'Promoção manual para alerta desabilitada. Defina ENABLE_MANUAL_AUTO_OPPORTUNITY_PROMOTION=true no backend.' } })
@@ -224,6 +241,7 @@ export async function autoEngineRoutes(app: FastifyInstance) {
       if (result.reason === 'opportunity_not_found') return reply.status(404).send(notFound('Oportunidade não encontrada.'))
       return reply.status(400).send(badRequest('Não foi possível promover a oportunidade.', { reason: result.reason }))
     }
+    void recordAdminAudit({ auth: req.auth, action: 'promote_to_alert', route: req.url, method: req.method, result: 'success', resourceType: 'opportunity', resourceId: id, metadata: { alertId: result.alertId, duplicate: result.duplicate } })
     return ok(result)
   })
 
@@ -252,7 +270,9 @@ export async function autoEngineRoutes(app: FastifyInstance) {
     catch (e: any) { app.log.warn(`auto-engine promoted-alerts list failed: ${e?.message || e}`); return ok([]) }
   })
 
-  app.post('/intelligence/auto-engine/promoted-alerts/:alertId/resolve-now', async (req, reply) => {
+  app.post('/intelligence/auto-engine/promoted-alerts/:alertId/resolve-now', {
+    preHandler: [requirePermission(ROUTE_ACCESS.resolve_now), rateLimit({ key: 'resolve_now', max: 'dangerous' })],
+  }, async (req, reply) => {
     const { alertId } = req.params as { alertId: string }
     if (!isPromotedAlertManualResolveEnabled()) {
       return reply.status(403).send({ success: false, error: { message: 'Resolução manual de alerta promovido desabilitada. Defina ENABLE_PROMOTED_ALERT_MANUAL_RESOLVE=true no backend.' } })
@@ -263,18 +283,22 @@ export async function autoEngineRoutes(app: FastifyInstance) {
         if (res.reason === 'alert_not_found') return reply.status(404).send(notFound('Alerta não encontrado.'))
         return reply.status(400).send(badRequest('Não foi possível resolver agora.', { reason: res.reason }))
       }
+      void recordAdminAudit({ auth: req.auth, action: 'resolve_now', route: req.url, method: req.method, result: 'success', resourceType: 'promoted_alert', resourceId: alertId })
       return ok(res.result)
     } catch (e: any) { app.log.error(`auto-engine resolve-now failed: ${e?.message || e}`); return reply.status(400).send(badRequest('Resolução falhou', e?.message)) }
   })
 
   // ── B24: Auto Engine learning & calibration (observational; never auto-tunes) ──
-  app.post('/intelligence/auto-engine/learning/rebuild', async (req, reply) => {
+  app.post('/intelligence/auto-engine/learning/rebuild', {
+    preHandler: [requirePermission(ROUTE_ACCESS.auto_learning_rebuild), rateLimit({ key: 'auto_learning_rebuild', max: 'dangerous' })],
+  }, async (req, reply) => {
     if (!isAutoEngineLearningRebuildEnabled()) {
       return reply.status(403).send({ success: false, error: { message: 'Recálculo de calibração desabilitado. Defina ENABLE_AUTO_ENGINE_LEARNING_REBUILD=true no backend.' } })
     }
     const body = (req.body || {}) as { dryRun?: boolean; from?: string; to?: string }
     try {
       const res = await rebuildAutoEngineLearningProfiles({ dryRun: body.dryRun === true, from: body.from, to: body.to })
+      void recordAdminAudit({ auth: req.auth, action: 'auto_engine_learning_rebuild', route: req.url, method: req.method, result: 'success', resourceType: 'auto_learning_run', resourceId: (res as any)?.run?.id ?? null, metadata: { dryRun: body.dryRun === true } })
       return ok(res)
     } catch (e: any) { app.log.error(`auto-engine learning rebuild failed: ${e?.message || e}`); return reply.status(400).send(badRequest('Rebuild falhou', e?.message)) }
   })
@@ -329,28 +353,40 @@ export async function autoEngineRoutes(app: FastifyInstance) {
     catch (e: any) { app.log.warn(`auto-alert policy get failed: ${e?.message || e}`); return ok(null) }
   })
 
-  app.post('/intelligence/auto-engine/auto-alert-policies', async (req, reply) => {
+  app.post('/intelligence/auto-engine/auto-alert-policies', {
+    preHandler: [requirePermission(ROUTE_ACCESS.policy_config)],
+  }, async (req, reply) => {
     if (!isAutoAlertPolicyConfigEnabled()) {
       return reply.status(403).send({ success: false, error: { message: 'Configuração de política desabilitada. Defina ENABLE_AUTO_ALERT_POLICY_CONFIG=true no backend.' } })
     }
-    try { return ok(await createPolicy((req.body || {}) as any)) }
+    try {
+      const p = await createPolicy((req.body || {}) as any)
+      void recordAdminAudit({ auth: req.auth, action: 'policy_create', route: req.url, method: req.method, result: 'success', resourceType: 'auto_alert_policy', resourceId: p.id, metadata: { mode: p.mode, enabled: p.enabled } })
+      return ok(p)
+    }
     catch (e: any) { return reply.status(400).send(badRequest('Falha ao criar política', e?.message)) }
   })
 
-  app.patch('/intelligence/auto-engine/auto-alert-policies/:id', async (req, reply) => {
+  app.patch('/intelligence/auto-engine/auto-alert-policies/:id', {
+    preHandler: [requirePermission(ROUTE_ACCESS.policy_config)],
+  }, async (req, reply) => {
     if (!isAutoAlertPolicyConfigEnabled()) {
       return reply.status(403).send({ success: false, error: { message: 'Configuração de política desabilitada. Defina ENABLE_AUTO_ALERT_POLICY_CONFIG=true no backend.' } })
     }
     const { id } = req.params as { id: string }
     const updated = await updatePolicy(id, (req.body || {}) as any)
     if (!updated) return reply.status(404).send(notFound('Política não encontrada.'))
+    void recordAdminAudit({ auth: req.auth, action: 'policy_update', route: req.url, method: req.method, result: 'success', resourceType: 'auto_alert_policy', resourceId: id, metadata: { mode: updated.mode, enabled: updated.enabled } })
     return ok(updated)
   })
 
-  app.post('/intelligence/auto-engine/opportunities/:id/evaluate-auto-alert-policy', async (req, reply) => {
+  app.post('/intelligence/auto-engine/opportunities/:id/evaluate-auto-alert-policy', {
+    preHandler: [requirePermission(ROUTE_ACCESS.policy_evaluate), rateLimit({ key: 'policy_evaluate', max: 'dangerous' })],
+  }, async (req, reply) => {
     const { id } = req.params as { id: string }
     try {
       const res = await evaluateOpportunityPolicies(id)
+      void recordAdminAudit({ auth: req.auth, action: 'policy_evaluate', route: req.url, method: req.method, result: 'success', resourceType: 'opportunity', resourceId: id, metadata: { evaluations: res.evaluations.length } })
       return ok(res)
     } catch (e: any) { app.log.error(`auto-alert evaluate failed: ${e?.message || e}`); return reply.status(400).send(badRequest('Avaliação falhou', e?.message)) }
   })

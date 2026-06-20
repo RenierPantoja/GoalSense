@@ -219,3 +219,14 @@ opportunities after persistence only when `ENABLE_AUTO_ALERT_POLICY=true` (non-f
 shadow-first (`ENABLE_AUTO_ALERT_POLICY=false`, `ENABLE_AUTO_ALERT_CREATE=false`,
 `ENABLE_AUTO_ALERT_TELEGRAM=false`, …). Smoke `smokeAutoAlertPolicy.mjs`. See
 [`AUTO_ALERT_POLICY_ENGINE.md`](./AUTO_ALERT_POLICY_ENGINE.md).
+
+---
+
+## B26 — Auth, Admin Guardrails & Security (extension)
+
+Sensitive Auto Engine routes are now permission-guarded: scan (`run:scan` + `ENABLE_AUTO_ENGINE`),
+opportunity action/feedback/notes (`opportunity:*`), promotion plan (`promotion:plan`),
+promote-to-alert (`promote:alert`), policy config (admin), policy evaluate, learning rebuild
+(admin), resolve-now (admin) — each keeping its env gate (checked first) plus rate limiting on
+dangerous routes and admin-audit logging. A global `onRequest` hook attaches `request.auth`. Reads
+stay open when `ENABLE_AUTH=false`. See [`AUTH_ADMIN_GUARDRAILS.md`](./AUTH_ADMIN_GUARDRAILS.md).

@@ -8,10 +8,13 @@
 import type { FastifyInstance } from 'fastify'
 import { createRepositories } from '../../repositories/index.js'
 import { ok } from '../../utils/apiResponse.js'
-import { env } from '../../env.js'
 import { searchAlerts, exportAlerts, type AlertIntelFilters, type AlertSearchItem } from './alertIntelligence.service.js'
 import { getAlertOverviewCached } from './alertIntelligenceCache.service.js'
 import { relatedForAlert, relatedForPattern } from './relatedAlerts.service.js'
+import { requirePermission } from '../../middleware/requirePermission.middleware.js'
+import { rateLimit } from '../../middleware/rateLimit.middleware.js'
+import { ROUTE_ACCESS } from '../auth/routeAccess.policy.js'
+import { recordAdminAudit } from '../audit/adminAudit.service.js'
 
 function clampLimit(raw: string | undefined, def: number, max: number): number {
   const n = raw ? parseInt(raw, 10) : def
@@ -93,17 +96,17 @@ export async function intelligenceRoutes(app: FastifyInstance) {
     } catch (e: any) { app.log.warn(`alert search failed: ${e?.message || e}`); return ok({ items: [], total: 0, totalApprox: 0, nextCursor: null, hasMore: false, appliedFilters: [] }) }
   })
 
-  // ── B18: CSV export (env-gated) ─────────────────────────────────────────────
-  app.get('/intelligence/alerts/export.csv', async (req, reply) => {
-    if (String(env.ENABLE_ALERT_EXPORT).toLowerCase() !== 'true') {
-      return reply.status(403).send({ success: false, error: { message: 'Exportação desabilitada. Defina ENABLE_ALERT_EXPORT=true no backend.' } })
-    }
+  // ── B18: CSV export (env-gated + B26 auth/rate-limit/audit) ─────────────────
+  app.get('/intelligence/alerts/export.csv', {
+    preHandler: [requirePermission(ROUTE_ACCESS.export_csv), rateLimit({ key: 'export_csv', max: 'dangerous' })],
+  }, async (req, reply) => {
     const q = req.query as any
     try {
       const max = Math.min(parseInt(q.limit, 10) || 5000, 5000)
       const items = await exportAlerts(parseFilters(q), max)
       const csv = buildAlertsCsv(items)
       const filename = `goalsense-alerts-${new Date().toISOString().slice(0, 10)}.csv`
+      void recordAdminAudit({ auth: req.auth, action: 'export_csv', route: req.url, method: req.method, result: 'success', resourceType: 'alerts_csv', resourceId: null, metadata: { rows: items.length } })
       reply.header('Content-Type', 'text/csv; charset=utf-8')
       reply.header('Content-Disposition', `attachment; filename="${filename}"`)
       return reply.send(csv)

@@ -12,6 +12,10 @@ import { ok, badRequest } from '../../utils/apiResponse.js'
 import { isBacktestApiEnabled, validateAndNormalizeConfig } from './backtest/utils/backtestGuards.util.js'
 import { runPatternBacktest } from './backtest/backtestEngine.service.js'
 import { replayFixture } from './backtest/replayEngine.service.js'
+import { requirePermission } from '../../middleware/requirePermission.middleware.js'
+import { rateLimit } from '../../middleware/rateLimit.middleware.js'
+import { ROUTE_ACCESS } from '../auth/routeAccess.policy.js'
+import { recordAdminAudit } from '../audit/adminAudit.service.js'
 
 function disabled(reply: any) {
   return reply.status(403).send({ success: false, error: { message: 'Backtest API disabled. Set ENABLE_BACKTEST_API=true to enable.' } })
@@ -25,12 +29,15 @@ function clampLimit(raw: string | undefined, def: number, max: number): number {
 export async function backtestRoutes(app: FastifyInstance) {
   const repos = createRepositories()
 
-  app.post('/intelligence/backtest/run', async (req, reply) => {
+  app.post('/intelligence/backtest/run', {
+    preHandler: [requirePermission(ROUTE_ACCESS.backtest_run), rateLimit({ key: 'backtest_run', max: 'dangerous' })],
+  }, async (req, reply) => {
     if (!isBacktestApiEnabled()) return disabled(reply)
     const v = validateAndNormalizeConfig((req.body || {}) as any)
     if (!v.ok) return reply.status(400).send(badRequest(v.error))
     try {
       const run = await runPatternBacktest(v.config)
+      void recordAdminAudit({ auth: req.auth, action: 'backtest_run', route: req.url, method: req.method, result: 'success', resourceType: 'backtest', resourceId: (run as any)?.id ?? null })
       return ok(run)
     } catch (e: any) {
       app.log.error(`backtest run failed: ${e?.message || e}`)
@@ -57,11 +64,17 @@ export async function backtestRoutes(app: FastifyInstance) {
     catch (e: any) { app.log.warn(`backtest results read failed: ${e?.message || e}`); return ok([]) }
   })
 
-  app.post('/intelligence/replay/run', async (req, reply) => {
+  app.post('/intelligence/replay/run', {
+    preHandler: [requirePermission(ROUTE_ACCESS.replay_run), rateLimit({ key: 'replay_run', max: 'dangerous' })],
+  }, async (req, reply) => {
     if (!isBacktestApiEnabled()) return disabled(reply)
     const { patternId, fixtureId } = (req.body || {}) as { patternId?: string; fixtureId?: string }
     if (!patternId || !fixtureId) return reply.status(400).send(badRequest('patternId and fixtureId are required'))
-    try { return ok(await replayFixture(patternId, fixtureId, { persist: true })) }
+    try {
+      const r = await replayFixture(patternId, fixtureId, { persist: true })
+      void recordAdminAudit({ auth: req.auth, action: 'replay_run', route: req.url, method: req.method, result: 'success', resourceType: 'replay', resourceId: fixtureId })
+      return ok(r)
+    }
     catch (e: any) { app.log.error(`replay run failed: ${e?.message || e}`); return reply.status(400).send(badRequest('Replay failed', e?.message)) }
   })
 

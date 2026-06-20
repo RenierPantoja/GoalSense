@@ -8,12 +8,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw, Plus, Pencil, ShieldAlert } from 'lucide-react'
 import { autoEngineApi } from '@/services/autoEngineApi'
+import { useAuth } from '@/services/authApi'
+import { AdminOnlyBadge } from './PermissionGate'
 import type { AutoAlertPolicyDto, AutoAlertPolicyOverviewDto, AutoAlertPolicyEvaluationDto } from '@/features/command/intelligence/autoEngineTypes'
 import { AUTO_ALERT_MODE_LABEL, AUTO_ALERT_DECISION_LABEL, AUTO_ALERT_DECISION_TONE } from '@/features/command/intelligence/autoEngineTypes'
 import { AutoAlertPolicyOverviewPanel } from './AutoAlertPolicyOverviewPanel'
 import { AutoAlertPolicyEditor } from './AutoAlertPolicyEditor'
 
 export function AutoAlertPolicyPanel() {
+  const { ctx, isAdmin } = useAuth()
   const [overview, setOverview] = useState<AutoAlertPolicyOverviewDto | null>(null)
   const [policies, setPolicies] = useState<AutoAlertPolicyDto[]>([])
   const [evals, setEvals] = useState<AutoAlertPolicyEvaluationDto[]>([])
@@ -42,6 +45,7 @@ export function AutoAlertPolicyPanel() {
 
   const configEnabled = overview?.flags.configEnabled ?? false
   const createEnabled = overview?.flags.createEnabled ?? false
+  const canConfigure = configEnabled && isAdmin
 
   if (loading) return <p className="text-[12px] text-white/40 px-1 py-8 text-center">Carregando políticas…</p>
 
@@ -50,7 +54,8 @@ export function AutoAlertPolicyPanel() {
       <div className="flex items-center gap-3 flex-wrap">
         <p className="text-[12px] text-white/45 flex-1 min-w-[200px]">Política de automação do Motor Automático. Por padrão opera em <span className="text-white/70">shadow</span> — registra o que faria, sem criar alerta. Sem Telegram, sem odds.</p>
         <button type="button" onClick={load} className="h-9 px-3 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-[12px] text-white/60 hover:text-white/90 inline-flex items-center gap-1.5 transition-colors shrink-0"><RefreshCw size={13} />Atualizar</button>
-        <button type="button" onClick={openNew} disabled={!configEnabled} title={configEnabled ? '' : 'Requer ENABLE_AUTO_ALERT_POLICY_CONFIG=true'} className="h-9 px-3 rounded-lg border border-[#2DD4BF]/25 bg-[#13B8A6]/[0.08] hover:bg-[#13B8A6]/[0.14] text-[12px] text-[#7FE9DC] inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 shrink-0"><Plus size={13} />Nova política</button>
+        <button type="button" onClick={openNew} disabled={!canConfigure} title={canConfigure ? '' : (isAdmin ? 'Requer ENABLE_AUTO_ALERT_POLICY_CONFIG=true' : 'Apenas admin/owner pode configurar políticas')} className="h-9 px-3 rounded-lg border border-[#2DD4BF]/25 bg-[#13B8A6]/[0.08] hover:bg-[#13B8A6]/[0.14] text-[12px] text-[#7FE9DC] inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 shrink-0"><Plus size={13} />Nova política</button>
+        <AdminOnlyBadge ctx={ctx} />
       </div>
 
       {overview && <AutoAlertPolicyOverviewPanel overview={overview} />}
@@ -69,7 +74,7 @@ export function AutoAlertPolicyPanel() {
                     <p className="text-[11px] text-white/45">{AUTO_ALERT_MODE_LABEL[p.mode]} · score ≥ {p.minScore} · amostra ≥ {p.minSampleQuality}</p>
                   </div>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full border ${p.enabled && p.mode !== 'disabled' ? 'bg-[#13B8A6]/12 border-[#2DD4BF]/25 text-[#7FE9DC]' : 'bg-white/[0.05] border-white/[0.1] text-white/45'}`}>{p.enabled && p.mode !== 'disabled' ? 'ativa' : 'inativa'}</span>
-                  <button type="button" onClick={() => setEditing(p)} className="h-8 w-8 rounded-lg grid place-items-center text-white/55 bg-white/[0.04] hover:bg-white/[0.08] hover:text-white/85 transition-colors"><Pencil size={13} /></button>
+                  <button type="button" onClick={() => setEditing(p)} disabled={!canConfigure} title={canConfigure ? '' : 'Apenas admin/owner com config habilitada'} className="h-8 w-8 rounded-lg grid place-items-center text-white/55 bg-white/[0.04] hover:bg-white/[0.08] hover:text-white/85 transition-colors disabled:opacity-40"><Pencil size={13} /></button>
                 </div>
               ))}
             </div>
@@ -98,8 +103,8 @@ export function AutoAlertPolicyPanel() {
       {editing && (
         <AutoAlertPolicyEditor
           initial={editing}
-          createEnabled={createEnabled}
-          configEnabled={configEnabled}
+          createEnabled={createEnabled && isAdmin}
+          configEnabled={canConfigure}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); void load() }}
         />

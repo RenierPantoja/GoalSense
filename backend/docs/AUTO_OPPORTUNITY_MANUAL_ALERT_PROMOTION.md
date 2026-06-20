@@ -97,3 +97,12 @@ Signal Ledger + a `PromotedAlertOutcomeLink`, feeds an `AutoOpportunityOutcomeSu
 the opportunity (as a separate layer — never the score), and emits an observational
 `source:'promoted_alert_resolution'` learning event. Still no Telegram, no odds, no auto-alert.
 Full detail: [`PROMOTED_ALERT_RESOLUTION.md`](./PROMOTED_ALERT_RESOLUTION.md).
+
+---
+
+## B26 — promote-to-alert is now permission-guarded (extension)
+
+`POST …/promote-to-alert` requires `promote:alert` + `ENABLE_MANUAL_AUTO_OPPORTUNITY_PROMOTION` +
+rate limit, in addition to the existing human-confirmation acks. The auth guard runs first (env
+gate → auth → permission → admin-for-dangerous); the ack validation still applies. Success/denial
+is audited. See [`AUTH_ADMIN_GUARDRAILS.md`](./AUTH_ADMIN_GUARDRAILS.md).

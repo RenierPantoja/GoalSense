@@ -17,6 +17,8 @@ import { intelligenceRoutes } from './modules/intelligence/intelligence.routes.j
 import { learningRoutes } from './modules/intelligence/learning.routes.js'
 import { backtestRoutes } from './modules/intelligence/backtest.routes.js'
 import { autoEngineRoutes } from './modules/intelligence/autoEngine.routes.js'
+import { authRoutes } from './modules/auth/auth.routes.js'
+import { registerAuthMiddleware } from './middleware/auth.middleware.js'
 import { startLiveMonitorWorker } from './workers/liveMonitor.worker.js'
 import { startPatternEvaluationWorker } from './workers/patternEvaluation.worker.js'
 import { startAlertResolutionWorker } from './workers/alertResolution.worker.js'
@@ -44,8 +46,13 @@ await app.register(cors, {
   allowedHeaders: ['Content-Type'],
 })
 
+// Auth: attach request.auth to every request (anonymous/local-dev/real). Must run
+// after CORS so preflight is unaffected, before route handlers/guards.
+registerAuthMiddleware(app)
+
 // Routes
 app.register(healthRoutes, { prefix: '/api' })
+app.register(authRoutes, { prefix: '/api' })
 app.register(patternRoutes, { prefix: '/api' })
 app.register(alertRoutes, { prefix: '/api' })
 app.register(performanceRoutes, { prefix: '/api' })

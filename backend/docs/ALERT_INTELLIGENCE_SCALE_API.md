@@ -52,3 +52,12 @@ documented future phase.
   paginated/indexed store is the scale follow-up.
 - Overview cache is per-process in-memory (no shared cache across instances).
 - No auth on read endpoints; export protected only by env flag.
+
+---
+
+## B26 — CSV export is now permission-guarded (extension)
+
+`GET …/intelligence/alerts/export.csv` now requires `export:csv` + admin-for-dangerous +
+`ENABLE_ALERT_EXPORT` (env gate checked first) and is rate-limited; each export is recorded in the
+admin audit (row count only, no payload). Search/overview/failure reads remain open (viewer). See
+[`AUTH_ADMIN_GUARDRAILS.md`](./AUTH_ADMIN_GUARDRAILS.md).

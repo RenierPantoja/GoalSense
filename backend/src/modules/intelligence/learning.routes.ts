@@ -14,6 +14,10 @@ import { createRepositories } from '../../repositories/index.js'
 import { ok, badRequest } from '../../utils/apiResponse.js'
 import { aggregateAll, aggregatePattern, getLearningOverview } from './learning/learningAggregator.service.js'
 import { learningEventDetail, relatedForLearningEvent } from './relatedAlerts.service.js'
+import { requirePermission } from '../../middleware/requirePermission.middleware.js'
+import { rateLimit } from '../../middleware/rateLimit.middleware.js'
+import { ROUTE_ACCESS } from '../auth/routeAccess.policy.js'
+import { recordAdminAudit } from '../audit/adminAudit.service.js'
 
 function clampLimit(raw: string | undefined, def: number, max: number): number {
   const n = raw ? parseInt(raw, 10) : def
@@ -91,12 +95,15 @@ export async function learningRoutes(app: FastifyInstance) {
     catch (e: any) { app.log.warn(`learning event related alerts failed: ${e?.message || e}`); return ok({ eventId, found: false, total: 0, appliedFilters: [], relatedAlerts: [] }) }
   })
 
-  app.post('/intelligence/learning/rebuild', async (req, reply) => {
+  app.post('/intelligence/learning/rebuild', {
+    preHandler: [requirePermission(ROUTE_ACCESS.learning_rebuild), rateLimit({ key: 'learning_rebuild', max: 'dangerous' })],
+  }, async (req, reply) => {
     const { patternId, dryRun } = (req.body || {}) as { patternId?: string; dryRun?: boolean }
     try {
       const run = patternId
         ? await aggregatePattern(patternId, { dryRun: !!dryRun })
         : await aggregateAll({ dryRun: !!dryRun })
+      void recordAdminAudit({ auth: req.auth, action: 'learning_rebuild', route: req.url, method: req.method, result: 'success', resourceType: 'learning_run', resourceId: (run as any)?.id ?? null, metadata: { patternId: patternId ?? null, dryRun: !!dryRun } })
       return ok(run)
     } catch (e: any) {
       app.log.error(`learning rebuild failed: ${e?.message || e}`)

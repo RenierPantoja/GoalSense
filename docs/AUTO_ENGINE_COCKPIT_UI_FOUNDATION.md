@@ -128,3 +128,13 @@ policy CRUD (config-flag gated), and recent shadow/blocked/auto decisions. The o
 gains a "Política automática" section with an "Avaliar política agora" action. Shadow-first: the UI
 never implies a real alert unless the decision is `auto_created`. See
 [`AUTO_ALERT_POLICY_UI.md`](./AUTO_ALERT_POLICY_UI.md).
+
+---
+
+## B26 — permission-aware cockpit (extension)
+
+A lightweight `useAuth()` hook + guard components (`PermissionGate`, `DangerousActionGuard`,
+`AdminOnlyBadge`) let cockpit panels disable actions the backend would refuse, with honest reasons.
+In local dev (`ENABLE_AUTH=false`) the UI resolves to owner so nothing changes. First wired into
+the "Políticas" segment (admin-gated config + auto-create). See
+[`AUTH_GUARDRAILS_UI.md`](./AUTH_GUARDRAILS_UI.md).
