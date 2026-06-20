@@ -276,3 +276,11 @@ The scanner now attaches the evaluated snapshot's id to each opportunity
 evaluations inherit it (`policyEvidenceSnapshotId`). This is observational lineage
 only — no recompute of score/risk gate, no decision change, no alert, no Telegram.
 See `LIVE_ALERT_EVIDENCE_CAPTURE.md`.
+
+---
+
+## B37 note — live validation sessions
+A new observational session layer groups live-validation data by fixture/window and
+reads existing Auto Engine opportunities (per fixture) into the session summary. It
+never recalibrates the engine, never changes scoring/decisions, and never starts
+workers. See `LIVE_VALIDATION_SESSIONS.md`.

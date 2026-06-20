@@ -17,6 +17,7 @@
     "smoke:live-evidence": "node scripts/smokeLiveEvidenceCapture.mjs",
     "smoke:bt-replay-inline-evidence": "node scripts/smokeBacktestReplayInlineEvidence.mjs",
     "smoke:bt-replay-reprocess": "node scripts/smokeBacktestReplayEvidenceReprocessing.mjs",
+    "smoke:live-validation": "node scripts/smokeLiveValidationSessions.mjs",
     "reprocess:bt-replay-evidence": "node scripts/reprocessBacktestReplayEvidence.mjs",
     "backfill:bt-replay-inline-evidence": "node scripts/backfillBacktestReplayInlineEvidence.mjs",
     "backfill:evidence-lineage": "node scripts/backfillEvidenceLineage.mjs",

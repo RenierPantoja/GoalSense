@@ -41,6 +41,9 @@ import type {
 import type { AdminAuditEntry } from '../../modules/audit/adminAudit.types.js'
 import type { SnapshotRetentionRun, LocalOpsMetricsSnapshot } from '../../modules/localops/snapshotLifecycle.types.js'
 import type { EvidenceSnapshotReference } from '../../modules/intelligence/evidence/evidenceLineage.types.js'
+import type {
+  LiveValidationSession, LiveValidationSessionFixture, LiveValidationSessionEvent, LiveValidationSessionReport,
+} from '../../modules/validation/liveValidation.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -73,6 +76,10 @@ const SNAPSHOT_RETENTION_RUNS = 'snapshotRetentionRuns'
 const LOCAL_OPS_METRICS = 'localOpsMetrics'
 const EVIDENCE_REFS = 'evidenceSnapshotReferences'
 const BT_REPLAY_REPROCESS_RUNS = 'backtestReplayEvidenceReprocessRuns'
+const LV_SESSIONS = 'liveValidationSessions'
+const LV_FIXTURES = 'liveValidationSessionFixtures'
+const LV_EVENTS = 'liveValidationSessionEvents'
+const LV_REPORTS = 'liveValidationSessionReports'
 
 const READ_CAP = 2000
 
@@ -783,5 +790,55 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     const snap = await db.collection(BT_REPLAY_REPROCESS_RUNS).limit(READ_CAP).get()
     return snap.docs.map((d: any) => docData<BacktestReplayEvidenceReprocessRun>(d))
       .sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
+  }
+
+  // ── B37: live validation sessions ───────────────────────────────────────────
+  async createLiveValidationSession(session: LiveValidationSession): Promise<LiveValidationSession> {
+    const db = await getFirestore(); await db.collection(LV_SESSIONS).doc(session.id).set(session, { merge: true }); return session
+  }
+  async updateLiveValidationSession(id: string, patch: Partial<LiveValidationSession>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(LV_SESSIONS).doc(id); const doc = await ref.get()
+    if (!doc.exists) return { count: 0 }
+    const clean: Record<string, unknown> = {}; for (const [k, v] of Object.entries(patch)) { if (v !== undefined) clean[k] = v }
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async getLiveValidationSession(id: string): Promise<LiveValidationSession | null> {
+    const db = await getFirestore(); const doc = await db.collection(LV_SESSIONS).doc(id).get(); return doc.exists ? docData<LiveValidationSession>(doc) : null
+  }
+  async listLiveValidationSessions(limit?: number): Promise<LiveValidationSession[]> {
+    const db = await getFirestore(); const snap = await db.collection(LV_SESSIONS).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<LiveValidationSession>(d)).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit || 50)
+  }
+  async addLiveValidationSessionFixture(fixture: LiveValidationSessionFixture): Promise<LiveValidationSessionFixture> {
+    const db = await getFirestore(); await db.collection(LV_FIXTURES).doc(fixture.id).set(fixture, { merge: true }); return fixture
+  }
+  async updateLiveValidationSessionFixture(id: string, patch: Partial<LiveValidationSessionFixture>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(LV_FIXTURES).doc(id); const doc = await ref.get()
+    if (!doc.exists) return { count: 0 }
+    const clean: Record<string, unknown> = {}; for (const [k, v] of Object.entries(patch)) { if (v !== undefined) clean[k] = v }
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async listLiveValidationSessionFixtures(sessionId: string, limit?: number): Promise<LiveValidationSessionFixture[]> {
+    const db = await getFirestore(); const snap = await db.collection(LV_FIXTURES).where('sessionId', '==', sessionId).get()
+    return snap.docs.map((d: any) => docData<LiveValidationSessionFixture>(d)).slice(0, limit || 500)
+  }
+  async createLiveValidationSessionEvent(event: LiveValidationSessionEvent): Promise<LiveValidationSessionEvent> {
+    const db = await getFirestore(); await db.collection(LV_EVENTS).doc(event.id).set(event, { merge: true }); return event
+  }
+  async listLiveValidationSessionEvents(sessionId: string, limit?: number): Promise<LiveValidationSessionEvent[]> {
+    const db = await getFirestore(); const snap = await db.collection(LV_EVENTS).where('sessionId', '==', sessionId).get()
+    return snap.docs.map((d: any) => docData<LiveValidationSessionEvent>(d)).sort(byCreatedAtDesc).slice(0, limit || 1000)
+  }
+  async createLiveValidationSessionReport(report: LiveValidationSessionReport): Promise<LiveValidationSessionReport> {
+    const db = await getFirestore(); await db.collection(LV_REPORTS).doc(report.id).set(report, { merge: true }); return report
+  }
+  async getLiveValidationSessionReport(sessionId: string): Promise<LiveValidationSessionReport | null> {
+    const db = await getFirestore(); const snap = await db.collection(LV_REPORTS).where('sessionId', '==', sessionId).get()
+    const rows = snap.docs.map((d: any) => docData<LiveValidationSessionReport>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))
+    return rows[0] || null
+  }
+  async listLiveValidationSessionReports(limit?: number): Promise<LiveValidationSessionReport[]> {
+    const db = await getFirestore(); const snap = await db.collection(LV_REPORTS).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<LiveValidationSessionReport>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit || 50)
   }
 }

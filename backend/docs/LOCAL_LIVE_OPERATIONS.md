@@ -108,3 +108,13 @@ recommends. Counters are in-memory (reset on restart). Retention is dry-run only
 - New endpoints under `/api/system/local-operations`: `snapshot-retention/plan?mode`,
   `snapshot-retention/run`, `snapshot-retention/runs[/:id]`, `metrics/history`,
   `metrics/capture`.
+
+---
+
+## B37 — Live Validation Sessions
+A controlled, observational session layer to validate real games locally: pick
+fixtures/leagues, start/pause/complete, and read an honest summary/report (coverage,
+snapshots, signals, alerts, opportunities, outcomes, evidence, operational risk).
+It never starts workers, never changes guard mode/env, and never alters results.
+Endpoints under `/api/validation/live-sessions`; UI in the "Validação Ao Vivo"
+cockpit segment. See `LIVE_VALIDATION_SESSIONS.md`.

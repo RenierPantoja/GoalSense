@@ -157,6 +157,9 @@ import type {
 import type { AdminAuditEntry } from '../modules/audit/adminAudit.types.js'
 import type { SnapshotRetentionRun, LocalOpsMetricsSnapshot } from '../modules/localops/snapshotLifecycle.types.js'
 import type { EvidenceSnapshotReference } from '../modules/intelligence/evidence/evidenceLineage.types.js'
+import type {
+  LiveValidationSession, LiveValidationSessionFixture, LiveValidationSessionEvent, LiveValidationSessionReport,
+} from '../modules/validation/liveValidation.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -308,6 +311,20 @@ export interface IntelligenceRepository {
   updateBacktestReplayEvidenceReprocessRun(id: string, patch: Partial<BacktestReplayEvidenceReprocessRun>): Promise<{ count: number }>
   getBacktestReplayEvidenceReprocessRun(id: string): Promise<BacktestReplayEvidenceReprocessRun | null>
   listBacktestReplayEvidenceReprocessRuns(limit?: number): Promise<BacktestReplayEvidenceReprocessRun[]>
+
+  // ── B37: live validation sessions ───────────────────────────────────────────
+  createLiveValidationSession(session: LiveValidationSession): Promise<LiveValidationSession>
+  updateLiveValidationSession(id: string, patch: Partial<LiveValidationSession>): Promise<{ count: number }>
+  getLiveValidationSession(id: string): Promise<LiveValidationSession | null>
+  listLiveValidationSessions(limit?: number): Promise<LiveValidationSession[]>
+  addLiveValidationSessionFixture(fixture: LiveValidationSessionFixture): Promise<LiveValidationSessionFixture>
+  updateLiveValidationSessionFixture(id: string, patch: Partial<LiveValidationSessionFixture>): Promise<{ count: number }>
+  listLiveValidationSessionFixtures(sessionId: string, limit?: number): Promise<LiveValidationSessionFixture[]>
+  createLiveValidationSessionEvent(event: LiveValidationSessionEvent): Promise<LiveValidationSessionEvent>
+  listLiveValidationSessionEvents(sessionId: string, limit?: number): Promise<LiveValidationSessionEvent[]>
+  createLiveValidationSessionReport(report: LiveValidationSessionReport): Promise<LiveValidationSessionReport>
+  getLiveValidationSessionReport(sessionId: string): Promise<LiveValidationSessionReport | null>
+  listLiveValidationSessionReports(limit?: number): Promise<LiveValidationSessionReport[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

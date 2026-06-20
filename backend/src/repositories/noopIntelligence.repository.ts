@@ -33,6 +33,9 @@ import type {
 import type { SnapshotRetentionRun, LocalOpsMetricsSnapshot } from '../modules/localops/snapshotLifecycle.types.js'
 import type { EvidenceSnapshotReference } from '../modules/intelligence/evidence/evidenceLineage.types.js'
 import type {
+  LiveValidationSession, LiveValidationSessionFixture, LiveValidationSessionEvent, LiveValidationSessionReport,
+} from '../modules/validation/liveValidation.types.js'
+import type {
   AutoAlertPolicy, AutoAlertPolicyEvaluation,
 } from '../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
 import type { AdminAuditEntry } from '../modules/audit/adminAudit.types.js'
@@ -193,4 +196,18 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async updateBacktestReplayEvidenceReprocessRun(): Promise<{ count: number }> { return { count: 0 } }
   async getBacktestReplayEvidenceReprocessRun(): Promise<BacktestReplayEvidenceReprocessRun | null> { return null }
   async listBacktestReplayEvidenceReprocessRuns(): Promise<BacktestReplayEvidenceReprocessRun[]> { return [] }
+
+  // ── B37 (Noop): live validation sessions not persisted; reads empty ──
+  async createLiveValidationSession(s: LiveValidationSession): Promise<LiveValidationSession> { warnOnce(); return s }
+  async updateLiveValidationSession(): Promise<{ count: number }> { return { count: 0 } }
+  async getLiveValidationSession(): Promise<LiveValidationSession | null> { return null }
+  async listLiveValidationSessions(): Promise<LiveValidationSession[]> { return [] }
+  async addLiveValidationSessionFixture(f: LiveValidationSessionFixture): Promise<LiveValidationSessionFixture> { warnOnce(); return f }
+  async updateLiveValidationSessionFixture(): Promise<{ count: number }> { return { count: 0 } }
+  async listLiveValidationSessionFixtures(): Promise<LiveValidationSessionFixture[]> { return [] }
+  async createLiveValidationSessionEvent(e: LiveValidationSessionEvent): Promise<LiveValidationSessionEvent> { return e }
+  async listLiveValidationSessionEvents(): Promise<LiveValidationSessionEvent[]> { return [] }
+  async createLiveValidationSessionReport(r: LiveValidationSessionReport): Promise<LiveValidationSessionReport> { warnOnce(); return r }
+  async getLiveValidationSessionReport(): Promise<LiveValidationSessionReport | null> { return null }
+  async listLiveValidationSessionReports(): Promise<LiveValidationSessionReport[]> { return [] }
 }

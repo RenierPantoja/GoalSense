@@ -38,3 +38,10 @@ Surfaces the captured snapshot evidence inline, with honest exact vs inferred ba
 The B34 limitation is closed: BacktestResultsTable now renders per-row trigger/
 outcome snapshot badges, BacktestCoveragePanel shows traceability coverage, and the
 ReplayViewer shows per-step snapshot badges. See `BACKTEST_REPLAY_INLINE_EVIDENCE_UI.md`.
+
+---
+
+## B37 note
+The Live Validation Lab surfaces per-session evidence coverage (exact vs inferred)
+in its summary. Per-alert/opportunity session badges are a future enhancement
+(sessions currently group by fixture/window). See `LIVE_VALIDATION_LAB_UI.md`.

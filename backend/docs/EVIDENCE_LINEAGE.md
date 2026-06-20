@@ -85,3 +85,10 @@ When the B36 reprocessor applies an inline patch to an old backtest result, it
 creates a non-fatal **exact** `EvidenceSnapshotReference` (`backtest_result`).
 Existing inferred links are kept; exact wins in bundles by strength ranking. See
 `BACKTEST_REPLAY_EVIDENCE_REPROCESSING.md`.
+
+---
+
+## B37 note — live validation sessions
+Validation session summaries read evidence references per fixture (exact vs inferred
+counts) for an honest traceability view. The session layer is observational and does
+not create or alter evidence links. See `LIVE_VALIDATION_SESSIONS.md`.

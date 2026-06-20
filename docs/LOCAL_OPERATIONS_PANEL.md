@@ -52,3 +52,10 @@ See `SNAPSHOT_LIFECYCLE_UI.md`.
 The snapshot lifecycle section notes that protection now uses the Evidence Lineage
 index (exact > inferred). The per-alert evidence trail lives in Alertas 2.0 →
 Evidências. See `EVIDENCE_LINEAGE_UI.md`.
+
+---
+
+## B37 additions
+The panel shows an "Sessão de validação ativa" banner when a validation session is
+running/paused, linking to the new "Validação Ao Vivo" cockpit segment. See
+`LIVE_VALIDATION_LAB_UI.md`.

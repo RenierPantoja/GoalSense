@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw, Activity, Database, ShieldAlert, Gauge, Cpu, Pause, Play, RotateCcw, AlertTriangle, ShieldCheck, Trash2, Layers, History, Save } from 'lucide-react'
 import { localOperationsApi } from '@/services/localOperationsApi'
+import { liveValidationApi } from '@/services/liveValidationApi'
 import { useAuth } from '@/auth/useAuth'
 import type {
   LocalOperationsStatusDto, ProviderUsageDto, SnapshotGuardDto, CoverageDto, WorkerDto,
@@ -32,6 +33,7 @@ export function LocalOperationsPanel() {
   const [metrics, setMetrics] = useState<GuardMetricsDto | null>(null)
   const [retention, setRetention] = useState<SnapshotRetentionPlanV2Dto | null>(null)
   const [history, setHistory] = useState<LocalOpsMetricsHistoryDto | null>(null)
+  const [activeSession, setActiveSession] = useState<{ id: string; name: string; status: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [disabled, setDisabled] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -54,6 +56,9 @@ export function LocalOperationsPanel() {
     if (m.ok) setMetrics(m.data)
     if (r.ok) setRetention(r.data)
     if (h.ok) setHistory(h.data)
+    // B37: surface the active validation session (best-effort).
+    const sess = await liveValidationApi.list()
+    if (sess.ok && sess.data) { const a = sess.data.find(x => x.status === 'running' || x.status === 'paused'); setActiveSession(a ? { id: a.id, name: a.name, status: a.status } : null) }
     setLoading(false)
   }, [])
 
@@ -105,6 +110,12 @@ export function LocalOperationsPanel() {
         {isAdmin && <button type="button" onClick={() => act(localOperationsApi.resetGuardCounters, 'Contadores zerados (nenhum dado apagado).')} className="h-9 px-3 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-[12px] text-white/60 hover:text-white/90 inline-flex items-center gap-1.5 transition-colors shrink-0"><RotateCcw size={13} />Zerar contadores</button>}
       </div>
       {msg && <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-2.5 text-[12px] text-white/70">{msg}</div>}
+
+      {activeSession && (
+        <div className="rounded-xl border border-[#2DD4BF]/20 bg-[#13B8A6]/[0.05] px-4 py-2.5 text-[12px] text-[#7FE9DC]/90">
+          Sessão de validação ativa: <span className="font-medium">{activeSession.name}</span> ({activeSession.status}) — veja a aba "Validação Ao Vivo".
+        </div>
+      )}
 
       {status && status.warnings.length > 0 && (
         <Card title="Avisos operacionais" icon={<AlertTriangle size={14} />}>
