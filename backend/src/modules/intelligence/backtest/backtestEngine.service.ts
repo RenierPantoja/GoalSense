@@ -13,6 +13,7 @@ import { evaluateCondition, evaluatePatternAgainstInput } from '../../command/co
 import { evaluatePatternScope, parseScopeExtended, parseScopeFilter } from '../../command/backendScopeFilter.service.js'
 import { orderSnapshotsChronologically, snapshotsAfter, type RawSnapshot } from './utils/replayTimeline.util.js'
 import { backtestRunId, backtestSignalResultId } from './utils/backtestId.util.js'
+import { buildTriggerIdentity, buildOutcomeIdentity, buildResultFingerprint } from './utils/backtestEvidenceIdentity.util.js'
 import { buildBacktestInput, contextForFixture, type BacktestFixtureView } from './backtestEvaluationAdapter.service.js'
 import { estimateOutcome } from './backtestOutcome.service.js'
 import { buildBacktestSummary } from './backtestSummary.service.js'
@@ -106,6 +107,21 @@ export function evaluateFixture(
     const outId = outSnap?.id ? String(outSnap.id) : null
     const trigStrength: BacktestEvidenceStrength = trigId ? 'exact' : 'unknown'
     const outStrength: BacktestEvidenceStrength = outId ? 'exact' : (post.length > 0 ? 'window_inferred' : 'unknown')
+    const triggerIdentity = buildTriggerIdentity({
+      patternId: pattern.id, patternName: pattern.name, signalType: pattern.signalType ?? null, conditions: pattern.conditions,
+      triggerMinute: triggerInput.minute, fixtureId: fixture.id, competitionId: fixture.competition,
+      teamContext: `${fixture.homeName} vs ${fixture.awayName}`, snapshotId: trigId, snapshotCapturedAt: trigSnap?.capturedAt ?? null,
+    })
+    const outcomeIdentity = buildOutcomeIdentity({
+      outcomeType: pattern.signalType ?? 'unknown',
+      windowStartMinute: triggerInput.minute, windowEndMinute: triggerInput.minute != null ? triggerInput.minute + guess.windowMinutes : null,
+      snapshotId: outId, snapshotCapturedAt: outSnap?.capturedAt ?? null,
+      goals: guess.evidence.goalsInWindow, corners: guess.evidence.cornersInWindow, cards: guess.evidence.cardsInWindow,
+    })
+    const resultFingerprint = buildResultFingerprint({
+      fixtureId: fixture.id, patternId: pattern.id, triggerMinute: triggerInput.minute, triggerSnapshotId: trigId,
+      outcomeStatus: guess.outcome, outcomeSnapshotId: outId, wouldTrigger: true, notEvaluableReason: null,
+    })
     return {
       fixtureId: fixture.id, fixtureLabel: `${fixture.homeName} vs ${fixture.awayName}`,
       leagueName: fixture.competition, homeTeam: fixture.homeName, awayTeam: fixture.awayName,
@@ -125,6 +141,8 @@ export function evaluateFixture(
       outcomeEvidenceStrength: outStrength,
       outcomeEvidenceLimitations: outId ? [] : (post.length > 0 ? ['outcome_snapshot_id_missing'] : ['no_post_trigger_snapshot']),
       evidenceSummary: `trigger:${trigStrength} · outcome:${outStrength}`,
+      triggerIdentity, outcomeIdentity, resultFingerprint,
+      evidenceReprocessStatus: 'not_attempted', evidenceReprocessRunId: null, evidenceReprocessLimitations: [],
     }
   }
 
@@ -153,6 +171,13 @@ export function evaluateFixture(
     outcomeSnapshotId: null, outcomeSnapshotCapturedAt: null, outcomeSnapshotMinute: null,
     outcomeEvidenceStrength: 'unknown', outcomeEvidenceLimitations: ['no_trigger'],
     evidenceSummary: 'trigger:unknown · outcome:unknown',
+    triggerIdentity: null, outcomeIdentity: null,
+    resultFingerprint: buildResultFingerprint({
+      fixtureId: fixture.id, patternId: pattern.id, triggerMinute: refInput?.minute ?? null, triggerSnapshotId: null,
+      outcomeStatus: 'not_evaluable', outcomeSnapshotId: null, wouldTrigger: false,
+      notEvaluableReason: 'no_trigger',
+    }),
+    evidenceReprocessStatus: 'not_attempted', evidenceReprocessRunId: null, evidenceReprocessLimitations: [],
   }
 }
 

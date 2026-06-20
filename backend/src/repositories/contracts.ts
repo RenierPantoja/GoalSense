@@ -140,7 +140,7 @@ import type {
   TeamLearningProfile, SignalContextStats, LearningRecommendation,
 } from '../modules/intelligence/contracts/learning.types.js'
 import type {
-  BacktestRun, ReplayRun, PersistedBacktestSignalResult,
+  BacktestRun, ReplayRun, PersistedBacktestSignalResult, BacktestReplayEvidenceReprocessRun,
 } from '../modules/intelligence/backtest/backtest.types.js'
 import type {
   AutoEngineRun, AutoOpportunity, AutoOpportunityAction, AutoOpportunityUserState,
@@ -218,6 +218,8 @@ export interface IntelligenceRepository {
   listBacktestRuns(filters: { patternId?: string; limit?: number }): Promise<BacktestRun[]>
   createBacktestSignalResult(result: PersistedBacktestSignalResult): Promise<PersistedBacktestSignalResult>
   listBacktestSignalResults(runId: string, limit?: number): Promise<PersistedBacktestSignalResult[]>
+  /** B36: patch evidence fields on a persisted backtest result (never the outcome). */
+  updateBacktestSignalResult(id: string, patch: Json): Promise<{ count: number }>
   createReplayRun(run: ReplayRun): Promise<ReplayRun>
   getReplayRun(id: string): Promise<ReplayRun | null>
   listReplayRuns(filters: { patternId?: string; limit?: number }): Promise<ReplayRun[]>
@@ -300,6 +302,12 @@ export interface IntelligenceRepository {
   listEvidenceSnapshotReferencesBySource(source: string, sourceId: string, limit?: number): Promise<EvidenceSnapshotReference[]>
   listEvidenceSnapshotReferencesByAlert(alertId: string, limit?: number): Promise<EvidenceSnapshotReference[]>
   listEvidenceSnapshotReferencesByOpportunity(opportunityId: string, limit?: number): Promise<EvidenceSnapshotReference[]>
+
+  // ── B36: backtest/replay evidence reprocess run audit ───────────────────────
+  createBacktestReplayEvidenceReprocessRun(run: BacktestReplayEvidenceReprocessRun): Promise<BacktestReplayEvidenceReprocessRun>
+  updateBacktestReplayEvidenceReprocessRun(id: string, patch: Partial<BacktestReplayEvidenceReprocessRun>): Promise<{ count: number }>
+  getBacktestReplayEvidenceReprocessRun(id: string): Promise<BacktestReplayEvidenceReprocessRun | null>
+  listBacktestReplayEvidenceReprocessRuns(limit?: number): Promise<BacktestReplayEvidenceReprocessRun[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

@@ -41,6 +41,89 @@ export interface BacktestEvidenceCoverage {
   commonLimitations: { limitation: string; count: number }[]
 }
 
+// ─── B36: trigger / outcome / step identity + reprocessing ─────────────────────
+
+export type BacktestEvidenceReprocessStatus =
+  | 'not_attempted'
+  | 'dry_run_matched'
+  | 'dry_run_mismatch'
+  | 'patched'
+  | 'skipped_insufficient_data'
+  | 'skipped_legacy_unsupported'
+  | 'skipped_missing_snapshots'
+  | 'failed_non_fatal'
+
+export interface BacktestTriggerIdentity {
+  patternId: string
+  patternName: string
+  signalType: string | null
+  conditionKey: string
+  conditionFingerprint: string
+  triggerMinute: number | null
+  fixtureId: string
+  competitionId: string | null
+  teamContext: string | null
+  evaluatedAtSnapshotId: string | null
+  evaluatedAtSnapshotCapturedAt: string | null
+  evaluationFingerprint: string
+  limitations: string[]
+}
+
+export interface BacktestOutcomeIdentity {
+  outcomeType: string
+  outcomeWindowStartMinute: number | null
+  outcomeWindowEndMinute: number | null
+  outcomeSnapshotId: string | null
+  outcomeSnapshotCapturedAt: string | null
+  outcomeFingerprint: string
+  limitations: string[]
+}
+
+export interface BacktestResultFingerprint {
+  fixtureId: string
+  patternId: string
+  triggerMinute: number | null
+  triggerSnapshotId: string | null
+  outcomeStatus: BacktestEstimatedOutcome
+  outcomeSnapshotId: string | null
+  resultStatus: 'triggered' | 'no_trigger'
+  notEvaluableReason: string | null
+  evaluationVersion: string
+  hash: string
+}
+
+export interface ReplayStepIdentity {
+  stepIndex: number
+  fixtureId: string
+  minute: number | null
+  status: string
+  scoreFingerprint: string
+  eventFingerprint: string
+  snapshotId: string | null
+  fingerprint: string
+  limitations: string[]
+}
+
+export interface BacktestReplayEvidenceReprocessRun {
+  id: string
+  targetType: 'backtest' | 'replay' | 'both'
+  targetRunId: string | null
+  mode: 'dry_run' | 'patch_inline'
+  requestedBy: string | null
+  startedAt: string
+  completedAt: string | null
+  scannedResults: number
+  matchedResults: number
+  patchedResults: number
+  mismatchedResults: number
+  skippedResults: number
+  errors: string[]
+  exactRecovered: number
+  inferredRecovered: number
+  limitations: string[]
+  status: 'completed' | 'completed_with_limitations' | 'failed_non_fatal'
+}
+
 export interface BacktestConditionResult {
   type: string
   passed: boolean
@@ -64,6 +147,10 @@ export interface BacktestTimelinePoint {
   snapshotMinute?: number | null
   evidenceStrength?: BacktestEvidenceStrength
   evidenceLimitations?: string[]
+  // ── B36 (optional): per-step identity + reprocess status ──
+  stepIdentity?: ReplayStepIdentity | null
+  evidenceReprocessStatus?: BacktestEvidenceReprocessStatus
+  evidenceReprocessRunId?: string | null
 }
 
 export interface BacktestOutcomeGuess {
@@ -114,6 +201,13 @@ export interface BacktestSignalResult {
   outcomeEvidenceStrength?: BacktestEvidenceStrength
   outcomeEvidenceLimitations?: string[]
   evidenceSummary?: string | null
+  // ── B36 (optional): identity + reprocess status ──
+  triggerIdentity?: BacktestTriggerIdentity | null
+  outcomeIdentity?: BacktestOutcomeIdentity | null
+  resultFingerprint?: BacktestResultFingerprint | null
+  evidenceReprocessStatus?: BacktestEvidenceReprocessStatus
+  evidenceReprocessRunId?: string | null
+  evidenceReprocessLimitations?: string[]
 }
 
 export interface BacktestDataCoverage {

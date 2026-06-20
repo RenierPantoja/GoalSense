@@ -8,6 +8,7 @@
 import { createRepositories } from '../../../repositories/index.js'
 import { env } from '../../../env.js'
 import { linkSnapshotsToSource } from '../evidence/evidenceLineage.service.js'
+import { buildReplayStepIdentity } from './utils/backtestEvidenceIdentity.util.js'
 import type { LinkSnapshotInput } from '../evidence/evidenceLineage.types.js'
 import { evaluateCondition, evaluatePatternAgainstInput } from '../../command/commandEvaluation.service.js'
 import { orderSnapshotsChronologically, snapshotsAfter, type RawSnapshot } from './utils/replayTimeline.util.js'
@@ -90,7 +91,12 @@ export async function replayFixture(patternId: string, fixtureId: string, opts: 
       snapshotMinute: typeof s.minute === 'number' ? s.minute : null,
       evidenceStrength: (s as any)?.id ? 'exact' : 'unknown',
       evidenceLimitations: (s as any)?.id ? [] : ['step_snapshot_id_missing'],
+      // B36: per-step identity.
+      stepIdentity: null,
+      evidenceReprocessStatus: 'not_attempted',
+      evidenceReprocessRunId: null,
     }
+    point.stepIdentity = buildReplayStepIdentity(point, i, fixtureId)
     timeline.push(point)
     if (res.shouldAlert && triggerIndex < 0) { triggerIndex = i; triggerInput = input }
   }

@@ -7,7 +7,7 @@
  */
 import { getBackendUrl } from './commandBackendClient'
 import type {
-  BacktestRun, BacktestRunConfig, BacktestSignalResult, ReplayRun,
+  BacktestRun, BacktestRunConfig, BacktestSignalResult, ReplayRun, BacktestReplayEvidenceReprocessRunDto,
 } from '@/features/command/backtest/backtestTypes'
 
 export interface ApiResult<T> {
@@ -73,5 +73,15 @@ export const backtestApi = {
   },
   getReplayForPatternFixture(patternId: string, fixtureId: string) {
     return request<ReplayRun>(`/api/intelligence/replay/patterns/${encodeURIComponent(patternId)}/fixtures/${encodeURIComponent(fixtureId)}`)
+  },
+  // ── B36: evidence reprocessing ──
+  listReprocessRuns(limit = 30) {
+    return request<BacktestReplayEvidenceReprocessRunDto[]>(`/api/intelligence/backtest-replay-evidence/reprocess-runs?limit=${limit}`)
+  },
+  reprocessBacktestEvidence(runId: string, mode: 'dry_run' | 'patch_inline' = 'dry_run', toleranceMinutes = 0) {
+    return request<BacktestReplayEvidenceReprocessRunDto>(`/api/intelligence/backtest-runs/${encodeURIComponent(runId)}/reprocess-evidence`, { method: 'POST', body: JSON.stringify({ mode, toleranceMinutes }) })
+  },
+  reprocessReplayEvidence(runId: string, mode: 'dry_run' | 'patch_inline' = 'dry_run') {
+    return request<BacktestReplayEvidenceReprocessRunDto>(`/api/intelligence/replay-runs/${encodeURIComponent(runId)}/reprocess-evidence`, { method: 'POST', body: JSON.stringify({ mode }) })
   },
 }

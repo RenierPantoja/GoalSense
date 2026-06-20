@@ -38,12 +38,23 @@ function SnapshotBadge({ label, snapshotId, strength, capturedAt, minute, limita
 
 function SnapshotEvidenceRow({ r }: { r: BacktestSignalResult }) {
   const hasInline = r.triggerEvidenceStrength != null || r.outcomeEvidenceStrength != null || r.triggerSnapshotId != null || r.outcomeSnapshotId != null
-  if (!hasInline) return <p className="text-[10.5px] text-white/35">Sem evidência inline neste run (rode o backtest novamente para captura exata).</p>
+  const isLegacy = !hasInline && !r.resultFingerprint && !r.triggerIdentity
+  if (isLegacy) return <p className="text-[10.5px] text-white/35">Run legado — sem identidade/evidência inline (rode o backtest novamente ou use "Reprocessar evidência").</p>
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-[9.5px] uppercase tracking-wider text-white/40 font-semibold">Evidência</span>
-      <SnapshotBadge label="Trigger" snapshotId={r.triggerSnapshotId} strength={r.triggerEvidenceStrength} capturedAt={r.triggerSnapshotCapturedAt} minute={r.triggerSnapshotMinute} limitations={r.triggerEvidenceLimitations} />
-      <SnapshotBadge label="Outcome" snapshotId={r.outcomeSnapshotId} strength={r.outcomeEvidenceStrength} capturedAt={r.outcomeSnapshotCapturedAt} minute={r.outcomeSnapshotMinute} limitations={r.outcomeEvidenceLimitations} />
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[9.5px] uppercase tracking-wider text-white/40 font-semibold">Evidência</span>
+        <SnapshotBadge label="Trigger" snapshotId={r.triggerSnapshotId} strength={r.triggerEvidenceStrength} capturedAt={r.triggerSnapshotCapturedAt} minute={r.triggerSnapshotMinute} limitations={r.triggerEvidenceLimitations} />
+        <SnapshotBadge label="Outcome" snapshotId={r.outcomeSnapshotId} strength={r.outcomeEvidenceStrength} capturedAt={r.outcomeSnapshotCapturedAt} minute={r.outcomeSnapshotMinute} limitations={r.outcomeEvidenceLimitations} />
+        {r.evidenceReprocessStatus === 'patched' && <span className="text-[9.5px] px-1.5 py-0.5 rounded-full border border-[#2DD4BF]/25 text-[#7FE9DC]/80" title={r.evidenceReprocessRunId || ''}>reprocessado</span>}
+        {r.evidenceReprocessStatus === 'dry_run_mismatch' && <span className="text-[9.5px] px-1.5 py-0.5 rounded-full border border-amber-400/20 text-amber-100/75">divergência</span>}
+      </div>
+      {r.triggerIdentity && (
+        <div className="flex items-center gap-2 flex-wrap text-[10px] text-white/40">
+          <span title={r.triggerIdentity.conditionFingerprint}>sinal: {r.triggerIdentity.signalType || '—'}</span>
+          <span title={r.triggerIdentity.conditionFingerprint}>· condições: {r.triggerIdentity.conditionKey}</span>
+        </div>
+      )}
     </div>
   )
 }

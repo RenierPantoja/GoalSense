@@ -62,3 +62,11 @@ rewritten blindly.
 - Prisma mode: backtest run/result persistence exists, but the intelligence
   evidence index is Noop — inline fields still persist on the result docs in
   Firebase mode.
+
+---
+
+## B36 update — identity + reprocessing
+New runs now also persist `triggerIdentity`/`outcomeIdentity`/`resultFingerprint`
+(backtest) and `stepIdentity` (replay). A conservative reprocessor recovers inline
+evidence for OLD runs by re-evaluating and patching ONLY on an exact match. See
+`BACKTEST_REPLAY_EVIDENCE_REPROCESSING.md`.

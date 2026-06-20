@@ -12,6 +12,7 @@ import { ok, badRequest } from '../../utils/apiResponse.js'
 import { isBacktestApiEnabled, validateAndNormalizeConfig } from './backtest/utils/backtestGuards.util.js'
 import { runPatternBacktest } from './backtest/backtestEngine.service.js'
 import { replayFixture } from './backtest/replayEngine.service.js'
+import { reprocessBacktestRunEvidence, reprocessReplayRunEvidence, listReprocessRuns, getReprocessRun } from './backtest/backtestReplayEvidenceReprocessor.service.js'
 import { requirePermission } from '../../middleware/requirePermission.middleware.js'
 import { rateLimit } from '../../middleware/rateLimit.middleware.js'
 import { ROUTE_ACCESS } from '../auth/routeAccess.policy.js'
@@ -89,5 +90,50 @@ export async function backtestRoutes(app: FastifyInstance) {
     const { patternId, fixtureId } = req.params as { patternId: string; fixtureId: string }
     try { return ok(await replayFixture(patternId, fixtureId, { persist: false })) }
     catch (e: any) { app.log.error(`replay compute failed: ${e?.message || e}`); return reply.status(400).send(badRequest('Replay failed', e?.message)) }
+  })
+
+  // ── B36: evidence reprocessing (dry-run default; patch env-gated + admin/operator) ──
+  app.get('/intelligence/backtest-replay-evidence/reprocess-runs', async (req) => {
+    const { limit } = req.query as { limit?: string }
+    try { return ok(await listReprocessRuns(clampLimit(limit, 30, 100))) }
+    catch (e: any) { app.log.warn(`reprocess runs read failed: ${e?.message || e}`); return ok([]) }
+  })
+
+  app.get('/intelligence/backtest-replay-evidence/reprocess-runs/:id', async (req) => {
+    const { id } = req.params as { id: string }
+    try { return ok(await getReprocessRun(id)) }
+    catch (e: any) { app.log.warn(`reprocess run read failed: ${e?.message || e}`); return ok(null) }
+  })
+
+  app.post('/intelligence/backtest-runs/:runId/reprocess-evidence', {
+    preHandler: [requirePermission(ROUTE_ACCESS.backtest_run)],
+  }, async (req, reply) => {
+    if (!isBacktestApiEnabled()) return disabled(reply)
+    const { runId } = req.params as { runId: string }
+    const body = (req.body || {}) as { mode?: 'dry_run' | 'patch_inline'; toleranceMinutes?: number }
+    if (body.mode === 'patch_inline' && !(req.auth?.user?.role === 'admin' || req.auth?.user?.role === 'owner' || req.auth?.user?.role === 'operator')) {
+      return reply.status(403).send(badRequest('patch_inline requer operator+.', { reason: 'forbidden' }))
+    }
+    try {
+      const run = await reprocessBacktestRunEvidence(runId, { mode: body.mode || 'dry_run', toleranceMinutes: body.toleranceMinutes, requestedBy: req.auth?.user?.userId ?? null })
+      void recordAdminAudit({ auth: req.auth, action: 'backtest_run', route: req.url, method: req.method, result: 'success', resourceType: 'backtest_evidence_reprocess', resourceId: run.id, metadata: { mode: run.mode, patched: run.patchedResults, matched: run.matchedResults, mismatched: run.mismatchedResults } })
+      return ok(run)
+    } catch (e: any) { app.log.error(`reprocess backtest failed: ${e?.message || e}`); return reply.status(400).send(badRequest('Reprocess failed', e?.message)) }
+  })
+
+  app.post('/intelligence/replay-runs/:runId/reprocess-evidence', {
+    preHandler: [requirePermission(ROUTE_ACCESS.replay_run)],
+  }, async (req, reply) => {
+    if (!isBacktestApiEnabled()) return disabled(reply)
+    const { runId } = req.params as { runId: string }
+    const body = (req.body || {}) as { mode?: 'dry_run' | 'patch_inline' }
+    if (body.mode === 'patch_inline' && !(req.auth?.user?.role === 'admin' || req.auth?.user?.role === 'owner' || req.auth?.user?.role === 'operator')) {
+      return reply.status(403).send(badRequest('patch_inline requer operator+.', { reason: 'forbidden' }))
+    }
+    try {
+      const run = await reprocessReplayRunEvidence(runId, { mode: body.mode || 'dry_run', requestedBy: req.auth?.user?.userId ?? null })
+      void recordAdminAudit({ auth: req.auth, action: 'replay_run', route: req.url, method: req.method, result: 'success', resourceType: 'replay_evidence_reprocess', resourceId: run.id, metadata: { mode: run.mode, patched: run.patchedResults } })
+      return ok(run)
+    } catch (e: any) { app.log.error(`reprocess replay failed: ${e?.message || e}`); return reply.status(400).send(badRequest('Reprocess failed', e?.message)) }
   })
 }

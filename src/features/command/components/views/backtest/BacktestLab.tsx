@@ -13,6 +13,7 @@ import type { BacktestRun, BacktestSignalResult, BacktestRunConfig } from '../..
 import { BacktestConfigPanel, type BacktestFormState } from './BacktestConfigPanel'
 import { BacktestSummaryPanel } from './BacktestSummaryPanel'
 import { BacktestCoveragePanel } from './BacktestCoveragePanel'
+import { BacktestEvidenceReprocessPanel } from './BacktestEvidenceReprocessPanel'
 import { BacktestResultsTable } from './BacktestResultsTable'
 import { BacktestRunsHistory } from './BacktestRunsHistory'
 import { ReplayViewer } from './ReplayViewer'
@@ -153,6 +154,7 @@ export function BacktestLab({ patterns, backendOnline }: Props) {
           )}
           {currentRun.summary && <BacktestSummaryPanel summary={currentRun.summary} />}
           {currentRun.dataCoverage && <BacktestCoveragePanel coverage={currentRun.dataCoverage} limitations={currentRun.limitations || []} evidenceCoverage={currentRun.summary?.evidenceCoverage} />}
+          {currentRun.id && currentRun.status === 'completed' && <BacktestEvidenceReprocessPanel runId={currentRun.id} kind="backtest" />}
           {results.length > 0
             ? <BacktestResultsTable results={results} onOpenReplay={(fixtureId) => setReplayTarget({ patternId: currentRun.patternId, fixtureId })} />
             : currentRun.status === 'completed' && (

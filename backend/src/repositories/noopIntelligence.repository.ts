@@ -19,7 +19,7 @@ import type {
   TeamLearningProfile, SignalContextStats, LearningRecommendation,
 } from '../modules/intelligence/contracts/learning.types.js'
 import type {
-  BacktestRun, ReplayRun, PersistedBacktestSignalResult,
+  BacktestRun, ReplayRun, PersistedBacktestSignalResult, BacktestReplayEvidenceReprocessRun,
 } from '../modules/intelligence/backtest/backtest.types.js'
 import type {
   AutoEngineRun, AutoOpportunity, AutoOpportunityAction, AutoOpportunityUserState,
@@ -104,6 +104,7 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async listBacktestRuns(): Promise<BacktestRun[]> { return [] }
   async createBacktestSignalResult(result: PersistedBacktestSignalResult): Promise<PersistedBacktestSignalResult> { warnOnce(); return result }
   async listBacktestSignalResults(): Promise<PersistedBacktestSignalResult[]> { return [] }
+  async updateBacktestSignalResult(): Promise<{ count: number }> { return { count: 0 } }
   async createReplayRun(run: ReplayRun): Promise<ReplayRun> { warnOnce(); return run }
   async getReplayRun(): Promise<ReplayRun | null> { return null }
   async listReplayRuns(): Promise<ReplayRun[]> { return [] }
@@ -186,4 +187,10 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async listEvidenceSnapshotReferencesBySource(): Promise<EvidenceSnapshotReference[]> { return [] }
   async listEvidenceSnapshotReferencesByAlert(): Promise<EvidenceSnapshotReference[]> { return [] }
   async listEvidenceSnapshotReferencesByOpportunity(): Promise<EvidenceSnapshotReference[]> { return [] }
+
+  // ── B36 (Noop): reprocess run audit not persisted; reads empty ──
+  async createBacktestReplayEvidenceReprocessRun(run: BacktestReplayEvidenceReprocessRun): Promise<BacktestReplayEvidenceReprocessRun> { warnOnce(); return run }
+  async updateBacktestReplayEvidenceReprocessRun(): Promise<{ count: number }> { return { count: 0 } }
+  async getBacktestReplayEvidenceReprocessRun(): Promise<BacktestReplayEvidenceReprocessRun | null> { return null }
+  async listBacktestReplayEvidenceReprocessRuns(): Promise<BacktestReplayEvidenceReprocessRun[]> { return [] }
 }

@@ -88,6 +88,38 @@ export interface BacktestEvidenceCoverage {
   commonLimitations: { limitation: string; count: number }[]
 }
 
+export type BacktestEvidenceReprocessStatus =
+  | 'not_attempted' | 'dry_run_matched' | 'dry_run_mismatch' | 'patched'
+  | 'skipped_insufficient_data' | 'skipped_legacy_unsupported' | 'skipped_missing_snapshots' | 'failed_non_fatal'
+
+export interface BacktestTriggerIdentityDto {
+  patternId: string; patternName: string; signalType: string | null
+  conditionKey: string; conditionFingerprint: string; triggerMinute: number | null
+  fixtureId: string; competitionId: string | null; teamContext: string | null
+  evaluatedAtSnapshotId: string | null; evaluatedAtSnapshotCapturedAt: string | null
+  evaluationFingerprint: string; limitations: string[]
+}
+
+export interface BacktestReplayEvidenceReprocessRunDto {
+  id: string
+  targetType: 'backtest' | 'replay' | 'both'
+  targetRunId: string | null
+  mode: 'dry_run' | 'patch_inline'
+  requestedBy: string | null
+  startedAt: string
+  completedAt: string | null
+  scannedResults: number
+  matchedResults: number
+  patchedResults: number
+  mismatchedResults: number
+  skippedResults: number
+  errors: string[]
+  exactRecovered: number
+  inferredRecovered: number
+  limitations: string[]
+  status: 'completed' | 'completed_with_limitations' | 'failed_non_fatal'
+}
+
 export interface BacktestLimitation {
   code: string
   message: string
@@ -147,6 +179,11 @@ export interface BacktestSignalResult {
   outcomeEvidenceStrength?: BacktestEvidenceStrength
   outcomeEvidenceLimitations?: string[]
   evidenceSummary?: string | null
+  evidenceReprocessStatus?: BacktestEvidenceReprocessStatus
+  evidenceReprocessRunId?: string | null
+  evidenceReprocessLimitations?: string[]
+  triggerIdentity?: BacktestTriggerIdentityDto | null
+  resultFingerprint?: { hash: string; evaluationVersion: string } | null
 }
 
 export interface ReplayDecisionPoint {

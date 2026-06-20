@@ -77,3 +77,11 @@ Backtest results and replay steps now persist their exact snapshot ids inline
 (`BACKTEST_REPLAY_INLINE_EVIDENCE.md`), so UI no longer depends solely on the
 central Evidence Lineage index for per-row/per-step display. The lineage index
 remains the source of truth for cross-source bundles and retention protection.
+
+---
+
+## B36 update — reprocessing patch links
+When the B36 reprocessor applies an inline patch to an old backtest result, it
+creates a non-fatal **exact** `EvidenceSnapshotReference` (`backtest_result`).
+Existing inferred links are kept; exact wins in bundles by strength ranking. See
+`BACKTEST_REPLAY_EVIDENCE_REPROCESSING.md`.

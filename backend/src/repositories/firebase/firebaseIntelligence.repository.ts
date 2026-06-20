@@ -14,7 +14,7 @@
  * sort to avoid mandatory composite indexes at current (single-user) volume.
  */
 import { getFirestore } from '../../firebase/admin.js'
-import type { IntelligenceRepository } from '../contracts.js'
+import type { IntelligenceRepository, Json } from '../contracts.js'
 import type {
   SignalLedgerEntry, AlertOutcomeRecord, SignalFailureAnalysis,
   MissedOpportunityRecord, LearningEvent, IntelligenceOverview, AlertResult,
@@ -24,7 +24,7 @@ import type {
   TeamLearningProfile, SignalContextStats, LearningRecommendation,
 } from '../../modules/intelligence/contracts/learning.types.js'
 import type {
-  BacktestRun, ReplayRun, PersistedBacktestSignalResult,
+  BacktestRun, ReplayRun, PersistedBacktestSignalResult, BacktestReplayEvidenceReprocessRun,
 } from '../../modules/intelligence/backtest/backtest.types.js'
 import type {
   AutoEngineRun, AutoOpportunity, AutoOpportunityAction, AutoOpportunityUserState,
@@ -72,6 +72,7 @@ const ADMIN_AUDIT = 'adminAuditTrail'
 const SNAPSHOT_RETENTION_RUNS = 'snapshotRetentionRuns'
 const LOCAL_OPS_METRICS = 'localOpsMetrics'
 const EVIDENCE_REFS = 'evidenceSnapshotReferences'
+const BT_REPLAY_REPROCESS_RUNS = 'backtestReplayEvidenceReprocessRuns'
 
 const READ_CAP = 2000
 
@@ -370,6 +371,16 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     const db = await getFirestore()
     const snap = await db.collection(BACKTEST_RESULTS).where('runId', '==', runId).get()
     return snap.docs.map((d: any) => docData<PersistedBacktestSignalResult>(d)).slice(0, limit || 500)
+  }
+  async updateBacktestSignalResult(id: string, patch: Json): Promise<{ count: number }> {
+    const db = await getFirestore()
+    const ref = db.collection(BACKTEST_RESULTS).doc(id)
+    const doc = await ref.get()
+    if (!doc.exists) return { count: 0 }
+    const clean: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(patch)) { if (v !== undefined) clean[k] = v }
+    await ref.set(clean, { merge: true })
+    return { count: 1 }
   }
   async createReplayRun(run: ReplayRun): Promise<ReplayRun> {
     const db = await getFirestore()
@@ -744,5 +755,33 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     const db = await getFirestore()
     const snap = await db.collection(EVIDENCE_REFS).where('opportunityId', '==', opportunityId).get()
     return snap.docs.map((d: any) => docData<EvidenceSnapshotReference>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
+  }
+
+  // ── B36: backtest/replay evidence reprocess run audit ───────────────────────
+  async createBacktestReplayEvidenceReprocessRun(run: BacktestReplayEvidenceReprocessRun): Promise<BacktestReplayEvidenceReprocessRun> {
+    const db = await getFirestore()
+    await db.collection(BT_REPLAY_REPROCESS_RUNS).doc(run.id).set(run, { merge: true })
+    return run
+  }
+  async updateBacktestReplayEvidenceReprocessRun(id: string, patch: Partial<BacktestReplayEvidenceReprocessRun>): Promise<{ count: number }> {
+    const db = await getFirestore()
+    const ref = db.collection(BT_REPLAY_REPROCESS_RUNS).doc(id)
+    const doc = await ref.get()
+    if (!doc.exists) return { count: 0 }
+    const clean: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(patch)) { if (v !== undefined) clean[k] = v }
+    await ref.set(clean, { merge: true })
+    return { count: 1 }
+  }
+  async getBacktestReplayEvidenceReprocessRun(id: string): Promise<BacktestReplayEvidenceReprocessRun | null> {
+    const db = await getFirestore()
+    const doc = await db.collection(BT_REPLAY_REPROCESS_RUNS).doc(id).get()
+    return doc.exists ? docData<BacktestReplayEvidenceReprocessRun>(doc) : null
+  }
+  async listBacktestReplayEvidenceReprocessRuns(limit?: number): Promise<BacktestReplayEvidenceReprocessRun[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(BT_REPLAY_REPROCESS_RUNS).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<BacktestReplayEvidenceReprocessRun>(d))
+      .sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
   }
 }

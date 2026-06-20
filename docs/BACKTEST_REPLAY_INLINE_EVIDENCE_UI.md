@@ -27,3 +27,11 @@
 ## Limitations
 - Outcome badge reflects the most-recent in-window snapshot (real id, approximate
   minute). Pre-B35 runs need a re-run to show inline badges.
+
+---
+
+## B36 additions
+The results table shows trigger identity (signalType/conditionKey) and a reprocess
+status badge; legacy runs show "Run legado". A "Reprocessar evidência" panel allows
+dry-run simulation and (admin + flag) inline patch. See
+`BACKTEST_REPLAY_EVIDENCE_REPROCESSING_UI.md`.
