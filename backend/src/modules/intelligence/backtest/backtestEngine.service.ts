@@ -17,7 +17,7 @@ import { buildBacktestInput, contextForFixture, type BacktestFixtureView } from 
 import { estimateOutcome } from './backtestOutcome.service.js'
 import { buildBacktestSummary } from './backtestSummary.service.js'
 import type {
-  BacktestRun, BacktestSignalResult, BacktestDataCoverage, BacktestLimitation,
+  BacktestRun, BacktestSignalResult, BacktestDataCoverage, BacktestLimitation, BacktestEvidenceStrength,
 } from './backtest.types.js'
 import type { DataQuality } from '../contracts/intelligence.types.js'
 import type { NormalizedConfig } from './utils/backtestGuards.util.js'
@@ -99,6 +99,13 @@ export function evaluateFixture(
       patternName: pattern.name, signalType: pattern.signalType,
       triggerMinute: triggerInput.minute, triggerScore: triggerInput.score, postSnapshots: post,
     })
+    // B35: inline snapshot evidence (exact only when a real snapshot id exists).
+    const trigSnap: any = ordered[triggerIndex]
+    const outSnap: any = (guess.outcome !== 'not_evaluable' && post.length > 0) ? post[post.length - 1] : null
+    const trigId = trigSnap?.id ? String(trigSnap.id) : null
+    const outId = outSnap?.id ? String(outSnap.id) : null
+    const trigStrength: BacktestEvidenceStrength = trigId ? 'exact' : 'unknown'
+    const outStrength: BacktestEvidenceStrength = outId ? 'exact' : (post.length > 0 ? 'window_inferred' : 'unknown')
     return {
       fixtureId: fixture.id, fixtureLabel: `${fixture.homeName} vs ${fixture.awayName}`,
       leagueName: fixture.competition, homeTeam: fixture.homeName, awayTeam: fixture.awayName,
@@ -107,6 +114,17 @@ export function evaluateFixture(
       matchedConditions: passed, missingConditions: missing, blockedReasons: triggerEval.blockers,
       dataQuality: (triggerInput.dataQuality as DataQuality) || 'unknown', matchContext: ctxBlock,
       estimatedOutcome: guess.outcome, outcomeReason: guess.reason, evidence: guess.evidence,
+      triggerSnapshotId: trigId,
+      triggerSnapshotCapturedAt: trigSnap?.capturedAt ?? null,
+      triggerSnapshotMinute: typeof trigSnap?.minute === 'number' ? trigSnap.minute : null,
+      triggerEvidenceStrength: trigStrength,
+      triggerEvidenceLimitations: trigId ? [] : ['trigger_snapshot_id_missing'],
+      outcomeSnapshotId: outId,
+      outcomeSnapshotCapturedAt: outSnap?.capturedAt ?? null,
+      outcomeSnapshotMinute: typeof outSnap?.minute === 'number' ? outSnap.minute : null,
+      outcomeEvidenceStrength: outStrength,
+      outcomeEvidenceLimitations: outId ? [] : (post.length > 0 ? ['outcome_snapshot_id_missing'] : ['no_post_trigger_snapshot']),
+      evidenceSummary: `trigger:${trigStrength} · outcome:${outStrength}`,
     }
   }
 
@@ -130,6 +148,11 @@ export function evaluateFixture(
     dataQuality: (refInput?.dataQuality as DataQuality) || 'unknown', matchContext: ctxBlock,
     estimatedOutcome: 'not_evaluable', outcomeReason: 'Radar não dispararia neste jogo com os dados disponíveis',
     evidence: null,
+    triggerSnapshotId: null, triggerSnapshotCapturedAt: null, triggerSnapshotMinute: null,
+    triggerEvidenceStrength: 'unknown', triggerEvidenceLimitations: ['no_trigger'],
+    outcomeSnapshotId: null, outcomeSnapshotCapturedAt: null, outcomeSnapshotMinute: null,
+    outcomeEvidenceStrength: 'unknown', outcomeEvidenceLimitations: ['no_trigger'],
+    evidenceSummary: 'trigger:unknown · outcome:unknown',
   }
 }
 

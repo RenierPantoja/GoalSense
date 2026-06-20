@@ -72,6 +72,20 @@ export interface BacktestSummary {
   commonBlockedReasons: { reason: string; count: number }[]
   sampleQuality: SampleQuality
   dataCoverage: BacktestDataCoverage
+  evidenceCoverage?: BacktestEvidenceCoverage
+}
+
+export type BacktestEvidenceStrength = 'exact' | 'strong_inferred' | 'window_inferred' | 'weak_inferred' | 'unknown'
+
+export interface BacktestEvidenceCoverage {
+  totalResults: number
+  resultsWithExactTriggerSnapshot: number
+  resultsWithExactOutcomeSnapshot: number
+  resultsWithAnyEvidence: number
+  exactEvidenceRate: number | null
+  inferredEvidenceRate: number | null
+  missingEvidenceRate: number | null
+  commonLimitations: { limitation: string; count: number }[]
 }
 
 export interface BacktestLimitation {
@@ -121,6 +135,18 @@ export interface BacktestSignalResult {
     postSnapshots: number; goalsInWindow: number; cornersInWindow: number
     cardsInWindow: number; hasTimedEvents: boolean; hasStats: boolean; warnings: string[]
   } | null
+  // B35 (optional): inline snapshot evidence per result.
+  triggerSnapshotId?: string | null
+  triggerSnapshotCapturedAt?: string | null
+  triggerSnapshotMinute?: number | null
+  triggerEvidenceStrength?: BacktestEvidenceStrength
+  triggerEvidenceLimitations?: string[]
+  outcomeSnapshotId?: string | null
+  outcomeSnapshotCapturedAt?: string | null
+  outcomeSnapshotMinute?: number | null
+  outcomeEvidenceStrength?: BacktestEvidenceStrength
+  outcomeEvidenceLimitations?: string[]
+  evidenceSummary?: string | null
 }
 
 export interface ReplayDecisionPoint {
@@ -134,6 +160,12 @@ export interface ReplayDecisionPoint {
   confidence: number
   dataQuality: DataQuality
   explanation: string
+  // B35 (optional): per-step snapshot evidence.
+  snapshotId?: string | null
+  snapshotCapturedAt?: string | null
+  snapshotMinute?: number | null
+  evidenceStrength?: BacktestEvidenceStrength
+  evidenceLimitations?: string[]
 }
 
 export interface ReplayRun {

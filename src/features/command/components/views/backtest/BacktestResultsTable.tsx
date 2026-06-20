@@ -24,6 +24,30 @@ const FILTERS: { key: ResultDisplayStatus | 'all'; label: string }[] = [
 
 function norm(s: string): string { return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') }
 
+/** B35: per-row inline snapshot evidence badges (exact/inferred/absent). */
+function SnapshotBadge({ label, snapshotId, strength, capturedAt, minute, limitations }: {
+  label: string; snapshotId?: string | null; strength?: string; capturedAt?: string | null; minute?: number | null; limitations?: string[]
+}) {
+  const exact = !!snapshotId
+  const inferred = !exact && (strength === 'strong_inferred' || strength === 'window_inferred' || strength === 'weak_inferred')
+  const cls = exact ? 'border-[#2DD4BF]/25 text-[#7FE9DC]' : inferred ? 'border-sky-400/20 text-sky-200/80' : 'border-white/10 text-white/40'
+  const state = exact ? 'Exato' : inferred ? 'Inferido' : 'Ausente'
+  const tip = [snapshotId ? `snap ${snapshotId.slice(0, 8)}…` : null, minute != null ? `${minute}'` : null, capturedAt ? new Date(capturedAt).toLocaleString('pt-BR') : null, (limitations && limitations.length) ? limitations.join(', ') : null].filter(Boolean).join(' · ')
+  return <span title={tip || state} className={`text-[10px] px-1.5 py-0.5 rounded-full border ${cls}`}>{label}: {state}</span>
+}
+
+function SnapshotEvidenceRow({ r }: { r: BacktestSignalResult }) {
+  const hasInline = r.triggerEvidenceStrength != null || r.outcomeEvidenceStrength != null || r.triggerSnapshotId != null || r.outcomeSnapshotId != null
+  if (!hasInline) return <p className="text-[10.5px] text-white/35">Sem evidência inline neste run (rode o backtest novamente para captura exata).</p>
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-[9.5px] uppercase tracking-wider text-white/40 font-semibold">Evidência</span>
+      <SnapshotBadge label="Trigger" snapshotId={r.triggerSnapshotId} strength={r.triggerEvidenceStrength} capturedAt={r.triggerSnapshotCapturedAt} minute={r.triggerSnapshotMinute} limitations={r.triggerEvidenceLimitations} />
+      <SnapshotBadge label="Outcome" snapshotId={r.outcomeSnapshotId} strength={r.outcomeEvidenceStrength} capturedAt={r.outcomeSnapshotCapturedAt} minute={r.outcomeSnapshotMinute} limitations={r.outcomeEvidenceLimitations} />
+    </div>
+  )
+}
+
 export function BacktestResultsTable({ results, onOpenReplay }: Props) {
   const [filter, setFilter] = useState<ResultDisplayStatus | 'all'>('all')
   const [search, setSearch] = useState('')
@@ -100,6 +124,7 @@ export function BacktestResultsTable({ results, onOpenReplay }: Props) {
                 {open && (
                   <div className="px-4 pb-4 pt-1 border-t border-white/[0.05] space-y-3">
                     <p className="text-[11.5px] text-white/60 leading-relaxed">{r.outcomeReason}</p>
+                    <SnapshotEvidenceRow r={r} />
                     {r.matchedConditions.length > 0 && (
                       <div className="flex items-start gap-2 flex-wrap">
                         <span className="text-[9.5px] uppercase tracking-wider text-white/40 font-semibold mt-0.5">Bateram</span>

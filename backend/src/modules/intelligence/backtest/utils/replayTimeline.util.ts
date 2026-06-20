@@ -5,6 +5,7 @@
  * replay/backtest walks the match in real time. Never fabricates points.
  */
 export interface RawSnapshot {
+  id?: string | null
   minute?: number | null
   scoreHome?: number
   scoreAway?: number

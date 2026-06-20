@@ -136,3 +136,13 @@ Backtest/replay remain the exact-link sources for historical snapshots; B34 adds
 exact links for live triggers/outcomes/opportunities/policies. Per-row backtest
 result snapshot badges are still not surfaced (no snapshot-id field on the persisted
 result) — run-level exact links exist via the evidence API.
+
+---
+
+## B35 — inline snapshot evidence (completion)
+`BacktestSignalResult` now carries `triggerSnapshotId`/`outcomeSnapshotId` (+ strength/
+limitations), `ReplayDecisionPoint` carries per-step `snapshotId`, and
+`BacktestSummary.evidenceCoverage` reports traceability (exact/inferred/missing) —
+all optional and compatible with old runs. The UI shows per-row and per-step badges
+(no separate lineage lookup). Trigger detection, outcome estimation, summary counts,
+score, confidence and patterns are unchanged. See `BACKTEST_REPLAY_INLINE_EVIDENCE.md`.

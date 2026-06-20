@@ -40,3 +40,10 @@ New "Evidência & Linhagem" block:
 The alert drawer now shows exact trigger/outcome snapshot links (when captured live);
 the AutoOpportunityDrawer gains an "Evidência da oportunidade" section
 (evidenceSnapshotId / capturedAt / minute / exact badge). See `INLINE_EVIDENCE_UX.md`.
+
+---
+
+## B35 additions
+Backtest results table shows per-row Trigger/Outcome snapshot badges (exato/inferido/
+ausente), the coverage panel shows a traceability block, and the replay viewer shows
+per-step snapshot badges. See `BACKTEST_REPLAY_INLINE_EVIDENCE_UI.md`.

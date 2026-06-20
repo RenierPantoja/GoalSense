@@ -152,7 +152,7 @@ export function BacktestLab({ patterns, backendOnline }: Props) {
             </div>
           )}
           {currentRun.summary && <BacktestSummaryPanel summary={currentRun.summary} />}
-          {currentRun.dataCoverage && <BacktestCoveragePanel coverage={currentRun.dataCoverage} limitations={currentRun.limitations || []} />}
+          {currentRun.dataCoverage && <BacktestCoveragePanel coverage={currentRun.dataCoverage} limitations={currentRun.limitations || []} evidenceCoverage={currentRun.summary?.evidenceCoverage} />}
           {results.length > 0
             ? <BacktestResultsTable results={results} onOpenReplay={(fixtureId) => setReplayTarget({ patternId: currentRun.patternId, fixtureId })} />
             : currentRun.status === 'completed' && (

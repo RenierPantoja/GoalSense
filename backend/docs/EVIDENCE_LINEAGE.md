@@ -69,3 +69,11 @@ Triggers, outcomes, opportunities and policy evaluations now carry the **exact**
 `linkPolicySnapshot` / `linkPromotionSnapshot`. This closes the B33 gap where only
 backtest/replay produced exact links. Strength stays honest (exact only with a real
 id; `snapshot_not_written` limitation otherwise). See `LIVE_ALERT_EVIDENCE_CAPTURE.md`.
+
+---
+
+## B35 update — inline backtest/replay evidence
+Backtest results and replay steps now persist their exact snapshot ids inline
+(`BACKTEST_REPLAY_INLINE_EVIDENCE.md`), so UI no longer depends solely on the
+central Evidence Lineage index for per-row/per-step display. The lineage index
+remains the source of truth for cross-source bundles and retention protection.

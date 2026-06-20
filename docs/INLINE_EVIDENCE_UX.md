@@ -31,3 +31,10 @@ Surfaces the captured snapshot evidence inline, with honest exact vs inferred ba
   (the persisted backtest result has no snapshot-id field; run-level exact links
   exist via the evidence API). Replay timeline steps do not carry per-step snapshot
   ids in the timeline type — fixture-level lineage summary is shown instead.
+
+---
+
+## B35 additions
+The B34 limitation is closed: BacktestResultsTable now renders per-row trigger/
+outcome snapshot badges, BacktestCoveragePanel shows traceability coverage, and the
+ReplayViewer shows per-step snapshot badges. See `BACKTEST_REPLAY_INLINE_EVIDENCE_UI.md`.

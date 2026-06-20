@@ -55,3 +55,11 @@ summary. See `docs/INLINE_EVIDENCE_UX.md`.
   evaluated snapshots at run level instead).
 - Prisma mode does not persist links/fields beyond the alert/opportunity docs (Noop
   for evidence). Use Firebase mode for full lineage.
+
+---
+
+## B35 note
+The B34 limitation "backtest results table does not render per-row snapshot ids" is
+closed in B35: `BacktestSignalResult` now carries `triggerSnapshotId`/
+`outcomeSnapshotId` and `ReplayDecisionPoint` carries per-step `snapshotId`. See
+`BACKTEST_REPLAY_INLINE_EVIDENCE.md`.

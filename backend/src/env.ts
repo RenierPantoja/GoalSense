@@ -125,6 +125,7 @@ const envSchema = z.object({
   // Evidence Lineage (Phase B33).
   ENABLE_EVIDENCE_LINEAGE: z.string().default('true'),
   ENABLE_EVIDENCE_LINEAGE_BACKFILL: z.string().default('false'),
+  ENABLE_BACKTEST_REPLAY_INLINE_EVIDENCE_BACKFILL: z.string().default('false'),
   AUTO_ENGINE_INTERVAL_MS: z.coerce.number().default(60000),
   AUTO_ENGINE_MAX_FIXTURES_PER_RUN: z.coerce.number().default(20),
   AUTO_ENGINE_MIN_SAMPLE_QUALITY: z.enum(['insufficient', 'low', 'moderate', 'strong']).default('moderate'),

@@ -3,12 +3,15 @@
  * Honest: fixtures without snapshots are NOT failures.
  */
 import { Database, AlertTriangle } from 'lucide-react'
-import type { BacktestDataCoverage, BacktestLimitation } from '../../../backtest/backtestTypes'
+import type { BacktestDataCoverage, BacktestLimitation, BacktestEvidenceCoverage } from '../../../backtest/backtestTypes'
 
 interface Props {
   coverage: BacktestDataCoverage
   limitations: BacktestLimitation[]
+  evidenceCoverage?: BacktestEvidenceCoverage
 }
+
+function pctLabel(n: number | null | undefined): string { return n == null ? '—' : `${Math.round(n * 100)}%` }
 
 const QUALITY_BARS = [
   { key: 'richDataCount', label: 'Rica', color: '#34D399' },
@@ -26,7 +29,7 @@ function Stat({ label, value, muted }: { label: string; value: number; muted?: b
   )
 }
 
-export function BacktestCoveragePanel({ coverage, limitations }: Props) {
+export function BacktestCoveragePanel({ coverage, limitations, evidenceCoverage }: Props) {
   const totalQuality = coverage.richDataCount + coverage.partialDataCount + coverage.poorDataCount + coverage.unknownDataCount || 1
   const providers = Object.entries(coverage.providerBreakdown || {}).sort((a, b) => b[1] - a[1])
 
@@ -81,6 +84,27 @@ export function BacktestCoveragePanel({ coverage, limitations }: Props) {
       <div className="rounded-xl border border-[#2DD4BF]/15 bg-[#13B8A6]/[0.04] px-3.5 py-2.5 mb-3">
         <p className="text-[11px] text-[#7FE9DC]/85 leading-relaxed">Jogos sem snapshots não são considerados falha — entram como <span className="font-semibold">não avaliável</span>.</p>
       </div>
+
+      {evidenceCoverage && evidenceCoverage.totalResults > 0 && (
+        <div className="rounded-xl border border-white/[0.07] bg-white/[0.012] px-3.5 py-3 mb-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-white/45 mb-2">Cobertura de rastreabilidade (B35)</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <Stat label="Trigger exato" value={evidenceCoverage.resultsWithExactTriggerSnapshot} />
+            <Stat label="Outcome exato" value={evidenceCoverage.resultsWithExactOutcomeSnapshot} />
+            <Stat label="Com evidência" value={evidenceCoverage.resultsWithAnyEvidence} />
+            <Stat label="Sem evidência" value={evidenceCoverage.totalResults - evidenceCoverage.resultsWithAnyEvidence} muted />
+          </div>
+          <div className="flex items-center gap-3 mt-2 flex-wrap text-[10px] text-white/55">
+            <span>exato {pctLabel(evidenceCoverage.exactEvidenceRate)}</span>
+            <span>· inferido {pctLabel(evidenceCoverage.inferredEvidenceRate)}</span>
+            <span>· ausente {pctLabel(evidenceCoverage.missingEvidenceRate)}</span>
+          </div>
+          {evidenceCoverage.commonLimitations.length > 0 && (
+            <p className="text-[10px] text-white/35 mt-1.5">Limitações: {evidenceCoverage.commonLimitations.slice(0, 3).map(l => `${l.limitation}=${l.count}`).join(' · ')}</p>
+          )}
+          <p className="text-[10px] text-white/35 mt-1">Rastreabilidade ≠ taxa de acerto: mede quantos resultados têm snapshot vinculado.</p>
+        </div>
+      )}
 
       {limitations.length > 0 && (
         <div className="space-y-1.5">

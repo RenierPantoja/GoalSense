@@ -5,7 +5,7 @@
  * unknown/not_evaluable. Rates computed over DECISIVE outcomes only. Best/worst
  * lists carry sampleQuality and are not "ranked" when the sample is tiny.
  */
-import type { BacktestSignalResult, BacktestSummary, BacktestDataCoverage } from './backtest.types.js'
+import type { BacktestSignalResult, BacktestSummary, BacktestDataCoverage, BacktestEvidenceCoverage } from './backtest.types.js'
 import type { ContextBreakdownSample } from '../contracts/learning.types.js'
 import { sampleQualityOf } from '../learning/learningStats.util.js'
 import { minuteWindowOf, minuteWindowLabel } from '../learning/minuteWindow.util.js'
@@ -40,6 +40,39 @@ function topBy(map: Map<string, Bucket>, metric: 'useful' | 'failed', n = 3): Co
     if (bv !== av) return bv - av
     return b.sampleSize - a.sampleSize
   }).slice(0, n)
+}
+
+/** B35: traceability coverage (NOT hit-rate). Counts inline snapshot evidence. */
+function buildEvidenceCoverage(results: BacktestSignalResult[]): BacktestEvidenceCoverage {
+  const total = results.length
+  let exactTrigger = 0, exactOutcome = 0, anyEvidence = 0, inferred = 0, missing = 0
+  const lim = new Map<string, number>()
+  for (const r of results) {
+    const hasExactTrigger = !!r.triggerSnapshotId
+    const hasExactOutcome = !!r.outcomeSnapshotId
+    if (hasExactTrigger) exactTrigger++
+    if (hasExactOutcome) exactOutcome++
+    const hasAny = hasExactTrigger || hasExactOutcome
+      || r.triggerEvidenceStrength === 'strong_inferred' || r.triggerEvidenceStrength === 'window_inferred'
+      || r.outcomeEvidenceStrength === 'strong_inferred' || r.outcomeEvidenceStrength === 'window_inferred'
+    if (hasAny) anyEvidence++
+    if (!hasExactTrigger && !hasExactOutcome && hasAny) inferred++
+    if (!hasAny) missing++
+    for (const l of [...(r.triggerEvidenceLimitations || []), ...(r.outcomeEvidenceLimitations || [])]) {
+      lim.set(l, (lim.get(l) || 0) + 1)
+    }
+  }
+  const rate0 = (n: number) => total > 0 ? Math.round((n / total) * 1000) / 1000 : null
+  return {
+    totalResults: total,
+    resultsWithExactTriggerSnapshot: exactTrigger,
+    resultsWithExactOutcomeSnapshot: exactOutcome,
+    resultsWithAnyEvidence: anyEvidence,
+    exactEvidenceRate: rate0(Math.max(exactTrigger, exactOutcome)),
+    inferredEvidenceRate: rate0(inferred),
+    missingEvidenceRate: rate0(missing),
+    commonLimitations: [...lim.entries()].map(([limitation, count]) => ({ limitation, count })).sort((a, b) => b.count - a.count).slice(0, 5),
+  }
 }
 
 export function buildBacktestSummary(results: BacktestSignalResult[], coverage: BacktestDataCoverage): BacktestSummary {
@@ -89,5 +122,6 @@ export function buildBacktestSummary(results: BacktestSignalResult[], coverage: 
     commonBlockedReasons: [...blocked.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count).slice(0, 5),
     sampleQuality: sampleQualityOf(decisive),
     dataCoverage: coverage,
+    evidenceCoverage: buildEvidenceCoverage(results),
   }
 }

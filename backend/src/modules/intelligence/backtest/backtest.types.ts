@@ -16,6 +16,31 @@ export type BacktestRunStatus = 'queued' | 'running' | 'completed' | 'failed' | 
 export type BacktestMode = 'pattern_backtest' | 'replay'
 export type BacktestEvaluationMode = 'strict' | 'diagnostic'
 
+// ─── B35: inline snapshot evidence ─────────────────────────────────────────────
+
+export type BacktestEvidenceStrength = 'exact' | 'strong_inferred' | 'window_inferred' | 'weak_inferred' | 'unknown'
+
+export interface BacktestSnapshotEvidenceRef {
+  snapshotId: string | null
+  fixtureId: string
+  capturedAt: string | null
+  minute: number | null
+  strength: BacktestEvidenceStrength
+  kind: 'trigger_state' | 'outcome_state' | 'replay_step' | 'backtest_evaluation'
+  limitations: string[]
+}
+
+export interface BacktestEvidenceCoverage {
+  totalResults: number
+  resultsWithExactTriggerSnapshot: number
+  resultsWithExactOutcomeSnapshot: number
+  resultsWithAnyEvidence: number
+  exactEvidenceRate: number | null
+  inferredEvidenceRate: number | null
+  missingEvidenceRate: number | null
+  commonLimitations: { limitation: string; count: number }[]
+}
+
 export interface BacktestConditionResult {
   type: string
   passed: boolean
@@ -33,6 +58,12 @@ export interface BacktestTimelinePoint {
   confidence: number
   dataQuality: DataQuality
   explanation: string
+  // ── B35 (optional): per-step snapshot evidence ──
+  snapshotId?: string | null
+  snapshotCapturedAt?: string | null
+  snapshotMinute?: number | null
+  evidenceStrength?: BacktestEvidenceStrength
+  evidenceLimitations?: string[]
 }
 
 export interface BacktestOutcomeGuess {
@@ -71,6 +102,18 @@ export interface BacktestSignalResult {
   estimatedOutcome: BacktestEstimatedOutcome
   outcomeReason: string
   evidence: BacktestOutcomeGuess['evidence'] | null
+  // ── B35 (optional): inline snapshot evidence (compat with old runs) ──
+  triggerSnapshotId?: string | null
+  triggerSnapshotCapturedAt?: string | null
+  triggerSnapshotMinute?: number | null
+  triggerEvidenceStrength?: BacktestEvidenceStrength
+  triggerEvidenceLimitations?: string[]
+  outcomeSnapshotId?: string | null
+  outcomeSnapshotCapturedAt?: string | null
+  outcomeSnapshotMinute?: number | null
+  outcomeEvidenceStrength?: BacktestEvidenceStrength
+  outcomeEvidenceLimitations?: string[]
+  evidenceSummary?: string | null
 }
 
 export interface BacktestDataCoverage {
@@ -107,6 +150,8 @@ export interface BacktestSummary {
   commonBlockedReasons: { reason: string; count: number }[]
   sampleQuality: SampleQuality
   dataCoverage: BacktestDataCoverage
+  // ── B35 (optional): traceability coverage (NOT hit-rate) ──
+  evidenceCoverage?: BacktestEvidenceCoverage
 }
 
 export interface BacktestLimitation {

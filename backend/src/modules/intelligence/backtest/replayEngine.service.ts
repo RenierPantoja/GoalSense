@@ -84,6 +84,12 @@ export async function replayFixture(patternId: string, fixtureId: string, opts: 
       wouldTrigger: res.shouldAlert, confidence: res.confidence,
       dataQuality: (input.dataQuality as DataQuality) || 'unknown',
       explanation: explain(input.minute, res.shouldAlert, missing, res.blockers),
+      // B35: per-step snapshot evidence (exact only with a real id).
+      snapshotId: (s as any)?.id ? String((s as any).id) : null,
+      snapshotCapturedAt: s.capturedAt ?? null,
+      snapshotMinute: typeof s.minute === 'number' ? s.minute : null,
+      evidenceStrength: (s as any)?.id ? 'exact' : 'unknown',
+      evidenceLimitations: (s as any)?.id ? [] : ['step_snapshot_id_missing'],
     }
     timeline.push(point)
     if (res.shouldAlert && triggerIndex < 0) { triggerIndex = i; triggerInput = input }

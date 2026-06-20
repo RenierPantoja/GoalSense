@@ -98,6 +98,12 @@ export function ReplayViewer({ patternId, fixtureId, onClose }: Props) {
                       </span>
                     )}
                     <span className="text-[11px] text-white/40">{run.snapshotsEvaluated} snapshots</span>
+                    {(() => {
+                      const withSnap = run.timeline.filter(p => !!p.snapshotId).length
+                      const total = run.timeline.length
+                      if (total === 0 || withSnap === 0) return null
+                      return <span className="text-[10px] px-2 py-0.5 rounded-full border border-[#2DD4BF]/20 text-[#7FE9DC]/80" title="Passos com snapshot exato vinculado (B35)">{withSnap}/{total} passos com snapshot exato</span>
+                    })()}
                   </div>
                   {run.outcomeReason && <p className="text-[11.5px] text-white/55 mb-4 leading-relaxed">{run.outcomeReason}</p>}
 
@@ -115,6 +121,9 @@ export function ReplayViewer({ patternId, fixtureId, onClose }: Props) {
                               <span className="text-[10px] text-white/30">{p.status}</span>
                               <span className="text-[10px] text-white/30">conf {p.confidence}</span>
                               <span className="text-[10px] text-white/30">dados {p.dataQuality}</span>
+                              {p.snapshotId
+                                ? <span className="text-[9.5px] px-1.5 py-0.5 rounded-full border border-[#2DD4BF]/25 text-[#7FE9DC]/80" title={`snap ${p.snapshotId.slice(0, 8)}…${p.snapshotCapturedAt ? ' · ' + new Date(p.snapshotCapturedAt).toLocaleTimeString() : ''}`}>snapshot exato</span>
+                                : (p.evidenceStrength ? <span className="text-[9.5px] px-1.5 py-0.5 rounded-full border border-white/10 text-white/35" title={(p.evidenceLimitations || []).join(', ')}>sem snapshot</span> : null)}
                             </div>
                             <p className="text-[11.5px] text-white/65 mt-1 leading-snug">{p.explanation}</p>
                           </div>
