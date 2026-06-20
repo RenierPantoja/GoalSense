@@ -75,3 +75,14 @@ results unchanged.
 Only ESPN is truly wired (today fixtures + live). All pre-match domains
 (lineups/injuries/suspensions/standings/H2H) report `provider_not_configured` until an
 operator supplies credentials and the corresponding fetch integration is implemented.
+
+## B41 — real integration + manual intake + merge
+
+A real API-Football `today_fixtures` fetch (env-gated, ID-free), a provider readiness
+report (`/providers/readiness`), an auditable **manual intelligence intake** for the
+domains blocked by id-mapping, and a **merge engine** (provider + manual with conflict
+detection) now feed Acquisition Runner V2 (`runAcquisitionForFixtureV2`/`…TodayV2` +
+`buildAcquisitionReportV2`: fetchedFromProvider / filledByManual / stillMissing /
+providerNotConfigured / providerNotSupported / conflicts / manualRequiredDomains). See
+`REAL_PRE_MATCH_PROVIDER_INTEGRATION.md`, `MANUAL_INTELLIGENCE_INTAKE.md`,
+`PRE_MATCH_DATA_MERGE.md`.

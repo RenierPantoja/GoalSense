@@ -6,6 +6,10 @@
  */
 import { apiFetch } from './apiClient'
 import type {
+  ProviderReadinessReportDto, MergeReportDto, ReadinessV3Dto, PrecheckV3Dto,
+} from '@/features/matchIntelligence/providerReadinessTypes'
+import type { ManualIntelligenceRecordDto, CreateManualRecordPayload } from '@/features/matchIntelligence/manualIntelligenceTypes'
+import type {
   ProviderCapabilitiesDto, MatchDayScopeDto, MatchIntelligencePackageDto, ReadinessDto,
   DecisionInputBundleDto, AlertPrecheckDto, PostMatchExplanationDto, TeamMemoryDto,
   SquadAvailabilityDto, ProviderStackReportDto, AcquisitionRunDto, LineupWindowDto,
@@ -43,4 +47,14 @@ export const matchIntelligenceApi = {
   getPrecheckV2(id: string) { return apiFetch<PrecheckV2Dto>(`${fx(id)}/precheck-v2`) },
   getPostMatchExplanationV2(id: string) { return apiFetch<PostMatchV2Dto>(`${fx(id)}/post-match-explanation-v2`) },
   getMatchIntelligencePackageV2(id: string) { return apiFetch<MatchIntelligencePackageV2Dto>(`${fx(id)}/package-v2`) },
+  // ── B41 ──
+  getProviderReadiness() { return apiFetch<ProviderReadinessReportDto>(`${BASE}/providers/readiness`) },
+  listManualRecords(id: string) { return apiFetch<ManualIntelligenceRecordDto[]>(`${fx(id)}/manual-records`) },
+  createManualRecord(id: string, payload: CreateManualRecordPayload) { return apiFetch<ManualIntelligenceRecordDto>(`${fx(id)}/manual-records`, { method: 'POST', body: JSON.stringify(payload) }) },
+  updateManualRecord(recordId: string, patch: Partial<CreateManualRecordPayload>) { return apiFetch<ManualIntelligenceRecordDto>(`${BASE}/manual-records/${encodeURIComponent(recordId)}`, { method: 'PATCH', body: JSON.stringify(patch) }) },
+  deleteManualRecord(recordId: string) { return apiFetch<{ deleted: boolean }>(`${BASE}/manual-records/${encodeURIComponent(recordId)}`, { method: 'DELETE' }) },
+  getMergeReport(id: string) { return apiFetch<MergeReportDto>(`${fx(id)}/merge-report`) },
+  getReadinessV3(id: string) { return apiFetch<ReadinessV3Dto>(`${fx(id)}/readiness-v3`) },
+  getPrecheckV3(id: string) { return apiFetch<PrecheckV3Dto>(`${fx(id)}/precheck-v3`) },
+  runAcquisitionV2(id: string) { return apiFetch<{ run: unknown; report: unknown; providerReadiness: unknown }>(`${fx(id)}/acquisition/run-v2`, { method: 'POST', body: '{}' }) },
 }

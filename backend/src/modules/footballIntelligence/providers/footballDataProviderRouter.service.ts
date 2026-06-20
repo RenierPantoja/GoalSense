@@ -58,7 +58,7 @@ export async function fetchWithFallback(domain: AcquisitionDomain, params: Fetch
     }
     const res = await adapter.fetchDomain(domain, params)
     last = { ...res, providerCandidatesTried: tried }
-    if (res.availability === 'available' || res.availability === 'partial') return last
+    if (res.availability === 'available' || res.availability === 'partial' || res.availability === 'available_empty_confirmed') return last
   }
   return last ?? emptyResult(domain, 'unavailable', ['Todos os providers falharam.'], tried)
 }

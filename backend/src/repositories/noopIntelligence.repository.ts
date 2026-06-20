@@ -41,6 +41,7 @@ import type {
 import type {
   PreMatchDomainSnapshot, PreMatchAcquisitionRun,
 } from '../modules/footballIntelligence/preMatchAcquisition.types.js'
+import type { ManualIntelligenceRecord } from '../modules/footballIntelligence/manualIntelligence.types.js'
 import type {
   AutoAlertPolicy, AutoAlertPolicyEvaluation,
 } from '../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
@@ -240,4 +241,11 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async updatePreMatchAcquisitionRun(): Promise<{ count: number }> { return { count: 0 } }
   async getPreMatchAcquisitionRun(): Promise<PreMatchAcquisitionRun | null> { return null }
   async listPreMatchAcquisitionRuns(): Promise<PreMatchAcquisitionRun[]> { return [] }
+
+  // ── B41 (Noop): manual intelligence not persisted ──
+  async saveManualIntelligenceRecord(r: ManualIntelligenceRecord): Promise<ManualIntelligenceRecord> { return r }
+  async getManualIntelligenceRecord(): Promise<ManualIntelligenceRecord | null> { return null }
+  async listManualIntelligenceRecords(): Promise<ManualIntelligenceRecord[]> { return [] }
+  async updateManualIntelligenceRecord(): Promise<{ count: number }> { return { count: 0 } }
+  async deleteManualIntelligenceRecord(): Promise<{ count: number }> { return { count: 0 } }
 }

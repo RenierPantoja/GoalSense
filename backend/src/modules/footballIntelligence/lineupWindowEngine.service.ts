@@ -87,3 +87,61 @@ export async function recomputeReadinessAfterLineup(fixtureId: string): Promise<
   if (w.shouldWait) return { shouldReevaluate: false, reason: 'Escalação ainda não disponível — aguardar.' }
   return { shouldReevaluate: false, reason: 'Sem mudança de escalação relevante.' }
 }
+
+// ─── Lineup real data flow V2 (B41) — provider + manual + conflict ─────────────
+import { listManualRecordsForFixture } from './manualIntelligenceIntake.service.js'
+
+export type LineupWindowStatusV2 =
+  | 'too_early' | 'waiting_for_provider' | 'waiting_for_manual_confirmation' | 'probable_available'
+  | 'confirmed_available' | 'conflict_requires_review' | 'provider_not_configured'
+  | 'provider_not_supported' | 'unavailable' | 'stale'
+
+export interface LineupWindowStateV2 {
+  fixtureId: string
+  status: LineupWindowStatusV2
+  baseStatus: LineupWindowStatus
+  minutesToKickoff: number | null
+  source: 'provider' | 'manual' | 'none'
+  sourceReliability: string
+  hasManualLineup: boolean
+  hasProviderLineup: boolean
+  conflict: boolean
+  shouldWait: boolean
+  shouldRefreshNow: boolean
+  limitations: string[]
+}
+
+export async function getLineupWindowStatusV2(fixtureId: string): Promise<LineupWindowStateV2> {
+  const baseState = await getLineupWindowStatus(fixtureId)
+  const manual = await listManualRecordsForFixture(fixtureId, 100).catch(() => [])
+  const manualLineups = manual.filter(m => m.domain === 'lineup')
+  const hasManualConfirmed = manualLineups.some(m => (m.payload as any)?.confirmed === true || m.reliability === 'high')
+  const hasManualLineup = manualLineups.length > 0
+  const providerConfigured = !(baseState.status === 'provider_not_supported')
+  const hasProviderLineup = baseState.status === 'confirmed_available'
+
+  const limitations = [...baseState.limitations]
+  const conflict = hasProviderLineup && hasManualConfirmed
+
+  let status: LineupWindowStatusV2
+  let source: 'provider' | 'manual' | 'none' = 'none'
+  let sourceReliability = 'unknown'
+
+  if (conflict) { status = 'conflict_requires_review'; source = 'provider'; sourceReliability = 'requires_review'; limitations.push('Escalação provider × manual divergem — revisar.') }
+  else if (hasProviderLineup) { status = 'confirmed_available'; source = 'provider'; sourceReliability = 'provider' }
+  else if (hasManualConfirmed) { status = 'confirmed_available'; source = 'manual'; sourceReliability = 'manual_high'; limitations.push('Escalação confirmada via intake MANUAL (não provider).') }
+  else if (hasManualLineup) { status = 'waiting_for_manual_confirmation'; source = 'manual'; sourceReliability = manualLineups[0].reliability; limitations.push('Escalação manual provável — aguardando confirmação.') }
+  else if (baseState.status === 'too_early') { status = 'too_early' }
+  else if (baseState.status === 'probable_expected') { status = 'probable_available' }
+  else if (baseState.status === 'confirmed_expected_soon') { status = providerConfigured ? 'waiting_for_provider' : 'waiting_for_manual_confirmation' }
+  else if (baseState.status === 'provider_not_supported') { status = 'provider_not_supported'; limitations.push('Nenhum provider de escalação — use intake manual.') }
+  else if (baseState.status === 'stale') { status = 'stale' }
+  else { status = 'unavailable' }
+
+  return {
+    fixtureId, status, baseStatus: baseState.status, minutesToKickoff: baseState.minutesToKickoff,
+    source, sourceReliability, hasManualLineup, hasProviderLineup, conflict,
+    shouldWait: status === 'too_early' || status === 'probable_available' || status === 'waiting_for_provider' || status === 'waiting_for_manual_confirmation',
+    shouldRefreshNow: baseState.shouldRefreshNow, limitations,
+  }
+}

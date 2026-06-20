@@ -85,3 +85,12 @@ package. ESPN remains the only wired source; every other domain reports
 `provider_not_configured` until credentials are supplied. Nothing is fabricated. See
 `PRE_MATCH_ACQUISITION.md`, `LINEUP_WINDOW_ENGINE.md`, `PLAYER_IMPORTANCE_FOUNDATION.md`,
 `ALERT_DECISION_PRECHECK_V2.md`, `POST_MATCH_EXPLANATION_V2.md`.
+
+## B41 — real provider integration + manual intake (additive)
+
+Real (env-gated) API-Football today_fixtures fetch + provider readiness report; an
+auditable manual intelligence intake; a provider+manual merge engine with conflict
+detection; and Readiness V3 / Precheck V3 / Acquisition Runner V2 consuming both. ESPN
+stays the wired live source. Nothing fabricated; observe-first; no score/confidence
+changes. See `REAL_PRE_MATCH_PROVIDER_INTEGRATION.md`, `MANUAL_INTELLIGENCE_INTAKE.md`,
+`PRE_MATCH_DATA_MERGE.md`, `READINESS_V3.md`, `PRECHECK_V3.md`.

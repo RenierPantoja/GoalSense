@@ -37,3 +37,9 @@ loaded from `package-v2` for the selected fixture.
 `src/services/matchIntelligenceApi.ts` (B40 methods) →
 `/api/match-intelligence/*` (provider-stack, acquisition, lineup-window,
 player-importance, readiness-v2, precheck-v2, post-match-explanation-v2, package-v2).
+
+## B41 — provider + manual control center
+
+Backstage now also shows global provider readiness, per-fixture merge conflicts,
+Readiness V3, and an auditable manual intelligence intake (add/list/delete with a
+`manual` badge). See `BACKSTAGE_PROVIDER_MANUAL_CONTROL_CENTER.md`.

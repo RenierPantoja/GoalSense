@@ -172,3 +172,83 @@ export async function runAlertDecisionPrecheckV2(fixtureId: string): Promise<Ale
   if (readinessV2) base.limitations.push(`Cobertura de provider: ${readinessV2.providerCoverageScore}%.`)
   return base
 }
+
+// ─── Precheck V3 (B41) — provider + manual + conflict aware, observe-first ─────
+import { buildFundamentalReadinessV3 } from './fundamentalReadinessEngine.service.js'
+import { getLineupWindowStatusV2 } from './lineupWindowEngine.service.js'
+import { buildSquadAvailabilityV2 } from './squadAvailabilityEngine.service.js'
+import { buildPreMatchMergeReport } from './preMatchDataMerge.service.js'
+
+export type PrecheckV3Decision =
+  | 'avoid' | 'wait_for_lineup' | 'wait_for_manual_review' | 'wait_for_live_confirmation'
+  | 'monitor' | 'alert_candidate' | 'strong_alert' | 'post_match_learning_only'
+
+export interface AlertDecisionPrecheckV3Result {
+  fixtureId: string
+  mode: 'observe' | 'enforce'
+  enabled: boolean
+  enforced: boolean
+  decision: PrecheckV3Decision
+  reasons: string[]
+  positiveFactors: string[]
+  negativeFactors: string[]
+  uncertaintyFactors: string[]
+  stayOutReasons: string[]
+  limitations: string[]
+  generatedAt: string
+}
+
+export async function runAlertDecisionPrecheckV3(fixtureId: string): Promise<AlertDecisionPrecheckV3Result> {
+  const enabled = isPrecheckEnabled()
+  const mode = precheckMode()
+  const out: AlertDecisionPrecheckV3Result = {
+    fixtureId, mode, enabled, enforced: false, decision: 'monitor', reasons: [],
+    positiveFactors: [], negativeFactors: [], uncertaintyFactors: [], stayOutReasons: [],
+    limitations: ['Precheck V3 observacional: nunca bloqueia alerta real em observe; não altera score/confiança/resultado.'], generatedAt: new Date().toISOString(),
+  }
+  const pkg = await buildMatchIntelligencePackage(fixtureId).catch(() => null)
+  if (!pkg) { out.reasons.push('Pacote indisponível — não aplicável.'); return out }
+
+  const [readinessV3, lineupV2, squadV2, merge] = await Promise.all([
+    buildFundamentalReadinessV3(fixtureId).catch(() => null),
+    getLineupWindowStatusV2(fixtureId).catch(() => null),
+    buildSquadAvailabilityV2(fixtureId).catch(() => null),
+    buildPreMatchMergeReport(fixtureId).catch(() => null),
+  ])
+
+  const reasons: string[] = []
+  const positive: string[] = []
+  const negative: string[] = []
+  const uncertain: string[] = []
+  const stayOut: string[] = [...pkg.stayOutReasons]
+
+  // Reason flags.
+  if (lineupV2?.conflict || merge?.requiresReview) reasons.push('manual_data_conflicts_with_provider')
+  if (lineupV2?.status === 'confirmed_available' && lineupV2.source === 'manual') reasons.push('trusted_lineup_confirmed')
+  if (lineupV2?.conflict) reasons.push('lineup_conflict')
+  if (squadV2 && !squadV2.injuries.available) reasons.push('injury_report_unavailable')
+  if (squadV2 && !squadV2.suspensions.available) reasons.push('suspension_report_unavailable')
+  if (squadV2 && squadV2.injuries.source === 'manual' && squadV2.injuries.items.length > 0) { reasons.push('key_absence_confirmed'); negative.push('ausência confirmada (manual)') }
+  for (const b of readinessV3?.criticalDomainBlockers ?? []) reasons.push('provider_unconfigured_for_critical_domain')
+  if ((readinessV3?.manualDataCoverage ?? 0) >= 50) { reasons.push('manual_data_supports_pattern'); positive.push('cobertura manual confiável') }
+
+  // Decision.
+  let decision: PrecheckV3Decision
+  if (pkg.phase === 'post_match') decision = 'post_match_learning_only'
+  else if (merge?.requiresReview || readinessV3?.status === 'wait_for_manual_review') decision = 'wait_for_manual_review'
+  else if (readinessV3?.status === 'wait_for_lineup' || lineupV2?.shouldWait) decision = 'wait_for_lineup'
+  else if (pkg.phase === 'live' && !(pkg.live?.hasStats)) decision = 'wait_for_live_confirmation'
+  else if (readinessV3?.status === 'stay_out') { decision = 'avoid'; reasons.push('fundamentals_contradict_pattern') }
+  else if (readinessV3?.status === 'provider_limited') decision = 'monitor'
+  else if (readinessV3?.status === 'ready_with_provider_data' || readinessV3?.status === 'ready_with_manual_data') { decision = 'alert_candidate'; reasons.push('fundamentals_support_pattern') }
+  else decision = 'monitor'
+
+  out.decision = decision
+  out.reasons = [...new Set(reasons)]
+  out.positiveFactors = [...new Set([...positive, ...pkg.positiveFactors])]
+  out.negativeFactors = [...new Set([...negative, ...pkg.negativeFactors])]
+  out.uncertaintyFactors = [...new Set([...uncertain, ...pkg.uncertaintyFactors])]
+  out.stayOutReasons = [...new Set([...stayOut, ...(readinessV3?.stayOutReasons ?? [])])]
+  out.enforced = enabled && mode === 'enforce' && (decision === 'avoid' || decision.startsWith('wait'))
+  return out
+}

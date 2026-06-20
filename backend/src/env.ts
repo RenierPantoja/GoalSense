@@ -148,6 +148,9 @@ const envSchema = z.object({
   MATCH_INTELLIGENCE_MAX_TODAY_FIXTURES: z.coerce.number().default(20),
   // B40: multi-provider pre-match acquisition + lineup window.
   SPORTMONKS_API_KEY: z.string().optional(),
+  API_FOOTBALL_BASE_URL: z.string().default('https://v3.football.api-sports.io'),
+  FOOTBALL_DATA_BASE_URL: z.string().default('https://api.football-data.org/v4'),
+  PROVIDER_FETCH_TIMEOUT_MS: z.coerce.number().default(8000),
   ENABLE_PROVIDER_API_FOOTBALL: z.string().default('false'),
   ENABLE_PROVIDER_SPORTMONKS: z.string().default('false'),
   ENABLE_PROVIDER_FOOTBALL_DATA: z.string().default('false'),

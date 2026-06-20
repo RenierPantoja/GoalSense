@@ -13,7 +13,7 @@ export type AcquisitionDomain =
   | 'live_events' | 'live_stats' | 'post_match_stats' | 'competition_context'
 
 export type FetchAvailability =
-  | 'available' | 'partial' | 'unavailable' | 'provider_not_supported'
+  | 'available' | 'available_empty_confirmed' | 'partial' | 'unavailable' | 'provider_not_supported'
   | 'provider_not_configured' | 'not_available_yet' | 'budget_blocked' | 'unknown'
 
 export type Freshness = 'realtime' | 'near_realtime' | 'fresh' | 'stale' | 'pre_match_only' | 'unknown'

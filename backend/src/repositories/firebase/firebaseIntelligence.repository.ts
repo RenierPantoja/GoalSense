@@ -50,6 +50,7 @@ import type {
 import type {
   PreMatchDomainSnapshot, PreMatchAcquisitionRun,
 } from '../../modules/footballIntelligence/preMatchAcquisition.types.js'
+import type { ManualIntelligenceRecord } from '../../modules/footballIntelligence/manualIntelligence.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -91,6 +92,7 @@ const LV_METRIC_COUNTERS = 'liveValidationSessionMetricCounters'
 const LV_ATTACH_RUNS = 'dynamicFixtureAttachRuns'
 const PM_DOMAIN_SNAPSHOTS = 'preMatchDomainSnapshots'
 const PM_ACQUISITION_RUNS = 'preMatchAcquisitionRuns'
+const MANUAL_RECORDS = 'manualIntelligenceRecords'
 
 const READ_CAP = 2000
 
@@ -945,5 +947,33 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     if (filters.fixtureId) q = q.where('fixtureId', '==', filters.fixtureId)
     const snap = await q.get()
     return snap.docs.map((d: any) => docData<PreMatchAcquisitionRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, filters.limit || 50)
+  }
+
+  // ── B41: manual intelligence intake ──
+  async saveManualIntelligenceRecord(record: ManualIntelligenceRecord): Promise<ManualIntelligenceRecord> {
+    const db = await getFirestore(); await db.collection(MANUAL_RECORDS).doc(record.id).set(record, { merge: true }); return record
+  }
+  async getManualIntelligenceRecord(id: string): Promise<ManualIntelligenceRecord | null> {
+    const db = await getFirestore(); const doc = await db.collection(MANUAL_RECORDS).doc(id).get()
+    return doc.exists ? docData<ManualIntelligenceRecord>(doc) : null
+  }
+  async listManualIntelligenceRecords(filters: { fixtureId?: string; teamId?: string; limit?: number }): Promise<ManualIntelligenceRecord[]> {
+    const db = await getFirestore()
+    let q: any = db.collection(MANUAL_RECORDS)
+    if (filters.fixtureId) q = q.where('fixtureId', '==', filters.fixtureId)
+    else if (filters.teamId) q = q.where('teamId', '==', filters.teamId)
+    const snap = await q.get()
+    return snap.docs.map((d: any) => docData<ManualIntelligenceRecord>(d)).filter((r: any) => !r.deleted).sort((a: any, b: any) => (b.enteredAt || '').localeCompare(a.enteredAt || '')).slice(0, filters.limit || 100)
+  }
+  async updateManualIntelligenceRecord(id: string, patch: Partial<ManualIntelligenceRecord>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(MANUAL_RECORDS).doc(id); const doc = await ref.get()
+    if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async deleteManualIntelligenceRecord(id: string): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(MANUAL_RECORDS).doc(id); const doc = await ref.get()
+    if (!doc.exists) return { count: 0 }
+    await ref.set({ deleted: true, updatedAt: new Date().toISOString() }, { merge: true }); return { count: 1 }
   }
 }

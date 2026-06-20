@@ -22,6 +22,7 @@
     "smoke:live-session-record-index": "node scripts/smokeLiveSessionRecordIndex.mjs",
     "smoke:match-intelligence": "node scripts/smokeMatchIntelligenceFabric.mjs",
     "smoke:pre-match-acquisition": "node scripts/smokePreMatchAcquisition.mjs",
+    "smoke:real-pre-match-provider": "node scripts/smokeRealPreMatchProviderIntegration.mjs",
     "backfill:live-session-attribution": "node scripts/backfillLiveValidationSessionAttribution.mjs",
     "reindex:live-session-records": "node scripts/reindexLiveValidationSessionRecords.mjs",
     "reprocess:bt-replay-evidence": "node scripts/reprocessBacktestReplayEvidence.mjs",

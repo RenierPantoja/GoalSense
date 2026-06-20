@@ -32,6 +32,12 @@ import { runAcquisitionForToday, runAcquisitionForFixture, refreshLineupWindow, 
 import { getLineupWindowStatus } from '../modules/footballIntelligence/lineupWindowEngine.service.js'
 import { buildFixturePlayerImportance } from '../modules/footballIntelligence/playerImportance.service.js'
 import { buildMatchIntelligencePackageV2 } from '../modules/footballIntelligence/matchIntelligencePackageV2.service.js'
+import { buildProviderIntegrationReadiness } from '../modules/footballIntelligence/providerIntegrationReadiness.service.js'
+import { buildPreMatchMergeReport } from '../modules/footballIntelligence/preMatchDataMerge.service.js'
+import { buildFundamentalReadinessV3 } from '../modules/footballIntelligence/fundamentalReadinessEngine.service.js'
+import { runAlertDecisionPrecheckV3 } from '../modules/footballIntelligence/alertDecisionPrecheck.service.js'
+import { runAcquisitionForFixtureV2, runAcquisitionForTodayV2 } from '../modules/footballIntelligence/preMatchAcquisitionRunner.service.js'
+import { createManualRecord, updateManualRecord, deleteManualRecord, listManualRecordsForFixture, getManualRecord } from '../modules/footballIntelligence/manualIntelligenceIntake.service.js'
 import { createRepositories } from '../repositories/index.js'
 
 const flag = (v: unknown) => String(v).toLowerCase() === 'true'
@@ -208,5 +214,78 @@ export async function matchIntelligenceRoutes(app: FastifyInstance) {
     if (!gate(reply)) return
     const pkg = await buildMatchIntelligencePackageV2(fid(req))
     return pkg ? ok(pkg) : reply.status(404).send(badRequest('fixture_not_found'))
+  })
+
+  // ── B41: real provider integration + manual intake + V3 ──
+  const adminOp = { preHandler: [requirePermission({ permission: 'run:scan', dangerous: true })] }
+
+  app.get(`${BASE}/providers/readiness`, async (_req, reply) => {
+    if (!gate(reply)) return
+    return ok(buildProviderIntegrationReadiness())
+  })
+
+  app.get(`${BASE}/fixtures/:fixtureId/manual-records`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await listManualRecordsForFixture(fid(req), 200))
+  })
+
+  app.post(`${BASE}/fixtures/:fixtureId/manual-records`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const b = (req.body || {}) as any
+    if (!b.domain || !b.sourceType) return reply.status(400).send(badRequest('domain e sourceType são obrigatórios'))
+    const record = await createManualRecord({
+      fixtureId: fid(req), teamId: b.teamId ?? null, side: b.side, domain: b.domain, sourceType: b.sourceType,
+      sourceLabel: b.sourceLabel || 'operador', sourceUrl: b.sourceUrl ?? null, reliability: b.reliability,
+      payload: b.payload ?? {}, note: b.note ?? '', expiresAt: b.expiresAt ?? null, enteredBy: req.auth?.user?.userId ?? null,
+    })
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'manual_intelligence', resourceId: record.id, metadata: { domain: b.domain, sourceType: b.sourceType } })
+    return ok(record)
+  })
+
+  app.patch(`${BASE}/manual-records/:id`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const id = String((req.params as any).id)
+    const res = await updateManualRecord(id, (req.body || {}) as any, req.auth?.user?.userId ?? null)
+    if (res.count === 0) return reply.status(404).send(badRequest('manual_record_not_found'))
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'manual_intelligence', resourceId: id, metadata: { op: 'update' } })
+    return ok(await getManualRecord(id))
+  })
+
+  app.delete(`${BASE}/manual-records/:id`, adminOp, async (req, reply) => {
+    if (!gate(reply)) return
+    const id = String((req.params as any).id)
+    const res = await deleteManualRecord(id)
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'manual_intelligence', resourceId: id, metadata: { op: 'delete' } })
+    return ok({ deleted: res.count > 0 })
+  })
+
+  app.get(`${BASE}/fixtures/:fixtureId/merge-report`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await buildPreMatchMergeReport(fid(req)))
+  })
+
+  app.get(`${BASE}/fixtures/:fixtureId/readiness-v3`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await buildFundamentalReadinessV3(fid(req)))
+  })
+
+  app.get(`${BASE}/fixtures/:fixtureId/precheck-v3`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await runAlertDecisionPrecheckV3(fid(req)))
+  })
+
+  app.post(`${BASE}/fixtures/:fixtureId/acquisition/run-v2`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const id = fid(req)
+    const res = await runAcquisitionForFixtureV2(id)
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'pre_match_acquisition', resourceId: res.run.id, metadata: { scope: 'fixture_v2', fixtureId: id } })
+    return ok(res)
+  })
+
+  app.post(`${BASE}/today/acquisition/run-v2`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const res = await runAcquisitionForTodayV2()
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'pre_match_acquisition', resourceId: res.run.id, metadata: { scope: 'today_v2' } })
+    return ok(res)
   })
 }

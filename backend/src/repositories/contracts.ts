@@ -166,6 +166,7 @@ import type {
 import type {
   PreMatchDomainSnapshot, PreMatchAcquisitionRun,
 } from '../modules/footballIntelligence/preMatchAcquisition.types.js'
+import type { ManualIntelligenceRecord } from '../modules/footballIntelligence/manualIntelligence.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -355,6 +356,13 @@ export interface IntelligenceRepository {
   updatePreMatchAcquisitionRun(id: string, patch: Partial<PreMatchAcquisitionRun>): Promise<{ count: number }>
   getPreMatchAcquisitionRun(id: string): Promise<PreMatchAcquisitionRun | null>
   listPreMatchAcquisitionRuns(filters: { fixtureId?: string; limit?: number }): Promise<PreMatchAcquisitionRun[]>
+
+  // ── B41: manual intelligence intake ─────────────────────────────────────────
+  saveManualIntelligenceRecord(record: ManualIntelligenceRecord): Promise<ManualIntelligenceRecord>
+  getManualIntelligenceRecord(id: string): Promise<ManualIntelligenceRecord | null>
+  listManualIntelligenceRecords(filters: { fixtureId?: string; teamId?: string; limit?: number }): Promise<ManualIntelligenceRecord[]>
+  updateManualIntelligenceRecord(id: string, patch: Partial<ManualIntelligenceRecord>): Promise<{ count: number }>
+  deleteManualIntelligenceRecord(id: string): Promise<{ count: number }>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

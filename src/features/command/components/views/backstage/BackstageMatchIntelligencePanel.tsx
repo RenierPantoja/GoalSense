@@ -8,7 +8,7 @@
  * invented prediction, no odds, no stake.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw, Brain, ListChecks, Gauge, AlertTriangle, Clock, ShieldQuestion, Microscope, Database, DownloadCloud, Users } from 'lucide-react'
+import { RefreshCw, Brain, ListChecks, Gauge, AlertTriangle, Clock, ShieldQuestion, Microscope, Database, DownloadCloud, Users, Plug, ClipboardList, Trash2, Plus } from 'lucide-react'
 import { matchIntelligenceApi } from '@/services/matchIntelligenceApi'
 import { useAuth } from '@/auth/useAuth'
 import type {
@@ -16,6 +16,10 @@ import type {
   MatchIntelligencePackageV2Dto,
 } from '@/features/matchIntelligence/matchIntelligenceTypes'
 import { PRECHECK_LABEL, READINESS_LABEL, PRECHECK_V2_LABEL, READINESS_V2_LABEL } from '@/features/matchIntelligence/matchIntelligenceTypes'
+import type { ProviderReadinessReportDto, MergeReportDto, ReadinessV3Dto } from '@/features/matchIntelligence/providerReadinessTypes'
+import { READINESS_V3_LABEL } from '@/features/matchIntelligence/providerReadinessTypes'
+import type { ManualIntelligenceRecordDto, ManualDomain, ManualIntelligenceSource } from '@/features/matchIntelligence/manualIntelligenceTypes'
+import { MANUAL_DOMAIN_LABEL, MANUAL_SOURCE_LABEL } from '@/features/matchIntelligence/manualIntelligenceTypes'
 
 function Card({ title, icon, children, action }: { title: string; icon?: React.ReactNode; children: React.ReactNode; action?: React.ReactNode }) {
   return <div className="rounded-2xl border border-white/[0.07] bg-white/[0.012] p-4"><div className="flex items-center gap-2 mb-3"><span className="text-white/35">{icon}</span><h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45 flex-1">{title}</h4>{action}</div>{children}</div>
@@ -35,6 +39,11 @@ export function BackstageMatchIntelligencePanel() {
   const [precheck, setPrecheck] = useState<AlertPrecheckDto | null>(null)
   const [postMatch, setPostMatch] = useState<PostMatchExplanationDto | null>(null)
   const [pkgV2, setPkgV2] = useState<MatchIntelligencePackageV2Dto | null>(null)
+  const [providerReadiness, setProviderReadiness] = useState<ProviderReadinessReportDto | null>(null)
+  const [mergeReport, setMergeReport] = useState<MergeReportDto | null>(null)
+  const [readinessV3, setReadinessV3] = useState<ReadinessV3Dto | null>(null)
+  const [manualRecords, setManualRecords] = useState<ManualIntelligenceRecordDto[]>([])
+  const [mForm, setMForm] = useState<{ domain: ManualDomain; sourceType: ManualIntelligenceSource; sourceLabel: string; playerName: string; note: string }>({ domain: 'lineup', sourceType: 'official_club', sourceLabel: '', playerName: '', note: '' })
   const [loading, setLoading] = useState(true)
   const [disabled, setDisabled] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -50,18 +59,30 @@ export function BackstageMatchIntelligencePanel() {
 
   useEffect(() => { void loadScope() }, [loadScope])
 
+  useEffect(() => {
+    let active = true
+    void matchIntelligenceApi.getProviderReadiness().then(r => { if (active && r.ok && r.data) setProviderReadiness(r.data) })
+    return () => { active = false }
+  }, [])
+
   const openFixture = useCallback(async (id: string) => {
-    setSelected(id); setPkg(null); setPrecheck(null); setPostMatch(null); setPkgV2(null)
-    const [p, pc, pm, v2] = await Promise.all([
+    setSelected(id); setPkg(null); setPrecheck(null); setPostMatch(null); setPkgV2(null); setMergeReport(null); setReadinessV3(null); setManualRecords([])
+    const [p, pc, pm, v2, mr, rv3, man] = await Promise.all([
       matchIntelligenceApi.getMatchIntelligencePackage(id),
       matchIntelligenceApi.getAlertPrecheck(id),
       matchIntelligenceApi.getPostMatchExplanation(id),
       matchIntelligenceApi.getMatchIntelligencePackageV2(id),
+      matchIntelligenceApi.getMergeReport(id),
+      matchIntelligenceApi.getReadinessV3(id),
+      matchIntelligenceApi.listManualRecords(id),
     ])
     if (p.ok) setPkg(p.data)
     if (pc.ok) setPrecheck(pc.data)
     if (pm.ok) setPostMatch(pm.data)
     if (v2.ok) setPkgV2(v2.data)
+    if (mr.ok) setMergeReport(mr.data)
+    if (rv3.ok) setReadinessV3(rv3.data)
+    if (man.ok && man.data) setManualRecords(man.data)
   }, [])
 
   const refresh = async () => {
@@ -85,6 +106,22 @@ export function BackstageMatchIntelligencePanel() {
     else setMsg(r.reason === 'forbidden' ? 'Sem permissão.' : r.error || 'Falha ao atualizar escalação.')
   }
 
+  const addManualRecord = async () => {
+    if (!selected) return
+    if (!mForm.sourceLabel.trim()) { setMsg('Informe a fonte (sourceLabel).'); return }
+    const payload: Record<string, unknown> = {}
+    if (mForm.playerName.trim()) payload.playerName = mForm.playerName.trim()
+    const r = await matchIntelligenceApi.createManualRecord(selected, { domain: mForm.domain, sourceType: mForm.sourceType, sourceLabel: mForm.sourceLabel.trim(), note: mForm.note, payload })
+    if (r.ok) { setMsg('Registro manual adicionado (marcado como manual).'); setMForm({ ...mForm, sourceLabel: '', playerName: '', note: '' }); await openFixture(selected) }
+    else setMsg(r.reason === 'forbidden' ? 'Sem permissão.' : r.error || 'Falha ao adicionar manual.')
+  }
+
+  const removeManualRecord = async (recordId: string) => {
+    const r = await matchIntelligenceApi.deleteManualRecord(recordId)
+    if (r.ok) { setMsg('Registro manual removido.'); if (selected) await openFixture(selected) }
+    else setMsg(r.reason === 'forbidden' ? 'Remoção exige admin/owner.' : r.error || 'Falha ao remover.')
+  }
+
   if (loading) return <p className="text-[12px] text-white/40 px-1 py-8 text-center">Carregando Backstage…</p>
   if (disabled) return (
     <div className="rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.01] p-8 text-center">
@@ -100,6 +137,23 @@ export function BackstageMatchIntelligencePanel() {
     <div className="space-y-4">
       <p className="text-[12px] text-white/45">Backstage — cérebro fundamentalista dos jogos de hoje. Observacional: decide quando analisar, esperar ou ficar fora. Sem previsão inventada, sem odds, sem aposta.</p>
       {msg && <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-2.5 text-[12px] text-white/70">{msg}</div>}
+
+      {/* B41: provider integration readiness (global) */}
+      {providerReadiness && (
+        <Card title="Prontidão dos providers (B41)" icon={<Plug size={14} />}>
+          <div className="space-y-1">
+            {providerReadiness.providers.map(p => (
+              <div key={p.providerName} className="flex items-center gap-2 text-[11px] border-b border-white/[0.04] pb-1 flex-wrap">
+                <span className="text-white/80 font-medium w-28 truncate">{p.providerName}</span>
+                <span className={`text-[9.5px] px-1.5 py-0.5 rounded-full border ${p.adapterStatus === 'real' ? 'border-emerald-400/25 text-emerald-200/85' : p.adapterStatus === 'disabled' ? 'border-amber-400/20 text-amber-100/75' : 'border-white/10 text-white/45'}`}>{p.adapterStatus}</span>
+                {p.implementedDomains.length > 0 && <span className="text-white/45">impl: {p.implementedDomains.length}</span>}
+                {p.missingEnvVars.length > 0 && <span className="text-white/40 truncate">falta: {p.missingEnvVars.join(', ')}</span>}
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-white/30 mt-1.5">{providerReadiness.limitations[0]}</p>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Today list */}
@@ -258,6 +312,61 @@ export function BackstageMatchIntelligencePanel() {
                   <p className="text-[10px] text-white/30 mt-2">Lesão/suspensão ausente = unknown (não "sem lesão"); escalação antes da janela = not_available_yet; provider sem env não é chamado. Precheck V2 observe não bloqueia alerta real.</p>
                 </Card>
               )}
+
+              {/* B41: provider + manual control + merge conflicts + readiness V3 */}
+              <Card title="Provider + Manual + Conflitos (B41)" icon={<ClipboardList size={14} />}>
+                {/* Readiness V3 */}
+                {readinessV3 && (
+                  <div className="flex items-center gap-3 flex-wrap text-[11px] text-white/60 mb-2">
+                    <span className="text-white/85 font-medium">{READINESS_V3_LABEL[readinessV3.status] || readinessV3.status} ({readinessV3.score})</span>
+                    <span>· provider {readinessV3.providerDataCoverage}%</span>
+                    <span>· manual {readinessV3.manualDataCoverage}%</span>
+                    {readinessV3.manualReviewRequired && <span className="text-amber-200/80">· requer revisão</span>}
+                  </div>
+                )}
+
+                {/* Merge conflicts */}
+                {mergeReport && mergeReport.conflicts.length > 0 && (
+                  <div className="rounded-lg border border-amber-400/20 bg-amber-500/[0.05] px-3 py-2 mb-2">
+                    <p className="text-[11px] text-amber-100/85 inline-flex items-center gap-1.5"><AlertTriangle size={12} />Conflitos provider × manual (revisar): {mergeReport.conflicts.map(c => c.domain).join(', ')}</p>
+                  </div>
+                )}
+
+                {/* Manual records */}
+                <p className="text-[10px] uppercase tracking-wide text-white/35 mb-1">Inteligência manual ({manualRecords.length})</p>
+                {manualRecords.length > 0 ? (
+                  <div className="space-y-1 max-h-40 overflow-y-auto sidebar-scroll mb-2">
+                    {manualRecords.map(r => (
+                      <div key={r.id} className="flex items-center gap-2 text-[11px] border-b border-white/[0.04] pb-1">
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-sky-400/25 text-sky-200/80 shrink-0">manual</span>
+                        <span className="text-white/75 shrink-0">{MANUAL_DOMAIN_LABEL[r.domain]}</span>
+                        <span className="text-white/45 truncate flex-1">{MANUAL_SOURCE_LABEL[r.sourceType]} · {r.reliability}{(r.payload as any)?.playerName ? ` · ${(r.payload as any).playerName}` : ''}</span>
+                        {isAdmin && <button type="button" onClick={() => removeManualRecord(r.id)} className="text-white/30 hover:text-rose-300/80 shrink-0"><Trash2 size={12} /></button>}
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="text-[11px] text-white/40 mb-2">Nenhum registro manual. Insira escalação/lesão/suspensão/contexto reais que você obteve de fonte confiável.</p>}
+
+                {/* Add manual form (operator+) */}
+                {isAdmin && (
+                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.01] p-2.5 space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <select value={mForm.domain} onChange={e => setMForm({ ...mForm, domain: e.target.value as ManualDomain })} className="h-8 px-2 rounded-lg border border-white/[0.08] bg-white/[0.03] text-[11px] text-white/85 outline-none">
+                        {Object.entries(MANUAL_DOMAIN_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      </select>
+                      <select value={mForm.sourceType} onChange={e => setMForm({ ...mForm, sourceType: e.target.value as ManualIntelligenceSource })} className="h-8 px-2 rounded-lg border border-white/[0.08] bg-white/[0.03] text-[11px] text-white/85 outline-none">
+                        {Object.entries(MANUAL_SOURCE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      </select>
+                    </div>
+                    <input value={mForm.sourceLabel} onChange={e => setMForm({ ...mForm, sourceLabel: e.target.value })} placeholder="Fonte (ex.: site oficial do clube)" className="w-full h-8 px-2 rounded-lg border border-white/[0.08] bg-white/[0.03] text-[11px] text-white/85 placeholder:text-white/30 outline-none" />
+                    <div className="flex items-center gap-2">
+                      <input value={mForm.playerName} onChange={e => setMForm({ ...mForm, playerName: e.target.value })} placeholder="Jogador (opcional)" className="h-8 px-2 rounded-lg border border-white/[0.08] bg-white/[0.03] text-[11px] text-white/85 placeholder:text-white/30 outline-none flex-1" />
+                      <button type="button" onClick={addManualRecord} className="h-8 px-3 rounded-lg border border-[#2DD4BF]/25 bg-[#13B8A6]/[0.08] hover:bg-[#13B8A6]/[0.15] text-[11px] text-[#7FE9DC] inline-flex items-center gap-1"><Plus size={12} />Adicionar</button>
+                    </div>
+                    <p className="text-[10px] text-white/30">Marcado como MANUAL (não provider). Confiabilidade derivada da fonte. Audit registrado.</p>
+                  </div>
+                )}
+              </Card>
 
               {/* Post-match */}
               {pkg.phase === 'post_match' && postMatch && (

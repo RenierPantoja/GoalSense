@@ -32,3 +32,11 @@ A missing lineup before the window is `too_early`/`probable_expected` with `shou
 never a failure. Without a configured lineup provider the status is
 `provider_not_supported` (a limitation, not a fault). Player importance is `unknown`
 without evidence — we never invent which player matters.
+
+## B41 — lineup real data flow (provider + manual)
+
+`getLineupWindowStatusV2(fixtureId)` adds manual + conflict awareness. New statuses:
+`waiting_for_provider`, `waiting_for_manual_confirmation`, `probable_available`,
+`confirmed_available`, `conflict_requires_review`, `provider_not_configured`. A manual
+confirmed lineup is used as `manual_operator` (never as provider); a provider × manual
+divergence is a `conflict_requires_review`. See `READINESS_V3.md` / `PRECHECK_V3.md`.

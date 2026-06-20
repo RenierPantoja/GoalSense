@@ -90,3 +90,55 @@ export async function buildSquadAvailability(fixtureId: string): Promise<SquadAv
     lineupMeta: unavailableMeta(lineupStatus === 'not_available_yet' ? 'not_available_yet' : 'unavailable', 'Escalação não coletada pelo backend.'),
   }
 }
+
+// ─── Squad availability with manual + provider (B41) ───────────────────────────
+import { listManualRecordsForFixture } from './manualIntelligenceIntake.service.js'
+import { getPreMatchDomainSnapshot } from './preMatchDataStore.service.js'
+
+export interface SquadAvailabilityV2 {
+  fixtureId: string
+  injuries: { source: 'provider' | 'manual' | 'none'; available: boolean; items: Array<{ playerName: string; reason: string; reliability: string }>; limitations: string[] }
+  suspensions: { source: 'provider' | 'manual' | 'none'; available: boolean; items: Array<{ playerName: string; reason: string; reliability: string }>; limitations: string[] }
+  injuryImpact: 'unknown' | 'possible' | 'high'
+  suspensionImpact: 'unknown' | 'possible' | 'high'
+  limitations: string[]
+}
+
+export async function buildSquadAvailabilityV2(fixtureId: string): Promise<SquadAvailabilityV2> {
+  const [manual, injSnap, suspSnap] = await Promise.all([
+    listManualRecordsForFixture(fixtureId, 200).catch(() => []),
+    getPreMatchDomainSnapshot(fixtureId, 'injuries').catch(() => null),
+    getPreMatchDomainSnapshot(fixtureId, 'suspensions').catch(() => null),
+  ])
+  const manualInjuries = manual.filter(m => m.domain === 'injury')
+  const manualSuspensions = manual.filter(m => m.domain === 'suspension')
+
+  const providerInjAvailable = injSnap && (injSnap.availability === 'available' || injSnap.availability === 'available_empty_confirmed' || injSnap.availability === 'partial')
+  const providerSuspAvailable = suspSnap && (suspSnap.availability === 'available' || suspSnap.availability === 'available_empty_confirmed' || suspSnap.availability === 'partial')
+
+  const injItems = manualInjuries.map(m => ({ playerName: String((m.payload as any)?.playerName || 'desconhecido'), reason: String((m.payload as any)?.reason || m.note || 'lesão'), reliability: m.reliability }))
+  const suspItems = manualSuspensions.map(m => ({ playerName: String((m.payload as any)?.playerName || 'desconhecido'), reason: String((m.payload as any)?.reason || m.note || 'suspensão'), reliability: m.reliability }))
+
+  const injuries: SquadAvailabilityV2['injuries'] = {
+    source: providerInjAvailable ? 'provider' : injItems.length ? 'manual' : 'none',
+    available: !!providerInjAvailable || injItems.length > 0,
+    items: injItems,
+    limitations: providerInjAvailable || injItems.length ? [] : ['Lesões indisponíveis — unknown ≠ "sem lesão".'],
+  }
+  const suspensions: SquadAvailabilityV2['suspensions'] = {
+    source: providerSuspAvailable ? 'provider' : suspItems.length ? 'manual' : 'none',
+    available: !!providerSuspAvailable || suspItems.length > 0,
+    items: suspItems,
+    limitations: providerSuspAvailable || suspItems.length ? [] : ['Suspensões indisponíveis — unknown ≠ "sem suspensão".'],
+  }
+
+  // Impact stays conservative: only "possible" when we actually have an absence; never
+  // "high" without player-importance evidence (which we lack).
+  const injuryImpact: SquadAvailabilityV2['injuryImpact'] = injItems.length > 0 ? 'possible' : 'unknown'
+  const suspensionImpact: SquadAvailabilityV2['suspensionImpact'] = suspItems.length > 0 ? 'possible' : 'unknown'
+
+  return {
+    fixtureId, injuries, suspensions, injuryImpact, suspensionImpact,
+    limitations: ['Ausência indisponível nunca vira "sem ausência"; impacto exige importância de jogador (unknown sem dados).'],
+  }
+}

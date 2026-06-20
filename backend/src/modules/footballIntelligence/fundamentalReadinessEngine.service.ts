@@ -198,3 +198,83 @@ export async function buildFundamentalReadinessV2(fixtureId: string): Promise<Fu
     criticalMissingDomains, stayOutReasons, waitReasons, limitations,
   }
 }
+
+// ─── Readiness V3 (B41) — provider + manual + conflict aware ───────────────────
+import { buildPreMatchMergeReport } from './preMatchDataMerge.service.js'
+import { getLineupWindowStatusV2 } from './lineupWindowEngine.service.js'
+
+export type ReadinessV3Status =
+  | 'ready_with_provider_data' | 'ready_with_manual_data' | 'partially_ready'
+  | 'wait_for_lineup' | 'wait_for_manual_review' | 'provider_limited' | 'stay_out'
+
+export interface FundamentalReadinessV3 {
+  status: ReadinessV3Status
+  score: number
+  providerDataCoverage: number
+  manualDataCoverage: number
+  conflictPenalty: number
+  lineupSourceReliability: string
+  injurySourceReliability: string
+  suspensionSourceReliability: string
+  criticalDomainBlockers: string[]
+  manualReviewRequired: boolean
+  waitReasons: string[]
+  stayOutReasons: string[]
+  limitations: string[]
+}
+
+export async function buildFundamentalReadinessV3(fixtureId: string): Promise<FundamentalReadinessV3 | null> {
+  const repos = createRepositories()
+  const fixture = await repos.fixtures.findById(fixtureId).catch(() => null)
+  if (!fixture) return null
+
+  const [merge, lineupV2, v2] = await Promise.all([
+    buildPreMatchMergeReport(fixtureId).catch(() => null),
+    getLineupWindowStatusV2(fixtureId).catch(() => null),
+    buildFundamentalReadinessV2(fixtureId).catch(() => null),
+  ])
+
+  const domains = merge?.domains ?? []
+  const total = domains.length || 1
+  const providerCovered = domains.filter(d => d.chosenSource === 'provider' && !d.conflict).length
+  const manualCovered = domains.filter(d => d.chosenSource === 'manual').length
+  const providerDataCoverage = Math.round((providerCovered / total) * 100)
+  const manualDataCoverage = Math.round((manualCovered / total) * 100)
+  const conflictCount = merge?.conflicts.length ?? 0
+  const conflictPenalty = Math.min(40, conflictCount * 20)
+  const manualReviewRequired = conflictCount > 0
+
+  const lineupSourceReliability = lineupV2?.sourceReliability ?? 'unknown'
+  const injuryMerge = domains.find(d => d.domain === 'injuries')
+  const suspMerge = domains.find(d => d.domain === 'suspensions')
+  const injurySourceReliability = injuryMerge?.chosenReliability ?? 'unknown'
+  const suspensionSourceReliability = suspMerge?.chosenReliability ?? 'unknown'
+
+  const criticalDomainBlockers = (v2?.criticalMissingDomains ?? []).slice()
+  const waitReasons: string[] = []
+  const stayOutReasons: string[] = []
+  if (lineupV2?.shouldWait) waitReasons.push('Escalação ainda não confirmada.')
+
+  let status: ReadinessV3Status
+  if (manualReviewRequired) { status = 'wait_for_manual_review'; waitReasons.push('Conflito provider × manual — revisar.') }
+  else if (lineupV2?.status === 'too_early' || lineupV2?.status === 'probable_available' || lineupV2?.status === 'waiting_for_provider' || lineupV2?.status === 'waiting_for_manual_confirmation') status = 'wait_for_lineup'
+  else if (providerDataCoverage >= 50) status = 'ready_with_provider_data'
+  else if (manualDataCoverage >= 50) status = 'ready_with_manual_data'
+  else if (providerDataCoverage > 0 || manualDataCoverage > 0) status = 'partially_ready'
+  else if ((v2?.providerCoverageScore ?? 0) === 0) { status = 'provider_limited' }
+  else status = 'partially_ready'
+
+  if (status === 'provider_limited' && manualDataCoverage === 0) stayOutReasons.push('Sem dado de provider nem manual para domínios críticos.')
+
+  let score = 15 + Math.round(providerDataCoverage * 0.4 + manualDataCoverage * 0.25) - conflictPenalty
+  if (status === 'ready_with_provider_data') score += 15
+  if (status === 'wait_for_lineup' || status === 'wait_for_manual_review') score = Math.min(score, 45)
+  score = Math.max(0, Math.min(100, score))
+
+  return {
+    status, score, providerDataCoverage, manualDataCoverage, conflictPenalty,
+    lineupSourceReliability, injurySourceReliability, suspensionSourceReliability,
+    criticalDomainBlockers, manualReviewRequired, waitReasons, stayOutReasons,
+    limitations: ['Readiness V3 não é probabilidade; pondera cobertura provider/manual e penaliza conflito. Dado manual confiável habilita análise com badge manual.'],
+  }
+}

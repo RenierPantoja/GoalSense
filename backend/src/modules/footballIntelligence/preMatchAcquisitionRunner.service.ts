@@ -13,6 +13,7 @@ import { planAcquisitionForFixture, planAcquisitionForToday } from './preMatchAc
 import { createRepositories } from '../../repositories/index.js'
 import { fromFetchResult, savePreMatchDomainSnapshot, createAcquisitionRun, updateAcquisitionRun, listPreMatchDomainSnapshots, listAcquisitionRuns } from './preMatchDataStore.service.js'
 import type { PreMatchAcquisitionRun, PreMatchAcquisitionTask } from './preMatchAcquisition.types.js'
+import type { AcquisitionDomain } from './providers/provider.types.js'
 
 const flag = (v: unknown) => String(v).toLowerCase() === 'true'
 export function isAcquisitionEnabled(): boolean { return flag(env.ENABLE_PRE_MATCH_ACQUISITION) }
@@ -117,4 +118,72 @@ export async function refreshCriticalPreMatchData(fixtureId: string): Promise<Pr
 export async function buildAcquisitionReport(fixtureId: string): Promise<{ fixtureId: string; snapshots: unknown[]; runs: unknown[]; generatedAt: string }> {
   const [snapshots, runs] = await Promise.all([listPreMatchDomainSnapshots(fixtureId, 100), listAcquisitionRuns(fixtureId, 20)])
   return { fixtureId, snapshots, runs, generatedAt: new Date().toISOString() }
+}
+
+// ─── Acquisition V2 (B41) — provider + manual diagnostic ───────────────────────
+import { buildPreMatchMergeReport } from './preMatchDataMerge.service.js'
+import { buildProviderIntegrationReadiness } from './providerIntegrationReadiness.service.js'
+import { listManualRecordsForFixture } from './manualIntelligenceIntake.service.js'
+
+const CRITICAL: AcquisitionDomain[] = ['confirmed_lineups', 'injuries', 'suspensions', 'standings']
+
+export interface AcquisitionReportV2 {
+  fixtureId: string
+  fetchedFromProvider: string[]
+  filledByManual: string[]
+  stillMissing: string[]
+  providerNotConfigured: string[]
+  providerNotSupported: string[]
+  conflicts: Array<{ domain: string; detail: string }>
+  criticalBlockers: string[]
+  manualRequiredDomains: string[]
+  nextRecommendedRefreshAt: string | null
+  generatedAt: string
+  limitations: string[]
+}
+
+export async function buildAcquisitionReportV2(fixtureId: string): Promise<AcquisitionReportV2> {
+  const repos = createRepositories()
+  const [snapshots, merge, manual] = await Promise.all([
+    listPreMatchDomainSnapshots(fixtureId, 200).catch(() => []),
+    buildPreMatchMergeReport(fixtureId).catch(() => null),
+    listManualRecordsForFixture(fixtureId, 200).catch(() => []),
+  ])
+  void repos
+  const byDomain = new Map<string, any>()
+  for (const s of snapshots) if (!byDomain.has(s.domain) || s.fetchedAt > byDomain.get(s.domain).fetchedAt) byDomain.set(s.domain, s)
+
+  const fetchedFromProvider: string[] = []
+  const providerNotConfigured: string[] = []
+  const providerNotSupported: string[] = []
+  for (const [domain, s] of byDomain.entries()) {
+    if (s.availability === 'available' || s.availability === 'available_empty_confirmed' || s.availability === 'partial') fetchedFromProvider.push(domain)
+    else if (s.availability === 'provider_not_configured') providerNotConfigured.push(domain)
+    else if (s.availability === 'provider_not_supported') providerNotSupported.push(domain)
+  }
+  const filledByManual = [...new Set((manual as any[]).map(m => m.domain))]
+  const conflicts = merge?.conflicts ?? []
+  const mergedDomains = merge?.domains ?? []
+  const stillMissing = mergedDomains.filter(d => d.chosenSource === 'none').map(d => d.domain)
+  const criticalBlockers = CRITICAL.filter(d => stillMissing.includes(d))
+  const manualRequiredDomains = criticalBlockers.filter(d => providerNotConfigured.includes(d) || providerNotSupported.includes(d) || !byDomain.has(d))
+
+  return {
+    fixtureId, fetchedFromProvider, filledByManual, stillMissing,
+    providerNotConfigured, providerNotSupported, conflicts,
+    criticalBlockers, manualRequiredDomains, nextRecommendedRefreshAt: null,
+    generatedAt: new Date().toISOString(),
+    limitations: ['Diagnóstico V2: separa provider × manual × ausente; conflitos exigem revisão; nada inventado.'],
+  }
+}
+
+export async function runAcquisitionForFixtureV2(fixtureId: string): Promise<{ run: PreMatchAcquisitionRun; report: AcquisitionReportV2; providerReadiness: ReturnType<typeof buildProviderIntegrationReadiness> }> {
+  const run = await runAcquisitionForFixture(fixtureId)
+  const report = await buildAcquisitionReportV2(fixtureId)
+  return { run, report, providerReadiness: buildProviderIntegrationReadiness() }
+}
+
+export async function runAcquisitionForTodayV2(max?: number): Promise<{ run: PreMatchAcquisitionRun; providerReadiness: ReturnType<typeof buildProviderIntegrationReadiness> }> {
+  const run = await runAcquisitionForToday(max)
+  return { run, providerReadiness: buildProviderIntegrationReadiness() }
 }
