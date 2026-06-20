@@ -259,3 +259,11 @@ creation, or alert promotion. The Auto Engine keeps its own independent
 `AUTO_ENGINE_MAX_FIXTURES_PER_RUN`. Guards are observe-first and default-safe;
 enforcement is opt-in via `LOCAL_OPS_GUARD_MODE=enforce` + the `ENABLE_*_GUARD`
 flags. See `LIVE_PIPELINE_GUARD_INTEGRATION.md`.
+
+---
+
+## B33 note — evidence lineage
+Promoted alerts now create a non-fatal `window_inferred` evidence link
+(`auto_opportunity_evidence`) tying the opportunity's fixture to the snapshot
+window. This is observational lineage only — it never changes scoring, confidence,
+the opportunity decision, or counters. See `EVIDENCE_LINEAGE.md`.

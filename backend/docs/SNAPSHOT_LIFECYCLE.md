@@ -80,3 +80,13 @@ results. No secrets stored.
 - Scan bounded to `SNAPSHOT_RETENTION_SCAN_LIMIT`; large batches run incrementally
   (`SNAPSHOT_RETENTION_BATCH_SIZE`).
 - Prisma mode cannot mutate lifecycle (no-op) — use Firebase for real lifecycle.
+
+---
+
+## B33 update — Evidence Lineage refines protection
+The protection index now consults `evidenceSnapshotReferences` (B33) first: an
+`exact` link (real snapshotId, from backtest/replay) or an inferred link yields
+precise `linked_to_*` reasons; absence of a link falls back to protect-first
+(recent / fixture-has-alert / `unknown_dependency`). This reduces over-protection
+where exact links exist, without ever authorizing a delete on uncertainty. See
+`EVIDENCE_LINEAGE.md`.

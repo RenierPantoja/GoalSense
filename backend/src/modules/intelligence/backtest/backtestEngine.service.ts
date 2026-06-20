@@ -6,6 +6,9 @@
  * production counters/profiles. Persists only its own backtest run + results.
  */
 import { createRepositories } from '../../../repositories/index.js'
+import { env } from '../../../env.js'
+import { linkSnapshotsToSource } from '../evidence/evidenceLineage.service.js'
+import type { LinkSnapshotInput } from '../evidence/evidenceLineage.types.js'
 import { evaluateCondition, evaluatePatternAgainstInput } from '../../command/commandEvaluation.service.js'
 import { evaluatePatternScope, parseScopeExtended, parseScopeFilter } from '../../command/backendScopeFilter.service.js'
 import { orderSnapshotsChronologically, snapshotsAfter, type RawSnapshot } from './utils/replayTimeline.util.js'
@@ -184,6 +187,8 @@ export async function runPatternBacktest(config: NormalizedConfig): Promise<Back
     const coverage = newCoverage()
     coverage.fixturesFound = candidates.length
     const results: BacktestSignalResult[] = []
+    const evidenceLinks: LinkSnapshotInput[] = []
+    const lineageOn = String(env.ENABLE_EVIDENCE_LINEAGE).toLowerCase() === 'true'
 
     for (const fx of candidates) {
       const fixtureView: BacktestFixtureView = {
@@ -207,6 +212,20 @@ export async function runPatternBacktest(config: NormalizedConfig): Promise<Back
       coverage.fixturesWithSnapshots++
       const result = evaluateFixture(patternView, fixtureView, snaps as RawSnapshot[], config.evaluationMode, coverage)
       results.push(result)
+      // B33: EXACT evidence links — these snapshot docs were the actual backtest input.
+      if (lineageOn && !config.dryRun) {
+        const resultId = backtestSignalResultId(run.id, fx.id)
+        for (const s of (snaps as any[]).slice(0, 30)) {
+          if (!s?.id) continue
+          evidenceLinks.push({
+            snapshotId: String(s.id), fixtureId: fx.id, provider: s.provider ?? null,
+            capturedAt: s.capturedAt ?? null, minute: typeof s.minute === 'number' ? s.minute : null,
+            linkStrength: 'exact', source: 'backtest_result', sourceId: resultId, sourceType: 'BacktestSignalResult',
+            patternId: run.patternId ?? null, backtestRunId: run.id, evidenceKind: 'backtest_evaluation',
+            reason: 'Snapshot consumido diretamente pela avaliação de backtest.',
+          })
+        }
+      }
     }
 
     const summary = buildBacktestSummary(results, coverage)
@@ -221,6 +240,7 @@ export async function runPatternBacktest(config: NormalizedConfig): Promise<Back
         try { await repos.intelligence.createBacktestSignalResult({ ...r, runId: run.id, id: backtestSignalResultId(run.id, r.fixtureId) } as any) } catch { /* never block */ }
       }
       await repos.intelligence.updateBacktestRun(run.id, run)
+      if (lineageOn && evidenceLinks.length > 0) { void linkSnapshotsToSource(evidenceLinks) }
     }
     return run
   } catch (e: any) {

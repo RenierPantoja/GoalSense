@@ -118,3 +118,13 @@ distinguishes 403 (API disabled) from other errors and shows honest states.
 See `docs/BACKTEST_LAB_UI_FOUNDATION.md`. The UI is read-only: it never creates
 alerts, sends Telegram, or alters patterns/confidence — and renders `unknown` /
 `not_evaluable` as distinct neutral states (never "failure").
+
+---
+
+## B33 note — evidence lineage (exact links)
+The backtest and replay engines now emit **exact** evidence links to the snapshot
+documents they actually consume (`backtest_result` / `replay_step`, gated by
+`ENABLE_EVIDENCE_LINEAGE`, batched, non-fatal). These are the only sources that can
+produce `exact` links today (they iterate real snapshot docs with ids), which lets
+snapshot retention protect precisely the snapshots a backtest/replay depended on.
+Results/timelines and outcomes are unchanged. See `EVIDENCE_LINEAGE.md`.

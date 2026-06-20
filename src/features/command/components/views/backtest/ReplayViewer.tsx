@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react'
 import { X, PlayCircle, Flag } from 'lucide-react'
 import { backtestApi } from '@/services/backtestApi'
+import { evidenceLineageApi } from '@/services/evidenceLineageApi'
 import type { ReplayRun } from '../../../backtest/backtestTypes'
 import { OUTCOME_LABEL, OUTCOME_TONE } from '../../../backtest/backtestTypes'
 
@@ -19,6 +20,7 @@ export function ReplayViewer({ patternId, fixtureId, onClose }: Props) {
   const [disabled, setDisabled] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [run, setRun] = useState<ReplayRun | null>(null)
+  const [lineage, setLineage] = useState<{ exact: number; inferred: number } | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -28,6 +30,10 @@ export function ReplayViewer({ patternId, fixtureId, onClose }: Props) {
       if (res.disabled) { setDisabled(true); setLoading(false); return }
       if (!res.ok) { setError(res.error || 'Falha ao carregar replay'); setLoading(false); return }
       setRun(res.data); setLoading(false)
+    })
+    // B33: read-only evidence lineage summary for this fixture.
+    evidenceLineageApi.getFixtureLineage(fixtureId).then(r => {
+      if (alive && r.ok && r.data) setLineage({ exact: r.data.exactLinks.length, inferred: r.data.inferredLinks.length })
     })
     return () => { alive = false }
   }, [patternId, fixtureId])
@@ -51,6 +57,9 @@ export function ReplayViewer({ patternId, fixtureId, onClose }: Props) {
             <h3 className="text-[15px] font-semibold text-white/95 truncate">{run?.fixtureLabel || 'Replay'}</h3>
             <p className="text-[11px] text-white/45 truncate">{run ? `${run.patternName} · ${run.leagueName}` : 'Carregando replay…'}</p>
           </div>
+          {lineage && (lineage.exact > 0 || lineage.inferred > 0) && (
+            <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full border border-[#2DD4BF]/20 text-[#7FE9DC]/80" title="Linhagem de evidências desta partida">{lineage.exact} exato · {lineage.inferred} inferido</span>
+          )}
           <button onClick={onClose} type="button" aria-label="Fechar" className="h-8 w-8 rounded-full grid place-items-center text-white/50 bg-white/[0.06] hover:bg-white/[0.12] hover:text-white/90 transition-colors"><X size={15} /></button>
         </div>
 

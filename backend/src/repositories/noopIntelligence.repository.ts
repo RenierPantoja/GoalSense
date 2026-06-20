@@ -31,6 +31,7 @@ import type {
   AutoEngineLearningRecommendation,
 } from '../modules/intelligence/autoEngine/autoEngineLearning.types.js'
 import type { SnapshotRetentionRun, LocalOpsMetricsSnapshot } from '../modules/localops/snapshotLifecycle.types.js'
+import type { EvidenceSnapshotReference } from '../modules/intelligence/evidence/evidenceLineage.types.js'
 import type {
   AutoAlertPolicy, AutoAlertPolicyEvaluation,
 } from '../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
@@ -174,4 +175,15 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async listSnapshotRetentionRuns(): Promise<SnapshotRetentionRun[]> { return [] }
   async createLocalOpsMetricsSnapshot(snapshot: LocalOpsMetricsSnapshot): Promise<LocalOpsMetricsSnapshot> { warnOnce(); return snapshot }
   async listLocalOpsMetricsSnapshots(): Promise<LocalOpsMetricsSnapshot[]> { return [] }
+
+  // ── B33 (Noop): evidence lineage not persisted; reads empty ──
+  async createEvidenceSnapshotReference(ref: EvidenceSnapshotReference): Promise<EvidenceSnapshotReference> { warnOnce(); return ref }
+  async createEvidenceSnapshotReferencesBatch(refs: EvidenceSnapshotReference[]): Promise<{ created: number }> { warnOnce(); return { created: 0 } }
+  async getEvidenceSnapshotReference(): Promise<EvidenceSnapshotReference | null> { return null }
+  async listEvidenceSnapshotReferences(): Promise<EvidenceSnapshotReference[]> { return [] }
+  async listEvidenceSnapshotReferencesBySnapshot(): Promise<EvidenceSnapshotReference[]> { return [] }
+  async listEvidenceSnapshotReferencesByFixture(): Promise<EvidenceSnapshotReference[]> { return [] }
+  async listEvidenceSnapshotReferencesBySource(): Promise<EvidenceSnapshotReference[]> { return [] }
+  async listEvidenceSnapshotReferencesByAlert(): Promise<EvidenceSnapshotReference[]> { return [] }
+  async listEvidenceSnapshotReferencesByOpportunity(): Promise<EvidenceSnapshotReference[]> { return [] }
 }

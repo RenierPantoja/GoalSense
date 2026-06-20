@@ -6,12 +6,15 @@
 import { useEffect, useState } from 'react'
 import { X, FileText, Layers, Flag, Clock, GraduationCap, PlayCircle, FlaskConical, Info } from 'lucide-react'
 import { alertIntelligenceApi } from '@/services/alertIntelligenceApi'
+import { evidenceLineageApi } from '@/services/evidenceLineageApi'
 import { ReplayViewer } from '../../backtest/ReplayViewer'
 import { RelatedAlertsPanel } from './RelatedAlertsPanel'
 import type {
   SignalLedgerEntry, AlertOutcomeRecord, PatternLearningProfile, LearningEvent, AlertResult, SignalFailureAnalysis, AlertIntelFilters,
 } from '../../../../intelligence/alertIntelligenceTypes'
 import { RESULT_LABEL, RESULT_TONE, SAMPLE_QUALITY_LABEL, pct } from '../../../../intelligence/alertIntelligenceTypes'
+import type { EvidenceLineageBundleDto } from '../../../../intelligence/evidenceLineageTypes'
+import { LINK_STRENGTH_LABEL, SOURCE_LABEL } from '../../../../intelligence/evidenceLineageTypes'
 
 interface Props {
   alertId: string | null
@@ -59,6 +62,7 @@ export function AlertSignalDrawer({ alertId, headline, onClose, onGoToBacktest, 
   const [profile, setProfile] = useState<PatternLearningProfile | null>(null)
   const [events, setEvents] = useState<LearningEvent[]>([])
   const [failure, setFailure] = useState<SignalFailureAnalysis | null>(null)
+  const [lineage, setLineage] = useState<EvidenceLineageBundleDto | null>(null)
   const [showReplay, setShowReplay] = useState(false)
 
   useEffect(() => {
@@ -73,6 +77,8 @@ export function AlertSignalDrawer({ alertId, headline, onClose, onGoToBacktest, 
       setLedger(b.ledger); setOutcome(b.outcome); setProfile(b.profile); setEvents(b.learningEvents)
       setFailure(fa); setLoading(false)
     })
+    // B33: evidence lineage is fetched separately (non-blocking, honest empty).
+    evidenceLineageApi.getAlertLineage(alertId).then(r => { if (alive && r.ok) setLineage(r.data) })
     return () => { alive = false }
   }, [alertId])
 
@@ -185,6 +191,7 @@ export function AlertSignalDrawer({ alertId, headline, onClose, onGoToBacktest, 
                   {ledger.evidence.missingData.length > 0 && (
                     <Section title="Dados ausentes"><Chips items={ledger.evidence.missingData} tone="miss" /></Section>
                   )}
+                  <EvidenceLineageSection lineage={lineage} />
                 </>
               )}
 
@@ -329,4 +336,39 @@ function TimelineStep({ dot, title, when, detail }: { dot: string; title: string
 }
 function Mini({ k, v, tone }: { k: string; v: string; tone: string }) {
   return <div className="rounded-lg border border-white/[0.06] bg-white/[0.015] px-2.5 py-2 text-center"><span className={`text-[15px] font-bold tabular-nums block ${tone}`}>{v}</span><span className="text-[9px] uppercase tracking-wider text-white/40 mt-0.5 block">{k}</span></div>
+}
+
+function EvidenceLineageSection({ lineage }: { lineage: EvidenceLineageBundleDto | null }) {
+  if (!lineage || (lineage.exactLinks.length === 0 && lineage.inferredLinks.length === 0 && lineage.unknownLinks.length === 0)) {
+    return (
+      <div className="rounded-xl border border-white/[0.07] bg-white/[0.012] p-4">
+        <h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45 mb-2">Evidência & Linhagem</h4>
+        <p className="text-[11.5px] text-white/50 leading-relaxed">Este alerta foi criado antes do índice de evidências ou não possui snapshot vinculado.</p>
+      </div>
+    )
+  }
+  const rows = [...lineage.exactLinks, ...lineage.inferredLinks].slice(0, 12)
+  return (
+    <div className="rounded-xl border border-white/[0.07] bg-white/[0.012] p-4">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">Evidência & Linhagem</h4>
+        <span className="text-[10px] text-white/40">{lineage.exactLinks.length} exato(s) · {lineage.inferredLinks.length} inferido(s)</span>
+      </div>
+      <div className="space-y-1">
+        {rows.map(r => (
+          <div key={r.id} className="flex items-center gap-2 text-[11px] border-b border-white/[0.04] pb-1 flex-wrap">
+            <span className={`px-1.5 py-0.5 rounded-full border text-[9.5px] ${r.linkStrength === 'exact' ? 'border-[#2DD4BF]/25 text-[#7FE9DC]' : 'border-sky-400/20 text-sky-200/80'}`}>{LINK_STRENGTH_LABEL[r.linkStrength]}</span>
+            <span className="text-white/60">{SOURCE_LABEL[r.source]}</span>
+            <span className="text-white/40 truncate">{r.evidenceKind}</span>
+            <span className="ml-auto text-white/45 tabular-nums">{r.snapshotId ? `snap ${r.snapshotId.slice(0, 6)}…` : (r.minute != null ? `${r.minute}'` : '—')}</span>
+          </div>
+        ))}
+      </div>
+      {lineage.exactLinks.length === 0 && (
+        <p className="text-[10.5px] text-amber-100/70 mt-2">Superproteção conservadora — vínculos inferidos (sem snapshotId exato).</p>
+      )}
+      {lineage.limitations.length > 0 && <p className="text-[10px] text-white/35 mt-1.5">{lineage.limitations[lineage.limitations.length - 1]}</p>}
+      <p className="text-[10px] text-white/30 mt-1">Vínculo inferido nunca finge ser exato. Unknown não autoriza exclusão.</p>
+    </div>
+  )
 }

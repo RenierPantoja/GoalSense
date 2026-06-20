@@ -6,6 +6,9 @@
  * ledger, sends NO Telegram. Persists only its own replay run (deterministic id).
  */
 import { createRepositories } from '../../../repositories/index.js'
+import { env } from '../../../env.js'
+import { linkSnapshotsToSource } from '../evidence/evidenceLineage.service.js'
+import type { LinkSnapshotInput } from '../evidence/evidenceLineage.types.js'
 import { evaluateCondition, evaluatePatternAgainstInput } from '../../command/commandEvaluation.service.js'
 import { orderSnapshotsChronologically, snapshotsAfter, type RawSnapshot } from './utils/replayTimeline.util.js'
 import { replayRunId } from './utils/backtestId.util.js'
@@ -102,7 +105,24 @@ export async function replayFixture(patternId: string, fixtureId: string, opts: 
     base.outcomeReason = 'Radar não dispararia nesta partida com os dados disponíveis'
   }
 
-  if (persist) { try { await repos.intelligence.createReplayRun(base) } catch { /* read-only intent; never block */ } }
+  if (persist) {
+    try { await repos.intelligence.createReplayRun(base) } catch { /* read-only intent; never block */ }
+    // B33: EXACT evidence links from the replayed snapshots (these docs were the input).
+    if (String(env.ENABLE_EVIDENCE_LINEAGE).toLowerCase() === 'true') {
+      const links: LinkSnapshotInput[] = []
+      ordered.slice(0, 60).forEach((s: any) => {
+        if (!s?.id) return
+        links.push({
+          snapshotId: String(s.id), fixtureId, provider: s.provider ?? null,
+          capturedAt: s.capturedAt ?? null, minute: typeof s.minute === 'number' ? s.minute : null,
+          linkStrength: 'exact', source: 'replay_step', sourceId: base.id, sourceType: 'ReplayRun',
+          patternId, replayRunId: base.id, evidenceKind: 'replay_step',
+          reason: 'Snapshot percorrido diretamente pelo replay.',
+        })
+      })
+      if (links.length > 0) void linkSnapshotsToSource(links)
+    }
+  }
   return base
 }
 

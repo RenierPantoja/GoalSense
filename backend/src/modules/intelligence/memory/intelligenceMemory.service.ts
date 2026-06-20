@@ -12,12 +12,14 @@
  *   - `unknown` is preserved as `unknown` (never counted as failure).
  */
 import { createRepositories } from '../../../repositories/index.js'
+import { env } from '../../../env.js'
 import type { AlertResult, DataQuality, SignalLedgerEntry } from '../contracts/intelligence.types.js'
 import { buildEvidenceSnapshot } from '../explainability/signalExplainability.service.js'
 import { buildLedgerEntry } from './signalLedger.service.js'
 import { buildFailureAnalysis, buildLearningEvent, learningTypeForResult } from '../learning/learningEvent.service.js'
 import { outcomeId } from '../utils/intelligenceId.util.js'
 import { buildLiveAvailabilityMap, collectMissingData, inferProviderQuality } from '../utils/dataAvailability.util.js'
+import { linkSnapshotToSource } from '../evidence/evidenceLineage.service.js'
 
 export interface AlertCreatedContext {
   alertId: string
@@ -123,6 +125,17 @@ export async function recordAlertCreated(ctx: AlertCreatedContext): Promise<void
 
     await repos.intelligence.createSignalLedgerEntry(entry)
 
+    // B33: non-fatal evidence link (no snapshotId captured at trigger → inferred).
+    if (String(env.ENABLE_EVIDENCE_LINEAGE).toLowerCase() === 'true') {
+      void linkSnapshotToSource({
+        fixtureId: ctx.fixture.id, minute: ctx.minute, linkStrength: 'window_inferred',
+        source: 'signal_ledger', sourceId: entry.id, sourceType: 'SignalLedgerEntry',
+        alertId: ctx.alertId, patternId: ctx.pattern.id, evidenceKind: 'trigger_state',
+        reason: 'Ledger criado sem snapshotId no gatilho — vínculo por fixture/janela.',
+        limitations: ['Sem snapshotId exato no momento do gatilho.'],
+      })
+    }
+
     await repos.intelligence.createLearningEvent(buildLearningEvent({
       type: 'alert_created',
       fixtureId: ctx.fixture.id,
@@ -181,6 +194,18 @@ export async function recordAlertResolved(ctx: AlertResolvedContext): Promise<vo
     // Transition the ledger entry (if present) to resolved.
     const patch: Partial<SignalLedgerEntry> = { signalStatus: 'resolved' }
     await repos.intelligence.updateSignalLedgerEntry(`led_${ctx.alertId}`, patch)
+
+    // B33: non-fatal evidence link for the outcome state (inferred, no snapshotId).
+    if (String(env.ENABLE_EVIDENCE_LINEAGE).toLowerCase() === 'true') {
+      void linkSnapshotToSource({
+        fixtureId: ctx.fixtureId, minute: null, linkStrength: 'window_inferred',
+        source: 'alert_outcome', sourceId: outcomeId(ctx.alertId), sourceType: 'AlertOutcomeRecord',
+        alertId: ctx.alertId, patternId: ctx.patternId, outcomeId: outcomeId(ctx.alertId),
+        evidenceKind: 'outcome_state',
+        reason: 'Outcome resolvido sem snapshotId exato — vínculo por fixture/janela.',
+        limitations: ['Sem snapshotId exato no momento da resolução.'],
+      })
+    }
 
     // Failure analysis only when genuinely failed (resolver already had data).
     if (ctx.result === 'failed') {

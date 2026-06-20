@@ -59,3 +59,11 @@ unprotected snapshots, and requires admin/owner on the API route. Every run is
 audited (`snapshotRetentionRuns`). Protection is computed by the Snapshot
 Protection Index (protect-first; `unknown_dependency` protects). Read-path excludes
 soft/hard-deleted by default. Full detail: `SNAPSHOT_LIFECYCLE.md`.
+
+---
+
+## B33 update — Evidence-aware protection
+Retention protection is now driven by the Evidence Lineage index when available:
+exact links (backtest/replay) protect precisely the referenced snapshots; inferred
+links protect with declared strength; no link → protect-first fallback. `unknown`
+links never authorize a delete. See `EVIDENCE_LINEAGE.md`.

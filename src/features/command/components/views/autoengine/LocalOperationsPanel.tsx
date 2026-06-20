@@ -221,6 +221,7 @@ export function LocalOperationsPanel() {
           {retention.downgraded && <p className="text-[10.5px] text-amber-100/75 mt-1.5">Modo solicitado rebaixado: {retention.downgradeReason}</p>}
           {retention.limitations.length > 0 && <p className="text-[10px] text-white/35 mt-1.5">{retention.limitations[retention.limitations.length - 1]}</p>}
           <p className="text-[10px] text-white/35 mt-1">Protegido nunca é deletado. Hard-delete só aparece com flag + modo real e exige admin.</p>
+          <p className="text-[10px] text-white/35 mt-0.5">Proteção usa o índice de linhagem de evidências (B33): vínculo exato &gt; inferido. Veja a trilha por alerta em Alertas 2.0 → Evidências.</p>
         </Card>
       )}
 

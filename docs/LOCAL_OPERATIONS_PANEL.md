@@ -45,3 +45,10 @@ Adds snapshot lifecycle controls (dry-run / mark / soft-delete / hard-delete wit
 protect-first and strong confirms) and a persistent operational metrics history.
 Hard-delete only shows with the explicit flag + real mode and requires admin.
 See `SNAPSHOT_LIFECYCLE_UI.md`.
+
+---
+
+## B33 additions
+The snapshot lifecycle section notes that protection now uses the Evidence Lineage
+index (exact > inferred). The per-alert evidence trail lives in Alertas 2.0 →
+Evidências. See `EVIDENCE_LINEAGE_UI.md`.

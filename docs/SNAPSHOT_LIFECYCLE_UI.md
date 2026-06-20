@@ -35,3 +35,11 @@ sections.
 `localOperationsTypes.ts` (`SnapshotRetentionPlanV2Dto`, `SnapshotRetentionRunDto`,
 `SnapshotRetentionCandidateDto`, `SnapshotLifecycleStateDto`,
 `SnapshotRetentionModeDto`, `LocalOpsMetricsSnapshotDto`, `LocalOpsMetricsHistoryDto`).
+
+---
+
+## B33 additions
+Protection reasons shown in the lifecycle section are now informed by the Evidence
+Lineage index (exact vs inferred). The detailed per-alert evidence trail (snapshots,
+timeline, strengths) is in Alertas 2.0 → Evidências; ReplayViewer shows a fixture
+lineage summary badge. See `EVIDENCE_LINEAGE_UI.md`.

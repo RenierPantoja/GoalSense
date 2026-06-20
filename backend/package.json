@@ -13,6 +13,8 @@
     "smoke:local-ops": "node scripts/smokeLocalOperations.mjs",
     "smoke:pipeline-guards": "node scripts/smokeLivePipelineGuards.mjs",
     "smoke:snapshot-lifecycle": "node scripts/smokeSnapshotLifecycle.mjs",
+    "smoke:evidence-lineage": "node scripts/smokeEvidenceLineage.mjs",
+    "backfill:evidence-lineage": "node scripts/backfillEvidenceLineage.mjs",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",

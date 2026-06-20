@@ -156,6 +156,7 @@ import type {
 } from '../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
 import type { AdminAuditEntry } from '../modules/audit/adminAudit.types.js'
 import type { SnapshotRetentionRun, LocalOpsMetricsSnapshot } from '../modules/localops/snapshotLifecycle.types.js'
+import type { EvidenceSnapshotReference } from '../modules/intelligence/evidence/evidenceLineage.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -288,6 +289,17 @@ export interface IntelligenceRepository {
   listSnapshotRetentionRuns(limit?: number): Promise<SnapshotRetentionRun[]>
   createLocalOpsMetricsSnapshot(snapshot: LocalOpsMetricsSnapshot): Promise<LocalOpsMetricsSnapshot>
   listLocalOpsMetricsSnapshots(limit?: number): Promise<LocalOpsMetricsSnapshot[]>
+
+  // ── B33: evidence lineage (snapshot reference index) ────────────────────────
+  createEvidenceSnapshotReference(ref: EvidenceSnapshotReference): Promise<EvidenceSnapshotReference>
+  createEvidenceSnapshotReferencesBatch(refs: EvidenceSnapshotReference[]): Promise<{ created: number }>
+  getEvidenceSnapshotReference(id: string): Promise<EvidenceSnapshotReference | null>
+  listEvidenceSnapshotReferences(limit?: number): Promise<EvidenceSnapshotReference[]>
+  listEvidenceSnapshotReferencesBySnapshot(snapshotId: string, limit?: number): Promise<EvidenceSnapshotReference[]>
+  listEvidenceSnapshotReferencesByFixture(fixtureId: string, limit?: number): Promise<EvidenceSnapshotReference[]>
+  listEvidenceSnapshotReferencesBySource(source: string, sourceId: string, limit?: number): Promise<EvidenceSnapshotReference[]>
+  listEvidenceSnapshotReferencesByAlert(alertId: string, limit?: number): Promise<EvidenceSnapshotReference[]>
+  listEvidenceSnapshotReferencesByOpportunity(opportunityId: string, limit?: number): Promise<EvidenceSnapshotReference[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

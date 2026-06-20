@@ -1,0 +1,35 @@
+# Evidence Lineage UI (Phase B33)
+
+## Alertas 2.0 — AlertSignalDrawer → aba "Evidências"
+New "Evidência & Linhagem" block:
+- Exact vs inferred link counts.
+- Per-link rows: strength badge (Exato/Inferido), source (Alerta/Outcome/Backtest/
+  Replay/Oportunidade), evidence kind, and snapshot id (or minute when inferred).
+- "Superproteção conservadora" note when there are no exact links.
+- Honest empty state: "Este alerta foi criado antes do índice de evidências ou não
+  possui snapshot vinculado."
+- Always: "Vínculo inferido nunca finge ser exato. Unknown não autoriza exclusão."
+
+## ReplayViewer
+- Header badge with the fixture's evidence lineage summary (`N exato · M inferido`),
+  read-only.
+
+## LocalOperationsPanel — Ciclo de vida de snapshots
+- Note that protection now uses the evidence lineage index (exact > inferred) and
+  points to the per-alert trail in Alertas 2.0 → Evidências.
+
+## API / types
+`src/services/evidenceLineageApi.ts`: `getSnapshotLineage`, `getFixtureLineage`,
+`getAlertLineage`, `getOpportunityLineage`, `searchEvidenceLineage`,
+`runEvidenceBackfill`. Types in `evidenceLineageTypes.ts`
+(`EvidenceSnapshotReferenceDto`, `EvidenceLineageBundleDto`, `EvidenceLinkStrengthDto`,
+`EvidenceLinkSourceDto`, `EvidenceKindDto`, `EvidenceLineageSearchParams`).
+
+## Safety
+- All views are read-only; no JSON dumps; honest empty states; never invents evidence.
+- Backfill action is admin/owner + env-gated on the backend.
+
+## Limitations
+- Backtest results table does not yet render per-result trigger/outcome snapshot
+  badges inline (lineage is available via the evidence API and the alert drawer);
+  step-level snapshot ids are not carried in the replay timeline type.

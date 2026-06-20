@@ -40,6 +40,7 @@ import type {
 } from '../../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
 import type { AdminAuditEntry } from '../../modules/audit/adminAudit.types.js'
 import type { SnapshotRetentionRun, LocalOpsMetricsSnapshot } from '../../modules/localops/snapshotLifecycle.types.js'
+import type { EvidenceSnapshotReference } from '../../modules/intelligence/evidence/evidenceLineage.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -70,6 +71,7 @@ const AUTO_ALERT_POLICY_EVALS = 'autoAlertPolicyEvaluations'
 const ADMIN_AUDIT = 'adminAuditTrail'
 const SNAPSHOT_RETENTION_RUNS = 'snapshotRetentionRuns'
 const LOCAL_OPS_METRICS = 'localOpsMetrics'
+const EVIDENCE_REFS = 'evidenceSnapshotReferences'
 
 const READ_CAP = 2000
 
@@ -686,5 +688,61 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     const snap = await db.collection(LOCAL_OPS_METRICS).limit(READ_CAP).get()
     return snap.docs.map((d: any) => docData<LocalOpsMetricsSnapshot>(d))
       .sort((a: any, b: any) => (b.capturedAt || '').localeCompare(a.capturedAt || '')).slice(0, limit || 100)
+  }
+
+  // ── B33: evidence snapshot references ────────────────────────────────────────
+  async createEvidenceSnapshotReference(ref: EvidenceSnapshotReference): Promise<EvidenceSnapshotReference> {
+    const db = await getFirestore()
+    await db.collection(EVIDENCE_REFS).doc(ref.id).set(ref, { merge: true })
+    return ref
+  }
+  async createEvidenceSnapshotReferencesBatch(refs: EvidenceSnapshotReference[]): Promise<{ created: number }> {
+    if (refs.length === 0) return { created: 0 }
+    const db = await getFirestore()
+    let created = 0
+    // Chunk into batches of 400 (Firestore batch limit is 500).
+    for (let i = 0; i < refs.length; i += 400) {
+      const chunk = refs.slice(i, i + 400)
+      const batch = db.batch()
+      for (const ref of chunk) batch.set(db.collection(EVIDENCE_REFS).doc(ref.id), ref, { merge: true })
+      await batch.commit()
+      created += chunk.length
+    }
+    return { created }
+  }
+  async getEvidenceSnapshotReference(id: string): Promise<EvidenceSnapshotReference | null> {
+    const db = await getFirestore()
+    const doc = await db.collection(EVIDENCE_REFS).doc(id).get()
+    return doc.exists ? docData<EvidenceSnapshotReference>(doc) : null
+  }
+  async listEvidenceSnapshotReferences(limit?: number): Promise<EvidenceSnapshotReference[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(EVIDENCE_REFS).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<EvidenceSnapshotReference>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
+  }
+  async listEvidenceSnapshotReferencesBySnapshot(snapshotId: string, limit?: number): Promise<EvidenceSnapshotReference[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(EVIDENCE_REFS).where('snapshotId', '==', snapshotId).get()
+    return snap.docs.map((d: any) => docData<EvidenceSnapshotReference>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
+  }
+  async listEvidenceSnapshotReferencesByFixture(fixtureId: string, limit?: number): Promise<EvidenceSnapshotReference[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(EVIDENCE_REFS).where('fixtureId', '==', fixtureId).get()
+    return snap.docs.map((d: any) => docData<EvidenceSnapshotReference>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
+  }
+  async listEvidenceSnapshotReferencesBySource(source: string, sourceId: string, limit?: number): Promise<EvidenceSnapshotReference[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(EVIDENCE_REFS).where('source', '==', source).where('sourceId', '==', sourceId).get()
+    return snap.docs.map((d: any) => docData<EvidenceSnapshotReference>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
+  }
+  async listEvidenceSnapshotReferencesByAlert(alertId: string, limit?: number): Promise<EvidenceSnapshotReference[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(EVIDENCE_REFS).where('alertId', '==', alertId).get()
+    return snap.docs.map((d: any) => docData<EvidenceSnapshotReference>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
+  }
+  async listEvidenceSnapshotReferencesByOpportunity(opportunityId: string, limit?: number): Promise<EvidenceSnapshotReference[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(EVIDENCE_REFS).where('opportunityId', '==', opportunityId).get()
+    return snap.docs.map((d: any) => docData<EvidenceSnapshotReference>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
   }
 }

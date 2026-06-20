@@ -12,6 +12,7 @@ import { buildLedgerEntry } from '../memory/signalLedger.service.js'
 import { createOpportunityAction } from './autoOpportunityActions.service.js'
 import { buildPromotionPreview, evaluatePromotionGuard } from './utils/autoOpportunityAlertPromotion.util.js'
 import { OPP_TYPE_LABEL } from './utils/autoSignalLabels.util.js'
+import { linkSnapshotToSource } from '../evidence/evidenceLineage.service.js'
 import type {
   AutoOpportunity, ManualAlertPromotionPreview, ManualAlertPromotionRequest,
   ManualAlertPromotionResult, ManualPromotedAlertLink, PromotedAlertProvenance,
@@ -174,6 +175,16 @@ export async function promoteOpportunityToManualAlert(request: ManualAlertPromot
     })
     await repos.intelligence.createSignalLedgerEntry(entry)
     ledgerId = entry.id
+    // B33: inferred evidence link for the promoted alert's opportunity (no snapshotId).
+    if (String(env.ENABLE_EVIDENCE_LINEAGE).toLowerCase() === 'true') {
+      void linkSnapshotToSource({
+        fixtureId: opp.fixtureId, minute: opp.minute, linkStrength: 'window_inferred',
+        source: 'promoted_alert', sourceId: alertId, sourceType: 'PromotedAlert',
+        alertId, opportunityId: opp.id, evidenceKind: 'auto_opportunity_evidence',
+        reason: 'Alerta promovido de oportunidade — vínculo por fixture/janela (sem snapshotId).',
+        limitations: ['Sem snapshotId exato da oportunidade.'],
+      })
+    }
   } catch (e: any) {
     console.warn(`[B22] ledger write failed for promoted alert ${alertId} (non-blocking): ${e?.message || e}`)
   }

@@ -9,6 +9,8 @@
  */
 import type { Repositories } from '../../repositories/index.js'
 import { deriveProtectionReasons, type ProtectionResult } from './utils/localOps.util.js'
+import { findProtectedSnapshotsForSource } from '../intelligence/evidence/evidenceLineage.service.js'
+import { env } from '../../env.js'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -42,11 +44,16 @@ function hasTimedEvents(snapshot: any): boolean {
 export interface SnapshotProtection extends ProtectionResult {
   ageDays: number
   dependencyResolvable: boolean
+  /** B33: precise evidence-link protection (exact/inferred), when available. */
+  evidenceExactLink: boolean
+  evidenceInferredLink: boolean
 }
 
 /**
  * Resolve protection for a single snapshot doc. `rawRetentionDays` defines the
- * "recent" window that always protects.
+ * "recent" window that always protects. B33: when the snapshot has a real id, its
+ * exact/inferred evidence links take precedence — precise protection that lets
+ * retention stop over-protecting every snapshot of a fixture.
  */
 export async function resolveSnapshotProtection(
   snapshot: any,
@@ -57,9 +64,23 @@ export async function resolveSnapshotProtection(
   const capturedAt = snapshot?.capturedAt ? new Date(snapshot.capturedAt).getTime() : now
   const ageDays = Math.max(0, (now - capturedAt) / DAY_MS)
   const fixtureId = String(snapshot?.fixtureId || '')
+  const snapshotId = String(snapshot?.id || '')
 
   // Dependency resolvable only when we have a usable fixtureId and capturedAt.
   const dependencyResolvable = !!fixtureId && !!snapshot?.capturedAt
+
+  // B33: precise evidence links by snapshotId (exact > inferred).
+  const lineageOn = String(env.ENABLE_EVIDENCE_LINEAGE).toLowerCase() === 'true'
+  let evidenceExactLink = false, evidenceInferredLink = false
+  const evidenceReasons: string[] = []
+  if (lineageOn && snapshotId) {
+    try {
+      const ev = await findProtectedSnapshotsForSource(snapshotId)
+      evidenceExactLink = ev.hasExactLink
+      evidenceInferredLink = ev.hasInferredLink
+      evidenceReasons.push(...ev.protectionReasons)
+    } catch { /* honest: fall through to conservative */ }
+  }
 
   let linkedToAlert = false
   if (dependencyResolvable) {
@@ -69,12 +90,17 @@ export async function resolveSnapshotProtection(
   const result = deriveProtectionReasons({
     ageDays,
     rawRetentionDays,
-    linkedToAlert,
-    // Conservative: a fixture with an alert may also feed outcome/promoted/learning.
+    // Exact/inferred evidence links protect precisely; fixture-alert is the fallback.
+    linkedToAlert: linkedToAlert || evidenceReasons.includes('linked_to_alert'),
     linkedToOutcome: linkedToAlert,
+    linkedToBacktest: evidenceReasons.includes('linked_to_backtest'),
+    linkedToReplay: evidenceReasons.includes('linked_to_replay'),
+    linkedToLearning: evidenceReasons.includes('linked_to_learning'),
+    linkedToPromotedAlert: evidenceReasons.includes('linked_to_promoted_alert'),
+    manualProtected: evidenceReasons.includes('manual_protection'),
     hasImportantEvent: hasTimedEvents(snapshot),
     dependencyResolvable,
   })
 
-  return { ...result, ageDays, dependencyResolvable }
+  return { ...result, ageDays, dependencyResolvable, evidenceExactLink, evidenceInferredLink }
 }
