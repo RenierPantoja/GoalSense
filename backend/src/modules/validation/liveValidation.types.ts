@@ -121,6 +121,17 @@ export interface LiveValidationSessionSummary {
   pendingOutcomes?: number
   attributionCoverageRate?: number | null
   outcomeBreakdown?: { confirmed: number; confirmed_partial: number; failed: number; unknown: number; expired: number; not_evaluable: number; pending: number }
+  // ── B39: session record index + scoped metrics + dynamic attach ──
+  recordLinkCoverageRate?: number | null
+  indexedRecords?: number
+  directSessionRecords?: number
+  legacyInferredRecords?: number
+  dynamicFixturesAttached?: number
+  metricsSource?: 'session_counters' | 'fixture_window_fallback' | 'mixed'
+  scopedProviderCallsAllowed?: number | null
+  scopedProviderCallsBlocked?: number | null
+  scopedSnapshotsWritten?: number | null
+  scopedGuardBlocks?: number | null
 }
 
 export interface LiveValidationSessionReport {

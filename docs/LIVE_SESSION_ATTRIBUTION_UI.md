@@ -24,3 +24,10 @@ attribution/outcome fields on the summary).
 ## Limitations
 - Per-alert/opportunity badges appear only for records created during a running
   session (exact attribution). Historical records remain grouped by fixture/window.
+
+## B39 — Index & scoped metrics in the Lab
+
+The Lab adds a card "Índice de registros & métricas escopadas (B39)" with index
+coverage (exact/inferred/source breakdown), scoped session counters, and dynamic attach
+runs, plus operator‑only buttons "Rodar anexação agora" and "Reconstruir métricas". See
+`LIVE_SESSION_INDEX_UI.md`.

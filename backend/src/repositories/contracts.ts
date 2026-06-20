@@ -160,6 +160,9 @@ import type { EvidenceSnapshotReference } from '../modules/intelligence/evidence
 import type {
   LiveValidationSession, LiveValidationSessionFixture, LiveValidationSessionEvent, LiveValidationSessionReport,
 } from '../modules/validation/liveValidation.types.js'
+import type {
+  LiveValidationRecordLink, LiveValidationSessionMetricCounter, DynamicFixtureAttachRun,
+} from '../modules/validation/liveValidationIndex.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -325,6 +328,21 @@ export interface IntelligenceRepository {
   createLiveValidationSessionReport(report: LiveValidationSessionReport): Promise<LiveValidationSessionReport>
   getLiveValidationSessionReport(sessionId: string): Promise<LiveValidationSessionReport | null>
   listLiveValidationSessionReports(limit?: number): Promise<LiveValidationSessionReport[]>
+
+  // ── B39: session record index + scoped metrics + dynamic attach ─────────────
+  createLiveValidationRecordLink(link: LiveValidationRecordLink): Promise<LiveValidationRecordLink>
+  createLiveValidationRecordLinksBatch(links: LiveValidationRecordLink[]): Promise<{ created: number }>
+  listLiveValidationRecordLinks(limit?: number): Promise<LiveValidationRecordLink[]>
+  listLiveValidationRecordLinksBySession(validationSessionId: string, limit?: number): Promise<LiveValidationRecordLink[]>
+  listLiveValidationRecordLinksByRecord(recordId: string, limit?: number): Promise<LiveValidationRecordLink[]>
+  listLiveValidationRecordLinksByFixture(fixtureId: string, limit?: number): Promise<LiveValidationRecordLink[]>
+  upsertLiveValidationSessionMetricCounter(counter: LiveValidationSessionMetricCounter): Promise<LiveValidationSessionMetricCounter>
+  getLiveValidationSessionMetricCounter(validationSessionId: string, bucketKey: string): Promise<LiveValidationSessionMetricCounter | null>
+  listLiveValidationSessionMetricCounters(validationSessionId: string, limit?: number): Promise<LiveValidationSessionMetricCounter[]>
+  createDynamicFixtureAttachRun(run: DynamicFixtureAttachRun): Promise<DynamicFixtureAttachRun>
+  updateDynamicFixtureAttachRun(id: string, patch: Partial<DynamicFixtureAttachRun>): Promise<{ count: number }>
+  listDynamicFixtureAttachRuns(validationSessionId: string, limit?: number): Promise<DynamicFixtureAttachRun[]>
+  getDynamicFixtureAttachRun(id: string): Promise<DynamicFixtureAttachRun | null>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

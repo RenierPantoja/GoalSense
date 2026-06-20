@@ -21,6 +21,8 @@ import { outcomeId } from '../utils/intelligenceId.util.js'
 import { buildLiveAvailabilityMap, collectMissingData, inferProviderQuality } from '../utils/dataAvailability.util.js'
 import { linkTriggerSnapshot, linkOutcomeSnapshot } from '../evidence/evidenceLineage.service.js'
 import { resolveSessionAttribution, recordAttributionEvent } from '../../validation/liveValidationAttribution.service.js'
+import { linkRecordToSession } from '../../validation/liveValidationRecordIndex.service.js'
+import { incrementSessionMetric } from '../../validation/liveValidationSessionMetrics.service.js'
 
 export interface AlertCreatedContext {
   alertId: string
@@ -153,6 +155,11 @@ export async function recordAlertCreated(ctx: AlertCreatedContext): Promise<void
     if (attribution) {
       void recordAttributionEvent({ sessionId: attribution.validationSessionId, type: 'signal_created', fixtureId: ctx.fixture.id, source: 'ledger', message: `Sinal/alerta em ${entry.fixtureLabel} (${ctx.signalType}).` })
       void recordAttributionEvent({ sessionId: attribution.validationSessionId, type: 'alert_created', fixtureId: ctx.fixture.id, source: 'ledger', message: `Alerta criado (conf ${ctx.confidence}).` })
+      // B39: record-index links + scoped metrics (non-fatal).
+      void linkRecordToSession({ validationSessionId: attribution.validationSessionId, sessionName: attribution.sessionName, recordType: 'signal_ledger', recordId: entry.id, fixtureId: ctx.fixture.id, alertId: ctx.alertId, source: 'ledger' })
+      void linkRecordToSession({ validationSessionId: attribution.validationSessionId, sessionName: attribution.sessionName, recordType: 'alert', recordId: ctx.alertId, fixtureId: ctx.fixture.id, alertId: ctx.alertId, source: 'ledger' })
+      incrementSessionMetric(attribution.validationSessionId, 'signalsCreated', 1)
+      incrementSessionMetric(attribution.validationSessionId, 'alertsCreated', 1)
     }
 
     await repos.intelligence.createLearningEvent(buildLearningEvent({
@@ -235,6 +242,10 @@ export async function recordAlertResolved(ctx: AlertResolvedContext): Promise<vo
         severity: ctx.result === 'failed' ? 'warning' : 'info',
         message: `Outcome ${ctx.result}: ${ctx.outcomeReason}`.slice(0, 200), metadata: { result: ctx.result },
       })
+      // B39: record link + scoped metrics (non-fatal).
+      void linkRecordToSession({ validationSessionId: outcomeAttribution.validationSessionId, sessionName: outcomeAttribution.sessionName, recordType: 'outcome', recordId: outcomeId(ctx.alertId), fixtureId: ctx.fixtureId, alertId: ctx.alertId, outcomeId: outcomeId(ctx.alertId), source: 'resolution' })
+      incrementSessionMetric(outcomeAttribution.validationSessionId, 'outcomesResolved', 1)
+      if (ctx.result === 'unknown' || ctx.result === 'expired') incrementSessionMetric(outcomeAttribution.validationSessionId, 'unknownOutcomes', 1)
     }
 
     // Failure analysis only when genuinely failed (resolver already had data).

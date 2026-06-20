@@ -66,3 +66,9 @@ running/paused, linking to the new "Validação Ao Vivo" cockpit segment. See
 Records created during a running session are now attributed (sessionId); the Lab's
 "Registros vinculados" section shows exact vs inferred + outcome breakdown. See
 `LIVE_SESSION_ATTRIBUTION_UI.md`.
+
+## B39 — Dynamic attach scheduler in the workers list
+
+The `dynamicFixtureAttach` scheduler appears automatically in the panel's workers list
+(recommended local state `limited`, pausable at runtime). No separate UI wiring is
+required; the panel renders workers generically from the worker registry.

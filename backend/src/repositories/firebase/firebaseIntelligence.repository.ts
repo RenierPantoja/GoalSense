@@ -44,6 +44,9 @@ import type { EvidenceSnapshotReference } from '../../modules/intelligence/evide
 import type {
   LiveValidationSession, LiveValidationSessionFixture, LiveValidationSessionEvent, LiveValidationSessionReport,
 } from '../../modules/validation/liveValidation.types.js'
+import type {
+  LiveValidationRecordLink, LiveValidationSessionMetricCounter, DynamicFixtureAttachRun,
+} from '../../modules/validation/liveValidationIndex.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -80,6 +83,9 @@ const LV_SESSIONS = 'liveValidationSessions'
 const LV_FIXTURES = 'liveValidationSessionFixtures'
 const LV_EVENTS = 'liveValidationSessionEvents'
 const LV_REPORTS = 'liveValidationSessionReports'
+const LV_RECORD_LINKS = 'liveValidationRecordLinks'
+const LV_METRIC_COUNTERS = 'liveValidationSessionMetricCounters'
+const LV_ATTACH_RUNS = 'dynamicFixtureAttachRuns'
 
 const READ_CAP = 2000
 
@@ -840,5 +846,64 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
   async listLiveValidationSessionReports(limit?: number): Promise<LiveValidationSessionReport[]> {
     const db = await getFirestore(); const snap = await db.collection(LV_REPORTS).limit(READ_CAP).get()
     return snap.docs.map((d: any) => docData<LiveValidationSessionReport>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit || 50)
+  }
+
+  // ── B39: record index + scoped metrics + dynamic attach ─────────────────────
+  async createLiveValidationRecordLink(link: LiveValidationRecordLink): Promise<LiveValidationRecordLink> {
+    const db = await getFirestore(); await db.collection(LV_RECORD_LINKS).doc(link.id).set(link, { merge: true }); return link
+  }
+  async createLiveValidationRecordLinksBatch(links: LiveValidationRecordLink[]): Promise<{ created: number }> {
+    if (links.length === 0) return { created: 0 }
+    const db = await getFirestore(); let created = 0
+    for (let i = 0; i < links.length; i += 400) {
+      const chunk = links.slice(i, i + 400); const batch = db.batch()
+      for (const l of chunk) batch.set(db.collection(LV_RECORD_LINKS).doc(l.id), l, { merge: true })
+      await batch.commit(); created += chunk.length
+    }
+    return { created }
+  }
+  async listLiveValidationRecordLinks(limit?: number): Promise<LiveValidationRecordLink[]> {
+    const db = await getFirestore(); const snap = await db.collection(LV_RECORD_LINKS).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<LiveValidationRecordLink>(d)).sort(byCreatedAtDesc).slice(0, limit || 500)
+  }
+  async listLiveValidationRecordLinksBySession(validationSessionId: string, limit?: number): Promise<LiveValidationRecordLink[]> {
+    const db = await getFirestore(); const snap = await db.collection(LV_RECORD_LINKS).where('validationSessionId', '==', validationSessionId).get()
+    return snap.docs.map((d: any) => docData<LiveValidationRecordLink>(d)).sort(byCreatedAtDesc).slice(0, limit || 1000)
+  }
+  async listLiveValidationRecordLinksByRecord(recordId: string, limit?: number): Promise<LiveValidationRecordLink[]> {
+    const db = await getFirestore(); const snap = await db.collection(LV_RECORD_LINKS).where('recordId', '==', recordId).get()
+    return snap.docs.map((d: any) => docData<LiveValidationRecordLink>(d)).slice(0, limit || 50)
+  }
+  async listLiveValidationRecordLinksByFixture(fixtureId: string, limit?: number): Promise<LiveValidationRecordLink[]> {
+    const db = await getFirestore(); const snap = await db.collection(LV_RECORD_LINKS).where('fixtureId', '==', fixtureId).get()
+    return snap.docs.map((d: any) => docData<LiveValidationRecordLink>(d)).slice(0, limit || 200)
+  }
+  async upsertLiveValidationSessionMetricCounter(counter: LiveValidationSessionMetricCounter): Promise<LiveValidationSessionMetricCounter> {
+    const db = await getFirestore(); await db.collection(LV_METRIC_COUNTERS).doc(counter.id).set(counter, { merge: true }); return counter
+  }
+  async getLiveValidationSessionMetricCounter(validationSessionId: string, bucketKey: string): Promise<LiveValidationSessionMetricCounter | null> {
+    const db = await getFirestore(); const doc = await db.collection(LV_METRIC_COUNTERS).doc(`lvm_${validationSessionId}_${bucketKey}`).get()
+    return doc.exists ? docData<LiveValidationSessionMetricCounter>(doc) : null
+  }
+  async listLiveValidationSessionMetricCounters(validationSessionId: string, limit?: number): Promise<LiveValidationSessionMetricCounter[]> {
+    const db = await getFirestore(); const snap = await db.collection(LV_METRIC_COUNTERS).where('validationSessionId', '==', validationSessionId).get()
+    return snap.docs.map((d: any) => docData<LiveValidationSessionMetricCounter>(d)).slice(0, limit || 100)
+  }
+  async createDynamicFixtureAttachRun(run: DynamicFixtureAttachRun): Promise<DynamicFixtureAttachRun> {
+    const db = await getFirestore(); await db.collection(LV_ATTACH_RUNS).doc(run.id).set(run, { merge: true }); return run
+  }
+  async updateDynamicFixtureAttachRun(id: string, patch: Partial<DynamicFixtureAttachRun>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(LV_ATTACH_RUNS).doc(id); const doc = await ref.get()
+    if (!doc.exists) return { count: 0 }
+    const clean: Record<string, unknown> = {}; for (const [k, v] of Object.entries(patch)) { if (v !== undefined) clean[k] = v }
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async listDynamicFixtureAttachRuns(validationSessionId: string, limit?: number): Promise<DynamicFixtureAttachRun[]> {
+    const db = await getFirestore(); const snap = await db.collection(LV_ATTACH_RUNS).where('validationSessionId', '==', validationSessionId).get()
+    return snap.docs.map((d: any) => docData<DynamicFixtureAttachRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
+  }
+  async getDynamicFixtureAttachRun(id: string): Promise<DynamicFixtureAttachRun | null> {
+    const db = await getFirestore(); const doc = await db.collection(LV_ATTACH_RUNS).doc(id).get()
+    return doc.exists ? docData<DynamicFixtureAttachRun>(doc) : null
   }
 }

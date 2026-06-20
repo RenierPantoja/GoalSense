@@ -61,3 +61,12 @@ unchanged · B12–B37 preserved · Firebase + Prisma(Noop) preserved.
   derived from attributed records/events (not isolated counters).
 - Prisma mode does not persist sessions/attribution (Noop) — use Firebase mode.
 - Backfill never marks historical records as exact (honest); they remain inferred.
+
+## B39 — Session record index
+
+B38 attribution stamps records with `validationSessionId`. B39 adds an auxiliary
+session→record index (`liveValidationRecordLinks`) so those records can be queried per
+session in one read, plus scoped operational counters and dynamic mid‑session fixture
+attach. The index is never the source of truth; legacy/inferred records still fall back
+to fixture/window grouping and `inferred` never becomes `exact`. See
+`LIVE_SESSION_RECORD_INDEX.md` and `LIVE_SESSION_DYNAMIC_FIXTURE_ATTACH.md`.

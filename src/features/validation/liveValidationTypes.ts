@@ -46,6 +46,97 @@ export interface LiveValidationSessionSummaryDto {
   pendingOutcomes?: number
   attributionCoverageRate?: number | null
   outcomeBreakdown?: { confirmed: number; confirmed_partial: number; failed: number; unknown: number; expired: number; not_evaluable: number; pending: number }
+  // ── B39: record index + scoped metrics + dynamic attach ──
+  recordLinkCoverageRate?: number | null
+  indexedRecords?: number
+  directSessionRecords?: number
+  legacyInferredRecords?: number
+  dynamicFixturesAttached?: number
+  metricsSource?: 'session_counters' | 'fixture_window_fallback' | 'mixed'
+  scopedProviderCallsAllowed?: number | null
+  scopedProviderCallsBlocked?: number | null
+  scopedSnapshotsWritten?: number | null
+  scopedGuardBlocks?: number | null
+}
+
+export interface LiveValidationRecordLinkDto {
+  id: string
+  validationSessionId: string
+  sessionName: string | null
+  recordType: string
+  recordId: string
+  fixtureId: string | null
+  alertId: string | null
+  opportunityId: string | null
+  outcomeId: string | null
+  policyEvaluationId: string | null
+  evidenceReferenceId: string | null
+  snapshotId: string | null
+  createdAt: string
+  source: string
+  attributionStrength: 'exact_session_id' | 'inferred_fixture_window' | 'unknown'
+  linkReason: string
+  limitations: string[]
+}
+
+export interface RecordLinkCoverageDto {
+  totalLinks: number
+  byType: Record<string, number>
+  exact: number
+  inferred: number
+  unknown: number
+}
+
+export interface LiveValidationRecordLinksResponseDto {
+  links: LiveValidationRecordLinkDto[]
+  coverage: RecordLinkCoverageDto | null
+}
+
+export interface LiveValidationSessionMetricCounterDto {
+  id: string
+  validationSessionId: string
+  bucket: 'total' | 'minute' | 'hour'
+  bucketKey: string
+  providerCallsAllowed: number
+  providerCallsBlocked: number
+  snapshotsWritten: number
+  snapshotsSkipped: number
+  fixtureCapSkipped: number
+  guardBlocks: number
+  signalsCreated: number
+  alertsCreated: number
+  opportunitiesCreated: number
+  policyEvaluations: number
+  outcomesResolved: number
+  evidenceExactLinks: number
+  evidenceInferredLinks: number
+  unknownOutcomes: number
+  notEvaluableOutcomes: number
+  pendingOutcomes: number
+  updatedAt: string
+}
+
+export interface FixtureScopeMatchDto {
+  fixtureId: string
+  matched: boolean
+  reasons: string[]
+  scopeType: 'broad' | 'fixtureIds' | 'leagueNames' | 'teamNames' | 'none'
+  confidence: 'exact' | 'strong' | 'weak' | 'unknown'
+  limitations: string[]
+}
+
+export interface DynamicFixtureAttachRunDto {
+  id: string
+  validationSessionId: string
+  startedAt: string
+  completedAt: string | null
+  scannedFixtures: number
+  matchedFixtures: number
+  attachedFixtures: number
+  skippedFixtures: number
+  providerCallsBlocked: number
+  limitations: string[]
+  status: 'completed' | 'completed_with_limitations' | 'failed_non_fatal'
 }
 
 export interface LiveValidationLinkedRecordDto {

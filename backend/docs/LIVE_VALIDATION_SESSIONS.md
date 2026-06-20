@@ -76,3 +76,13 @@ during a running session are stamped with an optional `validationSessionId`, the
 session report adds exact-vs-inferred attribution + an outcome QA breakdown
 (unknown/not_evaluable/pending never failures), and linked-records endpoints expose
 session alerts/opportunities/evidence/outcomes. See `LIVE_SESSION_ATTRIBUTION.md`.
+
+## B39 — Record index, scoped metrics, dynamic attach
+
+A running session now maintains an auxiliary index of the records it produced, scoped
+operational counters (debounced + flushed), and can attach fixtures that go live
+mid‑session. New endpoints: `GET :id/record-links`, `GET :id/metrics`,
+`POST :id/metrics/rebuild` (operator+), `GET :id/dynamic-attach-runs`,
+`POST :id/dynamic-attach/run` (operator+). All additive, non‑fatal, and never alter
+calculations. See `LIVE_SESSION_RECORD_INDEX.md` and
+`LIVE_SESSION_DYNAMIC_FIXTURE_ATTACH.md`.

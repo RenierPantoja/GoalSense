@@ -30,6 +30,8 @@ import { startLocalOpsMetricsCapture } from './modules/localops/localOpsMetricsP
 import { startLearningAggregationScheduler } from './modules/intelligence/learning/learningAggregationScheduler.service.js'
 import { startAutoEngineScheduler } from './modules/intelligence/autoEngine/autoEngineScheduler.service.js'
 import { startAutoEngineLearningScheduler } from './modules/intelligence/autoEngine/autoEngineLearningScheduler.service.js'
+import { startSessionMetricsFlush } from './modules/validation/liveValidationSessionMetrics.service.js'
+import { startDynamicFixtureAttachScheduler } from './modules/validation/liveValidationDynamicAttach.scheduler.js'
 
 const app = Fastify({ logger: true })
 
@@ -103,6 +105,8 @@ const start = async () => {
     startAutoEngineScheduler()
     startAutoEngineLearningScheduler()
     startLocalOpsMetricsCapture() // B32: optional, only runs when persistence is enabled
+    startSessionMetricsFlush() // B39: debounced scoped session metric flush (flag-gated)
+    startDynamicFixtureAttachScheduler() // B39: attach newly-live fixtures to running sessions (flag-gated)
   } catch (err) {
     app.log.error(err)
     process.exit(1)

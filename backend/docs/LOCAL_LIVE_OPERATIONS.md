@@ -126,3 +126,11 @@ Records created during a running validation session are stamped with an optional
 `validationSessionId` (snapshots, ledger, outcomes, opportunities, policy, evidence)
 via a cheap TTL-cached session context. Non-fatal; never changes results. See
 `LIVE_SESSION_ATTRIBUTION.md`.
+
+## B39 — Dynamic fixture attach worker
+
+A new flag‑gated worker `dynamicFixtureAttach` periodically attaches fixtures that go
+live mid‑session to running validation sessions, using already‑collected data (no
+provider call by default) and respecting the local fixture cap (guard B31). It is
+registered in the worker registry (pausable/resumable at runtime; env unchanged on
+pause). See `LIVE_SESSION_DYNAMIC_FIXTURE_ATTACH.md`.

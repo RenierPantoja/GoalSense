@@ -8,7 +8,8 @@ import { apiFetch } from './apiClient'
 import type {
   LiveValidationSessionDto, LiveValidationSessionFixtureDto, LiveValidationSessionEventDto,
   LiveValidationSessionSummaryDto, LiveValidationSessionReportDto, LiveValidationFixtureScopeDto, LiveValidationGoal,
-  LiveValidationLinkedRecordsDto,
+  LiveValidationLinkedRecordsDto, LiveValidationRecordLinksResponseDto, LiveValidationSessionMetricCounterDto,
+  DynamicFixtureAttachRunDto,
 } from '@/features/validation/liveValidationTypes'
 
 const BASE = '/api/validation/live-sessions'
@@ -36,4 +37,9 @@ export const liveValidationApi = {
   generateReport(id: string) { return apiFetch<LiveValidationSessionReportDto>(`${BASE}/${encodeURIComponent(id)}/report`, { method: 'POST', body: '{}' }) },
   getReport(id: string) { return apiFetch<LiveValidationSessionReportDto>(`${BASE}/${encodeURIComponent(id)}/report`) },
   linkedRecords(id: string) { return apiFetch<LiveValidationLinkedRecordsDto>(`${BASE}/${encodeURIComponent(id)}/linked-records`) },
+  recordLinks(id: string) { return apiFetch<LiveValidationRecordLinksResponseDto>(`${BASE}/${encodeURIComponent(id)}/record-links`) },
+  sessionMetrics(id: string) { return apiFetch<LiveValidationSessionMetricCounterDto | null>(`${BASE}/${encodeURIComponent(id)}/metrics`) },
+  rebuildSessionMetrics(id: string) { return apiFetch<LiveValidationSessionMetricCounterDto>(`${BASE}/${encodeURIComponent(id)}/metrics/rebuild`, { method: 'POST', body: '{}' }) },
+  dynamicAttachRuns(id: string) { return apiFetch<DynamicFixtureAttachRunDto[]>(`${BASE}/${encodeURIComponent(id)}/dynamic-attach-runs`) },
+  runDynamicAttach(id: string) { return apiFetch<DynamicFixtureAttachRunDto>(`${BASE}/${encodeURIComponent(id)}/dynamic-attach/run`, { method: 'POST', body: '{}' }) },
 }

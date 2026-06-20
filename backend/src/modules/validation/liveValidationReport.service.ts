@@ -12,6 +12,8 @@ import { createRepositories } from '../../repositories/index.js'
 import { getGuardMetrics } from '../localops/livePipelineGuard.service.js'
 import { buildRecommendations, deriveGoNoGo } from './utils/liveValidationReport.util.js'
 import { listLinkedRecords } from './liveValidationLinkedRecords.service.js'
+import { getSessionMetrics } from './liveValidationSessionMetrics.service.js'
+import { getRecordLinkCoverage } from './liveValidationRecordIndex.service.js'
 import type {
   LiveValidationSession, LiveValidationSessionFixture, LiveValidationSessionSummary, LiveValidationSessionReport,
 } from './liveValidation.types.js'
@@ -107,7 +109,35 @@ export async function buildSessionSummary(session: LiveValidationSession): Promi
     summary.unknownOutcomes = (b.unknown || 0) + (b.expired || 0)
     summary.notEvaluable = b.not_evaluable || 0
     summary.pendingOutcomes = b.pending || 0
+    // B39: index-first coverage + record link tagging.
+    summary.indexedRecords = all.filter(r => r.source === 'index').length
+    summary.directSessionRecords = all.filter(r => r.source === 'direct_record').length
+    summary.legacyInferredRecords = all.filter(r => r.source === 'fixture_window_fallback').length
+    summary.recordLinkCoverageRate = all.length > 0 ? Math.round((summary.indexedRecords / all.length) * 1000) / 1000 : null
   } catch { summary.limitations.push('Breakdown de atribuição indisponível (leitura parcial).') }
+
+  // B39: scoped session counters (preferred over process-wide guard metrics when present).
+  try {
+    const counter = await getSessionMetrics(session.id)
+    const coverage = await getRecordLinkCoverage(session.id).catch(() => null)
+    if (counter) {
+      summary.metricsSource = 'session_counters'
+      summary.scopedProviderCallsAllowed = counter.providerCallsAllowed
+      summary.scopedProviderCallsBlocked = counter.providerCallsBlocked
+      summary.scopedSnapshotsWritten = counter.snapshotsWritten
+      summary.scopedGuardBlocks = counter.guardBlocks
+      summary.limitations.push('Métricas escopadas por sessão disponíveis (counters B39) — métricas de processo mantidas como referência.')
+    } else {
+      summary.metricsSource = 'fixture_window_fallback'
+    }
+    if (coverage && coverage.totalLinks > 0 && (summary.indexedRecords ?? 0) === 0) {
+      // Index has links even if linked-record tagging didn't intersect — surface honestly.
+      summary.indexedRecords = coverage.exact
+    }
+  } catch { /* non-fatal */ }
+
+  // B39: dynamic attach count.
+  try { const runs = await repos.intelligence.listDynamicFixtureAttachRuns(session.id, 100); summary.dynamicFixturesAttached = runs.reduce((s, r) => s + (r.attachedFixtures || 0), 0) } catch { summary.dynamicFixturesAttached = 0 }
 
   summary.recommendations = buildRecommendations(summary)
   return summary

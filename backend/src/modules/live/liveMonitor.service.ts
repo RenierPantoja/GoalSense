@@ -12,6 +12,8 @@ import { buildCanonicalKey, shouldUpdateStatus } from '../fixtures/fixtureIdenti
 import { applyFixtureCap, guardProviderCall, guardSnapshotWrite } from '../localops/livePipelineGuard.service.js'
 import type { SnapshotState } from '../localops/utils/localOps.util.js'
 import { resolveSessionAttribution, recordAttributionEvent } from '../validation/liveValidationAttribution.service.js'
+import { linkRecordToSession } from '../validation/liveValidationRecordIndex.service.js'
+import { incrementSessionMetric } from '../validation/liveValidationSessionMetrics.service.js'
 
 // ─── Fixture Upsert ──────────────────────────────────────────────────────────
 
@@ -136,7 +138,7 @@ export async function captureLiveSnapshot(
   // B38: optional session attribution (non-fatal, metadata only).
   const attribution = await resolveSessionAttribution(fixtureId).catch(() => null)
 
-  await repos.liveSnapshots.create({
+  const created = await repos.liveSnapshots.create({
     fixtureId,
     minute: pf.minute,
     status: pf.status,
@@ -153,6 +155,10 @@ export async function captureLiveSnapshot(
   })
   if (attribution) {
     void recordAttributionEvent({ sessionId: attribution.validationSessionId, type: 'snapshot_written', fixtureId, source: 'live_monitor', message: `Snapshot escrito (${dataQuality}) aos ${pf.minute ?? '?'}'.` })
+    // B39: auxiliary session→record index link + scoped metric (non-fatal).
+    const snapshotId = String((created as any)?.id ?? `snap_${fixtureId}_${pf.minute ?? 'na'}_${Date.now()}`)
+    void linkRecordToSession({ validationSessionId: attribution.validationSessionId, sessionName: attribution.sessionName ?? null, recordType: 'snapshot', recordId: snapshotId, fixtureId, snapshotId, source: 'live_monitor', attributionStrength: 'exact_session_id', linkReason: 'snapshot written during running session' })
+    incrementSessionMetric(attribution.validationSessionId, 'snapshotsWritten')
   }
   return true
 }

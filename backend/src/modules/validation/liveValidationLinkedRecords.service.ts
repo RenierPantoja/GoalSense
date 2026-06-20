@@ -7,8 +7,10 @@
  * honest; legacy records without sessionId are `inferred`.
  */
 import { createRepositories } from '../../repositories/index.js'
+import { listSessionLinkedRecordsIndexed } from './liveValidationRecordIndex.service.js'
 
 export type AttributionStrength = 'exact_session_id' | 'inferred_fixture_window' | 'unknown'
+export type LinkedRecordSource = 'index' | 'direct_record' | 'fixture_window_fallback'
 
 export interface LinkedRecord {
   id: string
@@ -16,6 +18,7 @@ export interface LinkedRecord {
   label: string
   attributionStrength: AttributionStrength
   detail: string
+  source?: LinkedRecordSource
 }
 
 function strengthOf(record: any, sessionId: string): AttributionStrength {
@@ -86,9 +89,24 @@ export async function listSessionOutcomes(sessionId: string, limit = 200): Promi
   return { items, breakdown }
 }
 
-export async function listLinkedRecords(sessionId: string): Promise<{ alerts: LinkedRecord[]; opportunities: LinkedRecord[]; evidence: LinkedRecord[]; outcomes: SessionOutcome[]; outcomeBreakdown: Record<string, number> }> {
-  const [alerts, opportunities, evidence, outcomes] = await Promise.all([
+export async function listLinkedRecords(sessionId: string): Promise<{ alerts: LinkedRecord[]; opportunities: LinkedRecord[]; evidence: LinkedRecord[]; outcomes: SessionOutcome[]; outcomeBreakdown: Record<string, number>; recordLinkCoverage: { totalIndexedRecords: number; indexedRecordIds: number; source: 'index_first' | 'fixture_window_only' } }> {
+  const [alerts, opportunities, evidence, outcomes, indexLinks] = await Promise.all([
     listSessionAlerts(sessionId, 100), listSessionOpportunities(sessionId, 100), listSessionEvidence(sessionId, 100), listSessionOutcomes(sessionId, 100),
+    listSessionLinkedRecordsIndexed(sessionId, 2000).catch(() => []),
   ])
-  return { alerts, opportunities, evidence, outcomes: outcomes.items, outcomeBreakdown: outcomes.breakdown }
+  // Index-first tagging: records present in the index (exact) are tagged `index`;
+  // exact-by-record (validationSessionId match) but not indexed are `direct_record`;
+  // everything else falls back to `fixture_window_fallback`.
+  const indexedIds = new Set(indexLinks.map(l => l.recordId))
+  const tag = (r: LinkedRecord): LinkedRecord => {
+    if (indexedIds.has(r.id)) r.source = 'index'
+    else if (r.attributionStrength === 'exact_session_id') r.source = 'direct_record'
+    else r.source = 'fixture_window_fallback'
+    return r
+  }
+  alerts.forEach(tag); opportunities.forEach(tag); evidence.forEach(tag); outcomes.items.forEach(tag)
+  return {
+    alerts, opportunities, evidence, outcomes: outcomes.items, outcomeBreakdown: outcomes.breakdown,
+    recordLinkCoverage: { totalIndexedRecords: indexLinks.length, indexedRecordIds: indexedIds.size, source: indexLinks.length > 0 ? 'index_first' : 'fixture_window_only' },
+  }
 }

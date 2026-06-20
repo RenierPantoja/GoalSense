@@ -36,6 +36,9 @@ import type {
   LiveValidationSession, LiveValidationSessionFixture, LiveValidationSessionEvent, LiveValidationSessionReport,
 } from '../modules/validation/liveValidation.types.js'
 import type {
+  LiveValidationRecordLink, LiveValidationSessionMetricCounter, DynamicFixtureAttachRun,
+} from '../modules/validation/liveValidationIndex.types.js'
+import type {
   AutoAlertPolicy, AutoAlertPolicyEvaluation,
 } from '../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
 import type { AdminAuditEntry } from '../modules/audit/adminAudit.types.js'
@@ -210,4 +213,19 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async createLiveValidationSessionReport(r: LiveValidationSessionReport): Promise<LiveValidationSessionReport> { warnOnce(); return r }
   async getLiveValidationSessionReport(): Promise<LiveValidationSessionReport | null> { return null }
   async listLiveValidationSessionReports(): Promise<LiveValidationSessionReport[]> { return [] }
+
+  // ── B39 (Noop): record index + metrics + dynamic attach not persisted ──
+  async createLiveValidationRecordLink(l: LiveValidationRecordLink): Promise<LiveValidationRecordLink> { return l }
+  async createLiveValidationRecordLinksBatch(): Promise<{ created: number }> { return { created: 0 } }
+  async listLiveValidationRecordLinks(): Promise<LiveValidationRecordLink[]> { return [] }
+  async listLiveValidationRecordLinksBySession(): Promise<LiveValidationRecordLink[]> { return [] }
+  async listLiveValidationRecordLinksByRecord(): Promise<LiveValidationRecordLink[]> { return [] }
+  async listLiveValidationRecordLinksByFixture(): Promise<LiveValidationRecordLink[]> { return [] }
+  async upsertLiveValidationSessionMetricCounter(c: LiveValidationSessionMetricCounter): Promise<LiveValidationSessionMetricCounter> { return c }
+  async getLiveValidationSessionMetricCounter(): Promise<LiveValidationSessionMetricCounter | null> { return null }
+  async listLiveValidationSessionMetricCounters(): Promise<LiveValidationSessionMetricCounter[]> { return [] }
+  async createDynamicFixtureAttachRun(r: DynamicFixtureAttachRun): Promise<DynamicFixtureAttachRun> { return r }
+  async updateDynamicFixtureAttachRun(): Promise<{ count: number }> { return { count: 0 } }
+  async listDynamicFixtureAttachRuns(): Promise<DynamicFixtureAttachRun[]> { return [] }
+  async getDynamicFixtureAttachRun(): Promise<DynamicFixtureAttachRun | null> { return null }
 }

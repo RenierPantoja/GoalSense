@@ -13,6 +13,8 @@ import { getAutoOpportunityTypeProfile } from './autoEngineCalibration.service.j
 import { createAutoAlertFromPolicy, isAutoAlertCreateEnabled } from './autoOpportunityAlertPromotion.service.js'
 import { linkPolicySnapshot } from '../evidence/evidenceLineage.service.js'
 import { recordAttributionEvent } from '../../validation/liveValidationAttribution.service.js'
+import { linkRecordToSession } from '../../validation/liveValidationRecordIndex.service.js'
+import { incrementSessionMetric } from '../../validation/liveValidationSessionMetrics.service.js'
 import {
   isAutoAlertPolicyEnabled, isAutoAlertCreateFlagEnabled, isAutoEngineToAlertsEnabled, getDefaultPolicyTemplate,
 } from './autoAlertPolicyConfig.service.js'
@@ -136,6 +138,9 @@ export async function evaluateOpportunityPolicies(
     // B38: policy session event (non-fatal).
     if ((opp as any).validationSessionId) {
       void recordAttributionEvent({ sessionId: (opp as any).validationSessionId, type: 'policy_evaluated', fixtureId: opp.fixtureId, source: 'policy', message: `Política "${policy.name}" → ${decision}`.slice(0, 200), metadata: { decision } })
+      // B39: auxiliary session→record index link + scoped metric (non-fatal).
+      void linkRecordToSession({ validationSessionId: (opp as any).validationSessionId, sessionName: null, recordType: 'policy_evaluation', recordId: evaluation.id, fixtureId: opp.fixtureId, policyEvaluationId: evaluation.id, opportunityId, source: 'policy', attributionStrength: 'exact_session_id', linkReason: 'policy evaluated during running session' })
+      incrementSessionMetric((opp as any).validationSessionId, 'policyEvaluations')
     }
     // B34: non-fatal exact policy evidence link (inherits the opportunity snapshot).
     if (String(env.ENABLE_EVIDENCE_LINEAGE).toLowerCase() === 'true') {

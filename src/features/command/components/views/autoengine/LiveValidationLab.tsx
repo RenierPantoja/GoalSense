@@ -7,12 +7,13 @@
  * mode, never promises hit-rate/profit. Zero odds/Telegram/auto-bet.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw, Plus, Play, Pause, CheckCircle2, XCircle, FlaskConical, Activity, AlertTriangle } from 'lucide-react'
+import { RefreshCw, Plus, Play, Pause, CheckCircle2, XCircle, FlaskConical, Activity, AlertTriangle, Database, Gauge, Link2 } from 'lucide-react'
 import { liveValidationApi } from '@/services/liveValidationApi'
 import { useAuth } from '@/auth/useAuth'
 import type {
   LiveValidationSessionDto, LiveValidationSessionFixtureDto, LiveValidationSessionEventDto,
   LiveValidationSessionReportDto, LiveValidationLinkedRecordsDto,
+  LiveValidationRecordLinksResponseDto, LiveValidationSessionMetricCounterDto, DynamicFixtureAttachRunDto,
 } from '@/features/validation/liveValidationTypes'
 import { STATUS_TONE, STATUS_LABEL, GONOGO_LABEL } from '@/features/validation/liveValidationTypes'
 
@@ -31,6 +32,9 @@ export function LiveValidationLab() {
   const [events, setEvents] = useState<LiveValidationSessionEventDto[]>([])
   const [report, setReport] = useState<LiveValidationSessionReportDto | null>(null)
   const [linked, setLinked] = useState<LiveValidationLinkedRecordsDto | null>(null)
+  const [recordLinks, setRecordLinks] = useState<LiveValidationRecordLinksResponseDto | null>(null)
+  const [metrics, setMetrics] = useState<LiveValidationSessionMetricCounterDto | null>(null)
+  const [attachRuns, setAttachRuns] = useState<DynamicFixtureAttachRunDto[]>([])
   const [loading, setLoading] = useState(true)
   const [disabled, setDisabled] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -50,14 +54,18 @@ export function LiveValidationLab() {
   useEffect(() => { void loadSessions() }, [loadSessions])
 
   const openSession = useCallback(async (id: string) => {
-    const [s, f, e, rep, lr] = await Promise.all([
+    const [s, f, e, rep, lr, rl, mt, ar] = await Promise.all([
       liveValidationApi.get(id), liveValidationApi.fixtures(id), liveValidationApi.events(id), liveValidationApi.getReport(id), liveValidationApi.linkedRecords(id),
+      liveValidationApi.recordLinks(id), liveValidationApi.sessionMetrics(id), liveValidationApi.dynamicAttachRuns(id),
     ])
     if (s.ok) setSelected(s.data)
     if (f.ok && f.data) setFixtures(f.data)
     if (e.ok && e.data) setEvents(e.data)
     setReport(rep.ok ? rep.data : null)
     setLinked(lr.ok ? lr.data : null)
+    setRecordLinks(rl.ok ? rl.data : null)
+    setMetrics(mt.ok ? mt.data : null)
+    setAttachRuns(ar.ok && ar.data ? ar.data : [])
   }, [])
 
   const create = async () => {
@@ -201,6 +209,68 @@ export function LiveValidationLab() {
               <p className="text-[10px] text-white/30 mt-1.5">Exato = registro carimbado com sessionId; inferido = agrupado por fixture/janela. unknown/not_evaluable/pendente nunca são falha.</p>
             </div>
           )}
+
+          {/* B39: session record index + scoped metrics + dynamic attach */}
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.012] p-3 mb-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Database size={13} className="text-white/35" />
+              <p className="text-[10px] uppercase tracking-wide text-white/35 flex-1">Índice de registros & métricas escopadas (B39)</p>
+              {isAdmin && (sel.status === 'running' || sel.status === 'paused') && (
+                <span className="flex items-center gap-1">
+                  <button type="button" onClick={() => act(() => liveValidationApi.runDynamicAttach(sel.id), 'Anexação dinâmica executada.')} className="h-7 px-2 rounded-lg border border-[#2DD4BF]/25 bg-[#13B8A6]/[0.08] hover:bg-[#13B8A6]/[0.15] text-[11px] text-[#7FE9DC] inline-flex items-center gap-1"><Link2 size={11} />Rodar anexação agora</button>
+                  <button type="button" onClick={() => act(() => liveValidationApi.rebuildSessionMetrics(sel.id), 'Métricas reconstruídas a partir do índice.')} className="h-7 px-2 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-[11px] text-white/70 inline-flex items-center gap-1"><Gauge size={11} />Reconstruir métricas</button>
+                </span>
+              )}
+            </div>
+
+            {/* Index coverage */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+              <KV k="links indexados" v={recordLinks?.coverage?.totalLinks ?? 0} />
+              <KV k="exatos" v={recordLinks?.coverage?.exact ?? 0} />
+              <KV k="inferidos" v={recordLinks?.coverage?.inferred ?? 0} />
+              <KV k="cobertura índice" v={sum?.recordLinkCoverageRate == null ? '—' : `${Math.round(sum.recordLinkCoverageRate * 100)}%`} />
+            </div>
+            {sum && (
+              <div className="flex items-center gap-3 flex-wrap text-[10.5px] text-white/55 mb-2">
+                <span>índice {sum.indexedRecords ?? 0}</span>
+                <span>· registro direto {sum.directSessionRecords ?? 0}</span>
+                <span>· fallback janela {sum.legacyInferredRecords ?? 0}</span>
+                <span>· anexadas dinâmico {sum.dynamicFixturesAttached ?? 0}</span>
+              </div>
+            )}
+
+            {/* Scoped metrics */}
+            <p className="text-[10px] uppercase tracking-wide text-white/30 mb-1">Métricas escopadas por sessão {metrics ? '' : '(sem counters ainda)'}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-1">
+              <KV k="snapshots" v={metrics?.snapshotsWritten ?? '—'} />
+              <KV k="sinais" v={metrics?.signalsCreated ?? '—'} />
+              <KV k="alertas" v={metrics?.alertsCreated ?? '—'} />
+              <KV k="oportunidades" v={metrics?.opportunitiesCreated ?? '—'} />
+              <KV k="políticas aval." v={metrics?.policyEvaluations ?? '—'} />
+              <KV k="outcomes" v={metrics?.outcomesResolved ?? '—'} />
+              <KV k="prov. bloq." v={metrics?.providerCallsBlocked ?? '—'} />
+              <KV k="guard blocks" v={metrics?.guardBlocks ?? '—'} />
+            </div>
+            <p className="text-[10px] text-white/35 mb-2">Fonte das métricas: {sum?.metricsSource === 'session_counters' ? 'counters por sessão (B39)' : 'janela por fixture (fallback)'}. Counters não substituem score/confiança; são contadores operacionais.</p>
+
+            {/* Dynamic attach runs */}
+            {attachRuns.length > 0 && (
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-white/30 mb-1">Anexações dinâmicas ({attachRuns.length})</p>
+                <div className="space-y-0.5 max-h-32 overflow-y-auto sidebar-scroll">
+                  {attachRuns.slice(0, 10).map(r => (
+                    <div key={r.id} className="flex items-center gap-2 text-[10.5px] text-white/55 border-b border-white/[0.04] pb-0.5">
+                      <span className="text-white/35 tabular-nums shrink-0">{new Date(r.startedAt).toLocaleTimeString()}</span>
+                      <span className="text-white/70 tabular-nums shrink-0">+{r.attachedFixtures}</span>
+                      <span className="text-white/40 tabular-nums shrink-0">scan {r.scannedFixtures} · match {r.matchedFixtures} · skip {r.skippedFixtures}</span>
+                      <span className={`shrink-0 ${r.status === 'failed_non_fatal' ? 'text-rose-300/70' : r.status === 'completed_with_limitations' ? 'text-amber-200/70' : 'text-emerald-200/70'}`}>{r.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <p className="text-[10px] text-white/30 mt-1.5">Índice é auxiliar (nunca fonte de verdade); legado cai no agrupamento por fixture/janela. Anexação dinâmica usa só dados já coletados (sem chamada de provider por padrão) e respeita o cap local.</p>
+          </div>
 
           {/* Recommendations */}
           {sum && sum.recommendations.length > 0 && (

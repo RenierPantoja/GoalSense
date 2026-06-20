@@ -17,6 +17,8 @@ import { rankOpportunities } from './utils/autoSignalRanking.util.js'
 import { autoRunId } from './utils/autoSignalId.util.js'
 import { linkOpportunitySnapshot } from '../evidence/evidenceLineage.service.js'
 import { resolveSessionAttribution, recordAttributionEvent } from '../../validation/liveValidationAttribution.service.js'
+import { linkRecordToSession } from '../../validation/liveValidationRecordIndex.service.js'
+import { incrementSessionMetric } from '../../validation/liveValidationSessionMetrics.service.js'
 import type { AutoEngineRun, AutoEngineRunConfig, AutoOpportunity, AutoEngineOverview } from './autoEngine.types.js'
 import type { SampleQuality } from '../contracts/learning.types.js'
 
@@ -127,6 +129,8 @@ export async function runAutoEngineScan(opts: ScanOptions = {}): Promise<AutoEng
           })
           if ((o as any).validationSessionId) {
             void recordAttributionEvent({ sessionId: (o as any).validationSessionId, type: 'auto_opportunity_created', fixtureId: o.fixtureId, source: 'auto_engine', message: `Oportunidade ${o.opportunityType} (${o.status}, score ${o.score}).` })
+            void linkRecordToSession({ validationSessionId: (o as any).validationSessionId, sessionName: (o as any).sessionName ?? null, recordType: 'auto_opportunity', recordId: o.id, fixtureId: o.fixtureId, opportunityId: o.id, snapshotId: o.evidenceSnapshotId ?? null, source: 'auto_engine' })
+            incrementSessionMetric((o as any).validationSessionId, 'opportunitiesCreated', 1)
           }
         }
       }

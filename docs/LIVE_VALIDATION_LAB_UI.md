@@ -36,3 +36,10 @@ local validation sessions.
 The Lab gains a "Registros vinculados (atribuição)" section (exact vs inferred,
 coverage, outcome breakdown), and alert/opportunity drawers show a session badge
 when a record was attributed. See `LIVE_SESSION_ATTRIBUTION_UI.md`.
+
+## B39 — Index, scoped metrics, dynamic attach
+
+The session view now includes a B39 card showing the session record index coverage,
+scoped operational counters (counters, not probabilities), and recent dynamic fixture
+attach runs. Admin/operator actions: "Rodar anexação agora" and "Reconstruir métricas".
+Full detail in `LIVE_SESSION_INDEX_UI.md`.

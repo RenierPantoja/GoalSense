@@ -16,6 +16,9 @@ import {
   buildSessionSummary, buildSessionReport,
 } from './liveValidation.service.js'
 import { listLinkedRecords, listSessionAlerts, listSessionOpportunities, listSessionEvidence, listSessionOutcomes } from './liveValidationLinkedRecords.service.js'
+import { listSessionLinkedRecordsIndexed, getRecordLinkCoverage } from './liveValidationRecordIndex.service.js'
+import { getSessionMetrics, rebuildSessionMetricsFromLinks } from './liveValidationSessionMetrics.service.js'
+import { runDynamicAttachForSession, listAttachRuns, getAttachRun } from './liveValidationDynamicFixtureAttach.service.js'
 
 function gate(reply: any): boolean {
   if (!isSessionsEnabled()) {
@@ -119,5 +122,46 @@ export async function liveValidationRoutes(app: FastifyInstance) {
   app.get(`${BASE}/:id/outcomes`, async (req, reply) => {
     if (!gate(reply)) return
     try { return ok(await listSessionOutcomes((req.params as any).id, 200)) } catch { return ok({ items: [], breakdown: {} }) }
+  })
+
+  // ── B39: session record index + scoped metrics + dynamic attach ──
+  app.get(`${BASE}/:id/record-links`, async (req, reply) => {
+    if (!gate(reply)) return
+    const id = (req.params as any).id
+    try {
+      const [links, coverage] = await Promise.all([listSessionLinkedRecordsIndexed(id, 2000), getRecordLinkCoverage(id)])
+      return ok({ links, coverage })
+    } catch (e: any) { app.log.warn(`record links failed: ${e?.message || e}`); return ok({ links: [], coverage: null }) }
+  })
+
+  app.get(`${BASE}/:id/metrics`, async (req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await getSessionMetrics((req.params as any).id)) } catch { return ok(null) }
+  })
+
+  app.post(`${BASE}/:id/metrics/rebuild`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const id = (req.params as any).id
+    const counter = await rebuildSessionMetricsFromLinks(id)
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'live_validation_session', resourceId: id, metadata: { op: 'metrics_rebuild' } })
+    return ok(counter)
+  })
+
+  app.get(`${BASE}/:id/dynamic-attach-runs`, async (req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await listAttachRuns((req.params as any).id, 50)) } catch { return ok([]) }
+  })
+
+  app.get(`${BASE}/dynamic-attach-runs/:runId`, async (req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await getAttachRun((req.params as any).runId)) } catch { return ok(null) }
+  })
+
+  app.post(`${BASE}/:id/dynamic-attach/run`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const id = (req.params as any).id
+    const run = await runDynamicAttachForSession(id)
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'live_validation_session', resourceId: id, metadata: { op: 'dynamic_attach', attached: run.attachedFixtures } })
+    return ok(run)
   })
 }
