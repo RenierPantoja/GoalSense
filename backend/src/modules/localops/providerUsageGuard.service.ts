@@ -8,7 +8,12 @@
 import { env } from '../../env.js'
 import { evaluateUsageLimit } from './utils/localOps.util.js'
 
-export type ProviderOperation = 'manual' | 'live_worker' | 'backtest' | 'replay' | 'auto_engine' | 'other'
+export type ProviderOperation =
+  // B30 coarse operations (preserved)
+  | 'manual' | 'live_worker' | 'backtest' | 'replay' | 'auto_engine' | 'other'
+  // B31 fine-grained operations
+  | 'live_fixtures' | 'live_snapshot' | 'fixture_detail' | 'alert_resolution'
+  | 'auto_engine_scan' | 'backtest_read' | 'replay_read'
 
 interface Bucket { minuteBucket: number; hourBucket: number; minuteCount: number; hourCount: number; count: number; blockedCount: number; lastCallAt: string | null; lastBlockedAt: string | null }
 

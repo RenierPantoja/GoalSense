@@ -177,3 +177,77 @@ export function estimateVolume(i: VolumeEstimateInput): VolumeEstimate {
     notes,
   }
 }
+
+// ── Guard mode resolution (Phase B31) ───────────────────────────────────────
+
+export type GuardMode = 'observe' | 'enforce'
+
+/**
+ * Effective guard mode. Explicit env mode ALWAYS wins; the profile only suggests.
+ * (See LIVE_PIPELINE_GUARD_INTEGRATION.md for the precedence rationale.)
+ */
+export function resolveGuardMode(_profile: LocalRuntimeProfile, envMode: GuardMode): GuardMode {
+  return envMode === 'enforce' ? 'enforce' : 'observe'
+}
+
+/** Recommended (not enforced) guard mode for a runtime profile. */
+export function recommendedGuardMode(profile: LocalRuntimeProfile): GuardMode {
+  switch (profile) {
+    case 'live_validation': return 'enforce'
+    case 'safe_local':
+    case 'intensive_debug':
+    case 'disabled':
+    default: return 'observe'
+  }
+}
+
+// ── Snapshot retention classification (Phase B31) ────────────────────────────
+
+export type RetentionCategory =
+  | 'raw'
+  | 'important_for_alert'
+  | 'important_for_backtest'
+  | 'important_for_replay'
+  | 'promoted_alert_related'
+  | 'learning_related'
+
+export interface RetentionLinkage {
+  linkedToPromotedAlert?: boolean
+  linkedToAlert?: boolean
+  linkedToOutcome?: boolean
+  linkedToBacktest?: boolean
+  linkedToReplay?: boolean
+  linkedToLearning?: boolean
+}
+
+export interface RetentionDecisionInput {
+  ageDays: number
+  linkage: RetentionLinkage
+  retentionDaysRaw: number
+  retentionDaysImportant: number
+}
+export interface RetentionDecision {
+  category: RetentionCategory
+  protectedRecord: boolean
+  wouldDelete: boolean
+  reason: string
+}
+
+/**
+ * Classify a snapshot for retention. ANY linkage to alert/outcome/backtest/replay/
+ * learning/promoted-alert protects the record (never a delete candidate in this
+ * foundation). Only old, unlinked `raw` snapshots beyond the raw window are
+ * delete candidates — and even then, deletion is dry-run unless a safe delete
+ * backend exists. When in doubt, protect.
+ */
+export function classifySnapshotRetention(i: RetentionDecisionInput): RetentionDecision {
+  const l = i.linkage || {}
+  if (l.linkedToPromotedAlert) return { category: 'promoted_alert_related', protectedRecord: true, wouldDelete: false, reason: 'linked_to_promoted_alert' }
+  if (l.linkedToAlert || l.linkedToOutcome) return { category: 'important_for_alert', protectedRecord: true, wouldDelete: false, reason: 'linked_to_alert_or_outcome' }
+  if (l.linkedToBacktest) return { category: 'important_for_backtest', protectedRecord: true, wouldDelete: false, reason: 'linked_to_backtest' }
+  if (l.linkedToReplay) return { category: 'important_for_replay', protectedRecord: true, wouldDelete: false, reason: 'linked_to_replay' }
+  if (l.linkedToLearning) return { category: 'learning_related', protectedRecord: true, wouldDelete: false, reason: 'linked_to_learning' }
+  // raw, unlinked
+  if (i.ageDays > i.retentionDaysRaw) return { category: 'raw', protectedRecord: false, wouldDelete: true, reason: `raw_older_than_${i.retentionDaysRaw}d` }
+  return { category: 'raw', protectedRecord: false, wouldDelete: false, reason: 'raw_within_window' }
+}

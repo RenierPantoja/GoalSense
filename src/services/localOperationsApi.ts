@@ -7,6 +7,7 @@
 import { apiFetch } from './apiClient'
 import type {
   LocalOperationsStatusDto, ProviderUsageDto, SnapshotGuardDto, CoverageDto, WorkerDto,
+  GuardMetricsDto, SnapshotRetentionPlanDto, SnapshotRetentionRunResultDto,
 } from '@/features/command/intelligence/localOperationsTypes'
 
 const BASE = '/api/system/local-operations'
@@ -17,6 +18,9 @@ export const localOperationsApi = {
   getSnapshotGuard() { return apiFetch<SnapshotGuardDto>(`${BASE}/snapshot-guard`) },
   getCoverage() { return apiFetch<CoverageDto>(`${BASE}/coverage`) },
   getWorkers() { return apiFetch<WorkerDto[]>(`${BASE}/workers`) },
+  getGuardMetrics() { return apiFetch<GuardMetricsDto>(`${BASE}/guard-metrics`) },
+  getSnapshotRetentionPlan() { return apiFetch<SnapshotRetentionPlanDto>(`${BASE}/snapshot-retention/plan`) },
+  runSnapshotRetention() { return apiFetch<SnapshotRetentionRunResultDto>(`${BASE}/snapshot-retention/run`, { method: 'POST', body: '{}' }) },
   pauseWorker(name: string) { return apiFetch<{ worker: string; paused: boolean }>(`${BASE}/workers/${encodeURIComponent(name)}/pause`, { method: 'POST', body: '{}' }) },
   resumeWorker(name: string) { return apiFetch<{ worker: string; paused: boolean }>(`${BASE}/workers/${encodeURIComponent(name)}/resume`, { method: 'POST', body: '{}' }) },
   resetGuardCounters() { return apiFetch<{ reset: boolean; note: string }>(`${BASE}/guards/reset-counters`, { method: 'POST', body: '{}' }) },

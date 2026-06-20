@@ -27,3 +27,13 @@ secrets.
 
 ## Verification
 - `npm run check:encoding` ✓ · `npx tsc --noEmit` ✓ · `npx vite build` ✓
+
+---
+
+## B31 additions
+The panel now shows live pipeline guard runtime (observe/enforce mode, enabled
+guards, recommended action) and per-area metrics (provider allowed/blocked,
+snapshot written/skipped breakdown, fixture cap observed/skipped), plus a
+snapshot-retention dry-run plan with an admin-only "run (dry-run)" action.
+Real deletion is never possible from the UI (no delete backend). See
+`LOCAL_OPERATIONS_PIPELINE_GUARDS_UI.md`.

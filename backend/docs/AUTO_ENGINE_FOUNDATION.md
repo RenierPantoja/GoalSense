@@ -249,3 +249,13 @@ Local runs are now guarded: snapshot-write dedup (skip ≠ failure), provider-ca
 registry with runtime pause/resume, coverage/quality visibility, and a volume-risk estimate. The
 auto-engine scheduler stays off by default and appears in the worker registry / "Operação Local"
 panel. No scoring/confidence change. See [`LOCAL_LIVE_OPERATIONS.md`](./LOCAL_LIVE_OPERATIONS.md).
+
+---
+
+## B31 note — live pipeline guards
+The local live-fixture cap, provider budget and snapshot write guards (B31) sit on
+the live monitor path and do not alter Auto Engine scoring, confidence, opportunity
+creation, or alert promotion. The Auto Engine keeps its own independent
+`AUTO_ENGINE_MAX_FIXTURES_PER_RUN`. Guards are observe-first and default-safe;
+enforcement is opt-in via `LOCAL_OPS_GUARD_MODE=enforce` + the `ENABLE_*_GUARD`
+flags. See `LIVE_PIPELINE_GUARD_INTEGRATION.md`.

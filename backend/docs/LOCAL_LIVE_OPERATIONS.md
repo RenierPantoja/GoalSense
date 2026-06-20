@@ -74,3 +74,22 @@ access, or want workers running unattended. Until then, run `safe_local` and ena
   is documented but the worker integration is intentionally minimal to avoid destabilizing B12–B29
   (the guards are fully usable/observable now).
 - Coverage reads are best-effort and depend on the persistence provider being reachable.
+
+---
+
+## B31 — Live Pipeline Guard Integration + Snapshot Retention
+
+The B30 guards are now wired into the **real** pipeline (observe-first, default-safe):
+- Provider budget consulted before the scoreboard (`live_fixtures`) and per-fixture
+  summary (`fixture_detail`) calls. Budget block ≠ failure (`budget_blocked`).
+- Snapshot write throttle/dedup/per-match cap on the single write site
+  (`captureLiveSnapshot`). Skipped snapshot ≠ failure; score/status/event always pass.
+- Local live-fixture cap (`LOCAL_MAX_LIVE_FIXTURES`) on `processLiveFixtures`
+  (`ENABLE_LIVE_FIXTURE_CAP=true` by default).
+- Guard metrics + snapshot retention plan endpoints under
+  `/api/system/local-operations`. See `LIVE_PIPELINE_GUARD_INTEGRATION.md` and
+  `SNAPSHOT_RETENTION.md`.
+
+Precedence: `LOCAL_OPS_GUARD_MODE` (observe|enforce) always wins; the profile only
+recommends. Counters are in-memory (reset on restart). Retention is dry-run only
+(append-only repos, no delete backend).

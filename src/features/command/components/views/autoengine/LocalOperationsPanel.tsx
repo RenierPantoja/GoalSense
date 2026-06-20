@@ -6,11 +6,12 @@
  * states; admin/owner controls; no secrets. Auto-create/Telegram flags surfaced.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw, Activity, Database, ShieldAlert, Gauge, Cpu, Pause, Play, RotateCcw, AlertTriangle } from 'lucide-react'
+import { RefreshCw, Activity, Database, ShieldAlert, Gauge, Cpu, Pause, Play, RotateCcw, AlertTriangle, ShieldCheck, Trash2, Layers } from 'lucide-react'
 import { localOperationsApi } from '@/services/localOperationsApi'
 import { useAuth } from '@/auth/useAuth'
 import type {
   LocalOperationsStatusDto, ProviderUsageDto, SnapshotGuardDto, CoverageDto, WorkerDto,
+  GuardMetricsDto, SnapshotRetentionPlanDto,
 } from '@/features/command/intelligence/localOperationsTypes'
 import { RISK_LABEL, RISK_TONE } from '@/features/command/intelligence/localOperationsTypes'
 
@@ -28,6 +29,8 @@ export function LocalOperationsPanel() {
   const [snap, setSnap] = useState<SnapshotGuardDto | null>(null)
   const [coverage, setCoverage] = useState<CoverageDto | null>(null)
   const [workers, setWorkers] = useState<WorkerDto[]>([])
+  const [metrics, setMetrics] = useState<GuardMetricsDto | null>(null)
+  const [retention, setRetention] = useState<SnapshotRetentionPlanDto | null>(null)
   const [loading, setLoading] = useState(true)
   const [disabled, setDisabled] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -37,14 +40,17 @@ export function LocalOperationsPanel() {
     const s = await localOperationsApi.getStatus()
     if (s.reason === 'env_gate' || s.status === 403) { setDisabled(true); setLoading(false); return }
     if (s.ok) setStatus(s.data)
-    const [u, g, c, w] = await Promise.all([
+    const [u, g, c, w, m, r] = await Promise.all([
       localOperationsApi.getProviderUsage(), localOperationsApi.getSnapshotGuard(),
       localOperationsApi.getCoverage(), localOperationsApi.getWorkers(),
+      localOperationsApi.getGuardMetrics(), localOperationsApi.getSnapshotRetentionPlan(),
     ])
     if (u.ok) setUsage(u.data)
     if (g.ok) setSnap(g.data)
     if (c.ok) setCoverage(c.data)
     if (w.ok && w.data) setWorkers(w.data)
+    if (m.ok) setMetrics(m.data)
+    if (r.ok) setRetention(r.data)
     setLoading(false)
   }, [])
 
@@ -53,6 +59,19 @@ export function LocalOperationsPanel() {
   const act = async (fn: () => Promise<{ ok: boolean; error: string | null; reason: any }>, okMsg: string) => {
     const r = await fn()
     setMsg(r.ok ? okMsg : (r.reason === 'forbidden' ? 'Sem permissão para esta ação.' : r.error || 'Falha.'))
+    if (r.ok) await load()
+  }
+
+  const runRetention = async () => {
+    const realDelete = retention?.enabled && !retention?.dryRun
+    const confirmText = realDelete
+      ? 'ATENÇÃO: a retenção está habilitada e NÃO está em dry-run. Mesmo assim, nenhum backend de exclusão existe (deleted=0). Confirmar execução?'
+      : 'Executar plano de retenção em dry-run? Nenhum snapshot será apagado.'
+    if (!window.confirm(confirmText)) return
+    const r = await localOperationsApi.runSnapshotRetention()
+    setMsg(r.ok && r.data
+      ? `Retenção: ${r.data.deleted} apagados · ${r.data.wouldDelete} candidatos · ${r.data.protectedRecords} protegidos (${r.data.dryRun ? 'dry-run' : 'real'}).`
+      : (r.reason === 'forbidden' ? 'Sem permissão para esta ação.' : r.error || 'Falha.'))
     if (r.ok) await load()
   }
 
@@ -122,6 +141,63 @@ export function LocalOperationsPanel() {
           </Card>
         )}
       </div>
+
+      {/* B31: live pipeline guard runtime */}
+      {metrics && (
+        <Card title="Guard do pipeline ao vivo (B31)" icon={<ShieldCheck size={14} />}>
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <span className={`text-[10.5px] font-semibold px-2 py-0.5 rounded-full border ${metrics.guardMode === 'enforce' ? 'bg-[#13B8A6]/12 border-[#2DD4BF]/25 text-[#7FE9DC]' : 'bg-sky-500/10 border-sky-400/20 text-sky-200/85'}`}>modo: {metrics.guardMode}</span>
+            <span className="text-[10px] text-white/40">recomendado: {metrics.recommendedGuardMode}</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${metrics.providerGuardEnabled ? 'border-[#2DD4BF]/25 text-[#7FE9DC]' : 'border-white/10 text-white/40'}`}>provider {metrics.providerGuardEnabled ? 'on' : 'off'}</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${metrics.snapshotGuardEnabled ? 'border-[#2DD4BF]/25 text-[#7FE9DC]' : 'border-white/10 text-white/40'}`}>snapshot {metrics.snapshotGuardEnabled ? 'on' : 'off'}</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${metrics.fixtureCapEnabled ? 'border-[#2DD4BF]/25 text-[#7FE9DC]' : 'border-white/10 text-white/40'}`}>cap {metrics.fixtureCapEnabled ? 'on' : 'off'}</span>
+          </div>
+          {metrics.recommendedAction && <p className="text-[11px] text-amber-100/75 mb-2">{metrics.recommendedAction}</p>}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-white/35 mb-1">Provider</p>
+              <KV k="permitidas" v={metrics.providerCallsAllowed} />
+              <KV k="bloqueadas" v={metrics.providerCallsBlocked} />
+              {metrics.lastProviderBlockAt && <p className="text-[9.5px] text-white/35 mt-0.5">último bloqueio: {new Date(metrics.lastProviderBlockAt).toLocaleTimeString()}</p>}
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-white/35 mb-1">Snapshot</p>
+              <KV k="escritos" v={metrics.snapshotsWritten} />
+              <KV k="pulo dup/sem mud." v={`${metrics.snapshotsSkippedDuplicate}/${metrics.snapshotsSkippedNoRelevantChange}`} />
+              <KV k="pulo intervalo/máx" v={`${metrics.snapshotsSkippedInterval}/${metrics.snapshotsSkippedMaxPerFixture}`} />
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-white/35 mb-1">Fixture cap</p>
+              <KV k="observadas" v={metrics.fixturesObserved} />
+              <KV k="puladas por cap" v={metrics.fixturesSkippedByCap} />
+              <p className="text-[9.5px] text-white/35 mt-0.5">protegidos p/ replay: {metrics.snapshotsProtectedForReplay}</p>
+            </div>
+          </div>
+          <p className="text-[10px] text-white/35 mt-2">Contadores in-memory (zeram ao reiniciar). Pulo/bloqueio nunca é falha.</p>
+        </Card>
+      )}
+
+      {/* B31: snapshot retention (dry-run foundation) */}
+      {retention && (
+        <Card title="Retenção de snapshots (dry-run)" icon={<Layers size={14} />}>
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${retention.enabled ? 'border-[#2DD4BF]/25 text-[#7FE9DC]' : 'border-white/10 text-white/40'}`}>{retention.enabled ? 'habilitada' : 'desabilitada'}</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${retention.dryRun ? 'border-sky-400/20 text-sky-200/85' : 'border-amber-400/20 text-amber-100/80'}`}>{retention.dryRun ? 'dry-run' : 'real (sem backend de delete)'}</span>
+            <span className="text-[10px] text-white/40">raw &gt; {retention.thresholds.rawDays}d · importante {retention.thresholds.importantDays}d</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <KV k="varridos" v={retention.scanned} />
+            <KV k="candidatos" v={retention.candidates} />
+            <KV k="protegidos" v={retention.protectedRecords} />
+            <KV k="apagaria" v={retention.wouldDelete} />
+          </div>
+          {retention.oldestCandidateAgeDays != null && <p className="text-[10.5px] text-white/45 mt-1">Candidato mais antigo: {retention.oldestCandidateAgeDays}d</p>}
+          {isAdmin && (
+            <button type="button" onClick={runRetention} className="mt-2 h-8 px-3 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-[11.5px] text-white/65 hover:text-white/90 inline-flex items-center gap-1.5"><Trash2 size={12} />Executar plano (dry-run)</button>
+          )}
+          {retention.limitations.length > 0 && <p className="text-[10px] text-white/35 mt-2">{retention.limitations[retention.limitations.length - 1]}</p>}
+        </Card>
+      )}
 
       <Card title="Workers" icon={<Cpu size={14} />}>
         {workers.length === 0 ? <p className="text-[11px] text-white/35">Nenhum worker registrado.</p> : (

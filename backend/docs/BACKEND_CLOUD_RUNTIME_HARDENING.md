@@ -78,3 +78,13 @@ registry (runtime pause/resume), coverage monitoring, and a volume-risk estimate
 `/api/system/local-operations/*` (env-gated by `ENABLE_LOCAL_OPERATIONS_PANEL`). These control cost
 and provider abuse on a single machine without changing engine behavior. See
 [`LOCAL_LIVE_OPERATIONS.md`](./LOCAL_LIVE_OPERATIONS.md).
+
+---
+
+## B31 note — live pipeline guards (local-first)
+B31 integrates the B30 guards into the live pipeline (provider budget, snapshot
+write throttle/dedup/cap, live-fixture cap) plus a dry-run snapshot retention
+foundation. All default-safe and observe-first; this is a local operations concern,
+not a cloud/billing/odds/Telegram concern. New endpoints live under
+`/api/system/local-operations` and are gated by `ENABLE_LOCAL_OPERATIONS_PANEL`.
+See `LIVE_PIPELINE_GUARD_INTEGRATION.md` and `SNAPSHOT_RETENTION.md`.

@@ -7,6 +7,7 @@
 import { env } from '../env.js'
 import { fetchEspnLiveFixtures } from '../providers/espn.provider.js'
 import { processLiveFixtures, recordProviderHealth, type MonitorRunResult } from '../modules/live/liveMonitor.service.js'
+import { guardProviderCall } from '../modules/localops/livePipelineGuard.service.js'
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,7 @@ let lastSuccessAt: string | null = null
 let lastError: string | null = null
 let totalRuns = 0
 let totalFixturesSeen = 0
+let totalRunsSkippedByBudget = 0
 let totalSnapshotsCreated = 0
 let totalSummariesFetched = 0
 let totalSummariesFailed = 0
@@ -38,6 +40,18 @@ async function runOnce(): Promise<MonitorRunResult | null> {
   }
 
   try {
+    // B31: consult the provider budget before the scoreboard call. A budget
+    // block is NOT an error — it does not increment consecutiveErrors; the run
+    // is simply skipped and surfaced as budget_blocked.
+    const budget = guardProviderCall('espn', 'live_fixtures')
+    if (budget.blockedByProviderBudget) {
+      totalRunsSkippedByBudget++
+      lastRunAt = new Date().toISOString()
+      totalRuns++
+      console.log(`[LiveWorker] Run #${totalRuns}: skipped (provider budget ${budget.reason}, retry ~${budget.retryAfterEstimateSeconds}s)`)
+      return null
+    }
+
     // Fetch from ESPN
     const espnResult = await fetchEspnLiveFixtures()
 
@@ -126,6 +140,7 @@ export function getLiveMonitorStatus() {
     lastError,
     totalRuns,
     totalFixturesSeen,
+    totalRunsSkippedByBudget,
     totalSnapshotsCreated,
     totalSummariesFetched,
     totalSummariesFailed,

@@ -55,3 +55,26 @@ export function getSnapshotGuardStatus() {
 }
 
 export function resetSnapshotGuardCounters(): void { tracked.clear(); totalWrites = 0; totalSkips = 0; skipReasons.clear() }
+
+/**
+ * B31: register an ACTUAL write (updates the tracked last-state + per-match count).
+ * Used by the live pipeline guard which previews with `evaluateSnapshot(commit=false)`
+ * and then commits the real write decision here (so the tracker never drifts, even
+ * when observe-mode writes a snapshot the decision would have skipped).
+ */
+export function commitWrite(fixtureId: string, state: SnapshotState, now: number = Date.now()): void {
+  const prev = tracked.get(fixtureId)
+  tracked.set(fixtureId, { state, atMs: now, countThisMatch: (prev?.countThisMatch ?? 0) + 1, matchKey: matchKeyFor(fixtureId) })
+  totalWrites++
+}
+
+/** B31: register a REAL skip (enforce mode). A skip is never a failure. */
+export function registerSkip(reason: string | null): void {
+  totalSkips++
+  if (reason) skipReasons.set(reason, (skipReasons.get(reason) || 0) + 1)
+}
+
+/** B31: per-match snapshot count already written for a fixture (0 if unknown). */
+export function getCountThisMatch(fixtureId: string): number {
+  return tracked.get(fixtureId)?.countThisMatch ?? 0
+}

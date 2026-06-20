@@ -15,7 +15,9 @@ import {
 import { getProviderUsage, resetProviderUsageCounters } from './providerUsageGuard.service.js'
 import { getSnapshotGuardStatus, resetSnapshotGuardCounters } from './snapshotWriteGuard.service.js'
 import { getCoverageReport } from './dataCoverageMonitor.service.js'
-import { pauseWorker, resumeWorker } from './workerRegistry.service.js'
+import { pauseWorker, resumeWorker, getGuardRuntimeSummary } from './workerRegistry.service.js'
+import { getGuardMetrics, resetGuardMetrics } from './livePipelineGuard.service.js'
+import { getSnapshotRetentionPlan, runSnapshotRetention } from './snapshotRetention.service.js'
 import { recordAdminAudit } from '../audit/adminAudit.service.js'
 
 function gate(reply: any): boolean {
@@ -56,6 +58,31 @@ export async function localOperationsRoutes(app: FastifyInstance) {
     return ok(listWorkers())
   })
 
+  // ── B31: live pipeline guard metrics + runtime summary ──────────────────────
+  app.get(`${BASE}/guard-metrics`, async (_req, reply) => {
+    if (!gate(reply)) return
+    return ok(getGuardMetrics())
+  })
+
+  app.get(`${BASE}/guard-runtime`, async (_req, reply) => {
+    if (!gate(reply)) return
+    return ok(getGuardRuntimeSummary())
+  })
+
+  // ── B31: snapshot retention (dry-run foundation) ────────────────────────────
+  app.get(`${BASE}/snapshot-retention/plan`, async (_req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await getSnapshotRetentionPlan()) }
+    catch (e: any) { app.log.warn(`retention plan failed: ${e?.message || e}`); return ok(null) }
+  })
+
+  app.post(`${BASE}/snapshot-retention/run`, { preHandler: [requirePermission({ permission: 'run:scan' })] }, async (req, reply) => {
+    if (!gate(reply)) return
+    const result = await runSnapshotRetention()
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'snapshot_retention', resourceId: 'run', metadata: { enabled: result.enabled, dryRun: result.dryRun, deleted: result.deleted, wouldDelete: result.wouldDelete } })
+    return ok(result)
+  })
+
   app.post(`${BASE}/workers/:workerName/pause`, { preHandler: [requirePermission({ permission: 'run:scan' })] }, async (req, reply) => {
     if (!gate(reply)) return
     const { workerName } = req.params as { workerName: string }
@@ -78,6 +105,7 @@ export async function localOperationsRoutes(app: FastifyInstance) {
     if (!gate(reply)) return
     resetProviderUsageCounters()
     resetSnapshotGuardCounters()
+    resetGuardMetrics()
     void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'local_guards', resourceId: 'counters', metadata: { op: 'reset_counters' } })
     return ok({ reset: true, note: 'Contadores in-memory zerados; nenhum dado persistido foi apagado.' })
   })

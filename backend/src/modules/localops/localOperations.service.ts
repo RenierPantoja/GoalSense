@@ -9,6 +9,7 @@ import { profileRecommendation, flagMismatches, estimateVolume, type LocalRuntim
 import { getProviderUsage } from './providerUsageGuard.service.js'
 import { getSnapshotGuardStatus } from './snapshotWriteGuard.service.js'
 import { listWorkers } from './workerRegistry.service.js'
+import { getGuardMetrics } from './livePipelineGuard.service.js'
 
 const flag = (v: unknown) => String(v).toLowerCase() === 'true'
 
@@ -39,6 +40,18 @@ function buildWarnings(actualFlags: Record<string, boolean>): OperationalWarning
   if (actualFlags.TELEGRAM_ENABLED) w.push({ code: 'telegram_on', severity: 'critical', message: 'TELEGRAM_ENABLED está ON.' })
   if (actualFlags.ENABLE_ALERT_EXPORT && !flag(env.ENABLE_AUTH)) w.push({ code: 'export_without_auth', severity: 'warning', message: 'Export habilitado com auth desligada — proteja antes de expor.' })
   if (actualFlags.ODDS_ENABLED) w.push({ code: 'odds_on', severity: 'warning', message: 'ODDS_ENABLED está ON (fora de escopo desta fase).' })
+  // B31: live pipeline guard advisories.
+  const gm = getGuardMetrics()
+  if (gm.guardMode === 'observe' && (gm.providerGuardEnabled || gm.snapshotGuardEnabled)) {
+    w.push({ code: 'guard_observe_only', severity: 'info', message: 'Guards em modo observe: decisões são calculadas e medidas, mas nada é bloqueado.' })
+  }
+  if (gm.guardMode === 'enforce' && !gm.providerGuardEnabled && !gm.snapshotGuardEnabled) {
+    w.push({ code: 'guard_off', severity: 'info', message: 'Modo enforce sem guards habilitados — nenhuma chamada/escrita será bloqueada.' })
+  }
+  if (gm.recommendedAction) w.push({ code: 'guard_recommendation', severity: 'info', message: gm.recommendedAction })
+  if (gm.retentionEnabled && !gm.retentionDryRun) {
+    w.push({ code: 'retention_real_mode', severity: 'warning', message: 'Retenção fora de dry-run (mesmo assim não há backend de exclusão; deleted=0).' })
+  }
   return w
 }
 

@@ -9,6 +9,8 @@ import { createRepositories } from '../../repositories/index.js'
 import type { ProviderFixture, ProviderFetchResult } from '../../providers/provider.types.js'
 import { fetchEspnSummary, extractEspnStats, extractEspnTimedEvents, extractEspnShootoutEvents, type LiveMatchStats, type BackendTimedEvent, type ShootoutEvent } from '../../providers/espn.provider.js'
 import { buildCanonicalKey, shouldUpdateStatus } from '../fixtures/fixtureIdentity.service.js'
+import { applyFixtureCap, guardProviderCall, guardSnapshotWrite } from '../localops/livePipelineGuard.service.js'
+import type { SnapshotState } from '../localops/utils/localOps.util.js'
 
 // ─── Fixture Upsert ──────────────────────────────────────────────────────────
 
@@ -93,6 +95,19 @@ function assessDataQuality(stats: LiveMatchStats | null, events: BackendTimedEve
   return 'poor'
 }
 
+/** B31: map a provider fixture (+ enriched payloads) to the guard's SnapshotState. */
+function buildSnapshotState(pf: ProviderFixture, stats: unknown, events: unknown): SnapshotState {
+  const eventsArr = Array.isArray(events) ? events : null
+  return {
+    minute: pf.minute,
+    status: pf.status,
+    scoreHome: pf.scoreHome,
+    scoreAway: pf.scoreAway,
+    eventsCount: eventsArr ? eventsArr.length : null,
+    statsFingerprint: stats ? JSON.stringify(stats) : null,
+  }
+}
+
 export async function captureLiveSnapshot(
   fixtureId: string,
   pf: ProviderFixture,
@@ -110,6 +125,12 @@ export async function captureLiveSnapshot(
   const stats = enrichedStats || pf.stats
   const events = enrichedEvents || pf.events
   const dataQuality = assessDataQuality(enrichedStats || null, enrichedEvents || null)
+
+  // B31: live pipeline snapshot-write guard (throttle / dedup / per-match cap).
+  // A skipped snapshot is NEVER a failure. Score/status/event changes always pass;
+  // observe mode writes anyway. Disabled/observe by default → no behavior change.
+  const guard = guardSnapshotWrite(fixtureId, buildSnapshotState(pf, stats, events))
+  if (!guard.shouldWrite) return false
 
   await repos.liveSnapshots.create({
     fixtureId,
@@ -131,9 +152,11 @@ export async function captureLiveSnapshot(
 
 export interface MonitorRunResult {
   fixturesSeen: number
+  fixturesSkippedByCap: number
   snapshotsCreated: number
   summariesFetched: number
   summariesFailed: number
+  summariesSkippedByBudget: number
   richSnapshots: number
   partialSnapshots: number
   poorSnapshots: number
@@ -155,15 +178,20 @@ export async function processLiveFixtures(fixtures: ProviderFixture[]): Promise<
   let snapshotsCreated = 0
   let summariesFetched = 0
   let summariesFailed = 0
+  let summariesSkippedByBudget = 0
   let richSnapshots = 0
   let partialSnapshots = 0
   let poorSnapshots = 0
   const errors: string[] = []
 
-  // Determine which fixtures get enrichment
-  const enrichmentSet = new Set(selectFixturesForEnrichment(fixtures).map(f => f.providerFixtureId))
+  // B31: apply the local live-fixture cap (skipped-by-cap is NOT a failure).
+  const cap = applyFixtureCap(fixtures)
+  const toProcess = cap.selected
 
-  for (const pf of fixtures) {
+  // Determine which fixtures get enrichment
+  const enrichmentSet = new Set(selectFixturesForEnrichment(toProcess).map(f => f.providerFixtureId))
+
+  for (const pf of toProcess) {
     try {
       const fixtureId = await upsertFixture(pf)
 
@@ -172,13 +200,20 @@ export async function processLiveFixtures(fixtures: ProviderFixture[]): Promise<
 
       // Fetch summary for eligible fixtures
       if (enrichmentSet.has(pf.providerFixtureId) && pf.provider === 'espn') {
-        const summaryResult = await fetchEspnSummary(pf.providerFixtureId)
-        if (summaryResult.success && summaryResult.data) {
-          summariesFetched++
-          enrichedStats = extractEspnStats(summaryResult.data)
-          enrichedEvents = extractEspnTimedEvents(summaryResult.data, pf.homeTeam, pf.awayTeam)
+        // B31: consult the provider budget before the per-fixture detail call.
+        // Blocked-by-budget is NOT a failure — base snapshot still proceeds.
+        const budget = guardProviderCall('espn', 'fixture_detail')
+        if (budget.blockedByProviderBudget) {
+          summariesSkippedByBudget++
         } else {
-          summariesFailed++
+          const summaryResult = await fetchEspnSummary(pf.providerFixtureId)
+          if (summaryResult.success && summaryResult.data) {
+            summariesFetched++
+            enrichedStats = extractEspnStats(summaryResult.data)
+            enrichedEvents = extractEspnTimedEvents(summaryResult.data, pf.homeTeam, pf.awayTeam)
+          } else {
+            summariesFailed++
+          }
         }
       }
 
@@ -195,7 +230,7 @@ export async function processLiveFixtures(fixtures: ProviderFixture[]): Promise<
     }
   }
 
-  return { fixturesSeen: fixtures.length, snapshotsCreated, summariesFetched, summariesFailed, richSnapshots, partialSnapshots, poorSnapshots, errors }
+  return { fixturesSeen: fixtures.length, fixturesSkippedByCap: cap.skippedByCap, snapshotsCreated, summariesFetched, summariesFailed, summariesSkippedByBudget, richSnapshots, partialSnapshots, poorSnapshots, errors }
 }
 
 // ─── Provider Health ─────────────────────────────────────────────────────────

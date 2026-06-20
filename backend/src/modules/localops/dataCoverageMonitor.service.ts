@@ -8,6 +8,7 @@
 import { createRepositories } from '../../repositories/index.js'
 import { getSnapshotGuardStatus } from './snapshotWriteGuard.service.js'
 import { getProviderUsage } from './providerUsageGuard.service.js'
+import { getGuardMetrics, type GuardMetrics } from './livePipelineGuard.service.js'
 
 const LIVE_STATUSES = ['1H', '2H', 'HT', 'ET', 'BT']
 
@@ -20,6 +21,7 @@ export interface CoverageReport {
   lowCoverageLeagues: { league: string; live: number; withSnapshot: number }[]
   snapshotGuard: ReturnType<typeof getSnapshotGuardStatus>
   providerUsage: ReturnType<typeof getProviderUsage>
+  guardMetrics: GuardMetrics
   limitations: string[]
   generatedAt: string
 }
@@ -74,6 +76,7 @@ export async function getCoverageReport(): Promise<CoverageReport> {
     lowCoverageLeagues,
     snapshotGuard: getSnapshotGuardStatus(),
     providerUsage: getProviderUsage(),
+    guardMetrics: getGuardMetrics(),
     limitations,
     generatedAt: new Date().toISOString(),
   }

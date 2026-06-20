@@ -52,6 +52,61 @@ export interface CoverageDto {
   quality: { rich: number; partial: number; poor: number; unknown: number }
   staleSnapshots: number
   lowCoverageLeagues: { league: string; live: number; withSnapshot: number }[]
+  guardMetrics?: GuardMetricsDto
+  limitations: string[]
+  generatedAt: string
+}
+
+export type GuardMode = 'observe' | 'enforce'
+
+export interface GuardMetricsDto {
+  guardMode: GuardMode
+  recommendedGuardMode: GuardMode
+  providerGuardEnabled: boolean
+  snapshotGuardEnabled: boolean
+  fixtureCapEnabled: boolean
+  retentionEnabled: boolean
+  retentionDryRun: boolean
+  providerCallsAllowed: number
+  providerCallsBlocked: number
+  fixturesObserved: number
+  fixturesSkippedByCap: number
+  snapshotsWritten: number
+  snapshotsSkippedDuplicate: number
+  snapshotsSkippedInterval: number
+  snapshotsSkippedMaxPerFixture: number
+  snapshotsSkippedNoRelevantChange: number
+  snapshotsProtectedForReplay: number
+  retentionCandidates: number
+  retentionProtected: number
+  lastProviderBlockAt: string | null
+  lastSnapshotSkipAt: string | null
+  lastGuardBlockAt: string | null
+  recommendedAction: string | null
+  generatedAt: string
+}
+
+export interface SnapshotRetentionPlanDto {
+  enabled: boolean
+  dryRun: boolean
+  scanned: number
+  byCategory: Record<string, number>
+  candidates: number
+  protectedRecords: number
+  wouldDelete: number
+  oldestCandidateAgeDays: number | null
+  thresholds: { rawDays: number; importantDays: number }
+  limitations: string[]
+  generatedAt: string
+}
+
+export interface SnapshotRetentionRunResultDto {
+  enabled: boolean
+  dryRun: boolean
+  candidates: number
+  protectedRecords: number
+  wouldDelete: number
+  deleted: number
   limitations: string[]
   generatedAt: string
 }

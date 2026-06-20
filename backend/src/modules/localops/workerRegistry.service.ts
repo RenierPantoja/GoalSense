@@ -12,6 +12,7 @@ import { startAlertResolutionWorker, stopAlertResolutionWorker, getResolutionWor
 import { getSchedulerState } from '../intelligence/learning/learningAggregationScheduler.service.js'
 import { getAutoEngineSchedulerState } from '../intelligence/autoEngine/autoEngineScheduler.service.js'
 import { getAutoEngineLearningSchedulerState } from '../intelligence/autoEngine/autoEngineLearningScheduler.service.js'
+import { getGuardMetrics } from './livePipelineGuard.service.js'
 
 const flag = (v: unknown) => String(v).toLowerCase() === 'true'
 
@@ -77,4 +78,27 @@ export function resumeWorker(name: string): { ok: boolean; reason: string | null
   if (!w.enabledByEnv()) return { ok: false, reason: 'disabled_by_env' }
   try { w.start(); paused.delete(name); return { ok: true, reason: null } }
   catch (e: any) { return { ok: false, reason: String(e?.message || e).slice(0, 80) } }
+}
+
+/**
+ * B31: live pipeline guard runtime summary for the registry view — guard mode,
+ * which guards are enabled, retention state, last block timestamps and a
+ * recommended action. Pulls live counters from the live pipeline guard.
+ */
+export function getGuardRuntimeSummary() {
+  const m = getGuardMetrics()
+  return {
+    guardMode: m.guardMode,
+    recommendedGuardMode: m.recommendedGuardMode,
+    providerGuardEnabled: m.providerGuardEnabled,
+    snapshotGuardEnabled: m.snapshotGuardEnabled,
+    fixtureCapEnabled: m.fixtureCapEnabled,
+    retentionEnabled: m.retentionEnabled,
+    retentionDryRun: m.retentionDryRun,
+    lastGuardBlockAt: m.lastGuardBlockAt,
+    lastSnapshotSkipAt: m.lastSnapshotSkipAt,
+    lastProviderBlockAt: m.lastProviderBlockAt,
+    recommendedAction: m.recommendedAction,
+    generatedAt: m.generatedAt,
+  }
 }
