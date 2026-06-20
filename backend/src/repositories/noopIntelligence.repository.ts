@@ -54,7 +54,9 @@ import type {
   TeamFundamentalMemoryProfile, MatchupFundamentalMemoryProfile, CompetitionMemoryProfile,
   HistoricalPatternContextProfile, TabooCandidate, MemoryBuildRun,
 } from '../modules/footballIntelligence/memory/fundamentalMemory.types.js'
-
+import type {
+  InfluenceLedgerEntry, InfluenceBuildRun,
+} from '../modules/footballIntelligence/influence/variableInfluence.types.js'
 let warned = false
 function warnOnce(): void {
   if (warned) return
@@ -312,4 +314,15 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async updateMemoryBuildRun(): Promise<{ count: number }> { return { count: 0 } }
   async getMemoryBuildRun(): Promise<MemoryBuildRun | null> { return null }
   async listMemoryBuildRuns(): Promise<MemoryBuildRun[]> { return [] }
+
+  // ── B46 (Noop): influence ledger not persisted; reads empty ──
+  async saveInfluenceLedgerEntry(e: InfluenceLedgerEntry): Promise<InfluenceLedgerEntry> { return e }
+  async getInfluenceLedgerEntry(): Promise<InfluenceLedgerEntry | null> { return null }
+  async listInfluenceLedgerEntries(): Promise<InfluenceLedgerEntry[]> { return [] }
+  async listInfluenceLedgerEntriesByFixture(): Promise<InfluenceLedgerEntry[]> { return [] }
+  async listInfluenceLedgerEntriesByPattern(): Promise<InfluenceLedgerEntry[]> { return [] }
+  async createInfluenceBuildRun(r: InfluenceBuildRun): Promise<InfluenceBuildRun> { return r }
+  async updateInfluenceBuildRun(): Promise<{ count: number }> { return { count: 0 } }
+  async getInfluenceBuildRun(): Promise<InfluenceBuildRun | null> { return null }
+  async listInfluenceBuildRuns(): Promise<InfluenceBuildRun[]> { return [] }
 }

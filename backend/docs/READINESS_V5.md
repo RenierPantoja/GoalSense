@@ -27,3 +27,12 @@ critical-domain readiness. New states: `ready_with_memory_support`,
 `memory_requires_live_confirmation`, `stay_out_memory_misleading`. The
 `memoryReadinessScore` is data-confidence of memory, NOT a win probability. See
 `MEMORY_AWARE_PRECHECK.md`.
+
+## Extended by Readiness V6 (B45) and V7 (B46)
+
+- V6 adds historical-memory readiness (see `MEMORY_AWARE_PRECHECK.md`).
+- V7 (`buildFundamentalReadinessV7`) adds influence readiness: states
+  `ready_with_supportive_influence`, `ready_but_mixed_influence`, `wait_due_to_influence`,
+  `blocked_by_influence`, `insufficient_influence_data`,
+  `live_confirmation_required_by_influence`. `influenceReadiness` is weight/assessment
+  confidence, NOT a probability. See `INFLUENCE_AWARE_PRECHECK.md`.

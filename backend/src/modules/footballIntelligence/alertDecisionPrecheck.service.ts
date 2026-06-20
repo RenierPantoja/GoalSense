@@ -430,3 +430,69 @@ export async function runAlertDecisionPrecheckV6(fixtureId: string): Promise<Ale
   out.enforced = enabled && mode === 'enforce' && decision.startsWith('wait')
   return out
 }
+
+// ─── Precheck V7 (B46) — influence-aware, observe-first ────────────────────────
+import { composeInfluence } from './influence/influenceLedger.service.js'
+
+export type PrecheckV7Decision =
+  | 'avoid' | 'wait_for_lineup' | 'wait_for_domain_fetch' | 'wait_for_mapping' | 'wait_for_manual_review'
+  | 'wait_for_live_confirmation' | 'monitor' | 'alert_candidate' | 'strong_alert' | 'post_match_learning_only'
+
+export interface AlertDecisionPrecheckV7Result {
+  fixtureId: string
+  mode: 'observe' | 'enforce'
+  enabled: boolean
+  enforced: boolean
+  decision: PrecheckV7Decision
+  netInfluenceBand: string
+  influenceScore: number
+  reasons: string[]
+  conflicts: string[]
+  limitations: string[]
+  generatedAt: string
+}
+
+export async function runAlertDecisionPrecheckV7(fixtureId: string): Promise<AlertDecisionPrecheckV7Result> {
+  const enabled = isPrecheckEnabled()
+  const mode = precheckMode()
+  const out: AlertDecisionPrecheckV7Result = {
+    fixtureId, mode, enabled, enforced: false, decision: 'monitor', netInfluenceBand: 'unknown', influenceScore: 0, reasons: [], conflicts: [],
+    limitations: ['Precheck V7 observacional: influência é apoio; nunca bloqueia alerta real em observe; não altera score/confiança/resultado.'], generatedAt: new Date().toISOString(),
+  }
+  const pkg = await buildMatchIntelligencePackage(fixtureId).catch(() => null)
+  if (!pkg) { out.reasons.push('Pacote indisponível.'); return out }
+  const composed = await composeInfluence(fixtureId, null).catch(() => null)
+  const agg = composed?.aggregate
+
+  out.netInfluenceBand = agg?.netInfluenceBand ?? 'unknown'
+  out.influenceScore = agg?.influenceScore ?? 0
+  out.conflicts = (composed?.conflicts ?? []).map(c => `${c.conflictType}→${c.recommendedAction}`)
+
+  const reasons: string[] = []
+  if (agg?.netInfluenceBand === 'strongly_supportive' || agg?.netInfluenceBand === 'supportive') reasons.push('influence_strongly_supportive')
+  if (agg?.netInfluenceBand === 'mixed' || agg?.netInfluenceBand === 'weak') reasons.push('influence_mixed')
+  if (agg?.netInfluenceBand === 'contradictory') reasons.push('influence_contradictory')
+  if (agg?.netInfluenceBand === 'blocked') reasons.push('influence_blocked')
+  if ((agg?.waitInfluences.length ?? 0) > 0) reasons.push('influence_requires_wait')
+  if ((agg?.liveConfirmationInfluences.length ?? 0) > 0) reasons.push('influence_requires_live_confirmation')
+  if (agg?.confidenceOfAssessment === 'high' && (agg?.positiveInfluences.length ?? 0) > 0) reasons.push('high_reliability_support')
+  if (agg?.confidenceOfAssessment === 'low') reasons.push('low_reliability_support')
+  if ((composed?.conflicts.length ?? 0) > 0) reasons.push('conflict_requires_review')
+
+  let decision: PrecheckV7Decision
+  if (pkg.phase === 'post_match') decision = 'post_match_learning_only'
+  else if ((composed?.conflicts ?? []).some(c => c.recommendedAction === 'operator_review')) decision = 'wait_for_manual_review'
+  else if (pkg.squads?.waitForLineupRecommended || (agg?.waitInfluences.some(w => w.variableKey === 'lineup_missing'))) decision = 'wait_for_lineup'
+  else if (agg?.netInfluenceBand === 'blocked') decision = 'avoid'
+  else if ((agg?.liveConfirmationInfluences.length ?? 0) > 0) decision = 'wait_for_live_confirmation'
+  else if ((agg?.waitInfluences.length ?? 0) > 0) decision = 'wait_for_domain_fetch'
+  else if (agg?.netInfluenceBand === 'contradictory') decision = 'monitor'
+  else if (agg?.netInfluenceBand === 'strongly_supportive' && agg?.confidenceOfAssessment === 'high') decision = 'alert_candidate'
+  else if (agg?.netInfluenceBand === 'supportive') decision = 'alert_candidate'
+  else decision = 'monitor'
+
+  out.decision = decision
+  out.reasons = [...new Set(reasons)]
+  out.enforced = enabled && mode === 'enforce' && (decision === 'avoid' || decision.startsWith('wait'))
+  return out
+}

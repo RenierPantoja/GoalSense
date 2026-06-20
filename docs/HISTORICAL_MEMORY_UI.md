@@ -35,3 +35,10 @@ button (POST) requires operator (`run:scan`) and is shown only to `isAdmin`.
 Reliability is data-confidence, not a probability of winning. The panel never displays
 an invented prediction, odds or stake; it only explains what the GoalSense remembers
 and how trustworthy that memory's sample is.
+
+## Followed by the Variable Influence panel (B46)
+
+Below the Historical Memory panel, the Backstage selected-fixture column now renders the
+`VariableInfluencePanel` (B46): net influence band, internal influenceScore, assessment
+confidence, positive/negative factors, blockers, wait reasons and conflicts. Advisory only;
+influence is never shown as a probability. See `docs/VARIABLE_INFLUENCE_UI.md`.

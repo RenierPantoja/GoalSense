@@ -64,6 +64,14 @@ import {
   isHistoricalMemoryBuildEnabled,
 } from '../modules/footballIntelligence/memory/historicalMemoryBuildRunner.service.js'
 import { createRepositories } from '../repositories/index.js'
+import { buildMatchIntelligencePackageV5 } from '../modules/footballIntelligence/matchIntelligencePackageV5.service.js'
+import { buildFundamentalReadinessV7 } from '../modules/footballIntelligence/fundamentalReadinessEngine.service.js'
+import { runAlertDecisionPrecheckV7 } from '../modules/footballIntelligence/alertDecisionPrecheck.service.js'
+import { buildPostMatchExplanationV5 } from '../modules/footballIntelligence/postMatchExplanationEngine.service.js'
+import {
+  composeInfluence, buildFixtureInfluence, buildPatternInfluence,
+  listInfluenceBuildRuns, isInfluenceEngineEnabled,
+} from '../modules/footballIntelligence/influence/influenceLedger.service.js'
 
 const flag = (v: unknown) => String(v).toLowerCase() === 'true'
 
@@ -575,5 +583,60 @@ export async function matchIntelligenceRoutes(app: FastifyInstance) {
   app.get(`${BASE}/fixtures/:fixtureId/post-match-explanation-v4`, async (req, reply) => {
     if (!gate(reply)) return
     return ok(await buildPostMatchExplanationV4(fid(req)))
+  })
+
+  // ── B46: variable influence engine ──
+  function influenceGate(reply: any): boolean {
+    if (!gate(reply)) return false
+    if (!isInfluenceEngineEnabled()) {
+      reply.status(403).send({ success: false, error: { message: 'Variable Influence Engine desabilitado (ENABLE_VARIABLE_INFLUENCE_ENGINE=false).', reason: 'env_gate_disabled' } })
+      return false
+    }
+    return true
+  }
+  const pid = (req: any) => String((req.params as any).patternId)
+
+  app.get(`${BASE}/fixtures/:fixtureId/influence`, async (req, reply) => {
+    if (!influenceGate(reply)) return
+    const c = await composeInfluence(fid(req), null)
+    return c ? ok(c) : reply.status(404).send(badRequest('fixture_not_found'))
+  })
+  app.post(`${BASE}/fixtures/:fixtureId/influence/build`, op, async (req, reply) => {
+    if (!influenceGate(reply)) return
+    const res = await buildFixtureInfluence(fid(req))
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'variable_influence', resourceId: fid(req), metadata: { scope: 'fixture', status: res.run.status } })
+    return ok(res)
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/patterns/:patternId/influence`, async (req, reply) => {
+    if (!influenceGate(reply)) return
+    const c = await composeInfluence(fid(req), pid(req))
+    return c ? ok(c) : reply.status(404).send(badRequest('fixture_not_found'))
+  })
+  app.post(`${BASE}/fixtures/:fixtureId/patterns/:patternId/influence/build`, op, async (req, reply) => {
+    if (!influenceGate(reply)) return
+    const res = await buildPatternInfluence(fid(req), pid(req))
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'variable_influence', resourceId: `${fid(req)}:${pid(req)}`, metadata: { scope: 'pattern', status: res.run.status } })
+    return ok(res)
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/package-v5`, async (req, reply) => {
+    if (!influenceGate(reply)) return
+    const pkg = await buildMatchIntelligencePackageV5(fid(req))
+    return pkg ? ok(pkg) : reply.status(404).send(badRequest('fixture_not_found'))
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/readiness-v7`, async (req, reply) => {
+    if (!influenceGate(reply)) return
+    return ok(await buildFundamentalReadinessV7(fid(req)))
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/precheck-v7`, async (req, reply) => {
+    if (!influenceGate(reply)) return
+    return ok(await runAlertDecisionPrecheckV7(fid(req)))
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/post-match-explanation-v5`, async (req, reply) => {
+    if (!influenceGate(reply)) return
+    return ok(await buildPostMatchExplanationV5(fid(req)))
+  })
+  app.get(`${BASE}/influence/build-runs`, async (_req, reply) => {
+    if (!influenceGate(reply)) return
+    return ok(await listInfluenceBuildRuns(50))
   })
 }

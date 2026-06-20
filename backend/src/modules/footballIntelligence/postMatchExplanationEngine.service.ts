@@ -293,3 +293,65 @@ export async function buildPostMatchExplanationV4(fixtureId: string): Promise<Po
     sampleWasTooWeak, tabooWasInvalid, similarScenarioWasUseful, memoryRefinementCandidates,
   }
 }
+
+// ─── Post-Match Explanation V5 (B46) — influence outcome analysis ──────────────
+import { composeInfluence } from './influence/influenceLedger.service.js'
+
+export interface PostMatchExplanationV5 extends PostMatchExplanation {
+  netInfluenceBand: string
+  influenceAssessmentWasAligned: boolean
+  misleadingInfluences: string[]
+  underestimatedInfluences: string[]
+  overestimatedInfluences: string[]
+  ignoredBlockers: string[]
+  ignoredWaitReasons: string[]
+  influenceRefinementCandidates: string[]
+}
+
+export async function buildPostMatchExplanationV5(fixtureId: string): Promise<PostMatchExplanationV5 | null> {
+  const v1 = await buildPostMatchExplanation(fixtureId)
+  if (!v1) return null
+  const composed = await composeInfluence(fixtureId, null).catch(() => null)
+  const agg = composed?.aggregate
+
+  const confirmed = v1.outcome === 'confirmed' || v1.outcome === 'confirmed_partial'
+  const failed = v1.outcome === 'failed'
+
+  const supportive = agg?.netInfluenceBand === 'strongly_supportive' || agg?.netInfluenceBand === 'supportive'
+  const contradictory = agg?.netInfluenceBand === 'contradictory'
+
+  // Aligned when supportive→confirmed or contradictory→failed.
+  const influenceAssessmentWasAligned = (supportive && confirmed) || (contradictory && failed)
+
+  const misleadingInfluences: string[] = []
+  const underestimatedInfluences: string[] = []
+  const overestimatedInfluences: string[] = []
+  if (failed && supportive) {
+    for (const a of agg?.positiveInfluences ?? []) {
+      if (a.magnitude === 'high' || a.magnitude === 'critical') overestimatedInfluences.push(a.label)
+      misleadingInfluences.push(a.label)
+    }
+  }
+  if (confirmed && contradictory) {
+    for (const a of agg?.negativeInfluences ?? []) underestimatedInfluences.push(a.label)
+  }
+
+  // Blockers/waits that existed pre-match but the (hypothetical) decision ignored.
+  const ignoredBlockers = failed ? (agg?.blockingInfluences ?? []).map(a => a.label) : []
+  const ignoredWaitReasons = failed ? (agg?.waitInfluences ?? []).map(a => a.waitReason || a.label) : []
+
+  const influenceRefinementCandidates: string[] = []
+  if (overestimatedInfluences.length) influenceRefinementCandidates.push('Magnitude superestimada — reduzir peso de variáveis com reliability baixa.')
+  if (misleadingInfluences.length && (composed?.variables ?? []).some(v => v.sampleQuality === 'weak' || v.sampleQuality === 'misleading_risk')) influenceRefinementCandidates.push('Source fraco/amostra fraca enganou — exigir confirmação ao vivo.')
+  if (ignoredBlockers.length) influenceRefinementCandidates.push('Bloqueador ignorado — reforçar gate de bloqueio antes de alertar.')
+  if (ignoredWaitReasons.length) influenceRefinementCandidates.push('Wait ignorado — esperar dado crítico/temporal.')
+  if (agg && agg.confidenceOfAssessment === 'low' && failed) influenceRefinementCandidates.push('Confiança da avaliação baixa — não alertar forte.')
+
+  return {
+    ...v1,
+    netInfluenceBand: agg?.netInfluenceBand ?? 'unknown',
+    influenceAssessmentWasAligned, misleadingInfluences: [...new Set(misleadingInfluences)],
+    underestimatedInfluences: [...new Set(underestimatedInfluences)], overestimatedInfluences: [...new Set(overestimatedInfluences)],
+    ignoredBlockers, ignoredWaitReasons, influenceRefinementCandidates,
+  }
+}

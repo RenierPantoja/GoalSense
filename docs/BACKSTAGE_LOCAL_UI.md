@@ -46,3 +46,14 @@ Backstage now includes a "Aquisição pré-jogo & janela de escalação (B40)" c
 provider reliability, lineup window, domain snapshots (with freshness/availability),
 Readiness V2 and Precheck V2, plus admin "Buscar" / "Escalação" actions. See
 `BACKSTAGE_PRE_MATCH_INTELLIGENCE_UI.md`.
+
+## B46 — Variable Influence panel
+
+The Backstage selected-fixture column now ends with the `VariableInfluencePanel` (B46),
+after the B45 Historical Memory panel. It explains WHY the system supports, contradicts or
+waits on a pattern: net influence band, internal influenceScore, assessment confidence,
+positive/negative factors, blockers, wait reasons and conflicts. Influence is advisory and
+never displayed as a probability; absent variables appear as uncertainty, weak samples never
+strong, manual data is badged manual, conflicts are explicit. Env-gated by
+`ENABLE_VARIABLE_INFLUENCE_ENGINE`; the build button needs operator. See
+`docs/VARIABLE_INFLUENCE_UI.md`.

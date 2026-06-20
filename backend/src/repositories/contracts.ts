@@ -175,6 +175,9 @@ import type {
   TeamFundamentalMemoryProfile, MatchupFundamentalMemoryProfile, CompetitionMemoryProfile,
   HistoricalPatternContextProfile, TabooCandidate, MemoryBuildRun,
 } from '../modules/footballIntelligence/memory/fundamentalMemory.types.js'
+import type {
+  InfluenceLedgerEntry, InfluenceBuildRun,
+} from '../modules/footballIntelligence/influence/variableInfluence.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -427,6 +430,17 @@ export interface IntelligenceRepository {
   updateMemoryBuildRun(id: string, patch: Partial<MemoryBuildRun>): Promise<{ count: number }>
   getMemoryBuildRun(id: string): Promise<MemoryBuildRun | null>
   listMemoryBuildRuns(limit?: number): Promise<MemoryBuildRun[]>
+
+  // ── B46: variable influence ledger + build runs ─────────────────────────────
+  saveInfluenceLedgerEntry(entry: InfluenceLedgerEntry): Promise<InfluenceLedgerEntry>
+  getInfluenceLedgerEntry(id: string): Promise<InfluenceLedgerEntry | null>
+  listInfluenceLedgerEntries(limit?: number): Promise<InfluenceLedgerEntry[]>
+  listInfluenceLedgerEntriesByFixture(fixtureId: string, limit?: number): Promise<InfluenceLedgerEntry[]>
+  listInfluenceLedgerEntriesByPattern(patternId: string, limit?: number): Promise<InfluenceLedgerEntry[]>
+  createInfluenceBuildRun(run: InfluenceBuildRun): Promise<InfluenceBuildRun>
+  updateInfluenceBuildRun(id: string, patch: Partial<InfluenceBuildRun>): Promise<{ count: number }>
+  getInfluenceBuildRun(id: string): Promise<InfluenceBuildRun | null>
+  listInfluenceBuildRuns(limit?: number): Promise<InfluenceBuildRun[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

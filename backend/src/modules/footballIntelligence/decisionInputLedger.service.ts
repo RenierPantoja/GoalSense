@@ -16,6 +16,7 @@ import type {
   TeamFundamentalMemoryProfile, MatchupFundamentalMemoryProfile,
   HistoricalPatternContextProfile, TabooCandidate,
 } from './memory/fundamentalMemory.types.js'
+import type { VariableInfluenceAssessment, InfluenceAggregate } from './influence/variableInfluence.types.js'
 
 export type DecisionDirection = 'positive' | 'negative' | 'neutral' | 'uncertain' | 'blocking' | 'contextual'
 export type WeightHint = 'low' | 'medium' | 'high' | 'critical' | 'unknown'
@@ -67,6 +68,9 @@ export interface DecisionInputSources {
   matchupMemory?: MatchupFundamentalMemoryProfile | null
   patternContext?: HistoricalPatternContextProfile[]
   usableTaboos?: TabooCandidate[]
+  // B46: optional influence inputs (advisory; never decisor).
+  influenceAssessments?: VariableInfluenceAssessment[]
+  influenceAggregate?: InfluenceAggregate | null
 }
 
 export function buildDecisionInputs(src: DecisionInputSources): DecisionInputBundle {
@@ -171,6 +175,40 @@ export function buildDecisionInputs(src: DecisionInputSources): DecisionInputBun
   }
   for (const t of src.usableTaboos ?? []) {
     out.push(di(f, 'taboo_memory', `taboo_${t.id}`, 'Restrição histórica', t.status, t.status === 'supported' ? 'negative' : 'uncertain', t.status === 'supported' ? 'medium' : 'low', 'partial', `taboo_supported: ${t.description}`, t.limitations.slice(0, 1)))
+  }
+
+  // B46: variable influence inputs (deterministic ids; advisory, never decisor).
+  const magToWeight = (m: string): WeightHint => m === 'critical' ? 'critical' : m === 'high' ? 'high' : m === 'medium' ? 'medium' : m === 'low' ? 'low' : 'unknown'
+  const dqOf = (rel: string): DecisionInput['dataQuality'] => rel === 'high' ? 'rich' : rel === 'medium' ? 'partial' : rel === 'unavailable' ? 'unavailable' : 'poor'
+  const influenceInputType = (d: string): { dir: DecisionDirection; type: string } => {
+    switch (d) {
+      case 'positive': return { dir: 'positive', type: 'variable_supports_pattern' }
+      case 'negative': return { dir: 'negative', type: 'variable_contradicts_pattern' }
+      case 'blocking': return { dir: 'blocking', type: 'variable_blocks_pattern' }
+      case 'wait': return { dir: 'blocking', type: 'variable_requires_wait' }
+      case 'live_confirmation_required': return { dir: 'blocking', type: 'variable_requires_live_confirmation' }
+      default: return { dir: 'uncertain', type: 'variable_uncertain' }
+    }
+  }
+  for (const a of src.influenceAssessments ?? []) {
+    const { dir, type } = influenceInputType(a.direction)
+    out.push({
+      id: `dci_inf_${a.id}`, fixtureId: f, source: 'variable_influence', variableKey: `${type}:${a.variableKey}`,
+      variableName: a.label, value: `${a.direction}/${a.magnitude}`, direction: dir, weightHint: magToWeight(a.magnitude),
+      dataQuality: dqOf(a.reliability), evidenceRef: a.evidenceRefs[0] ?? null, reasoning: a.reason,
+      limitations: a.limitations.slice(0, 1), createdAt: a.createdAt,
+    })
+  }
+  if (src.influenceAggregate) {
+    const agg = src.influenceAggregate
+    out.push({
+      id: `dci_inf_aggregate_${f}_${agg.patternId ?? 'fixture'}`, fixtureId: f, source: 'variable_influence', variableKey: 'influence_aggregate_summary',
+      variableName: 'Resumo de influência', value: `${agg.netInfluenceBand} (score ${agg.influenceScore})`,
+      direction: agg.netInfluenceBand === 'blocked' ? 'blocking' : agg.netInfluenceBand === 'contradictory' ? 'negative' : agg.netInfluenceBand.includes('supportive') ? 'positive' : 'uncertain',
+      weightHint: 'medium', dataQuality: agg.confidenceOfAssessment === 'high' ? 'rich' : agg.confidenceOfAssessment === 'medium' ? 'partial' : 'poor',
+      evidenceRef: null, reasoning: `Influência agregada: ${agg.netInfluenceBand}; confiança da avaliação ${agg.confidenceOfAssessment} (não é probabilidade).`,
+      limitations: ['influenceScore é peso interno, não probabilidade.'], createdAt: agg.generatedAt,
+    })
   }
 
   const bundle: DecisionInputBundle = {

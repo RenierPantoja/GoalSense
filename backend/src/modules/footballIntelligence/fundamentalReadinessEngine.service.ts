@@ -496,3 +496,56 @@ export async function buildFundamentalReadinessV6(fixtureId: string): Promise<Fu
     limitations: ['Readiness V6 mede confiança da MEMÓRIA (dado), não probabilidade de acerto; memória nunca bloqueia alerta real.'],
   }
 }
+
+// ─── Readiness V7 (B46) — influence-aware ──────────────────────────────────────
+import { composeInfluence } from './influence/influenceLedger.service.js'
+
+export type ReadinessV7Status =
+  | 'ready_with_supportive_influence' | 'ready_but_mixed_influence' | 'wait_due_to_influence'
+  | 'blocked_by_influence' | 'insufficient_influence_data' | 'live_confirmation_required_by_influence'
+
+export interface FundamentalReadinessV7 {
+  status: ReadinessV7Status
+  influenceReadiness: number
+  blockerCount: number
+  waitInfluenceCount: number
+  contradictionCount: number
+  supportiveInfluenceCount: number
+  liveConfirmationCount: number
+  missingCriticalInfluenceDomains: string[]
+  netInfluenceBand: string
+  influenceConfidenceOfAssessment: 'high' | 'medium' | 'low' | 'unknown'
+  limitations: string[]
+}
+
+export async function buildFundamentalReadinessV7(fixtureId: string): Promise<FundamentalReadinessV7 | null> {
+  const composed = await composeInfluence(fixtureId, null).catch(() => null)
+  if (!composed) return null
+  const agg = composed.aggregate
+
+  const blockerCount = agg.blockingInfluences.length
+  const waitInfluenceCount = agg.waitInfluences.length
+  const contradictionCount = agg.negativeInfluences.length
+  const supportiveInfluenceCount = agg.positiveInfluences.length
+  const liveConfirmationCount = agg.liveConfirmationInfluences.length
+  const missingCriticalInfluenceDomains = composed.variables.filter(v => v.variableKey === 'critical_data_missing').map(v => v.rawValue)
+
+  let status: ReadinessV7Status
+  if (blockerCount > 0) status = 'blocked_by_influence'
+  else if (liveConfirmationCount > 0) status = 'live_confirmation_required_by_influence'
+  else if (waitInfluenceCount > 0) status = 'wait_due_to_influence'
+  else if (agg.netInfluenceBand === 'insufficient_data' || agg.netInfluenceBand === 'unknown') status = 'insufficient_influence_data'
+  else if (agg.netInfluenceBand === 'strongly_supportive' || agg.netInfluenceBand === 'supportive') status = 'ready_with_supportive_influence'
+  else status = 'ready_but_mixed_influence'
+
+  // Influence readiness (0-100): supportive lifts, blockers/wait reduce. NOT a probability.
+  let influenceReadiness = 20 + supportiveInfluenceCount * 12 - contradictionCount * 8 - blockerCount * 25 - waitInfluenceCount * 10
+  if (agg.confidenceOfAssessment === 'high') influenceReadiness += 15
+  influenceReadiness = Math.max(0, Math.min(100, influenceReadiness))
+
+  return {
+    status, influenceReadiness, blockerCount, waitInfluenceCount, contradictionCount, supportiveInfluenceCount, liveConfirmationCount,
+    missingCriticalInfluenceDomains, netInfluenceBand: agg.netInfluenceBand, influenceConfidenceOfAssessment: agg.confidenceOfAssessment,
+    limitations: ['Readiness V7 mede prontidão por influência (peso/confiança da avaliação), NÃO probabilidade; influence ready ≠ alerta; blocker reduz; wait recomenda esperar.'],
+  }
+}

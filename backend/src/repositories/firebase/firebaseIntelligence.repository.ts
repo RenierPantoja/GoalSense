@@ -59,6 +59,9 @@ import type {
   TeamFundamentalMemoryProfile, MatchupFundamentalMemoryProfile, CompetitionMemoryProfile,
   HistoricalPatternContextProfile, TabooCandidate, MemoryBuildRun,
 } from '../../modules/footballIntelligence/memory/fundamentalMemory.types.js'
+import type {
+  InfluenceLedgerEntry, InfluenceBuildRun,
+} from '../../modules/footballIntelligence/influence/variableInfluence.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -116,6 +119,8 @@ const COMPETITION_MEMORY = 'competitionMemoryProfiles'
 const PATTERN_CONTEXT_MEMORY = 'historicalPatternContextProfiles'
 const TABOO_CANDIDATES = 'tabooCandidates'
 const MEMORY_BUILD_RUNS = 'memoryBuildRuns'
+const INFLUENCE_LEDGER = 'influenceLedgerEntries'
+const INFLUENCE_BUILD_RUNS = 'influenceBuildRuns'
 
 const READ_CAP = 2000
 
@@ -1194,5 +1199,40 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
   async listMemoryBuildRuns(limit?: number): Promise<MemoryBuildRun[]> {
     const db = await getFirestore(); const snap = await db.collection(MEMORY_BUILD_RUNS).get()
     return snap.docs.map((d: any) => docData<MemoryBuildRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
+  }
+
+  // ── B46: variable influence ledger + build runs ──
+  async saveInfluenceLedgerEntry(e: InfluenceLedgerEntry): Promise<InfluenceLedgerEntry> {
+    const db = await getFirestore(); await db.collection(INFLUENCE_LEDGER).doc(e.id).set(e, { merge: true }); return e
+  }
+  async getInfluenceLedgerEntry(id: string): Promise<InfluenceLedgerEntry | null> {
+    const db = await getFirestore(); const doc = await db.collection(INFLUENCE_LEDGER).doc(id).get(); return doc.exists ? docData<InfluenceLedgerEntry>(doc) : null
+  }
+  async listInfluenceLedgerEntries(limit?: number): Promise<InfluenceLedgerEntry[]> {
+    const db = await getFirestore(); const snap = await db.collection(INFLUENCE_LEDGER).get()
+    return snap.docs.map((d: any) => docData<InfluenceLedgerEntry>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit || 200)
+  }
+  async listInfluenceLedgerEntriesByFixture(fixtureId: string, limit?: number): Promise<InfluenceLedgerEntry[]> {
+    const db = await getFirestore(); const snap = await db.collection(INFLUENCE_LEDGER).where('fixtureId', '==', fixtureId).get()
+    return snap.docs.map((d: any) => docData<InfluenceLedgerEntry>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit || 100)
+  }
+  async listInfluenceLedgerEntriesByPattern(patternId: string, limit?: number): Promise<InfluenceLedgerEntry[]> {
+    const db = await getFirestore(); const snap = await db.collection(INFLUENCE_LEDGER).where('patternId', '==', patternId).get()
+    return snap.docs.map((d: any) => docData<InfluenceLedgerEntry>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit || 100)
+  }
+  async createInfluenceBuildRun(r: InfluenceBuildRun): Promise<InfluenceBuildRun> {
+    const db = await getFirestore(); await db.collection(INFLUENCE_BUILD_RUNS).doc(r.id).set(r, { merge: true }); return r
+  }
+  async updateInfluenceBuildRun(id: string, patch: Partial<InfluenceBuildRun>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(INFLUENCE_BUILD_RUNS).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async getInfluenceBuildRun(id: string): Promise<InfluenceBuildRun | null> {
+    const db = await getFirestore(); const doc = await db.collection(INFLUENCE_BUILD_RUNS).doc(id).get(); return doc.exists ? docData<InfluenceBuildRun>(doc) : null
+  }
+  async listInfluenceBuildRuns(limit?: number): Promise<InfluenceBuildRun[]> {
+    const db = await getFirestore(); const snap = await db.collection(INFLUENCE_BUILD_RUNS).get()
+    return snap.docs.map((d: any) => docData<InfluenceBuildRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
   }
 }

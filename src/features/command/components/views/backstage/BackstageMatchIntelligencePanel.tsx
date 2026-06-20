@@ -24,6 +24,7 @@ import { ProviderIdentityResolutionPanel } from './ProviderIdentityResolutionPan
 import { ProviderEntityMappingPanel } from './ProviderEntityMappingPanel'
 import { CriticalDomainAcquisitionPanel } from './CriticalDomainAcquisitionPanel'
 import { HistoricalMemoryPanel } from './HistoricalMemoryPanel'
+import { VariableInfluencePanel } from './VariableInfluencePanel'
 
 function Card({ title, icon, children, action }: { title: string; icon?: React.ReactNode; children: React.ReactNode; action?: React.ReactNode }) {
   return <div className="rounded-2xl border border-white/[0.07] bg-white/[0.012] p-4"><div className="flex items-center gap-2 mb-3"><span className="text-white/35">{icon}</span><h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45 flex-1">{title}</h4>{action}</div>{children}</div>
@@ -383,6 +384,9 @@ export function BackstageMatchIntelligencePanel() {
 
               {/* B45: historical club memory + contextual pattern intelligence */}
               <HistoricalMemoryPanel fixtureId={selected} isAdmin={isAdmin} />
+
+              {/* B46: fundamental variable weighting + influence engine */}
+              <VariableInfluencePanel fixtureId={selected} isAdmin={isAdmin} />
 
               {/* Post-match */}
               {pkg.phase === 'post_match' && postMatch && (

@@ -184,6 +184,11 @@ const envSchema = z.object({
   HISTORICAL_MEMORY_MAX_FIXTURES_PER_RUN: z.coerce.number().default(20),
   HISTORICAL_MEMORY_MIN_SAMPLE_FOR_STRONG: z.coerce.number().default(8),
   HISTORICAL_MEMORY_RECENCY_DAYS: z.coerce.number().default(730),
+  // B46: fundamental variable weighting + influence engine (advisory/observe).
+  ENABLE_VARIABLE_INFLUENCE_ENGINE: z.string().default('true'),
+  ENABLE_VARIABLE_INFLUENCE_BUILD: z.string().default('true'),
+  VARIABLE_INFLUENCE_MODE: z.enum(['observe', 'enforce']).default('observe'),
+  VARIABLE_INFLUENCE_MAX_PATTERNS_PER_FIXTURE: z.coerce.number().default(20),
 }).superRefine((val, ctx) => {
   // Conditional validation by persistence provider
   if (val.PERSISTENCE_PROVIDER === 'prisma') {

@@ -31,3 +31,10 @@ States:
 `buildDecisionInputs` accepts optional memory sources and emits advisory inputs
 (`fundamental_memory_*`, `matchup_memory`, `pattern_context_*`, `taboo_*`,
 `stay_out_memory_reason`, `sample_quality_warning`) — qualitative only, no math weight.
+
+## Followed by Influence-Aware Readiness/Precheck (B46)
+
+Readiness V7 and Precheck V7 add the variable-influence dimension on top of the memory-aware
+V6. They consume the InfluenceAggregate (net band, blockers, waits, live-confirmation,
+conflicts) and stay observe-first — influence never hard-blocks a real alert. See
+`INFLUENCE_AWARE_PRECHECK.md`.

@@ -45,3 +45,12 @@ repo is Noop → reads empty → `insufficient_history` (honest, not negative).
 Small samples never become strong conclusions; old/different-context cases are
 down-weighted; absence is never zero; memory is advisory and never changes
 score/confidence/patterns/alert results.
+
+## Consumed by the Influence Engine (B46)
+
+B46's `variableExtraction.service` reads this memory (team/matchup/pattern-context/taboos/
+similar) from Package V4 and turns it into influence variables: a `strong` memory sample
+can support a pattern; `insufficient_history` / `insufficient_data` become uncertainty (never
+negative); `misleading_risk` lowers magnitude; a usable taboo becomes a (still advisory)
+negative influence. Memory reliability remains data-confidence, never a probability. See
+`VARIABLE_INFLUENCE_ENGINE.md`.

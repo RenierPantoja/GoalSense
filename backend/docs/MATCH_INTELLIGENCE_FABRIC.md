@@ -126,3 +126,24 @@ never changes score/confidence/patterns/alerts and the precheck stays observe. S
 `CONTEXTUAL_PATTERN_MEMORY.md`, `TABOO_INTELLIGENCE_ENGINE.md`,
 `SIMILAR_SCENARIO_RETRIEVAL.md`, `MEMORY_AWARE_PRECHECK.md`,
 `POST_MATCH_MEMORY_ANALYSIS.md`.
+
+## B46 / Bloco 3 — Variable Influence layer
+
+The fabric now carries a variable-influence layer under
+`modules/footballIntelligence/influence/`:
+- `variableInfluence.types.ts`, `variableTaxonomy.service.ts`, `patternSensitivity.service.ts`,
+  `variableExtraction.service.ts`, `variableInfluenceRuleEngine.service.ts`,
+  `influenceAggregator.service.ts`, `variableConflictEngine.service.ts`,
+  `influenceLedger.service.ts`.
+- Package **V5** (`matchIntelligencePackageV5.service.ts`) composes V4 + influence.
+- Readiness **V7**, Precheck **V7** (observe), Post-Match **V5**, DecisionInputLedger **V2**.
+- Routes under `/api/match-intelligence`: `fixtures/:id/influence` (+build),
+  `fixtures/:id/patterns/:patternId/influence` (+build), `package-v5`, `readiness-v7`,
+  `precheck-v7`, `post-match-explanation-v5`, `influence/build-runs`.
+
+Influence is advisory: it is NOT a probability; `influenceScore` is internal weight;
+absent variables never become negative; weak sample never strong; manual stays manual;
+conflicts are explicit; blocking dominates; it never changes score/confidence/patterns/
+alerts and the precheck stays observe. See `VARIABLE_INFLUENCE_ENGINE.md`,
+`VARIABLE_TAXONOMY.md`, `PATTERN_SENSITIVITY_PROFILES.md`, `INFLUENCE_AGGREGATOR.md`,
+`INFLUENCE_AWARE_PRECHECK.md`, `POST_MATCH_INFLUENCE_ANALYSIS.md`.
