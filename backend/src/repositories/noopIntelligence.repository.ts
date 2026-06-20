@@ -50,6 +50,10 @@ import type {
   AutoAlertPolicy, AutoAlertPolicyEvaluation,
 } from '../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
 import type { AdminAuditEntry } from '../modules/audit/adminAudit.types.js'
+import type {
+  TeamFundamentalMemoryProfile, MatchupFundamentalMemoryProfile, CompetitionMemoryProfile,
+  HistoricalPatternContextProfile, TabooCandidate, MemoryBuildRun,
+} from '../modules/footballIntelligence/memory/fundamentalMemory.types.js'
 
 let warned = false
 function warnOnce(): void {
@@ -287,4 +291,25 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async updateEntityMappingDerivationRun(): Promise<{ count: number }> { return { count: 0 } }
   async getEntityMappingDerivationRun(): Promise<EntityMappingDerivationRun | null> { return null }
   async listEntityMappingDerivationRuns(): Promise<EntityMappingDerivationRun[]> { return [] }
+
+  // ── B45 (Noop): historical memory not persisted; reads empty (→ insufficient_history) ──
+  async saveTeamFundamentalMemory(p: TeamFundamentalMemoryProfile): Promise<TeamFundamentalMemoryProfile> { return p }
+  async getTeamFundamentalMemory(): Promise<TeamFundamentalMemoryProfile | null> { return null }
+  async listTeamFundamentalMemories(): Promise<TeamFundamentalMemoryProfile[]> { return [] }
+  async saveMatchupFundamentalMemory(p: MatchupFundamentalMemoryProfile): Promise<MatchupFundamentalMemoryProfile> { return p }
+  async getMatchupFundamentalMemory(): Promise<MatchupFundamentalMemoryProfile | null> { return null }
+  async listMatchupFundamentalMemories(): Promise<MatchupFundamentalMemoryProfile[]> { return [] }
+  async saveCompetitionMemory(p: CompetitionMemoryProfile): Promise<CompetitionMemoryProfile> { return p }
+  async getCompetitionMemory(): Promise<CompetitionMemoryProfile | null> { return null }
+  async listCompetitionMemories(): Promise<CompetitionMemoryProfile[]> { return [] }
+  async saveHistoricalPatternContextProfile(p: HistoricalPatternContextProfile): Promise<HistoricalPatternContextProfile> { return p }
+  async getHistoricalPatternContextProfile(): Promise<HistoricalPatternContextProfile | null> { return null }
+  async listHistoricalPatternContextProfiles(): Promise<HistoricalPatternContextProfile[]> { return [] }
+  async saveTabooCandidate(c: TabooCandidate): Promise<TabooCandidate> { return c }
+  async getTabooCandidate(): Promise<TabooCandidate | null> { return null }
+  async listTabooCandidates(): Promise<TabooCandidate[]> { return [] }
+  async createMemoryBuildRun(r: MemoryBuildRun): Promise<MemoryBuildRun> { return r }
+  async updateMemoryBuildRun(): Promise<{ count: number }> { return { count: 0 } }
+  async getMemoryBuildRun(): Promise<MemoryBuildRun | null> { return null }
+  async listMemoryBuildRuns(): Promise<MemoryBuildRun[]> { return [] }
 }

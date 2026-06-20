@@ -12,6 +12,10 @@ import type { TeamIntelligenceMemory } from './teamMemoryEngine.service.js'
 import type { HeadToHeadIntelligence } from './headToHeadIntelligence.service.js'
 import type { TacticalMatchupProfile } from './tacticalMatchupEngine.service.js'
 import type { CanonicalAnalysisReadiness } from './footballIntelligence.types.js'
+import type {
+  TeamFundamentalMemoryProfile, MatchupFundamentalMemoryProfile,
+  HistoricalPatternContextProfile, TabooCandidate,
+} from './memory/fundamentalMemory.types.js'
 
 export type DecisionDirection = 'positive' | 'negative' | 'neutral' | 'uncertain' | 'blocking' | 'contextual'
 export type WeightHint = 'low' | 'medium' | 'high' | 'critical' | 'unknown'
@@ -57,6 +61,12 @@ export interface DecisionInputSources {
   h2h: HeadToHeadIntelligence | null
   tactical: TacticalMatchupProfile | null
   readiness: CanonicalAnalysisReadiness | null
+  // B45: optional historical-memory inputs (advisory; never block).
+  homeFundamentalMemory?: TeamFundamentalMemoryProfile | null
+  awayFundamentalMemory?: TeamFundamentalMemoryProfile | null
+  matchupMemory?: MatchupFundamentalMemoryProfile | null
+  patternContext?: HistoricalPatternContextProfile[]
+  usableTaboos?: TabooCandidate[]
 }
 
 export function buildDecisionInputs(src: DecisionInputSources): DecisionInputBundle {
@@ -129,6 +139,38 @@ export function buildDecisionInputs(src: DecisionInputSources): DecisionInputBun
     } else if (r.status === 'provider_limited' || r.status === 'insufficient_history' || r.status === 'not_ready') {
       out.push(di(f, 'readiness', 'readiness', 'Prontidão', r.status, 'uncertain', 'medium', 'partial', `Base limitada para análise (${r.status}).`))
     }
+  }
+
+  // B45: historical fundamental memory (advisory; reliability ≠ probability).
+  for (const [side, mem] of [['home', src.homeFundamentalMemory], ['away', src.awayFundamentalMemory]] as const) {
+    if (!mem) continue
+    if (mem.memoryState === 'insufficient_history') {
+      out.push(di(f, 'fundamental_memory', `fundamental_memory_${side}`, `Memória fundamental ${side}`, 'insufficient_history', 'uncertain', 'low', 'unavailable', 'Sem memória fundamental suficiente — insufficient_history (não é negativo).', mem.limitations.slice(0, 1)))
+    } else if (mem.overallSample.quality === 'misleading_risk') {
+      out.push(di(f, 'fundamental_memory', `fundamental_memory_${side}`, `Memória fundamental ${side}`, 'misleading_risk', 'uncertain', 'low', 'poor', 'Memória potencialmente enganosa (antiga/contexto misto) — sample_quality_warning.'))
+    } else {
+      const dir: DecisionDirection = mem.overallSample.quality === 'strong' ? 'positive' : 'contextual'
+      const wh: WeightHint = mem.overallSample.quality === 'strong' ? 'medium' : 'low'
+      out.push(di(f, 'fundamental_memory', `fundamental_memory_${side}`, `Memória fundamental ${side}`, `${mem.memoryState}/${mem.overallSample.quality}`, dir, wh, 'partial', 'Memória fundamental do clube como apoio; confiança de dado, não probabilidade.'))
+    }
+  }
+  if (src.matchupMemory) {
+    const m = src.matchupMemory
+    if (m.matchupState === 'insufficient_data') {
+      out.push(di(f, 'matchup_memory', 'matchup_memory', 'Memória de confronto', 'insufficient_data', 'uncertain', 'low', 'unavailable', 'Confronto direto insuficiente — não é tabu.', m.limitations.slice(0, 1)))
+    } else {
+      out.push(di(f, 'matchup_memory', 'matchup_memory', 'Memória de confronto', `${m.matchupState} (${m.maturity})`, 'contextual', m.maturity === 'high' ? 'medium' : 'low', 'partial', 'Memória de confronto interna como apoio; confrontos antigos pesam menos.'))
+    }
+  }
+  for (const p of src.patternContext ?? []) {
+    if (p.recommendation === 'stay_out') {
+      out.push(di(f, 'pattern_context_memory', `pattern_context_${p.patternKey}_${p.contextKey}`, `Padrão×contexto`, `${p.patternName}/${p.contextLabel}`, 'negative', 'medium', 'partial', `stay_out_memory_reason: contexto historicamente desfavorável (${p.sample.quality}).`))
+    } else if (p.recommendation === 'use_with_confidence') {
+      out.push(di(f, 'pattern_context_memory', `pattern_context_${p.patternKey}_${p.contextKey}`, `Padrão×contexto`, `${p.patternName}/${p.contextLabel}`, 'positive', 'medium', 'partial', 'Contexto historicamente favorável (apoio observacional).'))
+    }
+  }
+  for (const t of src.usableTaboos ?? []) {
+    out.push(di(f, 'taboo_memory', `taboo_${t.id}`, 'Restrição histórica', t.status, t.status === 'supported' ? 'negative' : 'uncertain', t.status === 'supported' ? 'medium' : 'low', 'partial', `taboo_supported: ${t.description}`, t.limitations.slice(0, 1)))
   }
 
   const bundle: DecisionInputBundle = {

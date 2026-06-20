@@ -50,6 +50,19 @@ import { buildFundamentalReadinessV5 } from '../modules/footballIntelligence/fun
 import { runAlertDecisionPrecheckV5 } from '../modules/footballIntelligence/alertDecisionPrecheck.service.js'
 import { buildPostMatchExplanationV3 } from '../modules/footballIntelligence/postMatchExplanationEngine.service.js'
 import { buildMatchIntelligencePackageV3 } from '../modules/footballIntelligence/matchIntelligencePackageV3.service.js'
+import { buildMatchIntelligencePackageV4 } from '../modules/footballIntelligence/matchIntelligencePackageV4.service.js'
+import { buildFundamentalReadinessV6 } from '../modules/footballIntelligence/fundamentalReadinessEngine.service.js'
+import { runAlertDecisionPrecheckV6 } from '../modules/footballIntelligence/alertDecisionPrecheck.service.js'
+import { buildPostMatchExplanationV4 } from '../modules/footballIntelligence/postMatchExplanationEngine.service.js'
+import { buildTeamFundamentalMemory } from '../modules/footballIntelligence/memory/teamFundamentalMemory.service.js'
+import { buildMatchupMemoryForFixture } from '../modules/footballIntelligence/memory/matchupFundamentalMemory.service.js'
+import { getPatternMemoryForFixture } from '../modules/footballIntelligence/memory/contextualPatternMemory.service.js'
+import { detectTabooCandidatesForFixture } from '../modules/footballIntelligence/memory/tabooIntelligence.service.js'
+import { findSimilarPreMatchScenarios } from '../modules/footballIntelligence/memory/similarScenarioRetrieval.service.js'
+import {
+  buildMemoryForFixture, buildMemoryForTeam, buildMemoryForToday,
+  isHistoricalMemoryBuildEnabled,
+} from '../modules/footballIntelligence/memory/historicalMemoryBuildRunner.service.js'
 import { createRepositories } from '../repositories/index.js'
 
 const flag = (v: unknown) => String(v).toLowerCase() === 'true'
@@ -481,5 +494,86 @@ export async function matchIntelligenceRoutes(app: FastifyInstance) {
     if (!gate(reply)) return
     const pkg = await buildMatchIntelligencePackageV3(fid(req))
     return pkg ? ok(pkg) : reply.status(404).send(badRequest('fixture_not_found'))
+  })
+
+  // ── B45: historical club memory + contextual pattern intelligence ──
+  app.get(`${BASE}/fixtures/:fixtureId/memory`, async (req, reply) => {
+    if (!gate(reply)) return
+    const repos = createRepositories()
+    const fixture = await repos.fixtures.findById(fid(req)).catch(() => null)
+    if (!fixture) return reply.status(404).send(badRequest('fixture_not_found'))
+    const [home, away, matchup, patternContext, taboos, similar] = await Promise.all([
+      fixture.homeName ? buildTeamFundamentalMemory(fixture.homeName).catch(() => null) : Promise.resolve(null),
+      fixture.awayName ? buildTeamFundamentalMemory(fixture.awayName).catch(() => null) : Promise.resolve(null),
+      buildMatchupMemoryForFixture(fid(req)).catch(() => null),
+      getPatternMemoryForFixture(fid(req)).catch(() => []),
+      detectTabooCandidatesForFixture(fid(req)).catch(() => []),
+      findSimilarPreMatchScenarios(fid(req)).catch(() => null),
+    ])
+    return ok({ homeMemory: home, awayMemory: away, matchupMemory: matchup, patternContextMemory: patternContext, taboos, similarScenarios: similar })
+  })
+  app.post(`${BASE}/fixtures/:fixtureId/memory/build`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const run = await buildMemoryForFixture(fid(req))
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'historical_memory', resourceId: fid(req), metadata: { scope: 'fixture', status: run.status } })
+    return ok(run)
+  })
+  app.get(`${BASE}/teams/:teamId/fundamental-memory`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await buildTeamFundamentalMemory(String((req.params as any).teamId)))
+  })
+  app.post(`${BASE}/teams/:teamId/fundamental-memory/build`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const run = await buildMemoryForTeam(String((req.params as any).teamId))
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'historical_memory', resourceId: String((req.params as any).teamId), metadata: { scope: 'team', status: run.status } })
+    return ok(run)
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/matchup-memory`, async (req, reply) => {
+    if (!gate(reply)) return
+    const m = await buildMatchupMemoryForFixture(fid(req))
+    return m ? ok(m) : reply.status(404).send(badRequest('fixture_not_found'))
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/taboos`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await detectTabooCandidatesForFixture(fid(req)))
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/similar-scenarios`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await findSimilarPreMatchScenarios(fid(req)))
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/pattern-memory`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await getPatternMemoryForFixture(fid(req)))
+  })
+  app.get(`${BASE}/memory/build-runs`, async (_req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await createRepositories().intelligence.listMemoryBuildRuns(50)) } catch { return ok([]) }
+  })
+  app.post(`${BASE}/memory/today/build`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const run = await buildMemoryForToday()
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'historical_memory', resourceId: 'today', metadata: { scope: 'today', status: run.status } })
+    return ok(run)
+  })
+  app.get(`${BASE}/memory/status`, async (_req, reply) => {
+    if (!gate(reply)) return
+    return ok({ buildEnabled: isHistoricalMemoryBuildEnabled(), schedulerEnabled: flag(env.ENABLE_HISTORICAL_MEMORY_SCHEDULER) })
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/package-v4`, async (req, reply) => {
+    if (!gate(reply)) return
+    const pkg = await buildMatchIntelligencePackageV4(fid(req))
+    return pkg ? ok(pkg) : reply.status(404).send(badRequest('fixture_not_found'))
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/readiness-v6`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await buildFundamentalReadinessV6(fid(req)))
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/precheck-v6`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await runAlertDecisionPrecheckV6(fid(req)))
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/post-match-explanation-v4`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await buildPostMatchExplanationV4(fid(req)))
   })
 }

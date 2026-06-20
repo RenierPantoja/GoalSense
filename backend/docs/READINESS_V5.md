@@ -18,3 +18,12 @@ the unlock matrix + manual records.
 Missing critical domain reduces readiness. Reliable manual coverage counts as manual
 (mixed status). Endpoint-not-documented / provider-not-configured → provider-limited.
 Readiness score is not a probability of winning. V1–V4 remain; V5 is additive.
+
+## Superseded/extended by Readiness V6 (B45)
+
+`buildFundamentalReadinessV6` adds the historical-memory dimension on top of V5's
+critical-domain readiness. New states: `ready_with_memory_support`,
+`ready_but_memory_weak`, `insufficient_memory`, `memory_contradicts_pattern`,
+`memory_requires_live_confirmation`, `stay_out_memory_misleading`. The
+`memoryReadinessScore` is data-confidence of memory, NOT a win probability. See
+`MEMORY_AWARE_PRECHECK.md`.

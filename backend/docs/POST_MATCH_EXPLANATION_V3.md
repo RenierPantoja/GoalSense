@@ -22,3 +22,12 @@ improvements, not just pattern blame.
 A miss is never called random without evidence (inherited from V1). Domain absence is a
 candidate cause, not a certainty. unknown/expired/pending are never failures. V1/V2
 remain; V3 is additive.
+
+## Extended by Post-Match V4 (B45)
+
+`buildPostMatchExplanationV4` adds memory-aware learning fields: memorySupportedOutcome,
+memoryContradictedOutcome, memoryWasMisleading, sampleWasTooWeak, tabooWasInvalid,
+similarScenarioWasUseful, memoryRefinementCandidates. Same discipline: a miss is not
+"random" without evidence; weak/old samples are named as sample problems, not pattern
+failures; unknown/not_evaluable/pending are never failures. See
+`POST_MATCH_MEMORY_ANALYSIS.md`.

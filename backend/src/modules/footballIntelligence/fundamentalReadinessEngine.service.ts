@@ -418,3 +418,81 @@ export async function buildFundamentalReadinessV5(fixtureId: string): Promise<Fu
     limitations: ['Readiness V5 não é probabilidade; mede cobertura real por domínio crítico (provider/manual). Ausência reduz readiness; manual confiável conta como manual.'],
   }
 }
+
+// ─── Readiness V6 (B45) — historical-memory aware ──────────────────────────────
+import { buildTeamFundamentalMemory } from './memory/teamFundamentalMemory.service.js'
+import { buildMatchupMemoryForFixture } from './memory/matchupFundamentalMemory.service.js'
+import { getPatternMemoryForFixture } from './memory/contextualPatternMemory.service.js'
+
+export type ReadinessV6Status =
+  | 'ready_with_memory_support' | 'ready_but_memory_weak' | 'insufficient_memory'
+  | 'memory_contradicts_pattern' | 'memory_requires_live_confirmation' | 'stay_out_memory_misleading'
+
+export interface FundamentalReadinessV6 {
+  status: ReadinessV6Status
+  memoryReadinessScore: number
+  memoryReliability: 'high' | 'medium' | 'low' | 'insufficient'
+  homeMemoryState: string
+  awayMemoryState: string
+  matchupMaturity: string
+  strongContexts: string[]
+  stayOutContexts: string[]
+  misleadingContexts: string[]
+  memorySupportsPattern: boolean
+  memoryContradictsPattern: boolean
+  limitations: string[]
+}
+
+export async function buildFundamentalReadinessV6(fixtureId: string): Promise<FundamentalReadinessV6 | null> {
+  const repos = createRepositories()
+  const fixture = await repos.fixtures.findById(fixtureId).catch(() => null)
+  if (!fixture) return null
+
+  const [home, away, matchup, patternContext] = await Promise.all([
+    fixture.homeName ? buildTeamFundamentalMemory(fixture.homeName).catch(() => null) : Promise.resolve(null),
+    fixture.awayName ? buildTeamFundamentalMemory(fixture.awayName).catch(() => null) : Promise.resolve(null),
+    buildMatchupMemoryForFixture(fixtureId).catch(() => null),
+    getPatternMemoryForFixture(fixtureId).catch(() => []),
+  ])
+
+  const homeMemoryState = home?.memoryState ?? 'insufficient_history'
+  const awayMemoryState = away?.memoryState ?? 'insufficient_history'
+  const matchupMaturity = matchup?.maturity ?? 'insufficient_data'
+
+  const strongContexts = patternContext.filter(p => p.recommendation === 'use_with_confidence').map(p => `${p.patternName}/${p.contextLabel}`)
+  const stayOutContexts = patternContext.filter(p => p.recommendation === 'stay_out').map(p => `${p.patternName}/${p.contextLabel}`)
+  const misleadingContexts = patternContext.filter(p => p.sample.quality === 'misleading_risk').map(p => `${p.patternName}/${p.contextLabel}`)
+
+  const memorySupportsPattern = strongContexts.length > 0
+  const memoryContradictsPattern = stayOutContexts.length > 0
+
+  // Memory readiness score (data-confidence, NOT a probability).
+  const stateScore = (s: string): number => s === 'mature' ? 30 : s === 'usable' ? 20 : s === 'developing' ? 8 : 0
+  let memoryReadinessScore = stateScore(homeMemoryState) + stateScore(awayMemoryState)
+  if (matchupMaturity === 'high') memoryReadinessScore += 25
+  else if (matchupMaturity === 'medium') memoryReadinessScore += 12
+  memoryReadinessScore = Math.max(0, Math.min(100, memoryReadinessScore))
+
+  const reliabilities = [home?.overallSample.reliability, away?.overallSample.reliability].filter(Boolean) as string[]
+  const memoryReliability: FundamentalReadinessV6['memoryReliability'] =
+    reliabilities.includes('high') ? 'high'
+      : reliabilities.includes('medium') ? 'medium'
+        : reliabilities.includes('low') ? 'low'
+          : 'insufficient'
+
+  let status: ReadinessV6Status
+  if (misleadingContexts.length > 0) status = 'stay_out_memory_misleading'
+  else if (memoryContradictsPattern) status = 'memory_contradicts_pattern'
+  else if (homeMemoryState === 'insufficient_history' && awayMemoryState === 'insufficient_history') status = 'insufficient_memory'
+  else if (memorySupportsPattern && memoryReliability === 'high') status = 'ready_with_memory_support'
+  else if (memoryReliability === 'low' || memoryReliability === 'insufficient') status = 'ready_but_memory_weak'
+  else status = 'memory_requires_live_confirmation'
+
+  return {
+    status, memoryReadinessScore, memoryReliability,
+    homeMemoryState, awayMemoryState, matchupMaturity,
+    strongContexts, stayOutContexts, misleadingContexts,
+    memorySupportsPattern, memoryContradictsPattern,
+    limitations: ['Readiness V6 mede confiança da MEMÓRIA (dado), não probabilidade de acerto; memória nunca bloqueia alerta real.'],
+  }
+}

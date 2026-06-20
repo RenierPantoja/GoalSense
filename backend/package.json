@@ -26,6 +26,7 @@
     "smoke:cross-provider-identity": "node scripts/smokeCrossProviderIdentityResolution.mjs",
     "smoke:team-competition-identity": "node scripts/smokeTeamCompetitionIdentityMapping.mjs",
     "smoke:critical-pre-match-domains": "node scripts/smokeCriticalPreMatchDomains.mjs",
+    "smoke:historical-club-memory": "node scripts/smokeHistoricalClubMemory.mjs",
     "backfill:live-session-attribution": "node scripts/backfillLiveValidationSessionAttribution.mjs",
     "reindex:live-session-records": "node scripts/reindexLiveValidationSessionRecords.mjs",
     "reprocess:bt-replay-evidence": "node scripts/reprocessBacktestReplayEvidence.mjs",

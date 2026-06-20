@@ -29,3 +29,11 @@ falha.
 `/fixtures/:id/domain-unlock-matrix`, `/fixtures/:id/domains/:domain[/refresh]`,
 `/fixtures/:id/acquisition/critical/run`, `/fixtures/:id/readiness-v5`,
 `/fixtures/:id/precheck-v5`. Types in `criticalDomainTypes.ts`.
+
+## Followed by the Historical Memory panel (B45)
+
+Below the Critical Domain panel, the Backstage selected-fixture column now renders the
+`HistoricalMemoryPanel` (B45): team/matchup/contextual-pattern memory, taboo candidates
+and similar scenarios, plus a Readiness V6 badge. It is advisory only and shows honest
+empty states (`insufficient_history` / `insufficient_data`, never negative findings).
+See `docs/HISTORICAL_MEMORY_UI.md`.

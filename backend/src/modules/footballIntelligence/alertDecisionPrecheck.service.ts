@@ -368,3 +368,65 @@ export async function runAlertDecisionPrecheckV5(fixtureId: string): Promise<Ale
   out.enforced = enabled && mode === 'enforce' && (decision === 'avoid' || decision.startsWith('wait'))
   return out
 }
+
+// ─── Precheck V6 (B45) — historical-memory aware, observe-first ────────────────
+import { buildFundamentalReadinessV6 } from './fundamentalReadinessEngine.service.js'
+
+export type PrecheckV6Decision =
+  | 'avoid' | 'wait_for_lineup' | 'wait_for_live_confirmation' | 'wait_for_memory_build'
+  | 'monitor' | 'alert_candidate' | 'strong_alert' | 'post_match_learning_only'
+
+export interface AlertDecisionPrecheckV6Result {
+  fixtureId: string
+  mode: 'observe' | 'enforce'
+  enabled: boolean
+  enforced: boolean
+  decision: PrecheckV6Decision
+  reasons: string[]
+  memorySupportFactors: string[]
+  memoryCautionFactors: string[]
+  limitations: string[]
+  generatedAt: string
+}
+
+export async function runAlertDecisionPrecheckV6(fixtureId: string): Promise<AlertDecisionPrecheckV6Result> {
+  const enabled = isPrecheckEnabled()
+  const mode = precheckMode()
+  const out: AlertDecisionPrecheckV6Result = {
+    fixtureId, mode, enabled, enforced: false, decision: 'monitor', reasons: [],
+    memorySupportFactors: [], memoryCautionFactors: [],
+    limitations: ['Precheck V6 observacional: memória é apoio; nunca bloqueia alerta real em observe; não altera score/confiança/resultado.'], generatedAt: new Date().toISOString(),
+  }
+  const pkg = await buildMatchIntelligencePackage(fixtureId).catch(() => null)
+  if (!pkg) { out.reasons.push('Pacote indisponível.'); return out }
+  const v6 = await buildFundamentalReadinessV6(fixtureId).catch(() => null)
+
+  const reasons: string[] = []
+  const support: string[] = []
+  const caution: string[] = []
+
+  if (v6?.status === 'insufficient_memory') { reasons.push('memory_insufficient_history'); caution.push('Sem memória interna suficiente (insufficient_history).') }
+  if (v6?.memorySupportsPattern) { reasons.push('team_memory_positive'); support.push(...v6.strongContexts.map(c => `contexto favorável: ${c}`)) }
+  if (v6?.memoryContradictsPattern) { reasons.push('memory_contradicts_pattern'); caution.push(...v6.stayOutContexts.map(c => `contexto desfavorável: ${c}`)) }
+  if ((v6?.misleadingContexts.length ?? 0) > 0) { reasons.push('stay_out_memory_misleading'); caution.push(...(v6?.misleadingContexts ?? []).map(c => `contexto enganoso: ${c}`)) }
+  if (v6?.matchupMaturity === 'insufficient_data') reasons.push('matchup_memory_insufficient')
+  else if (v6?.matchupMaturity === 'high') { reasons.push('matchup_memory_supported'); support.push('confronto direto maduro (apoio)') }
+
+  let decision: PrecheckV6Decision
+  if (pkg.phase === 'post_match') decision = 'post_match_learning_only'
+  else if (pkg.squads?.waitForLineupRecommended) decision = 'wait_for_lineup'
+  else if (pkg.phase === 'live' && !(pkg.live?.hasStats)) decision = 'wait_for_live_confirmation'
+  else if (v6?.status === 'stay_out_memory_misleading') decision = 'monitor'
+  else if (v6?.status === 'memory_contradicts_pattern') decision = 'monitor'
+  else if (v6?.status === 'insufficient_memory') decision = 'monitor'
+  else if (v6?.status === 'ready_with_memory_support') decision = 'alert_candidate'
+  else decision = 'monitor'
+
+  out.decision = decision
+  out.reasons = [...new Set(reasons)]
+  out.memorySupportFactors = [...new Set(support)]
+  out.memoryCautionFactors = [...new Set(caution)]
+  // Memory NEVER hard-blocks; even in enforce it only marks wait_* as enforceable intent.
+  out.enforced = enabled && mode === 'enforce' && decision.startsWith('wait')
+  return out
+}

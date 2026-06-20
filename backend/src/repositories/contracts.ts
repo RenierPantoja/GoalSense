@@ -171,6 +171,10 @@ import type {
   ProviderEntityMapping, TeamAlias, CompetitionAlias, FixtureIdentityResolutionRun, ProviderEntityMappingStatus,
   ProviderTeamMapping, ProviderCompetitionMapping, ProviderSeasonMapping, EntityMappingDerivationRun, EntityMappingStatus,
 } from '../modules/footballIntelligence/identity/providerIdentity.types.js'
+import type {
+  TeamFundamentalMemoryProfile, MatchupFundamentalMemoryProfile, CompetitionMemoryProfile,
+  HistoricalPatternContextProfile, TabooCandidate, MemoryBuildRun,
+} from '../modules/footballIntelligence/memory/fundamentalMemory.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -402,6 +406,27 @@ export interface IntelligenceRepository {
   updateEntityMappingDerivationRun(id: string, patch: Partial<EntityMappingDerivationRun>): Promise<{ count: number }>
   getEntityMappingDerivationRun(id: string): Promise<EntityMappingDerivationRun | null>
   listEntityMappingDerivationRuns(limit?: number): Promise<EntityMappingDerivationRun[]>
+
+  // ── B45: historical club / matchup / context memory + taboos + build runs ───
+  saveTeamFundamentalMemory(profile: TeamFundamentalMemoryProfile): Promise<TeamFundamentalMemoryProfile>
+  getTeamFundamentalMemory(teamId: string): Promise<TeamFundamentalMemoryProfile | null>
+  listTeamFundamentalMemories(limit?: number): Promise<TeamFundamentalMemoryProfile[]>
+  saveMatchupFundamentalMemory(profile: MatchupFundamentalMemoryProfile): Promise<MatchupFundamentalMemoryProfile>
+  getMatchupFundamentalMemory(id: string): Promise<MatchupFundamentalMemoryProfile | null>
+  listMatchupFundamentalMemories(limit?: number): Promise<MatchupFundamentalMemoryProfile[]>
+  saveCompetitionMemory(profile: CompetitionMemoryProfile): Promise<CompetitionMemoryProfile>
+  getCompetitionMemory(competitionKey: string): Promise<CompetitionMemoryProfile | null>
+  listCompetitionMemories(limit?: number): Promise<CompetitionMemoryProfile[]>
+  saveHistoricalPatternContextProfile(profile: HistoricalPatternContextProfile): Promise<HistoricalPatternContextProfile>
+  getHistoricalPatternContextProfile(id: string): Promise<HistoricalPatternContextProfile | null>
+  listHistoricalPatternContextProfiles(limit?: number): Promise<HistoricalPatternContextProfile[]>
+  saveTabooCandidate(candidate: TabooCandidate): Promise<TabooCandidate>
+  getTabooCandidate(id: string): Promise<TabooCandidate | null>
+  listTabooCandidates(filters: { scopeKey?: string; status?: string; limit?: number }): Promise<TabooCandidate[]>
+  createMemoryBuildRun(run: MemoryBuildRun): Promise<MemoryBuildRun>
+  updateMemoryBuildRun(id: string, patch: Partial<MemoryBuildRun>): Promise<{ count: number }>
+  getMemoryBuildRun(id: string): Promise<MemoryBuildRun | null>
+  listMemoryBuildRuns(limit?: number): Promise<MemoryBuildRun[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

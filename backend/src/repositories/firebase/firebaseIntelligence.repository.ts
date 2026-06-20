@@ -55,6 +55,10 @@ import type {
   ProviderEntityMapping, TeamAlias, CompetitionAlias, FixtureIdentityResolutionRun, ProviderEntityMappingStatus,
   ProviderTeamMapping, ProviderCompetitionMapping, ProviderSeasonMapping, EntityMappingDerivationRun, EntityMappingStatus,
 } from '../../modules/footballIntelligence/identity/providerIdentity.types.js'
+import type {
+  TeamFundamentalMemoryProfile, MatchupFundamentalMemoryProfile, CompetitionMemoryProfile,
+  HistoricalPatternContextProfile, TabooCandidate, MemoryBuildRun,
+} from '../../modules/footballIntelligence/memory/fundamentalMemory.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -105,6 +109,13 @@ const TEAM_MAPPINGS = 'providerTeamMappings'
 const COMPETITION_MAPPINGS = 'providerCompetitionMappings'
 const SEASON_MAPPINGS = 'providerSeasonMappings'
 const ENTITY_DERIVATION_RUNS = 'entityMappingDerivationRuns'
+
+const TEAM_FUND_MEMORY = 'teamFundamentalMemoryProfiles'
+const MATCHUP_FUND_MEMORY = 'matchupFundamentalMemoryProfiles'
+const COMPETITION_MEMORY = 'competitionMemoryProfiles'
+const PATTERN_CONTEXT_MEMORY = 'historicalPatternContextProfiles'
+const TABOO_CANDIDATES = 'tabooCandidates'
+const MEMORY_BUILD_RUNS = 'memoryBuildRuns'
 
 const READ_CAP = 2000
 
@@ -1110,5 +1121,78 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
   async listEntityMappingDerivationRuns(limit?: number): Promise<EntityMappingDerivationRun[]> {
     const db = await getFirestore(); const snap = await db.collection(ENTITY_DERIVATION_RUNS).get()
     return snap.docs.map((d: any) => docData<EntityMappingDerivationRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
+  }
+
+  // ── B45: historical club / matchup / context memory + taboos + build runs ──
+  async saveTeamFundamentalMemory(p: TeamFundamentalMemoryProfile): Promise<TeamFundamentalMemoryProfile> {
+    const db = await getFirestore(); await db.collection(TEAM_FUND_MEMORY).doc(p.id).set(p, { merge: true }); return p
+  }
+  async getTeamFundamentalMemory(teamId: string): Promise<TeamFundamentalMemoryProfile | null> {
+    const db = await getFirestore(); const snap = await db.collection(TEAM_FUND_MEMORY).where('teamId', '==', teamId).limit(1).get()
+    return snap.empty ? null : docData<TeamFundamentalMemoryProfile>(snap.docs[0])
+  }
+  async listTeamFundamentalMemories(limit?: number): Promise<TeamFundamentalMemoryProfile[]> {
+    const db = await getFirestore(); const snap = await db.collection(TEAM_FUND_MEMORY).get()
+    return snap.docs.map((d: any) => docData<TeamFundamentalMemoryProfile>(d)).sort((a: any, b: any) => (b.builtAt || '').localeCompare(a.builtAt || '')).slice(0, limit || 200)
+  }
+  async saveMatchupFundamentalMemory(p: MatchupFundamentalMemoryProfile): Promise<MatchupFundamentalMemoryProfile> {
+    const db = await getFirestore(); await db.collection(MATCHUP_FUND_MEMORY).doc(p.id).set(p, { merge: true }); return p
+  }
+  async getMatchupFundamentalMemory(id: string): Promise<MatchupFundamentalMemoryProfile | null> {
+    const db = await getFirestore(); const doc = await db.collection(MATCHUP_FUND_MEMORY).doc(id).get(); return doc.exists ? docData<MatchupFundamentalMemoryProfile>(doc) : null
+  }
+  async listMatchupFundamentalMemories(limit?: number): Promise<MatchupFundamentalMemoryProfile[]> {
+    const db = await getFirestore(); const snap = await db.collection(MATCHUP_FUND_MEMORY).get()
+    return snap.docs.map((d: any) => docData<MatchupFundamentalMemoryProfile>(d)).sort((a: any, b: any) => (b.builtAt || '').localeCompare(a.builtAt || '')).slice(0, limit || 200)
+  }
+  async saveCompetitionMemory(p: CompetitionMemoryProfile): Promise<CompetitionMemoryProfile> {
+    const db = await getFirestore(); await db.collection(COMPETITION_MEMORY).doc(p.id).set(p, { merge: true }); return p
+  }
+  async getCompetitionMemory(competitionKey: string): Promise<CompetitionMemoryProfile | null> {
+    const db = await getFirestore(); const snap = await db.collection(COMPETITION_MEMORY).where('competitionKey', '==', competitionKey).limit(1).get()
+    return snap.empty ? null : docData<CompetitionMemoryProfile>(snap.docs[0])
+  }
+  async listCompetitionMemories(limit?: number): Promise<CompetitionMemoryProfile[]> {
+    const db = await getFirestore(); const snap = await db.collection(COMPETITION_MEMORY).get()
+    return snap.docs.map((d: any) => docData<CompetitionMemoryProfile>(d)).slice(0, limit || 200)
+  }
+  async saveHistoricalPatternContextProfile(p: HistoricalPatternContextProfile): Promise<HistoricalPatternContextProfile> {
+    const db = await getFirestore(); await db.collection(PATTERN_CONTEXT_MEMORY).doc(p.id).set(p, { merge: true }); return p
+  }
+  async getHistoricalPatternContextProfile(id: string): Promise<HistoricalPatternContextProfile | null> {
+    const db = await getFirestore(); const doc = await db.collection(PATTERN_CONTEXT_MEMORY).doc(id).get(); return doc.exists ? docData<HistoricalPatternContextProfile>(doc) : null
+  }
+  async listHistoricalPatternContextProfiles(limit?: number): Promise<HistoricalPatternContextProfile[]> {
+    const db = await getFirestore(); const snap = await db.collection(PATTERN_CONTEXT_MEMORY).get()
+    return snap.docs.map((d: any) => docData<HistoricalPatternContextProfile>(d)).sort((a: any, b: any) => (b.builtAt || '').localeCompare(a.builtAt || '')).slice(0, limit || 200)
+  }
+  async saveTabooCandidate(c: TabooCandidate): Promise<TabooCandidate> {
+    const db = await getFirestore(); await db.collection(TABOO_CANDIDATES).doc(c.id).set(c, { merge: true }); return c
+  }
+  async getTabooCandidate(id: string): Promise<TabooCandidate | null> {
+    const db = await getFirestore(); const doc = await db.collection(TABOO_CANDIDATES).doc(id).get(); return doc.exists ? docData<TabooCandidate>(doc) : null
+  }
+  async listTabooCandidates(filters: { scopeKey?: string; status?: string; limit?: number }): Promise<TabooCandidate[]> {
+    const db = await getFirestore()
+    let q: any = db.collection(TABOO_CANDIDATES)
+    if (filters.scopeKey) q = q.where('scopeKey', '==', filters.scopeKey)
+    else if (filters.status) q = q.where('status', '==', filters.status)
+    const snap = await q.get()
+    return snap.docs.map((d: any) => docData<TabooCandidate>(d)).sort((a: any, b: any) => (b.builtAt || '').localeCompare(a.builtAt || '')).slice(0, filters.limit || 200)
+  }
+  async createMemoryBuildRun(r: MemoryBuildRun): Promise<MemoryBuildRun> {
+    const db = await getFirestore(); await db.collection(MEMORY_BUILD_RUNS).doc(r.id).set(r, { merge: true }); return r
+  }
+  async updateMemoryBuildRun(id: string, patch: Partial<MemoryBuildRun>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(MEMORY_BUILD_RUNS).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async getMemoryBuildRun(id: string): Promise<MemoryBuildRun | null> {
+    const db = await getFirestore(); const doc = await db.collection(MEMORY_BUILD_RUNS).doc(id).get(); return doc.exists ? docData<MemoryBuildRun>(doc) : null
+  }
+  async listMemoryBuildRuns(limit?: number): Promise<MemoryBuildRun[]> {
+    const db = await getFirestore(); const snap = await db.collection(MEMORY_BUILD_RUNS).get()
+    return snap.docs.map((d: any) => docData<MemoryBuildRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
   }
 }

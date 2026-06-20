@@ -178,6 +178,12 @@ const envSchema = z.object({
   AUTO_ENGINE_MIN_SAMPLE_QUALITY: z.enum(['insufficient', 'low', 'moderate', 'strong']).default('moderate'),
   AUTO_ENGINE_MIN_SCORE: z.coerce.number().default(55),
   AUTO_ENGINE_MAX_OPPS_PER_FIXTURE: z.coerce.number().default(3),
+  // B45: historical club memory + contextual pattern intelligence (manual-first; scheduler OFF).
+  ENABLE_HISTORICAL_MEMORY_BUILD: z.string().default('true'),
+  ENABLE_HISTORICAL_MEMORY_SCHEDULER: z.string().default('false'),
+  HISTORICAL_MEMORY_MAX_FIXTURES_PER_RUN: z.coerce.number().default(20),
+  HISTORICAL_MEMORY_MIN_SAMPLE_FOR_STRONG: z.coerce.number().default(8),
+  HISTORICAL_MEMORY_RECENCY_DAYS: z.coerce.number().default(730),
 }).superRefine((val, ctx) => {
   // Conditional validation by persistence provider
   if (val.PERSISTENCE_PROVIDER === 'prisma') {

@@ -102,3 +102,27 @@ critical-domain snapshot store V2, Acquisition Runner V4, Readiness V5, Precheck
 Post-Match V3 and Match Intelligence Package V3. Real fetch happens only for documented
 endpoints with env + confirmed mappings; everything else is honestly blocked or manual.
 See `CRITICAL_PRE_MATCH_DATA_ACQUISITION.md`.
+
+## B45 / Bloco 2 — Historical Memory layer
+
+The fabric now carries a deep historical-memory layer under
+`modules/footballIntelligence/memory/`:
+- `memorySampleQuality.service.ts` (PURE sample-quality engine — the disciplined heart).
+- `teamFundamentalMemory.service.ts`, `matchupFundamentalMemory.service.ts`,
+  `contextualPatternMemory.service.ts`, `tabooIntelligence.service.ts`,
+  `similarScenarioRetrieval.service.ts`, `historicalMemoryBuildRunner.service.ts`.
+- Package **V4** (`matchIntelligencePackageV4.service.ts`) composes V3 + memory.
+- Readiness **V6**, Precheck **V6** (observe-first), Post-Match **V4**.
+- Routes under `/api/match-intelligence`: `fixtures/:id/memory` (+`/memory/build`),
+  `teams/:teamId/fundamental-memory` (+build), `fixtures/:id/matchup-memory`,
+  `.../taboos`, `.../similar-scenarios`, `.../pattern-memory`, `memory/build-runs`,
+  `memory/today/build`, `memory/status`, `package-v4`, `readiness-v6`, `precheck-v6`,
+  `post-match-explanation-v4`.
+
+Memory is advisory: reliability ≠ probability; small samples never conclude; H2H
+insufficient is never a tabu; old history is down-weighted; absence is never zero; it
+never changes score/confidence/patterns/alerts and the precheck stays observe. See
+`HISTORICAL_CLUB_MEMORY.md`, `MATCHUP_FUNDAMENTAL_MEMORY.md`,
+`CONTEXTUAL_PATTERN_MEMORY.md`, `TABOO_INTELLIGENCE_ENGINE.md`,
+`SIMILAR_SCENARIO_RETRIEVAL.md`, `MEMORY_AWARE_PRECHECK.md`,
+`POST_MATCH_MEMORY_ANALYSIS.md`.

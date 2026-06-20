@@ -230,3 +230,66 @@ export async function buildPostMatchExplanationV3(fixtureId: string): Promise<Po
     providerLimitationWasCritical, domainRefinementCandidates,
   }
 }
+
+// ─── Post-Match Explanation V4 (B45) — memory-aware learning ───────────────────
+import { buildTeamFundamentalMemory } from './memory/teamFundamentalMemory.service.js'
+import { getPatternMemoryForFixture } from './memory/contextualPatternMemory.service.js'
+import { detectTabooCandidatesForFixture } from './memory/tabooIntelligence.service.js'
+import { findSimilarPreMatchScenarios } from './memory/similarScenarioRetrieval.service.js'
+
+export interface PostMatchExplanationV4 extends PostMatchExplanation {
+  memorySupportedOutcome: boolean
+  memoryContradictedOutcome: boolean
+  memoryWasMisleading: boolean
+  sampleWasTooWeak: boolean
+  tabooWasInvalid: boolean
+  similarScenarioWasUseful: boolean
+  memoryRefinementCandidates: string[]
+}
+
+export async function buildPostMatchExplanationV4(fixtureId: string): Promise<PostMatchExplanationV4 | null> {
+  const v1 = await buildPostMatchExplanation(fixtureId)
+  if (!v1) return null
+  const repos = createRepositories()
+  const fixture = await repos.fixtures.findById(fixtureId).catch(() => null)
+
+  const [homeMem, awayMem, patternContext, taboos, similar] = await Promise.all([
+    fixture?.homeName ? buildTeamFundamentalMemory(fixture.homeName).catch(() => null) : Promise.resolve(null),
+    fixture?.awayName ? buildTeamFundamentalMemory(fixture.awayName).catch(() => null) : Promise.resolve(null),
+    getPatternMemoryForFixture(fixtureId).catch(() => []),
+    detectTabooCandidatesForFixture(fixtureId).catch(() => []),
+    findSimilarPreMatchScenarios(fixtureId).catch(() => null),
+  ])
+
+  const confirmed = v1.outcome === 'confirmed' || v1.outcome === 'confirmed_partial'
+  const failed = v1.outcome === 'failed'
+
+  const favorableContexts = patternContext.filter(p => p.recommendation === 'use_with_confidence').length
+  const unfavorableContexts = patternContext.filter(p => p.recommendation === 'stay_out').length
+
+  const memorySupportedOutcome = confirmed && favorableContexts > 0
+  const memoryContradictedOutcome = (confirmed && unfavorableContexts > 0) || (failed && favorableContexts > 0)
+  const memoryWasMisleading = patternContext.some(p => p.sample.quality === 'misleading_risk') && failed
+  const sampleQualityWeak = (homeMem?.overallSample.quality === 'weak' || homeMem?.overallSample.quality === 'insufficient') && (awayMem?.overallSample.quality === 'weak' || awayMem?.overallSample.quality === 'insufficient')
+  const sampleWasTooWeak = sampleQualityWeak
+  // A taboo was "invalid" if a usable constraint existed yet the constrained outcome happened.
+  const usableTaboo = taboos.find(t => t.status === 'supported' && t.isUsableConstraint)
+  const tabooWasInvalid = !!usableTaboo && confirmed
+  const similarScenarioWasUseful = !!similar && similar.usableScenarios > 0 && (
+    confirmed
+      ? similar.scenarios.some(s => s.observedOutcome === 'confirmed' || s.observedOutcome === 'confirmed_partial')
+      : similar?.scenarios.some(s => s.observedOutcome === 'failed') ?? false
+  )
+
+  const memoryRefinementCandidates: string[] = []
+  if (memoryContradictedOutcome) memoryRefinementCandidates.push('Memória contradiz o resultado — revisar contexto/peso (sem rebaixar por acaso).')
+  if (memoryWasMisleading) memoryRefinementCandidates.push('Memória potencialmente enganosa contribuiu — reforçar disciplina de amostra.')
+  if (sampleWasTooWeak) memoryRefinementCandidates.push('Amostra fraca demais — coletar mais histórico antes de pesar memória.')
+  if (tabooWasInvalid) memoryRefinementCandidates.push(`Restrição "${usableTaboo?.description}" falhou — rebaixar/invalidar.`)
+
+  return {
+    ...v1,
+    memorySupportedOutcome, memoryContradictedOutcome, memoryWasMisleading,
+    sampleWasTooWeak, tabooWasInvalid, similarScenarioWasUseful, memoryRefinementCandidates,
+  }
+}
