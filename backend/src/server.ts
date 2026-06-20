@@ -21,6 +21,7 @@ import { evidenceLineageRoutes } from './modules/intelligence/evidence/evidenceL
 import { liveValidationRoutes } from './modules/validation/liveValidation.routes.js'
 import { authRoutes } from './modules/auth/auth.routes.js'
 import { systemRoutes } from './routes/system.routes.js'
+import { matchIntelligenceRoutes } from './routes/matchIntelligence.routes.js'
 import { localOperationsRoutes } from './modules/localops/localOperations.routes.js'
 import { registerAuthMiddleware } from './middleware/auth.middleware.js'
 import { startLiveMonitorWorker } from './workers/liveMonitor.worker.js'
@@ -77,6 +78,7 @@ app.register(backtestRoutes, { prefix: '/api' })
 app.register(autoEngineRoutes, { prefix: '/api' })
 app.register(evidenceLineageRoutes, { prefix: '/api' })
 app.register(liveValidationRoutes, { prefix: '/api' })
+app.register(matchIntelligenceRoutes, { prefix: '/api' })
 app.register(systemRoutes, { prefix: '/api' })
 app.register(localOperationsRoutes, { prefix: '/api' })
 

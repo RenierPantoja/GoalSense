@@ -99,3 +99,9 @@ not create or alter evidence links. See `LIVE_VALIDATION_SESSIONS.md`.
 `EvidenceSnapshotReference` now carries an optional `validationSessionId` (stamped
 when a record is created during a running validation session). Optional and
 legacy-safe; never alters link strength or protection. See `LIVE_SESSION_ATTRIBUTION.md`.
+
+## Match Intelligence Fabric (related)
+
+The Match Intelligence Fabric consumes evidence/outcomes as part of the post-match
+explanation (why a pattern worked/failed) and team memory. It adds no new evidence
+writes; it reads existing lineage honestly. See `POST_MATCH_EXPLANATION_ENGINE.md`.

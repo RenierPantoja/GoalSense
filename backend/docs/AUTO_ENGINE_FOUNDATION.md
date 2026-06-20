@@ -284,3 +284,11 @@ A new observational session layer groups live-validation data by fixture/window 
 reads existing Auto Engine opportunities (per fixture) into the session summary. It
 never recalibrates the engine, never changes scoring/decisions, and never starts
 workers. See `LIVE_VALIDATION_SESSIONS.md`.
+
+## Match Intelligence Fabric — fundamental precheck (additive)
+
+The Match Intelligence Fabric adds a fundamental context layer that can advise, in
+`observe` mode, whether an opportunity should become an alert (allow / block / wait /
+downgrade / post_match_only). It is NOT wired into the auto engine or alert engine; it
+never changes score/confidence/counters/results. See `MATCH_INTELLIGENCE_FABRIC.md` and
+`ALERT_DECISION_PRECHECK.md`.

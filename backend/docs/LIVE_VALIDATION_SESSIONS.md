@@ -86,3 +86,10 @@ mid‑session. New endpoints: `GET :id/record-links`, `GET :id/metrics`,
 `POST :id/dynamic-attach/run` (operator+). All additive, non‑fatal, and never alter
 calculations. See `LIVE_SESSION_RECORD_INDEX.md` and
 `LIVE_SESSION_DYNAMIC_FIXTURE_ATTACH.md`.
+
+## Match Intelligence Fabric (related)
+
+The Match Intelligence Fabric reuses the same internal memory (signal ledger, outcomes)
+and the same provider-budget guard to build a per-fixture "match brain" for today's
+games and an observe-first alert precheck. It is observational and additive — see
+`MATCH_INTELLIGENCE_FABRIC.md`.

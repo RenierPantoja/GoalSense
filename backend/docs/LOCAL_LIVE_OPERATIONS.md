@@ -134,3 +134,10 @@ live mid‑session to running validation sessions, using already‑collected dat
 provider call by default) and respecting the local fixture cap (guard B31). It is
 registered in the worker registry (pausable/resumable at runtime; env unchanged on
 pause). See `LIVE_SESSION_DYNAMIC_FIXTURE_ATTACH.md`.
+
+## Match Intelligence Fabric (related)
+
+The Match Intelligence Fabric's MatchDayScope respects `LOCAL_MAX_LIVE_FIXTURES` and its
+refresh endpoints consult the provider-budget guard (`guardProviderCall`). It never
+fetches "the whole world" — only today's already-ingested fixtures. See
+`MATCH_INTELLIGENCE_FABRIC.md`.

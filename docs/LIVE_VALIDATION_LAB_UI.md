@@ -43,3 +43,9 @@ The session view now includes a B39 card showing the session record index covera
 scoped operational counters (counters, not probabilities), and recent dynamic fixture
 attach runs. Admin/operator actions: "Rodar anexação agora" and "Reconstruir métricas".
 Full detail in `LIVE_SESSION_INDEX_UI.md`.
+
+## Backstage tab (related)
+
+A new **Backstage** tab in the Command Center surfaces the Match Intelligence Fabric:
+today's games, the per-fixture "match brain", positive/negative/uncertain decision
+inputs, and the observe-first alert recommendation. See `BACKSTAGE_LOCAL_UI.md`.

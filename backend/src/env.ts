@@ -141,6 +141,11 @@ const envSchema = z.object({
   LIVE_VALIDATION_DYNAMIC_ATTACH_PROVIDER_LOOKUP: z.string().default('false'),
   LIVE_VALIDATION_DYNAMIC_ATTACH_MAX_PER_RUN: z.coerce.number().default(20),
   ENABLE_LIVE_VALIDATION_SESSION_REINDEX: z.string().default('false'),
+  // Match Intelligence Fabric — fundamental context engine (observe-first).
+  ENABLE_MATCH_INTELLIGENCE: z.string().default('true'),
+  ENABLE_ALERT_DECISION_PRECHECK: z.string().default('false'),
+  ALERT_DECISION_PRECHECK_MODE: z.enum(['observe', 'enforce']).default('observe'),
+  MATCH_INTELLIGENCE_MAX_TODAY_FIXTURES: z.coerce.number().default(20),
   AUTO_ENGINE_INTERVAL_MS: z.coerce.number().default(60000),
   AUTO_ENGINE_MAX_FIXTURES_PER_RUN: z.coerce.number().default(20),
   AUTO_ENGINE_MIN_SAMPLE_QUALITY: z.enum(['insufficient', 'low', 'moderate', 'strong']).default('moderate'),

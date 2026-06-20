@@ -8,7 +8,7 @@
  */
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { RefreshCw, Zap, AlertCircle, Activity, Target, Eye, BarChart3, Database, FlaskConical, Cpu } from 'lucide-react'
+import { RefreshCw, Zap, AlertCircle, Activity, Target, Eye, BarChart3, Database, FlaskConical, Cpu, Brain } from 'lucide-react'
 import { getLiveFixtures, type LiveFixture } from '@/lib/apiClient'
 import { storeFixtureForNavigation } from '@/lib/matchNavigation'
 import { useFavorites } from '@/context/FavoritesContext'
@@ -45,9 +45,10 @@ import { AlertsIntelligencePanel } from './components/views/alerts/AlertsIntelli
 import { PerformanceView } from './components/views/performance/PerformanceView'
 import { BacktestLab } from './components/views/backtest/BacktestLab'
 import { AutoEngineCockpit } from './components/views/autoengine/AutoEngineCockpit'
+import { BackstageLocalPage } from './components/views/backstage/BackstageLocalPage'
 import { TelegramConfigPanel } from './components/telegram/TelegramConfigPanel'
 
-type Tab = 'cockpit' | 'patterns' | 'scanner' | 'alerts' | 'performance' | 'backtest' | 'autoengine'
+type Tab = 'cockpit' | 'patterns' | 'scanner' | 'alerts' | 'performance' | 'backtest' | 'autoengine' | 'backstage'
 
 export function CommandCenterPage() {
   const navigate = useNavigate()
@@ -660,6 +661,7 @@ export function CommandCenterPage() {
           { id: 'performance' as Tab, label: 'Performance', icon: BarChart3, badge: 0 },
           { id: 'backtest' as Tab, label: 'Backtest', icon: FlaskConical, badge: 0 },
           { id: 'autoengine' as Tab, label: 'Motor Automático', icon: Cpu, badge: 0 },
+          { id: 'backstage' as Tab, label: 'Backstage', icon: Brain, badge: 0 },
         ]).map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-5 py-3 rounded-xl text-[13px] font-medium transition-all ${activeTab === tab.id ? 'text-white bg-white/[0.06] border border-white/[0.1]' : 'text-white/45 hover:text-white/70 border border-transparent hover:bg-white/[0.025]'}`} type="button">
             <tab.icon size={15} />{tab.label}
@@ -676,6 +678,7 @@ export function CommandCenterPage() {
       {activeTab === 'performance' && <PerformanceView patterns={patterns} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} isAdvanced={isAdvanced} backendReports={backendPerf.reports} performanceSource={backendPerf.source} />}
       {activeTab === 'backtest' && <BacktestLab patterns={patterns} backendOnline={backendSync.online} />}
       {activeTab === 'autoengine' && <AutoEngineCockpit backendOnline={backendSync.online} onGoToBacktest={() => setActiveTab('backtest')} onGoToAlerts={() => setActiveTab('alerts')} onPromoteToRadar={promoteToRadar} onOpenMatch={resolveAndOpenMatch} />}
+      {activeTab === 'backstage' && <BackstageLocalPage />}
     </div>
   )
 }
