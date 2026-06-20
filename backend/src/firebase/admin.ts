@@ -21,6 +21,20 @@ interface ServiceAccountCreds {
 }
 
 function resolveCredentials(): ServiceAccountCreds | null {
+  // Option 0 (B28): base64-encoded service account JSON (preferred for cloud env vars).
+  if (env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+    try {
+      const decoded = Buffer.from(env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8')
+      const parsed = JSON.parse(decoded)
+      return {
+        projectId: parsed.project_id || parsed.projectId,
+        clientEmail: parsed.client_email || parsed.clientEmail,
+        privateKey: (parsed.private_key || parsed.privateKey || '').replace(/\\n/g, '\n'),
+      }
+    } catch {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT_BASE64 is not valid base64-encoded JSON')
+    }
+  }
   // Option 1: full JSON (inline string)
   if (env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     try {
@@ -104,7 +118,24 @@ export async function getFirestore(): Promise<any> {
 }
 
 export function isFirebaseConfigured(): boolean {
-  return !!(env.FIREBASE_SERVICE_ACCOUNT_JSON || env.FIREBASE_SERVICE_ACCOUNT_PATH || (env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY))
+  return !!(env.FIREBASE_SERVICE_ACCOUNT_BASE64 || env.FIREBASE_SERVICE_ACCOUNT_JSON || env.FIREBASE_SERVICE_ACCOUNT_PATH || (env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY))
+}
+
+/**
+ * Lightweight readiness probe for /ready. Verifies init succeeds (no query, no
+ * secret leakage). Only meaningful when PERSISTENCE_PROVIDER=firebase.
+ */
+export async function getFirebaseReadiness(): Promise<{ configured: boolean; initialized: boolean; error: string | null }> {
+  const configured = isFirebaseConfigured()
+  if (!configured) return { configured: false, initialized: false, error: null }
+  try {
+    await getFirestore()
+    return { configured: true, initialized: true, error: null }
+  } catch (e: any) {
+    // Surface a short, non-secret reason only.
+    const msg = (e?.message || 'init_failed').toString().slice(0, 120)
+    return { configured: true, initialized: false, error: msg }
+  }
 }
 
 /** Mask a project id for diagnostics (project ids are low-sensitivity, but we mask anyway). */

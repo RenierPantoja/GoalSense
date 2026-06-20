@@ -25,6 +25,7 @@ import { AutoOpportunityAlertPromotionPanel } from './AutoOpportunityAlertPromot
 import { AutoEngineCalibrationPanel } from './AutoEngineCalibrationPanel'
 import { AutoAlertPolicyPanel } from './AutoAlertPolicyPanel'
 import { UserSessionMenu } from '@/auth/RoleBadge'
+import { BackendStatusBadge } from '@/auth/BackendStatusBadge'
 
 interface Props {
   backendOnline: boolean
@@ -260,6 +261,7 @@ function Header({ onRefresh, loading }: { onRefresh: () => void; loading: boolea
         <button onClick={onRefresh} type="button" disabled={loading} className="h-9 px-3 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-[12px] text-white/60 hover:text-white/90 inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 shrink-0">
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />Atualizar
         </button>
+        <BackendStatusBadge />
         <UserSessionMenu />
       </div>
     </header>

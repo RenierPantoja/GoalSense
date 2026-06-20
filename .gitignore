@@ -15,6 +15,9 @@ dist
 !.env.example
 !**/.env.example
 !backend/.env.example
+!**/*.env.example
+!**/.env.staging.example
+!backend/.env.staging.example
 
 # Backend
 backend/dist

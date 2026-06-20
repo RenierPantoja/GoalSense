@@ -18,6 +18,7 @@ import { learningRoutes } from './modules/intelligence/learning.routes.js'
 import { backtestRoutes } from './modules/intelligence/backtest.routes.js'
 import { autoEngineRoutes } from './modules/intelligence/autoEngine.routes.js'
 import { authRoutes } from './modules/auth/auth.routes.js'
+import { systemRoutes } from './routes/system.routes.js'
 import { registerAuthMiddleware } from './middleware/auth.middleware.js'
 import { startLiveMonitorWorker } from './workers/liveMonitor.worker.js'
 import { startPatternEvaluationWorker } from './workers/patternEvaluation.worker.js'
@@ -39,11 +40,15 @@ app.addHook('onRequest', async (req, reply) => {
   }
 })
 
-// CORS
+// CORS — allow the configured frontend origins to call this backend WITH the
+// Authorization header (required for B27 Bearer-token auth). Prefer the explicit
+// CORS_ALLOWED_ORIGINS list, falling back to the legacy CORS_ORIGIN. No wildcard.
+const corsOrigins = (env.CORS_ALLOWED_ORIGINS || env.CORS_ORIGIN)
+  .split(',').map(s => s.trim()).filter(Boolean)
 await app.register(cors, {
-  origin: env.CORS_ORIGIN.split(',').map(s => s.trim()).filter(Boolean),
+  origin: corsOrigins,
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 })
 
 // Auth: attach request.auth to every request (anonymous/local-dev/real). Must run
@@ -64,28 +69,49 @@ app.register(intelligenceRoutes, { prefix: '/api' })
 app.register(learningRoutes, { prefix: '/api' })
 app.register(backtestRoutes, { prefix: '/api' })
 app.register(autoEngineRoutes, { prefix: '/api' })
+app.register(systemRoutes, { prefix: '/api' })
+
+// Root-level liveness/readiness aliases for cloud platform probes (no secrets).
+app.get('/health', async () => ({ status: 'ok', service: 'goalsense-backend', appEnv: env.APP_ENV, uptime: process.uptime(), timestamp: new Date().toISOString() }))
+app.get('/ready', async (_req, reply) => reply.redirect('/api/ready'))
 
 // Start
 const start = async () => {
   try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' })
     console.log(`[GoalSense Backend] Running on port ${env.PORT} (${env.APP_ENV})`)
-    // Start live monitor worker (only if enabled via env)
+    // Startup flag summary (no secrets) — helps verify a safe cloud deploy.
+    const onOff = (v: unknown) => (String(v).toLowerCase() === 'true' ? 'ON' : 'off')
+    console.log('[GoalSense Backend] flags:'
+      + ` auth=${onOff(env.ENABLE_AUTH)} rateLimit=${onOff(env.ENABLE_RATE_LIMIT)}`
+      + ` autoEngine=${onOff(env.ENABLE_AUTO_ENGINE)} autoEngineWrite=${onOff(env.ENABLE_AUTO_ENGINE_WRITE)}`
+      + ` autoAlertPolicy=${onOff(env.ENABLE_AUTO_ALERT_POLICY)} autoAlertCreate=${onOff(env.ENABLE_AUTO_ALERT_CREATE)}`
+      + ` backtestApi=${onOff(env.ENABLE_BACKTEST_API)} alertExport=${onOff(env.ENABLE_ALERT_EXPORT)}`
+      + ` telegram=${onOff(env.TELEGRAM_ENABLED)} persistence=${env.PERSISTENCE_PROVIDER}`)
+    // Workers/schedulers — each respects its own env flag and never breaks startup.
     startLiveMonitorWorker()
-    // Start pattern evaluation worker (only if enabled via env)
     startPatternEvaluationWorker()
-    // Start alert resolution worker (only if enabled via env)
     startAlertResolutionWorker()
-    // Start learning aggregation scheduler (disabled by default; env-gated)
     startLearningAggregationScheduler()
-    // Start auto engine scheduler (B19; disabled by default; env-gated)
     startAutoEngineScheduler()
-    // Start auto engine learning/calibration scheduler (B24; disabled by default; env-gated)
     startAutoEngineLearningScheduler()
   } catch (err) {
     app.log.error(err)
     process.exit(1)
   }
 }
+
+// Graceful shutdown for containers/cloud (SIGTERM/SIGINT). Closes the server so
+// in-flight requests can finish; never throws on the way out.
+let shuttingDown = false
+async function shutdown(signal: string) {
+  if (shuttingDown) return
+  shuttingDown = true
+  console.log(`[GoalSense Backend] ${signal} received — shutting down gracefully…`)
+  try { await app.close() } catch (e) { app.log.error(e) }
+  process.exit(0)
+}
+process.on('SIGTERM', () => { void shutdown('SIGTERM') })
+process.on('SIGINT', () => { void shutdown('SIGINT') })
 
 start()

@@ -117,3 +117,12 @@ Policy config (`POST`/`PATCH`) requires `policy:config` + admin/owner + `ENABLE_
 policy evaluate requires `policy:evaluate` (+ rate limit). Env gates are unchanged and are checked
 first by the guard (env off ⇒ 403 even for owner). Denials and successes are recorded in the admin
 audit. See [`AUTH_ADMIN_GUARDRAILS.md`](./AUTH_ADMIN_GUARDRAILS.md).
+
+---
+
+## B28 — cloud go/no-go (extension)
+
+In staging/production the policy stays disabled and auto-create OFF by default; the go/no-go
+checklist (`BACKEND_CLOUD_STAGING_RUNBOOK.md`) treats `ENABLE_AUTO_ALERT_CREATE=true` or
+`ENABLE_AUTO_ENGINE_TO_ALERTS=true` without explicit sign-off as NO-GO. Policy/auto-create state is
+visible in `/api/system/diagnostics` (admin). No policy behavior changed.

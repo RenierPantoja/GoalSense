@@ -1,0 +1,15 @@
+# Never ship secrets, local state, or build noise into the image.
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*-firebase-adminsdk-*.json
+*serviceAccount*.json
+*service-account*.json
+*.log
+docs
+scripts/*.result.json
+live-validation-watch-result.json
+.git
+.gitignore

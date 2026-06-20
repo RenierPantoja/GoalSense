@@ -230,3 +230,13 @@ promote-to-alert (`promote:alert`), policy config (admin), policy evaluate, lear
 (admin), resolve-now (admin) — each keeping its env gate (checked first) plus rate limiting on
 dangerous routes and admin-audit logging. A global `onRequest` hook attaches `request.auth`. Reads
 stay open when `ENABLE_AUTH=false`. See [`AUTH_ADMIN_GUARDRAILS.md`](./AUTH_ADMIN_GUARDRAILS.md).
+
+---
+
+## B28 — cloud runtime readiness (extension)
+
+The Auto Engine and its schedulers stay OFF by default and are surfaced in `/api/ready` /
+`/api/system/diagnostics` for safe cloud operation. No engine behavior changed — only operational
+hardening (CORS Authorization, health/ready, base64 Firebase creds, graceful shutdown, Docker
+artifact). See [`BACKEND_CLOUD_RUNTIME_HARDENING.md`](./BACKEND_CLOUD_RUNTIME_HARDENING.md) and
+[`BACKEND_CLOUD_STAGING_RUNBOOK.md`](./BACKEND_CLOUD_STAGING_RUNBOOK.md).

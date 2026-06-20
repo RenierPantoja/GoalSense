@@ -62,3 +62,12 @@ Never set client-side.
 ## Verification
 - `npm run check:encoding` ✓ · `npx tsc --noEmit` ✓ · `npx vite build` ✓
 - backend `npm run typecheck`/`build` ✓ · `node scripts/smokeAuthSecurity.mjs` ✓
+
+---
+
+## B28 — backend env wiring + status badge (extension)
+
+The frontend points at a local or cloud backend via `VITE_COMMAND_BACKEND_URL` (or the
+`localStorage` override); the Bearer token now flows cross-origin because the backend allows the
+`Authorization` header (CORS). A `BackendStatusBadge` (online/offline/app-env/auth-mode) was added
+to the cockpit header. See [`FRONTEND_BACKEND_ENV_WIRING.md`](./FRONTEND_BACKEND_ENV_WIRING.md).

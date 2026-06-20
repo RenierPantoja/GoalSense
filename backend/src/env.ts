@@ -11,12 +11,19 @@ const envSchema = z.object({
   FIREBASE_CLIENT_EMAIL: z.string().optional(),
   FIREBASE_PRIVATE_KEY: z.string().optional(),
   FIREBASE_SERVICE_ACCOUNT_JSON: z.string().optional(),
+  // B28: base64-encoded service account JSON (preferred for cloud env vars).
+  FIREBASE_SERVICE_ACCOUNT_BASE64: z.string().optional(),
   // Local convenience: path to a service account JSON file (never commit the file).
   FIREBASE_SERVICE_ACCOUNT_PATH: z.string().optional(),
 
-  APP_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  APP_ENV: z.enum(['local', 'development', 'staging', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(4000),
   CORS_ORIGIN: z.string().default('http://localhost:5173,https://goal-sense.vercel.app'),
+  // B28: cloud runtime — preferred over CORS_ORIGIN when set (comma-separated).
+  CORS_ALLOWED_ORIGINS: z.string().optional(),
+  PUBLIC_BACKEND_URL: z.string().optional(),
+  FRONTEND_ORIGIN: z.string().optional(),
+  BUILD_VERSION: z.string().optional(),
   API_FOOTBALL_KEY: z.string().optional(),
   FOOTBALL_DATA_KEY: z.string().optional(),
   // Live monitoring worker
@@ -98,13 +105,14 @@ const envSchema = z.object({
     }
   } else if (val.PERSISTENCE_PROVIDER === 'firebase') {
     const hasJson = !!val.FIREBASE_SERVICE_ACCOUNT_JSON
+    const hasBase64 = !!val.FIREBASE_SERVICE_ACCOUNT_BASE64
     const hasPath = !!val.FIREBASE_SERVICE_ACCOUNT_PATH
     const hasSeparate = !!val.FIREBASE_PROJECT_ID && !!val.FIREBASE_CLIENT_EMAIL && !!val.FIREBASE_PRIVATE_KEY
-    if (!hasJson && !hasPath && !hasSeparate) {
+    if (!hasJson && !hasBase64 && !hasPath && !hasSeparate) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['FIREBASE_SERVICE_ACCOUNT_JSON'],
-        message: 'Firebase credentials required when PERSISTENCE_PROVIDER=firebase (set FIREBASE_SERVICE_ACCOUNT_JSON, FIREBASE_SERVICE_ACCOUNT_PATH, or FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY)',
+        message: 'Firebase credentials required when PERSISTENCE_PROVIDER=firebase (set FIREBASE_SERVICE_ACCOUNT_BASE64, FIREBASE_SERVICE_ACCOUNT_JSON, FIREBASE_SERVICE_ACCOUNT_PATH, or FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY)',
       })
     }
   }

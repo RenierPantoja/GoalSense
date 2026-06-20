@@ -96,3 +96,13 @@ authEnabled, rateLimitEnabled — never a token/secret) for the frontend session
 the Firebase ID token as `Authorization: Bearer …` on sensitive calls; the backend verification and
 guards are unchanged. Role assignment is via Firebase custom claims — see
 [`../../docs/FIREBASE_AUTH_ROLE_SETUP.md`](../../docs/FIREBASE_AUTH_ROLE_SETUP.md).
+
+---
+
+## B28 — cloud runtime (extension)
+
+CORS now allows the `Authorization` header (Bearer token works cross-origin from the Vercel
+frontend). New ops endpoints: `GET /api/ready` (readiness, 503 when a critical dependency is
+degraded) and admin-only `GET /api/system/diagnostics` (`flags:manage`, dangerous — non-secret
+snapshot). Firebase Admin accepts `FIREBASE_SERVICE_ACCOUNT_BASE64`; secrets are never logged.
+See [`BACKEND_CLOUD_RUNTIME_HARDENING.md`](./BACKEND_CLOUD_RUNTIME_HARDENING.md).
