@@ -1,0 +1,179 @@
+/**
+ * Local Operations pure helpers (Phase B30) — env-free, smoke-testable.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Profile recommendations, provider-usage limit evaluation, snapshot-write
+ * decisions, and a volume/risk estimator. No I/O, no env, no mutation of inputs.
+ */
+export type LocalRuntimeProfile = 'safe_local' | 'live_validation' | 'intensive_debug' | 'disabled'
+
+export interface ProfileRecommendation {
+  profile: LocalRuntimeProfile
+  description: string
+  /** Recommended state of dangerous/cost flags (true = should be ON). */
+  recommendedFlags: Record<string, boolean>
+}
+
+export const DANGEROUS_FLAGS = [
+  'ENABLE_AUTO_ALERT_CREATE', 'ENABLE_AUTO_ENGINE_TO_ALERTS', 'ENABLE_AUTO_ENGINE_WRITE',
+  'TELEGRAM_ENABLED', 'ODDS_ENABLED',
+] as const
+
+export function profileRecommendation(profile: LocalRuntimeProfile): ProfileRecommendation {
+  const allOff = { LIVE_WORKER_ENABLED: false, PATTERN_WORKER_ENABLED: false, RESOLUTION_WORKER_ENABLED: false, ENABLE_AUTO_ENGINE_WRITE: false, ENABLE_AUTO_ALERT_CREATE: false, ENABLE_AUTO_ENGINE_TO_ALERTS: false, TELEGRAM_ENABLED: false, ODDS_ENABLED: false, ENABLE_ALERT_EXPORT: false }
+  switch (profile) {
+    case 'safe_local':
+      return { profile, description: 'Workers críticos off, leitura/snapshot limitados, auto engine read-only, sem auto-create/export.', recommendedFlags: { ...allOff } }
+    case 'live_validation':
+      return { profile, description: 'Coleta ao vivo limitada (max ligas/jogos, snapshot throttled). Workers com limites; auto-create off.', recommendedFlags: { ...allOff, LIVE_WORKER_ENABLED: true } }
+    case 'intensive_debug':
+      return { profile, description: 'Apenas manual, logs detalhados. Nunca default. Workers off; ligar manualmente.', recommendedFlags: { ...allOff } }
+    case 'disabled':
+    default:
+      return { profile: 'disabled', description: 'Sem workers.', recommendedFlags: { ...allOff } }
+  }
+}
+
+/** Dangerous flags that are ON but the profile recommends OFF (precedence: explicit env wins). */
+export function flagMismatches(profile: LocalRuntimeProfile, actual: Record<string, boolean>): string[] {
+  const rec = profileRecommendation(profile).recommendedFlags
+  const out: string[] = []
+  for (const f of DANGEROUS_FLAGS) {
+    if (actual[f] === true && rec[f] === false) out.push(f)
+  }
+  return out
+}
+
+// ── Provider usage limit evaluation ──────────────────────────────────────────
+
+export interface UsageLimitInput {
+  minuteCount: number
+  hourCount: number
+  maxPerMinute: number
+  maxPerHour: number
+}
+export interface UsageLimitResult { allowed: boolean; reason: string | null }
+
+export function evaluateUsageLimit(i: UsageLimitInput): UsageLimitResult {
+  if (i.minuteCount >= i.maxPerMinute) return { allowed: false, reason: 'minute_limit' }
+  if (i.hourCount >= i.maxPerHour) return { allowed: false, reason: 'hour_limit' }
+  return { allowed: true, reason: null }
+}
+
+// ── Snapshot write decision ──────────────────────────────────────────────────
+
+export interface SnapshotState {
+  minute: number | null
+  status: string
+  scoreHome: number
+  scoreAway: number
+  /** Aggregate signal of meaningful stats (shots/corners/cards sum, or null). */
+  eventsCount?: number | null
+  statsFingerprint?: string | null
+}
+
+export interface SnapshotDecisionInput {
+  current: SnapshotState
+  last: { state: SnapshotState; atMs: number } | null
+  nowMs: number
+  minIntervalSeconds: number
+  countThisMatch: number
+  maxPerMatch: number
+}
+export interface SnapshotDecision {
+  shouldWrite: boolean
+  reason: string | null
+  skippedReason: string | null
+  relevantChange: boolean
+}
+
+/** Deterministic fingerprint of the meaningful parts of a snapshot. */
+export function snapshotHash(s: SnapshotState): string {
+  const win = s.minute == null ? 'na' : String(Math.floor(s.minute / 5)) // 5-min window
+  return [s.status, s.scoreHome, s.scoreAway, win, s.eventsCount ?? 'na', s.statsFingerprint ?? 'na'].join('|')
+}
+
+/** Is the change between two states relevant enough to persist a new snapshot? */
+export function isRelevantChange(cur: SnapshotState, last: SnapshotState | null): boolean {
+  if (!last) return true
+  if (cur.status !== last.status) return true
+  if (cur.scoreHome !== last.scoreHome || cur.scoreAway !== last.scoreAway) return true
+  if ((cur.eventsCount ?? 0) !== (last.eventsCount ?? 0)) return true
+  if ((cur.statsFingerprint ?? null) !== (last.statsFingerprint ?? null)) return true
+  // Minute-window advance (every 5') is relevant for replay granularity.
+  const cw = cur.minute == null ? -1 : Math.floor(cur.minute / 5)
+  const lw = last.minute == null ? -1 : Math.floor(last.minute / 5)
+  if (cw !== lw) return true
+  return false
+}
+
+export function decideSnapshotWrite(i: SnapshotDecisionInput): SnapshotDecision {
+  if (i.countThisMatch >= i.maxPerMatch) {
+    return { shouldWrite: false, reason: null, skippedReason: 'max_per_match_reached', relevantChange: false }
+  }
+  const relevant = isRelevantChange(i.current, i.last?.state ?? null)
+  if (!relevant) {
+    return { shouldWrite: false, reason: null, skippedReason: 'no_relevant_change', relevantChange: false }
+  }
+  if (i.last) {
+    const elapsed = (i.nowMs - i.last.atMs) / 1000
+    // A score/status change always passes; minute/stats-only changes respect the min interval.
+    const hardChange = i.current.status !== i.last.state.status
+      || i.current.scoreHome !== i.last.state.scoreHome || i.current.scoreAway !== i.last.state.scoreAway
+    if (!hardChange && elapsed < i.minIntervalSeconds) {
+      return { shouldWrite: false, reason: null, skippedReason: 'min_interval_not_elapsed', relevantChange: true }
+    }
+  }
+  return { shouldWrite: true, reason: 'relevant_change', skippedReason: null, relevantChange: true }
+}
+
+// ── Cost / volume estimator (operational, not monetary) ──────────────────────
+
+export type RiskLevel = 'low' | 'moderate' | 'high' | 'unsafe'
+
+export interface VolumeEstimateInput {
+  liveFixtures: number
+  intervalSeconds: number
+  snapshotsPerFixturePerMatch: number
+  providerCallsPerRun: number
+  writeBudgetPerHour: number
+  readBudgetPerHour: number
+}
+export interface VolumeEstimate {
+  providerCallsPerHour: number
+  snapshotsPerHourCap: number
+  projectedWritesPerHour: number
+  projectedDailyWrites: number
+  projectedReadsPerHour: number
+  projectedDailyReads: number
+  riskLevel: RiskLevel
+  notes: string[]
+}
+
+export function estimateVolume(i: VolumeEstimateInput): VolumeEstimate {
+  const runsPerHour = i.intervalSeconds > 0 ? Math.floor(3600 / i.intervalSeconds) : 0
+  const providerCallsPerHour = runsPerHour * Math.max(0, i.providerCallsPerRun)
+  // Snapshot writes are bounded by the per-match cap (guard) — use the lesser of cap vs naive runs.
+  const naiveSnapshots = runsPerHour * Math.max(0, i.liveFixtures)
+  const cappedSnapshots = i.liveFixtures * Math.max(0, i.snapshotsPerFixturePerMatch)
+  const projectedWritesPerHour = Math.min(naiveSnapshots, cappedSnapshots || naiveSnapshots)
+  const projectedReadsPerHour = providerCallsPerHour + projectedWritesPerHour // coarse proxy
+  const notes: string[] = []
+  let risk: RiskLevel = 'low'
+  const writeRatio = i.writeBudgetPerHour > 0 ? projectedWritesPerHour / i.writeBudgetPerHour : 1
+  const readRatio = i.readBudgetPerHour > 0 ? projectedReadsPerHour / i.readBudgetPerHour : 1
+  const worst = Math.max(writeRatio, readRatio)
+  if (worst >= 1) { risk = 'unsafe'; notes.push('Volume projetado excede o orçamento por hora.') }
+  else if (worst >= 0.75) { risk = 'high'; notes.push('Volume projetado próximo do orçamento.') }
+  else if (worst >= 0.4) { risk = 'moderate' }
+  if (i.liveFixtures === 0) notes.push('Sem jogos ao vivo — volume zero.')
+  return {
+    providerCallsPerHour,
+    snapshotsPerHourCap: cappedSnapshots,
+    projectedWritesPerHour,
+    projectedDailyWrites: projectedWritesPerHour * 24,
+    projectedReadsPerHour,
+    projectedDailyReads: projectedReadsPerHour * 24,
+    riskLevel: risk,
+    notes,
+  }
+}

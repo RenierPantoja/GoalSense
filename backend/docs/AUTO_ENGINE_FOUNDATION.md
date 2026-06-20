@@ -240,3 +240,12 @@ The Auto Engine and its schedulers stay OFF by default and are surfaced in `/api
 hardening (CORS Authorization, health/ready, base64 Firebase creds, graceful shutdown, Docker
 artifact). See [`BACKEND_CLOUD_RUNTIME_HARDENING.md`](./BACKEND_CLOUD_RUNTIME_HARDENING.md) and
 [`BACKEND_CLOUD_STAGING_RUNBOOK.md`](./BACKEND_CLOUD_STAGING_RUNBOOK.md).
+
+---
+
+## B30 — local operations guardrails (extension)
+
+Local runs are now guarded: snapshot-write dedup (skip ≠ failure), provider-call budgets, a worker
+registry with runtime pause/resume, coverage/quality visibility, and a volume-risk estimate. The
+auto-engine scheduler stays off by default and appears in the worker registry / "Operação Local"
+panel. No scoring/confidence change. See [`LOCAL_LIVE_OPERATIONS.md`](./LOCAL_LIVE_OPERATIONS.md).

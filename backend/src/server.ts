@@ -19,6 +19,7 @@ import { backtestRoutes } from './modules/intelligence/backtest.routes.js'
 import { autoEngineRoutes } from './modules/intelligence/autoEngine.routes.js'
 import { authRoutes } from './modules/auth/auth.routes.js'
 import { systemRoutes } from './routes/system.routes.js'
+import { localOperationsRoutes } from './modules/localops/localOperations.routes.js'
 import { registerAuthMiddleware } from './middleware/auth.middleware.js'
 import { startLiveMonitorWorker } from './workers/liveMonitor.worker.js'
 import { startPatternEvaluationWorker } from './workers/patternEvaluation.worker.js'
@@ -70,6 +71,7 @@ app.register(learningRoutes, { prefix: '/api' })
 app.register(backtestRoutes, { prefix: '/api' })
 app.register(autoEngineRoutes, { prefix: '/api' })
 app.register(systemRoutes, { prefix: '/api' })
+app.register(localOperationsRoutes, { prefix: '/api' })
 
 // Root-level liveness/readiness aliases for cloud platform probes (no secrets).
 app.get('/health', async () => ({ status: 'ok', service: 'goalsense-backend', appEnv: env.APP_ENV, uptime: process.uptime(), timestamp: new Date().toISOString() }))

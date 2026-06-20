@@ -68,3 +68,13 @@ auth-me + read endpoints + CORS header. No scans, exports, rebuilds, alerts, or 
 - Rate limit remains per-process (no shared store).
 - Application Default Credentials not auto-wired (base64/JSON/separate vars cover cloud env vars).
 - Readiness checks init, not a full Firestore round-trip (to avoid read cost on every probe).
+
+---
+
+## B30 — local guardrails (extension)
+
+For local operation, B30 adds provider-usage + snapshot-write guards, a runtime profile, a worker
+registry (runtime pause/resume), coverage monitoring, and a volume-risk estimate, exposed under
+`/api/system/local-operations/*` (env-gated by `ENABLE_LOCAL_OPERATIONS_PANEL`). These control cost
+and provider abuse on a single machine without changing engine behavior. See
+[`LOCAL_LIVE_OPERATIONS.md`](./LOCAL_LIVE_OPERATIONS.md).

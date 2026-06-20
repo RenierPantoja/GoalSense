@@ -65,3 +65,13 @@ step is operator-side cloud provisioning + setting Vercel `VITE_COMMAND_BACKEND_
 command sets and the full go/no-go are in
 [`BACKEND_CLOUD_STAGING_DEPLOY_EXECUTION.md`](./BACKEND_CLOUD_STAGING_DEPLOY_EXECUTION.md).
 Validate the cloud instance with `BACKEND_URL=https://… node scripts/smokeStagingRuntime.mjs`.
+
+---
+
+## B30 — local operations (running on your machine)
+
+Until the cloud backend is provisioned, run locally with the safe profile: `LOCAL_RUNTIME_PROFILE=
+safe_local`, `ENABLE_LOCAL_OPERATIONS_PANEL=true`, all dangerous flags + workers off. Pre-flight with
+`npm run local:safe` (prints flags, warns on dangerous ones); start with `npm start`. The "Operação
+Local" panel (cockpit) shows provider/snapshot budgets, coverage, workers (pause/resume), and volume
+risk. See [`LOCAL_LIVE_OPERATIONS.md`](./LOCAL_LIVE_OPERATIONS.md).

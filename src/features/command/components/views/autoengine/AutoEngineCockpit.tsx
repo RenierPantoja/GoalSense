@@ -7,7 +7,7 @@
  * no bet CTA, no Telegram, no "create alert". Opportunity ≠ alert; score ≠ probability.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { Cpu, RefreshCw, LayoutGrid, ListChecks, ShieldAlert, PlugZap, Gauge, ScrollText } from 'lucide-react'
+import { Cpu, RefreshCw, LayoutGrid, ListChecks, ShieldAlert, PlugZap, Gauge, ScrollText, Activity } from 'lucide-react'
 import { autoEngineApi } from '@/services/autoEngineApi'
 import type {
   AutoEngineStatusDto, AutoEngineRunDto, AutoOpportunityDto, AutoEngineScanRequest,
@@ -24,6 +24,7 @@ import { AutoOpportunityPromotionPanel } from './AutoOpportunityPromotionPanel'
 import { AutoOpportunityAlertPromotionPanel } from './AutoOpportunityAlertPromotionPanel'
 import { AutoEngineCalibrationPanel } from './AutoEngineCalibrationPanel'
 import { AutoAlertPolicyPanel } from './AutoAlertPolicyPanel'
+import { LocalOperationsPanel } from './LocalOperationsPanel'
 import { UserSessionMenu } from '@/auth/RoleBadge'
 import { BackendStatusBadge } from '@/auth/BackendStatusBadge'
 
@@ -37,7 +38,7 @@ interface Props {
   onOpenMatch?: (opp: AutoOpportunityDto) => boolean
 }
 
-type Segment = 'overview' | 'oportunidades' | 'bloqueadas' | 'calibracao' | 'politicas'
+type Segment = 'overview' | 'oportunidades' | 'bloqueadas' | 'calibracao' | 'politicas' | 'operacao'
 
 const SEGMENTS: { id: Segment; label: string; icon: typeof Cpu }[] = [
   { id: 'overview', label: 'Visão geral', icon: LayoutGrid },
@@ -45,6 +46,7 @@ const SEGMENTS: { id: Segment; label: string; icon: typeof Cpu }[] = [
   { id: 'bloqueadas', label: 'Bloqueadas', icon: ShieldAlert },
   { id: 'calibracao', label: 'Calibração', icon: Gauge },
   { id: 'politicas', label: 'Políticas', icon: ScrollText },
+  { id: 'operacao', label: 'Operação Local', icon: Activity },
 ]
 
 function EmptyNote({ title, body }: { title: string; body: string }) {
@@ -219,6 +221,7 @@ export function AutoEngineCockpit({ backendOnline, onGoToBacktest, onGoToAlerts,
       )}
       {segment === 'calibracao' && <AutoEngineCalibrationPanel rebuildEnabled={!!status?.enabled} />}
       {segment === 'politicas' && <AutoAlertPolicyPanel />}
+      {segment === 'operacao' && <LocalOperationsPanel />}
 
       {drawer && (
         <AutoOpportunityDrawer

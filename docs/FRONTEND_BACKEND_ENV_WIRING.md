@@ -47,3 +47,12 @@ Once the backend is provisioned (see `backend/docs/BACKEND_CLOUD_STAGING_DEPLOY_
 `BackendStatusBadge` should show "online · staging". CORS on the backend must list the exact Vercel
 origin in `CORS_ALLOWED_ORIGINS`; the `Authorization` header is already allowed so the Bearer token
 flows. Until then, the frontend keeps using the runtime override / local data honestly.
+
+---
+
+## B30 — local operations panel (extension)
+
+The cockpit gains an "Operação Local" segment (`LocalOperationsPanel`) backed by
+`/api/system/local-operations/*`. It shows the runtime profile, provider/snapshot budgets, coverage,
+workers (pause/resume for admins), and volume risk — so you can run locally without abusing the
+provider or exploding Firestore writes. See [`LOCAL_OPERATIONS_PANEL.md`](./LOCAL_OPERATIONS_PANEL.md).
