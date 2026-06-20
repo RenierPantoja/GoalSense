@@ -40,3 +40,14 @@ where those controls live. The backend is always the final authority (guards + a
 
 ## Verification
 - `npm run check:encoding` ✓ · `npx tsc --noEmit` ✓ · `npx vite build` ✓
+
+---
+
+## B27 — real session + token wiring (extension)
+
+The guards now run on a real session (`src/auth/AuthProvider` + `useAuth`): Firebase login,
+in-memory ID token, Bearer token on all API clients, and `GET /api/auth/me` for role/permissions.
+Honest 401/403/429 components (`AuthStates.tsx`), `RoleBadge`/`UserSessionMenu`, `LoginCard`, and
+`RequireAuth`/`RequirePermission` are available. Local mode (auth off) still resolves to owner.
+See [`FRONTEND_AUTH_SESSION.md`](./FRONTEND_AUTH_SESSION.md) and
+[`FIREBASE_AUTH_ROLE_SETUP.md`](./FIREBASE_AUTH_ROLE_SETUP.md).

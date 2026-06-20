@@ -4,6 +4,7 @@
  * never throws, never invents. Reuses the resolved backend URL.
  */
 import { getBackendUrl } from './commandBackendClient'
+import { authHeaders } from './authToken'
 import type {
   SignalLedgerEntry, AlertOutcomeRecord, PatternLearningProfile,
   LearningEvent, LearningRecommendation, LearningOverview,
@@ -15,7 +16,7 @@ async function get<T>(path: string): Promise<T | null> {
   const base = getBackendUrl()
   if (!base) return null
   try {
-    const res = await fetch(`${base}${path}`, { headers: { 'Content-Type': 'application/json' } })
+    const res = await fetch(`${base}${path}`, { headers: { 'Content-Type': 'application/json', ...authHeaders() } })
     if (!res.ok) return null
     const json = await res.json()
     return json?.success ? (json.data as T) : null
@@ -86,7 +87,8 @@ export const alertIntelligenceApi = {
     if (!base) return { ok: false, disabled: false, error: 'no_backend' }
     try {
       const url = `${base}/api/intelligence/alerts/export.csv${buildQuery({ ...filters, limit } as any)}`
-      const res = await fetch(url)
+      const res = await fetch(url, { headers: { ...authHeaders() } })
+      if (res.status === 401) return { ok: false, disabled: false, error: 'Faça login para exportar (sua sessão não está autenticada).' }
       if (res.status === 403) {
         let msg = 'Exportação desabilitada neste ambiente.'
         try { const j = await res.json(); msg = j?.error?.message || msg } catch { /* */ }

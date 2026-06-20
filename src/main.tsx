@@ -5,6 +5,7 @@ import { FavoritesProvider } from './context/FavoritesContext'
 import { ViewModeProvider } from './context/ViewModeContext'
 import { AlertsProvider } from './context/AlertsContext'
 import { PatternProvider } from './features/command/contexts/PatternContext'
+import { AuthProvider } from './auth/AuthProvider'
 import { runStartupMaintenance } from './services/cache/storageMaintenance'
 import { registerServiceWorker } from './features/pwa/pwaRegistration'
 import { registerChunkReloadHandler } from './lib/lazyWithReload'
@@ -24,15 +25,17 @@ void registerServiceWorker()
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <FavoritesProvider>
-        <ViewModeProvider>
-          <AlertsProvider>
-            <PatternProvider>
-              <App />
-            </PatternProvider>
-          </AlertsProvider>
-        </ViewModeProvider>
-      </FavoritesProvider>
+      <AuthProvider>
+        <FavoritesProvider>
+          <ViewModeProvider>
+            <AlertsProvider>
+              <PatternProvider>
+                <App />
+              </PatternProvider>
+            </AlertsProvider>
+          </ViewModeProvider>
+        </FavoritesProvider>
+      </AuthProvider>
     </BrowserRouter>
   </StrictMode>,
 )

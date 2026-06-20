@@ -12,6 +12,7 @@
  */
 
 const RUNTIME_KEY = 'goalsense_backend_url'
+import { authHeaders } from './authToken'
 
 /** Resolve the backend base URL at call time (runtime override > build env). */
 function resolveBackendUrl(): string {
@@ -46,7 +47,7 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T | nul
   try {
     const res = await fetch(`${base}${path}`, {
       ...options,
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      headers: { 'Content-Type': 'application/json', ...authHeaders(), ...options?.headers },
     })
     if (!res.ok) return null
     const json = await res.json()
@@ -62,7 +63,7 @@ async function fetchApiStrict<T>(path: string, options?: RequestInit): Promise<T
   if (!base) return null
   const res = await fetch(`${base}${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...options?.headers },
   })
   if (!res.ok) {
     const err = new Error(`Backend responded ${res.status}`) as Error & { status: number }

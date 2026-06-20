@@ -63,3 +63,12 @@ The "Políticas" panel uses `useAuth`: creating/editing a policy requires admin/
 flag (honest tooltip + `AdminOnlyBadge` otherwise), and the editor only offers `auto_create_monitored`
 when `ENABLE_AUTO_ALERT_CREATE` is on AND the user is admin/owner. The backend remains the
 authority. See [`AUTH_GUARDRAILS_UI.md`](./AUTH_GUARDRAILS_UI.md).
+
+---
+
+## B27 — policy UI runs on the real session (extension)
+
+The "Políticas" panel/editor now use the real `useAuth` (Firebase session + backend role), so
+admin-gated config and the `auto_create_monitored` option reflect the actual signed-in role and
+permissions (not just env flags). Sensitive policy calls carry the Bearer token. See
+[`FRONTEND_AUTH_SESSION.md`](./FRONTEND_AUTH_SESSION.md).

@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw, Plus, Pencil, ShieldAlert } from 'lucide-react'
 import { autoEngineApi } from '@/services/autoEngineApi'
-import { useAuth } from '@/services/authApi'
+import { useAuth } from '@/auth/useAuth'
 import { AdminOnlyBadge } from './PermissionGate'
 import type { AutoAlertPolicyDto, AutoAlertPolicyOverviewDto, AutoAlertPolicyEvaluationDto } from '@/features/command/intelligence/autoEngineTypes'
 import { AUTO_ALERT_MODE_LABEL, AUTO_ALERT_DECISION_LABEL, AUTO_ALERT_DECISION_TONE } from '@/features/command/intelligence/autoEngineTypes'

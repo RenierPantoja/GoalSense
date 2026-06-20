@@ -86,3 +86,13 @@ token), rate limiter. All pure; no Firebase. Passes.
 ## Next steps
 Login UI + token attachment on API calls, multi-instance rate limit, per-user ownership filters,
 billing/plans, MFA.
+
+---
+
+## B27 — frontend session + `/auth/me` (extension)
+
+A richer `GET /api/auth/me` projection was added (role, permissions, authMode, isDevBypass,
+authEnabled, rateLimitEnabled — never a token/secret) for the frontend session. The browser sends
+the Firebase ID token as `Authorization: Bearer …` on sensitive calls; the backend verification and
+guards are unchanged. Role assignment is via Firebase custom claims — see
+[`../../docs/FIREBASE_AUTH_ROLE_SETUP.md`](../../docs/FIREBASE_AUTH_ROLE_SETUP.md).

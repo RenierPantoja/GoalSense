@@ -6,6 +6,7 @@
  * Read endpoints return null/[] honestly. No mock, no invented opportunity, no odds.
  */
 import { getBackendUrl } from './commandBackendClient'
+import { authHeaders } from './authToken'
 import type {
   AutoEngineStatusDto, AutoEngineRunDto, AutoOpportunityDto,
   AutoEngineScanRequest, AutoOpportunityFilters,
@@ -40,12 +41,18 @@ async function request<T>(path: string, options?: RequestInit): Promise<ApiResul
   try {
     const res = await fetch(`${base}${path}`, {
       ...options,
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      headers: { 'Content-Type': 'application/json', ...authHeaders(), ...options?.headers },
     })
     if (res.status === 403) {
       let msg = 'Motor Automático desabilitado neste ambiente.'
       try { const j = await res.json(); msg = j?.error?.message || msg } catch { /* */ }
       return result<T>({ status: 403, disabled: true, error: msg })
+    }
+    if (res.status === 401) {
+      return result<T>({ status: 401, error: 'Faça login para executar esta ação.' })
+    }
+    if (res.status === 429) {
+      return result<T>({ status: 429, error: 'Muitas solicitações. Aguarde alguns segundos.' })
     }
     if (!res.ok) {
       let msg = `Backend respondeu ${res.status}`

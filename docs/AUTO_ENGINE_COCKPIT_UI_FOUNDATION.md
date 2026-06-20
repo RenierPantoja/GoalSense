@@ -138,3 +138,12 @@ A lightweight `useAuth()` hook + guard components (`PermissionGate`, `DangerousA
 In local dev (`ENABLE_AUTH=false`) the UI resolves to owner so nothing changes. First wired into
 the "Políticas" segment (admin-gated config + auto-create). See
 [`AUTH_GUARDRAILS_UI.md`](./AUTH_GUARDRAILS_UI.md).
+
+---
+
+## B27 — session identity in the cockpit (extension)
+
+The cockpit header now shows `UserSessionMenu` + `RoleBadge` (identity, role, auth mode, logout).
+All cockpit API calls carry the Bearer token when a session exists; sensitive actions surface
+honest 401/403/429 states. Local mode (auth off) shows "owner local". See
+[`FRONTEND_AUTH_SESSION.md`](./FRONTEND_AUTH_SESSION.md).

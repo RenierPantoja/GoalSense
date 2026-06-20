@@ -1,57 +1,35 @@
 /**
- * authApi + useAuth (Phase B26) — frontend auth/permission state.
+ * authApi (Phase B26→B27) — backend auth context/session reads.
  * ─────────────────────────────────────────────────────────────────────────────
- * Fetches the backend's public auth context. When the backend is unreachable or
- * auth is off, falls back to the local-dev owner so the UI never breaks. Never
- * stores or logs a token (token handling is deferred to a future login phase).
+ * Calls the backend's non-secret auth endpoints. When the backend is unreachable
+ * or auth is off, callers fall back to local-dev owner. Never stores/logs a token.
  */
-import { useCallback, useEffect, useState } from 'react'
-import { getBackendUrl } from './commandBackendClient'
-import type { AuthContextDto, AuthPermission, AuthRole } from '@/features/command/intelligence/authTypes'
+import { apiFetch } from './apiClient'
+import type { AuthContextDto } from '@/features/command/intelligence/authTypes'
 import { LOCAL_OWNER_CONTEXT } from '@/features/command/intelligence/authTypes'
-
-const ROLE_RANK: Record<AuthRole, number> = { viewer: 0, analyst: 1, operator: 2, admin: 3, owner: 4 }
+import type { BackendUser } from '@/auth/authSession.types'
 
 export const authApi = {
+  /** B26 context projection (role + permissions). Falls back to local owner. */
   async getContext(): Promise<AuthContextDto> {
-    const base = getBackendUrl()
-    if (!base) return LOCAL_OWNER_CONTEXT
-    try {
-      const res = await fetch(`${base}/api/auth/context`, { headers: { 'Content-Type': 'application/json' } })
-      if (!res.ok) return LOCAL_OWNER_CONTEXT
-      const json = await res.json()
-      return (json?.success && json.data) ? json.data as AuthContextDto : LOCAL_OWNER_CONTEXT
-    } catch {
-      return LOCAL_OWNER_CONTEXT
-    }
+    const r = await apiFetch<AuthContextDto>('/api/auth/context')
+    return r.ok && r.data ? r.data : LOCAL_OWNER_CONTEXT
   },
-}
 
-export interface UseAuthResult {
-  ctx: AuthContextDto
-  loading: boolean
-  refresh: () => Promise<void>
-  can: (perm: AuthPermission) => boolean
-  isAtLeast: (role: AuthRole) => boolean
-  isAdmin: boolean
-}
+  /** Richer session info for the frontend. Returns null when no backend. */
+  async getMe(): Promise<BackendUser | null> {
+    const r = await apiFetch<BackendUser>('/api/auth/me')
+    if (r.ok && r.data) return r.data
+    // No backend configured → behave as local owner so dev never breaks.
+    if (r.reason === 'no_backend') {
+      return {
+        userId: LOCAL_OWNER_CONTEXT.userId, email: null, displayName: null,
+        role: LOCAL_OWNER_CONTEXT.role, permissions: LOCAL_OWNER_CONTEXT.permissions,
+        authEnabled: false, authMode: 'local', isDevBypass: false, rateLimitEnabled: false,
+      }
+    }
+    return null
+  },
 
-/** Lightweight hook — fetches the auth context once and exposes permission checks. */
-export function useAuth(): UseAuthResult {
-  const [ctx, setCtx] = useState<AuthContextDto>(LOCAL_OWNER_CONTEXT)
-  const [loading, setLoading] = useState(true)
-
-  const refresh = useCallback(async () => {
-    setLoading(true)
-    const c = await authApi.getContext()
-    setCtx(c)
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { void refresh() }, [refresh])
-
-  const can = useCallback((perm: AuthPermission) => ctx.permissions.includes(perm), [ctx])
-  const isAtLeast = useCallback((role: AuthRole) => (ROLE_RANK[ctx.role] ?? 0) >= (ROLE_RANK[role] ?? 0), [ctx])
-
-  return { ctx, loading, refresh, can, isAtLeast, isAdmin: ctx.role === 'admin' || ctx.role === 'owner' }
+  async refreshMe(): Promise<BackendUser | null> { return this.getMe() },
 }
