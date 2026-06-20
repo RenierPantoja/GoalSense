@@ -53,3 +53,15 @@ GO only when ALL are true; otherwise NO-GO:
 - [ ] `ENABLE_ALERT_EXPORT=false` OR export is auth-protected (it is, via `export:csv` + admin).
 - [ ] `scripts/smokeStagingRuntime.mjs` passes.
 - [ ] `/api/ready` not degraded on any critical dependency.
+
+---
+
+## B29 — execution status
+
+The runtime was validated against a real running instance (staging profile): `/health`, `/api/ready`
+(ready=true), `/api/auth/me`, and all read-only endpoints returned 200; CORS echoed only the allowed
+origin; every env-gated dangerous route returned 403; no secret appeared in logs. The only remaining
+step is operator-side cloud provisioning + setting Vercel `VITE_COMMAND_BACKEND_URL`. Exact provider
+command sets and the full go/no-go are in
+[`BACKEND_CLOUD_STAGING_DEPLOY_EXECUTION.md`](./BACKEND_CLOUD_STAGING_DEPLOY_EXECUTION.md).
+Validate the cloud instance with `BACKEND_URL=https://… node scripts/smokeStagingRuntime.mjs`.

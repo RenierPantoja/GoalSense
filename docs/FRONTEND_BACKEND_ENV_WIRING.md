@@ -37,3 +37,13 @@ These are public client config — never the Admin SDK / service account.
 - Local dev: leave `VITE_COMMAND_BACKEND_URL` unset (or point at `http://localhost:4000`); backend
   `ENABLE_AUTH=false` → owner local.
 - Staging/prod: set `VITE_COMMAND_BACKEND_URL` to the cloud backend with `ENABLE_AUTH=true`.
+
+---
+
+## B29 — connecting Vercel to the cloud backend
+
+Once the backend is provisioned (see `backend/docs/BACKEND_CLOUD_STAGING_DEPLOY_EXECUTION.md`), set
+`VITE_COMMAND_BACKEND_URL=<cloud BACKEND_URL>` in Vercel (Production + Preview) and redeploy. The
+`BackendStatusBadge` should show "online · staging". CORS on the backend must list the exact Vercel
+origin in `CORS_ALLOWED_ORIGINS`; the `Authorization` header is already allowed so the Bearer token
+flows. Until then, the frontend keeps using the runtime override / local data honestly.
