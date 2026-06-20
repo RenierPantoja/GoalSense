@@ -29,3 +29,10 @@ local validation sessions.
 - Per-alert/opportunity session badges and deep cross-links are not implemented in
   B37 (sessions group by fixture/window, not per-record tag). See
   `backend/docs/LIVE_VALIDATION_SESSIONS.md`.
+
+---
+
+## B38 additions
+The Lab gains a "Registros vinculados (atribuição)" section (exact vs inferred,
+coverage, outcome breakdown), and alert/opportunity drawers show a session badge
+when a record was attributed. See `LIVE_SESSION_ATTRIBUTION_UI.md`.

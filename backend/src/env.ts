@@ -132,6 +132,7 @@ const envSchema = z.object({
   LIVE_VALIDATION_ALLOW_MULTIPLE_RUNNING: z.string().default('false'),
   LIVE_VALIDATION_AUTO_ATTACH: z.string().default('true'),
   LIVE_VALIDATION_REPORT_LIMIT: z.coerce.number().default(1000),
+  ENABLE_LIVE_VALIDATION_SESSION_ATTRIBUTION_BACKFILL: z.string().default('false'),
   AUTO_ENGINE_INTERVAL_MS: z.coerce.number().default(60000),
   AUTO_ENGINE_MAX_FIXTURES_PER_RUN: z.coerce.number().default(20),
   AUTO_ENGINE_MIN_SAMPLE_QUALITY: z.enum(['insufficient', 'low', 'moderate', 'strong']).default('moderate'),

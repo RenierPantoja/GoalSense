@@ -40,6 +40,29 @@ export interface LiveValidationSessionSummaryDto {
   operationalRisk: 'low' | 'moderate' | 'high' | 'unsafe'
   recommendations: string[]
   limitations: string[]
+  exactSessionAttributionCount?: number
+  inferredSessionGroupingCount?: number
+  recordsWithoutSessionId?: number
+  pendingOutcomes?: number
+  attributionCoverageRate?: number | null
+  outcomeBreakdown?: { confirmed: number; confirmed_partial: number; failed: number; unknown: number; expired: number; not_evaluable: number; pending: number }
+}
+
+export interface LiveValidationLinkedRecordDto {
+  id: string
+  fixtureId: string
+  label: string
+  attributionStrength: 'exact_session_id' | 'inferred_fixture_window' | 'unknown'
+  detail: string
+  result?: string
+}
+
+export interface LiveValidationLinkedRecordsDto {
+  alerts: LiveValidationLinkedRecordDto[]
+  opportunities: LiveValidationLinkedRecordDto[]
+  evidence: LiveValidationLinkedRecordDto[]
+  outcomes: LiveValidationLinkedRecordDto[]
+  outcomeBreakdown: Record<string, number>
 }
 
 export interface LiveValidationSessionDto {

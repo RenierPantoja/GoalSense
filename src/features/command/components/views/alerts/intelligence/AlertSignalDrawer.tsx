@@ -137,6 +137,11 @@ export function AlertSignalDrawer({ alertId, headline, onClose, onGoToBacktest, 
             <>
               {tab === 'resumo' && (
                 <>
+                  {ledger.validationSessionId && (
+                    <div className="rounded-xl border border-[#2DD4BF]/15 bg-[#13B8A6]/[0.05] px-3.5 py-2 mb-1">
+                      <span className="text-[10px] text-[#7FE9DC]/85">Sessão de validação: <span className="font-mono">{ledger.validationSessionId.slice(0, 12)}…</span> · atribuição exata (B38)</span>
+                    </div>
+                  )}
                   {isPromoted && (
                     <div className="rounded-xl border border-[#2DD4BF]/20 bg-[#13B8A6]/[0.06] p-4">
                       <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#7FE9DC]/85">Origem: Motor Automático</span>

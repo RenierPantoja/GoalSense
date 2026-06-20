@@ -118,3 +118,11 @@ snapshots, signals, alerts, opportunities, outcomes, evidence, operational risk)
 It never starts workers, never changes guard mode/env, and never alters results.
 Endpoints under `/api/validation/live-sessions`; UI in the "Validação Ao Vivo"
 cockpit segment. See `LIVE_VALIDATION_SESSIONS.md`.
+
+---
+
+## B38 note — session attribution
+Records created during a running validation session are stamped with an optional
+`validationSessionId` (snapshots, ledger, outcomes, opportunities, policy, evidence)
+via a cheap TTL-cached session context. Non-fatal; never changes results. See
+`LIVE_SESSION_ATTRIBUTION.md`.

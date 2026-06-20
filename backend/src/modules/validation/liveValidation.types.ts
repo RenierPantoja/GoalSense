@@ -114,6 +114,13 @@ export interface LiveValidationSessionSummary {
   operationalRisk: 'low' | 'moderate' | 'high' | 'unsafe'
   recommendations: string[]
   limitations: string[]
+  // ── B38: attribution + outcome QA breakdown ──
+  exactSessionAttributionCount?: number
+  inferredSessionGroupingCount?: number
+  recordsWithoutSessionId?: number
+  pendingOutcomes?: number
+  attributionCoverageRate?: number | null
+  outcomeBreakdown?: { confirmed: number; confirmed_partial: number; failed: number; unknown: number; expired: number; not_evaluable: number; pending: number }
 }
 
 export interface LiveValidationSessionReport {

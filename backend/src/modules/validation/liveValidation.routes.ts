@@ -15,6 +15,7 @@ import {
   startSession, pauseSession, resumeSession, completeSession, cancelSession,
   buildSessionSummary, buildSessionReport,
 } from './liveValidation.service.js'
+import { listLinkedRecords, listSessionAlerts, listSessionOpportunities, listSessionEvidence, listSessionOutcomes } from './liveValidationLinkedRecords.service.js'
 
 function gate(reply: any): boolean {
   if (!isSessionsEnabled()) {
@@ -95,5 +96,28 @@ export async function liveValidationRoutes(app: FastifyInstance) {
     if (!gate(reply)) return
     try { return ok(await repos.intelligence.getLiveValidationSessionReport((req.params as any).id)) }
     catch { return ok(null) }
+  })
+
+  // ── B38: linked records (exact vs inferred) ──
+  app.get(`${BASE}/:id/linked-records`, async (req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await listLinkedRecords((req.params as any).id)) }
+    catch (e: any) { app.log.warn(`linked records failed: ${e?.message || e}`); return ok(null) }
+  })
+  app.get(`${BASE}/:id/alerts`, async (req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await listSessionAlerts((req.params as any).id, 200)) } catch { return ok([]) }
+  })
+  app.get(`${BASE}/:id/opportunities`, async (req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await listSessionOpportunities((req.params as any).id, 200)) } catch { return ok([]) }
+  })
+  app.get(`${BASE}/:id/evidence`, async (req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await listSessionEvidence((req.params as any).id, 200)) } catch { return ok([]) }
+  })
+  app.get(`${BASE}/:id/outcomes`, async (req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await listSessionOutcomes((req.params as any).id, 200)) } catch { return ok({ items: [], breakdown: {} }) }
   })
 }

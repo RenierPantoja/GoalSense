@@ -12,7 +12,7 @@ import { liveValidationApi } from '@/services/liveValidationApi'
 import { useAuth } from '@/auth/useAuth'
 import type {
   LiveValidationSessionDto, LiveValidationSessionFixtureDto, LiveValidationSessionEventDto,
-  LiveValidationSessionReportDto,
+  LiveValidationSessionReportDto, LiveValidationLinkedRecordsDto,
 } from '@/features/validation/liveValidationTypes'
 import { STATUS_TONE, STATUS_LABEL, GONOGO_LABEL } from '@/features/validation/liveValidationTypes'
 
@@ -30,6 +30,7 @@ export function LiveValidationLab() {
   const [fixtures, setFixtures] = useState<LiveValidationSessionFixtureDto[]>([])
   const [events, setEvents] = useState<LiveValidationSessionEventDto[]>([])
   const [report, setReport] = useState<LiveValidationSessionReportDto | null>(null)
+  const [linked, setLinked] = useState<LiveValidationLinkedRecordsDto | null>(null)
   const [loading, setLoading] = useState(true)
   const [disabled, setDisabled] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -49,13 +50,14 @@ export function LiveValidationLab() {
   useEffect(() => { void loadSessions() }, [loadSessions])
 
   const openSession = useCallback(async (id: string) => {
-    const [s, f, e, rep] = await Promise.all([
-      liveValidationApi.get(id), liveValidationApi.fixtures(id), liveValidationApi.events(id), liveValidationApi.getReport(id),
+    const [s, f, e, rep, lr] = await Promise.all([
+      liveValidationApi.get(id), liveValidationApi.fixtures(id), liveValidationApi.events(id), liveValidationApi.getReport(id), liveValidationApi.linkedRecords(id),
     ])
     if (s.ok) setSelected(s.data)
     if (f.ok && f.data) setFixtures(f.data)
     if (e.ok && e.data) setEvents(e.data)
     setReport(rep.ok ? rep.data : null)
+    setLinked(lr.ok ? lr.data : null)
   }, [])
 
   const create = async () => {
@@ -166,6 +168,37 @@ export function LiveValidationLab() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* B38: linked records (exact vs inferred) + outcome breakdown + attribution coverage */}
+          {linked && (
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.012] p-3 mb-3">
+              <p className="text-[10px] uppercase tracking-wide text-white/35 mb-2">Registros vinculados (atribuição)</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+                <KV k="alertas" v={linked.alerts.length} />
+                <KV k="oportunidades" v={linked.opportunities.length} />
+                <KV k="evidências" v={linked.evidence.length} />
+                <KV k="outcomes" v={linked.outcomes.length} />
+              </div>
+              {sum && (
+                <div className="flex items-center gap-3 flex-wrap text-[10.5px] text-white/55 mb-1">
+                  <span>exato {sum.exactSessionAttributionCount ?? 0}</span>
+                  <span>· inferido {sum.inferredSessionGroupingCount ?? 0}</span>
+                  <span>· cobertura {sum.attributionCoverageRate == null ? '—' : `${Math.round(sum.attributionCoverageRate * 100)}%`}</span>
+                </div>
+              )}
+              {sum?.outcomeBreakdown && (
+                <div className="flex items-center gap-2 flex-wrap text-[10px] text-white/50">
+                  <span className="text-emerald-200/75">conf {sum.outcomeBreakdown.confirmed}</span>
+                  <span className="text-emerald-200/60">parcial {sum.outcomeBreakdown.confirmed_partial}</span>
+                  <span className="text-rose-200/70">falha {sum.outcomeBreakdown.failed}</span>
+                  <span className="text-amber-100/70">unknown {sum.outcomeBreakdown.unknown}</span>
+                  <span className="text-white/40">n/aval {sum.outcomeBreakdown.not_evaluable}</span>
+                  <span className="text-white/40">pendente {sum.outcomeBreakdown.pending}</span>
+                </div>
+              )}
+              <p className="text-[10px] text-white/30 mt-1.5">Exato = registro carimbado com sessionId; inferido = agrupado por fixture/janela. unknown/not_evaluable/pendente nunca são falha.</p>
             </div>
           )}
 

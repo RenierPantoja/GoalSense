@@ -16,6 +16,7 @@ import { isAutoAlertPolicyEnabled } from './autoAlertPolicyConfig.service.js'
 import { rankOpportunities } from './utils/autoSignalRanking.util.js'
 import { autoRunId } from './utils/autoSignalId.util.js'
 import { linkOpportunitySnapshot } from '../evidence/evidenceLineage.service.js'
+import { resolveSessionAttribution, recordAttributionEvent } from '../../validation/liveValidationAttribution.service.js'
 import type { AutoEngineRun, AutoEngineRunConfig, AutoOpportunity, AutoEngineOverview } from './autoEngine.types.js'
 import type { SampleQuality } from '../contracts/learning.types.js'
 
@@ -97,7 +98,12 @@ export async function runAutoEngineScan(opts: ScanOptions = {}): Promise<AutoEng
       // B34: attach the EXACT evidence snapshot the scan evaluated (no recompute).
       const evSnapId = (snapshot as any)?.id ? String((snapshot as any).id) : null
       const evSnapAt = (snapshot as any)?.capturedAt ? toDate((snapshot as any).capturedAt).toISOString() : null
-      for (const o of opps) { o.evidenceSnapshotId = evSnapId; o.evidenceSnapshotCapturedAt = evSnapAt; allOpps.push(o) }
+      const oppAttribution = await resolveSessionAttribution(fx.id)
+      for (const o of opps) {
+        o.evidenceSnapshotId = evSnapId; o.evidenceSnapshotCapturedAt = evSnapAt
+        if (oppAttribution) { o.validationSessionId = oppAttribution.validationSessionId; o.sessionAttachedAt = oppAttribution.sessionAttachedAt }
+        allOpps.push(o)
+      }
     }
 
     const ranked = rankOpportunities(allOpps)
@@ -117,7 +123,11 @@ export async function runAutoEngineScan(opts: ScanOptions = {}): Promise<AutoEng
           void linkOpportunitySnapshot({
             fixtureId: o.fixtureId, opportunityId: o.id, minute: o.minute,
             snapshotId: o.evidenceSnapshotId ?? null, capturedAt: o.evidenceSnapshotCapturedAt ?? null,
+            validationSessionId: (o as any).validationSessionId ?? null,
           })
+          if ((o as any).validationSessionId) {
+            void recordAttributionEvent({ sessionId: (o as any).validationSessionId, type: 'auto_opportunity_created', fixtureId: o.fixtureId, source: 'auto_engine', message: `Oportunidade ${o.opportunityType} (${o.status}, score ${o.score}).` })
+          }
         }
       }
     } else {

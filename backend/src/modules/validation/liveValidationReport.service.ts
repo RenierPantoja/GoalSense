@@ -11,6 +11,7 @@ import { env } from '../../env.js'
 import { createRepositories } from '../../repositories/index.js'
 import { getGuardMetrics } from '../localops/livePipelineGuard.service.js'
 import { buildRecommendations, deriveGoNoGo } from './utils/liveValidationReport.util.js'
+import { listLinkedRecords } from './liveValidationLinkedRecords.service.js'
 import type {
   LiveValidationSession, LiveValidationSessionFixture, LiveValidationSessionSummary, LiveValidationSessionReport,
 } from './liveValidation.types.js'
@@ -90,6 +91,24 @@ export async function buildSessionSummary(session: LiveValidationSession): Promi
   }
   // Operational risk from guard metrics (process-wide, advisory).
   if (guard.providerCallsBlocked > 0 || guard.fixturesSkippedByCap > 0) summary.operationalRisk = 'moderate'
+
+  // B38: exact attribution + outcome QA breakdown from linked records.
+  try {
+    const linked = await listLinkedRecords(session.id)
+    const all = [...linked.alerts, ...linked.opportunities, ...linked.evidence]
+    const exact = all.filter(r => r.attributionStrength === 'exact_session_id').length
+    const inferred = all.filter(r => r.attributionStrength === 'inferred_fixture_window').length
+    summary.exactSessionAttributionCount = exact
+    summary.inferredSessionGroupingCount = inferred
+    summary.recordsWithoutSessionId = inferred
+    summary.attributionCoverageRate = all.length > 0 ? Math.round((exact / all.length) * 1000) / 1000 : null
+    const b = linked.outcomeBreakdown
+    summary.outcomeBreakdown = { confirmed: b.confirmed || 0, confirmed_partial: b.confirmed_partial || 0, failed: b.failed || 0, unknown: b.unknown || 0, expired: b.expired || 0, not_evaluable: b.not_evaluable || 0, pending: b.pending || 0 }
+    summary.unknownOutcomes = (b.unknown || 0) + (b.expired || 0)
+    summary.notEvaluable = b.not_evaluable || 0
+    summary.pendingOutcomes = b.pending || 0
+  } catch { summary.limitations.push('Breakdown de atribuição indisponível (leitura parcial).') }
+
   summary.recommendations = buildRecommendations(summary)
   return summary
 }

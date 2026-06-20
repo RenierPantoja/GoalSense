@@ -51,6 +51,8 @@ export interface SignalLedgerEntry {
   dataAvailability: Record<string, { available: boolean; source: string | null; quality: DataQuality; unavailableReason?: string }>
   createdAt: string
   updatedAt: string
+  // B38 (optional): live validation session attribution.
+  validationSessionId?: string | null
 }
 
 export interface AlertOutcomeRecord {

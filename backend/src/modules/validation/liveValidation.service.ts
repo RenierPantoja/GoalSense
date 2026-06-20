@@ -11,6 +11,7 @@ import { createRepositories } from '../../repositories/index.js'
 import { discoverSessionFixtures } from './liveValidationFixtureDiscovery.service.js'
 import { recordSessionEvent } from './liveValidationEventRecorder.service.js'
 import { buildSessionSummary, buildSessionReport } from './liveValidationReport.service.js'
+import { invalidateSessionContext } from './liveValidationSessionContext.service.js'
 import type {
   LiveValidationSession, LiveValidationSessionStatus, CreateSessionInput, LiveValidationSessionFixture,
 } from './liveValidation.types.js'
@@ -71,6 +72,7 @@ export async function updateSession(id: string, patch: Partial<LiveValidationSes
 async function setStatus(id: string, status: LiveValidationSessionStatus, stamp: Partial<LiveValidationSession>): Promise<LiveValidationSession | null> {
   const repos = createRepositories()
   await repos.intelligence.updateLiveValidationSession(id, { status, ...stamp })
+  invalidateSessionContext()
   return getSession(id)
 }
 
@@ -132,6 +134,7 @@ export async function completeSession(id: string): Promise<LiveValidationSession
   let summary = null
   try { summary = await buildSessionSummary(session) } catch { /* non-fatal */ }
   await repos.intelligence.updateLiveValidationSession(id, { status: 'completed', completedAt: new Date().toISOString(), summary: summary ?? undefined })
+  invalidateSessionContext()
   void recordSessionEvent({ sessionId: id, type: 'session_completed', message: 'Sessão concluída — relatório disponível.' })
   // Generate + persist the report.
   try { await buildSessionReport({ ...session, status: 'completed', summary }) } catch { /* non-fatal */ }

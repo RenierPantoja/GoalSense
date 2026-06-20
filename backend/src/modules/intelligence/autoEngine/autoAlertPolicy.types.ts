@@ -101,6 +101,9 @@ export interface AutoAlertPolicyEvaluation {
   // ── B34 (optional): evidence snapshot inherited from the opportunity ──
   policyEvidenceSnapshotId?: string | null
   policyEvidenceCapturedAt?: string | null
+  // ── B38 (optional): live validation session attribution ──
+  validationSessionId?: string | null
+  sessionAttachedAt?: string | null
 }
 
 /** Lightweight audit trail entry (decision history is the evaluations themselves). */

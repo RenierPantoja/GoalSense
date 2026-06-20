@@ -39,3 +39,16 @@ export function deriveGoNoGo(s: LiveValidationSessionSummary): GoNoGo {
 export function evidenceBreakdown(exact: number, inferred: number, unknown: number): { exact: number; inferred: number; unknown: number } {
   return { exact: Math.max(0, exact), inferred: Math.max(0, inferred), unknown: Math.max(0, unknown) }
 }
+
+/** Pure attribution decision: a write is attributed iff session running + auto-attach + (broad scope or fixture attached). */
+export function shouldAttributeFixture(p: { status: string; autoAttach: boolean; broadScope: boolean; attachedFixtureIds: string[] }, fixtureId: string): boolean {
+  if (p.status !== 'running' || !p.autoAttach) return false
+  if (p.broadScope) return true
+  return !!fixtureId && p.attachedFixtureIds.includes(String(fixtureId))
+}
+
+/** Outcome QA: failure rate counts ONLY `failed` (unknown/not_evaluable/pending are never failures). */
+export function outcomeFailureRate(b: { confirmed: number; confirmed_partial: number; failed: number; unknown: number; not_evaluable: number; pending: number }): number | null {
+  const decisive = b.confirmed + b.confirmed_partial + b.failed
+  return decisive > 0 ? Math.round((b.failed / decisive) * 1000) / 1000 : null
+}

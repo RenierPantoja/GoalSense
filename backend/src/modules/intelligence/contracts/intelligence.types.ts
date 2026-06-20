@@ -128,6 +128,9 @@ export interface SignalLedgerEntry {
   triggerSnapshotId?: string | null
   triggerSnapshotCapturedAt?: string | null
   triggerEvidenceStrength?: string
+  // ── B38 (optional): live validation session attribution ──
+  validationSessionId?: string | null
+  sessionAttachedAt?: string | null
   // ── B23 (optional): outcome layer for resolved signals (esp. promoted alerts) ──
   /** Terminal outcome when the signal was resolved (mirror of AlertOutcomeRecord.result). */
   outcomeResult?: AlertResult
@@ -181,6 +184,9 @@ export interface AlertOutcomeRecord {
   // ── B34 (optional): exact outcome snapshot evidence when available ──
   outcomeSnapshotId?: string | null
   outcomeSnapshotCapturedAt?: string | null
+  // ── B38 (optional): live validation session attribution ──
+  validationSessionId?: string | null
+  sessionAttachedAt?: string | null
 }
 
 // ─── Failure analysis (deterministic, honest — no fake causality) ──────────────

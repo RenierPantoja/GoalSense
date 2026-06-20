@@ -59,3 +59,10 @@ Evidências. See `EVIDENCE_LINEAGE_UI.md`.
 The panel shows an "Sessão de validação ativa" banner when a validation session is
 running/paused, linking to the new "Validação Ao Vivo" cockpit segment. See
 `LIVE_VALIDATION_LAB_UI.md`.
+
+---
+
+## B38 note
+Records created during a running session are now attributed (sessionId); the Lab's
+"Registros vinculados" section shows exact vs inferred + outcome breakdown. See
+`LIVE_SESSION_ATTRIBUTION_UI.md`.

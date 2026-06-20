@@ -99,5 +99,6 @@ export function buildReference(input: LinkSnapshotInput, now: string): EvidenceS
     createdAt: now,
     createdBy: input.createdBy ?? null,
     limitations: input.limitations ?? [],
+    validationSessionId: input.validationSessionId ?? null,
   }
 }

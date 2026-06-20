@@ -8,6 +8,7 @@ import { apiFetch } from './apiClient'
 import type {
   LiveValidationSessionDto, LiveValidationSessionFixtureDto, LiveValidationSessionEventDto,
   LiveValidationSessionSummaryDto, LiveValidationSessionReportDto, LiveValidationFixtureScopeDto, LiveValidationGoal,
+  LiveValidationLinkedRecordsDto,
 } from '@/features/validation/liveValidationTypes'
 
 const BASE = '/api/validation/live-sessions'
@@ -34,4 +35,5 @@ export const liveValidationApi = {
   summary(id: string) { return apiFetch<LiveValidationSessionSummaryDto>(`${BASE}/${encodeURIComponent(id)}/summary`) },
   generateReport(id: string) { return apiFetch<LiveValidationSessionReportDto>(`${BASE}/${encodeURIComponent(id)}/report`, { method: 'POST', body: '{}' }) },
   getReport(id: string) { return apiFetch<LiveValidationSessionReportDto>(`${BASE}/${encodeURIComponent(id)}/report`) },
+  linkedRecords(id: string) { return apiFetch<LiveValidationLinkedRecordsDto>(`${BASE}/${encodeURIComponent(id)}/linked-records`) },
 }

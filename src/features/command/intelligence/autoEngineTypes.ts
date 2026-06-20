@@ -101,6 +101,8 @@ export interface AutoOpportunityDto {
   // B34 (optional): exact evidence snapshot of the scan that produced this opp.
   evidenceSnapshotId?: string | null
   evidenceSnapshotCapturedAt?: string | null
+  // B38 (optional): live validation session attribution.
+  validationSessionId?: string | null
 }
 
 export interface AutoEngineRunConfigDto {

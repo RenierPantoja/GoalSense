@@ -20,6 +20,7 @@ import { buildFailureAnalysis, buildLearningEvent, learningTypeForResult } from 
 import { outcomeId } from '../utils/intelligenceId.util.js'
 import { buildLiveAvailabilityMap, collectMissingData, inferProviderQuality } from '../utils/dataAvailability.util.js'
 import { linkTriggerSnapshot, linkOutcomeSnapshot } from '../evidence/evidenceLineage.service.js'
+import { resolveSessionAttribution, recordAttributionEvent } from '../../validation/liveValidationAttribution.service.js'
 
 export interface AlertCreatedContext {
   alertId: string
@@ -106,6 +107,7 @@ export async function recordAlertCreated(ctx: AlertCreatedContext): Promise<void
       missingData,
     })
 
+    const attribution = await resolveSessionAttribution(ctx.fixture.id)
     const entry = buildLedgerEntry({
       alertId: ctx.alertId,
       patternId: ctx.pattern.id,
@@ -135,6 +137,8 @@ export async function recordAlertCreated(ctx: AlertCreatedContext): Promise<void
       triggerSnapshotId: ctx.triggerSnapshotId ?? null,
       triggerSnapshotCapturedAt: ctx.triggerSnapshotCapturedAt ?? null,
       triggerEvidenceStrength: ctx.triggerSnapshotId ? 'exact' : 'window_inferred',
+      validationSessionId: attribution?.validationSessionId ?? null,
+      sessionAttachedAt: attribution?.sessionAttachedAt ?? null,
     })
 
     // B33/B34: non-fatal evidence link — EXACT when the evaluated snapshotId is known.
@@ -142,7 +146,13 @@ export async function recordAlertCreated(ctx: AlertCreatedContext): Promise<void
       void linkTriggerSnapshot({
         fixtureId: ctx.fixture.id, alertId: ctx.alertId, patternId: ctx.pattern.id, minute: ctx.minute,
         snapshotId: ctx.triggerSnapshotId ?? null, capturedAt: ctx.triggerSnapshotCapturedAt ?? null, provider: ctx.provider,
+        validationSessionId: attribution?.validationSessionId ?? null,
       })
+    }
+    // B38: session events (non-fatal).
+    if (attribution) {
+      void recordAttributionEvent({ sessionId: attribution.validationSessionId, type: 'signal_created', fixtureId: ctx.fixture.id, source: 'ledger', message: `Sinal/alerta em ${entry.fixtureLabel} (${ctx.signalType}).` })
+      void recordAttributionEvent({ sessionId: attribution.validationSessionId, type: 'alert_created', fixtureId: ctx.fixture.id, source: 'ledger', message: `Alerta criado (conf ${ctx.confidence}).` })
     }
 
     await repos.intelligence.createLearningEvent(buildLearningEvent({
@@ -165,6 +175,7 @@ export async function recordAlertResolved(ctx: AlertResolvedContext): Promise<vo
   try {
     const repos = createRepositories()
     const now = new Date()
+    const outcomeAttribution = await resolveSessionAttribution(ctx.fixtureId)
     const createdMs = new Date(toIso(ctx.createdAt)).getTime()
     const timeToResolutionMinutes = Number.isFinite(createdMs) ? Math.max(0, Math.round((now.getTime() - createdMs) / 60000)) : null
     const dataQualityAtResolution = qualityFromFlags(ctx.hasStats, ctx.hasTimedEvents)
@@ -200,6 +211,8 @@ export async function recordAlertResolved(ctx: AlertResolvedContext): Promise<vo
       updatedAt: now.toISOString(),
       outcomeSnapshotId: ctx.outcomeSnapshotId ?? null,
       outcomeSnapshotCapturedAt: ctx.outcomeSnapshotCapturedAt ?? null,
+      validationSessionId: outcomeAttribution?.validationSessionId ?? null,
+      sessionAttachedAt: outcomeAttribution?.sessionAttachedAt ?? null,
     })
 
     // Transition the ledger entry (if present) to resolved.
@@ -212,6 +225,15 @@ export async function recordAlertResolved(ctx: AlertResolvedContext): Promise<vo
         fixtureId: ctx.fixtureId, alertId: ctx.alertId, patternId: ctx.patternId,
         outcomeId: outcomeId(ctx.alertId), minute: ctx.outcomeMinute ?? null,
         snapshotId: ctx.outcomeSnapshotId ?? null, capturedAt: ctx.outcomeSnapshotCapturedAt ?? null,
+        validationSessionId: outcomeAttribution?.validationSessionId ?? null,
+      })
+    }
+    // B38: outcome session event (non-fatal). unknown/not_evaluable are not failures.
+    if (outcomeAttribution) {
+      void recordAttributionEvent({
+        sessionId: outcomeAttribution.validationSessionId, type: 'outcome_resolved', fixtureId: ctx.fixtureId, source: 'resolution',
+        severity: ctx.result === 'failed' ? 'warning' : 'info',
+        message: `Outcome ${ctx.result}: ${ctx.outcomeReason}`.slice(0, 200), metadata: { result: ctx.result },
       })
     }
 

@@ -92,3 +92,10 @@ Existing inferred links are kept; exact wins in bundles by strength ranking. See
 Validation session summaries read evidence references per fixture (exact vs inferred
 counts) for an honest traceability view. The session layer is observational and does
 not create or alter evidence links. See `LIVE_VALIDATION_SESSIONS.md`.
+
+---
+
+## B38 note — session attribution on evidence links
+`EvidenceSnapshotReference` now carries an optional `validationSessionId` (stamped
+when a record is created during a running validation session). Optional and
+legacy-safe; never alters link strength or protection. See `LIVE_SESSION_ATTRIBUTION.md`.

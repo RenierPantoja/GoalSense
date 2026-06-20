@@ -67,3 +67,12 @@ score/confidence/counters/patterns unchanged.
 - Under Prisma mode sessions are not persisted (Noop) — use Firebase mode.
 - Discovery sees only fixtures already in the backend; if the live worker is off and
   nothing was collected, the session is honestly empty.
+
+---
+
+## B38 update — real per-record attribution
+The B37 limitation (grouping only by fixture/window) is addressed: records created
+during a running session are stamped with an optional `validationSessionId`, the
+session report adds exact-vs-inferred attribution + an outcome QA breakdown
+(unknown/not_evaluable/pending never failures), and linked-records endpoints expose
+session alerts/opportunities/evidence/outcomes. See `LIVE_SESSION_ATTRIBUTION.md`.

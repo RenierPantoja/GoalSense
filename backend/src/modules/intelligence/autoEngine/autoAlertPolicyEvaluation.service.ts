@@ -12,6 +12,7 @@ import { evaluatePolicyGates } from './utils/autoAlertPolicyGuard.util.js'
 import { getAutoOpportunityTypeProfile } from './autoEngineCalibration.service.js'
 import { createAutoAlertFromPolicy, isAutoAlertCreateEnabled } from './autoOpportunityAlertPromotion.service.js'
 import { linkPolicySnapshot } from '../evidence/evidenceLineage.service.js'
+import { recordAttributionEvent } from '../../validation/liveValidationAttribution.service.js'
 import {
   isAutoAlertPolicyEnabled, isAutoAlertCreateFlagEnabled, isAutoEngineToAlertsEnabled, getDefaultPolicyTemplate,
 } from './autoAlertPolicyConfig.service.js'
@@ -127,9 +128,15 @@ export async function evaluateOpportunityPolicies(
       reasons, limitations: guard.limitations, promotedAlertId, source: 'auto_alert_policy',
       policyEvidenceSnapshotId: (opp as any).evidenceSnapshotId ?? null,
       policyEvidenceCapturedAt: (opp as any).evidenceSnapshotCapturedAt ?? null,
+      validationSessionId: (opp as any).validationSessionId ?? null,
+      sessionAttachedAt: (opp as any).sessionAttachedAt ?? null,
     }
 
     try { await repos.intelligence.createAutoAlertPolicyEvaluation(evaluation) } catch { /* never block */ }
+    // B38: policy session event (non-fatal).
+    if ((opp as any).validationSessionId) {
+      void recordAttributionEvent({ sessionId: (opp as any).validationSessionId, type: 'policy_evaluated', fixtureId: opp.fixtureId, source: 'policy', message: `Política "${policy.name}" → ${decision}`.slice(0, 200), metadata: { decision } })
+    }
     // B34: non-fatal exact policy evidence link (inherits the opportunity snapshot).
     if (String(env.ENABLE_EVIDENCE_LINEAGE).toLowerCase() === 'true') {
       void linkPolicySnapshot({

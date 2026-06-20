@@ -45,3 +45,10 @@ ReplayViewer shows per-step snapshot badges. See `BACKTEST_REPLAY_INLINE_EVIDENC
 The Live Validation Lab surfaces per-session evidence coverage (exact vs inferred)
 in its summary. Per-alert/opportunity session badges are a future enhancement
 (sessions currently group by fixture/window). See `LIVE_VALIDATION_LAB_UI.md`.
+
+---
+
+## B38 note
+Evidence references created during a running validation session carry a
+`validationSessionId`; alert/opportunity drawers show a session badge. See
+`LIVE_SESSION_ATTRIBUTION_UI.md`.

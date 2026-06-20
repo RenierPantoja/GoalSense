@@ -47,7 +47,7 @@ export async function linkSnapshotsToSource(inputs: LinkSnapshotInput[]): Promis
 /** Link an alert's TRIGGER snapshot. Exact when triggerSnapshotId is real. */
 export async function linkTriggerSnapshot(p: {
   fixtureId: string; alertId: string; patternId: string | null; minute: number | null
-  snapshotId: string | null; capturedAt: string | null; provider?: string | null
+  snapshotId: string | null; capturedAt: string | null; provider?: string | null; validationSessionId?: string | null
 }): Promise<EvidenceSnapshotReference | null> {
   return linkSnapshotToSource({
     snapshotId: p.snapshotId, fixtureId: p.fixtureId, provider: p.provider ?? null,
@@ -57,13 +57,14 @@ export async function linkTriggerSnapshot(p: {
     alertId: p.alertId, patternId: p.patternId, evidenceKind: 'trigger_state',
     reason: p.snapshotId ? 'Snapshot exato avaliado no gatilho do alerta.' : 'Gatilho sem snapshotId — vínculo por fixture/janela.',
     limitations: p.snapshotId ? [] : ['snapshot_not_written'],
+    validationSessionId: p.validationSessionId ?? null,
   })
 }
 
 /** Link an alert's OUTCOME snapshot. Exact when outcomeSnapshotId is real. */
 export async function linkOutcomeSnapshot(p: {
   fixtureId: string; alertId: string; patternId: string | null; outcomeId: string; minute: number | null
-  snapshotId: string | null; capturedAt: string | null
+  snapshotId: string | null; capturedAt: string | null; validationSessionId?: string | null
 }): Promise<EvidenceSnapshotReference | null> {
   return linkSnapshotToSource({
     snapshotId: p.snapshotId, fixtureId: p.fixtureId, capturedAt: p.capturedAt, minute: p.minute,
@@ -72,13 +73,14 @@ export async function linkOutcomeSnapshot(p: {
     alertId: p.alertId, patternId: p.patternId, outcomeId: p.outcomeId, evidenceKind: 'outcome_state',
     reason: p.snapshotId ? 'Snapshot exato usado na resolução do outcome.' : 'Resolução sem snapshotId — vínculo por fixture/janela.',
     limitations: p.snapshotId ? [] : ['snapshot_not_written'],
+    validationSessionId: p.validationSessionId ?? null,
   })
 }
 
 /** Link an opportunity's evidence snapshot. Exact when evidenceSnapshotId is real. */
 export async function linkOpportunitySnapshot(p: {
   fixtureId: string; opportunityId: string; minute: number | null
-  snapshotId: string | null; capturedAt: string | null
+  snapshotId: string | null; capturedAt: string | null; validationSessionId?: string | null
 }): Promise<EvidenceSnapshotReference | null> {
   return linkSnapshotToSource({
     snapshotId: p.snapshotId, fixtureId: p.fixtureId, capturedAt: p.capturedAt, minute: p.minute,
@@ -87,6 +89,7 @@ export async function linkOpportunitySnapshot(p: {
     opportunityId: p.opportunityId, evidenceKind: 'auto_opportunity_evidence',
     reason: p.snapshotId ? 'Snapshot exato avaliado na geração da oportunidade.' : 'Oportunidade sem snapshotId — vínculo por fixture/janela.',
     limitations: p.snapshotId ? [] : ['snapshot_not_written'],
+    validationSessionId: p.validationSessionId ?? null,
   })
 }
 

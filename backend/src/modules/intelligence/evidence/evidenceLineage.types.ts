@@ -68,6 +68,8 @@ export interface EvidenceSnapshotReference {
   createdAt: string
   createdBy: string | null
   limitations: string[]
+  // ── B38 (optional): live validation session attribution ──
+  validationSessionId?: string | null
 }
 
 export interface EvidenceTimelineEntry {
@@ -114,4 +116,5 @@ export interface LinkSnapshotInput {
   evidenceKind: EvidenceKind
   createdBy?: string | null
   limitations?: string[]
+  validationSessionId?: string | null
 }

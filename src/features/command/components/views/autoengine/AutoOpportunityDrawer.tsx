@@ -206,6 +206,11 @@ export function AutoOpportunityDrawer({ opportunity: o, onClose, onGoToBacktest,
                 </div>
               </div>
               <Section title="Por que agora"><List items={o.explanation.whyNow} tone="ok" /></Section>
+              {o.validationSessionId && (
+                <div className="rounded-xl border border-[#2DD4BF]/15 bg-[#13B8A6]/[0.05] px-3.5 py-2">
+                  <span className="text-[10px] text-[#7FE9DC]/85">Sessão de validação: <span className="font-mono">{o.validationSessionId.slice(0, 12)}…</span> · atribuição exata (B38)</span>
+                </div>
+              )}
               <Section title="Evidência da oportunidade">
                 {o.evidenceSnapshotId ? (
                   <>
