@@ -37,3 +37,11 @@ snapshot written/skipped breakdown, fixture cap observed/skipped), plus a
 snapshot-retention dry-run plan with an admin-only "run (dry-run)" action.
 Real deletion is never possible from the UI (no delete backend). See
 `LOCAL_OPERATIONS_PIPELINE_GUARDS_UI.md`.
+
+---
+
+## B32 additions
+Adds snapshot lifecycle controls (dry-run / mark / soft-delete / hard-delete with
+protect-first and strong confirms) and a persistent operational metrics history.
+Hard-delete only shows with the explicit flag + real mode and requires admin.
+See `SNAPSHOT_LIFECYCLE_UI.md`.

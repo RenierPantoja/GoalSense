@@ -1,0 +1,80 @@
+/**
+ * Snapshot Protection Index (Phase B32) — protect-first dependency resolution.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Decides whether a snapshot is protected from deletion. Because no per-snapshot
+ * link exists from alerts/outcomes/backtest/replay/learning, protection is
+ * derived conservatively from the fixture (has alerts?), the snapshot payload
+ * (timed events = evidence), and age. When a dependency cannot be proven safe,
+ * the snapshot is protected (`unknown_dependency`). Never invents a link.
+ */
+import type { Repositories } from '../../repositories/index.js'
+import { deriveProtectionReasons, type ProtectionResult } from './utils/localOps.util.js'
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+export interface ProtectionContext {
+  /** Per-fixture alert presence, cached across a retention scan. */
+  fixtureHasAlert: (fixtureId: string) => Promise<boolean>
+}
+
+/** Build a context with a per-fixture alert cache and conservative error handling. */
+export function buildProtectionContext(repos: Repositories): ProtectionContext {
+  const cache = new Map<string, boolean>()
+  return {
+    async fixtureHasAlert(fixtureId: string): Promise<boolean> {
+      if (!fixtureId) return false
+      if (cache.has(fixtureId)) return cache.get(fixtureId) as boolean
+      let has = false
+      try { const alerts = await repos.alerts.findByFixtureIds(fixtureId); has = Array.isArray(alerts) && alerts.length > 0 }
+      catch { has = true /* on error, protect conservatively */ }
+      cache.set(fixtureId, has)
+      return has
+    },
+  }
+}
+
+function hasTimedEvents(snapshot: any): boolean {
+  const raw = snapshot?.eventsJson
+  if (!raw) return false
+  try { const arr = JSON.parse(raw); return Array.isArray(arr) && arr.length > 0 } catch { return false }
+}
+
+export interface SnapshotProtection extends ProtectionResult {
+  ageDays: number
+  dependencyResolvable: boolean
+}
+
+/**
+ * Resolve protection for a single snapshot doc. `rawRetentionDays` defines the
+ * "recent" window that always protects.
+ */
+export async function resolveSnapshotProtection(
+  snapshot: any,
+  ctx: ProtectionContext,
+  rawRetentionDays: number,
+  now: number = Date.now(),
+): Promise<SnapshotProtection> {
+  const capturedAt = snapshot?.capturedAt ? new Date(snapshot.capturedAt).getTime() : now
+  const ageDays = Math.max(0, (now - capturedAt) / DAY_MS)
+  const fixtureId = String(snapshot?.fixtureId || '')
+
+  // Dependency resolvable only when we have a usable fixtureId and capturedAt.
+  const dependencyResolvable = !!fixtureId && !!snapshot?.capturedAt
+
+  let linkedToAlert = false
+  if (dependencyResolvable) {
+    try { linkedToAlert = await ctx.fixtureHasAlert(fixtureId) } catch { linkedToAlert = true }
+  }
+
+  const result = deriveProtectionReasons({
+    ageDays,
+    rawRetentionDays,
+    linkedToAlert,
+    // Conservative: a fixture with an alert may also feed outcome/promoted/learning.
+    linkedToOutcome: linkedToAlert,
+    hasImportantEvent: hasTimedEvents(snapshot),
+    dependencyResolvable,
+  })
+
+  return { ...result, ageDays, dependencyResolvable }
+}

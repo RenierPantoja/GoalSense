@@ -24,6 +24,7 @@ import { registerAuthMiddleware } from './middleware/auth.middleware.js'
 import { startLiveMonitorWorker } from './workers/liveMonitor.worker.js'
 import { startPatternEvaluationWorker } from './workers/patternEvaluation.worker.js'
 import { startAlertResolutionWorker } from './workers/alertResolution.worker.js'
+import { startLocalOpsMetricsCapture } from './modules/localops/localOpsMetricsPersistence.service.js'
 import { startLearningAggregationScheduler } from './modules/intelligence/learning/learningAggregationScheduler.service.js'
 import { startAutoEngineScheduler } from './modules/intelligence/autoEngine/autoEngineScheduler.service.js'
 import { startAutoEngineLearningScheduler } from './modules/intelligence/autoEngine/autoEngineLearningScheduler.service.js'
@@ -97,6 +98,7 @@ const start = async () => {
     startLearningAggregationScheduler()
     startAutoEngineScheduler()
     startAutoEngineLearningScheduler()
+    startLocalOpsMetricsCapture() // B32: optional, only runs when persistence is enabled
   } catch (err) {
     app.log.error(err)
     process.exit(1)

@@ -111,6 +111,87 @@ export interface SnapshotRetentionRunResultDto {
   generatedAt: string
 }
 
+// ── B32: snapshot lifecycle + persistent metrics ─────────────────────────────
+
+export type SnapshotLifecycleStateDto =
+  | 'active' | 'protected' | 'marked_for_deletion' | 'soft_deleted' | 'hard_deleted' | 'deletion_blocked'
+
+export type SnapshotRetentionModeDto = 'dry_run' | 'mark_only' | 'soft_delete' | 'hard_delete'
+
+export interface SnapshotRetentionCandidateDto {
+  snapshotId: string
+  fixtureId: string
+  capturedAt: string | null
+  category: string
+  lifecycleState: SnapshotLifecycleStateDto
+  protectionReasons: string[]
+  eligibleForSoftDelete: boolean
+  eligibleForHardDelete: boolean
+  ageDays: number
+  dataQuality: string
+  limitations: string[]
+}
+
+export interface SnapshotRetentionPlanV2Dto {
+  enabled: boolean
+  dryRun: boolean
+  requestedMode: SnapshotRetentionModeDto
+  effectiveMode: SnapshotRetentionModeDto
+  downgraded: boolean
+  downgradeReason: string | null
+  scanned: number
+  protectedRecords: number
+  candidates: number
+  byLifecycleState: Record<string, number>
+  topCandidates: SnapshotRetentionCandidateDto[]
+  thresholds: { rawDays: number; importantDays: number }
+  requireMarkBeforeDelete: boolean
+  limitations: string[]
+  generatedAt: string
+}
+
+export interface SnapshotRetentionRunDto {
+  id: string
+  mode: SnapshotRetentionModeDto
+  requestedBy: string | null
+  startedAt: string
+  completedAt: string | null
+  scanned: number
+  protectedRecords: number
+  candidates: number
+  marked: number
+  softDeleted: number
+  hardDeleted: number
+  blocked: number
+  errors: string[]
+  limitations: string[]
+}
+
+export interface LocalOpsMetricsSnapshotDto {
+  id: string
+  capturedAt: string
+  profile: string
+  guardMode: string
+  providerCallsAllowed: number
+  providerCallsBlocked: number
+  snapshotsWritten: number
+  snapshotsSkippedDuplicate: number
+  snapshotsSkippedInterval: number
+  snapshotsSkippedMax: number
+  fixturesSkippedByCap: number
+  readBudgetUsed: number
+  writeBudgetUsed: number
+  riskLevel: string
+  warnings: number
+}
+
+export interface LocalOpsMetricsHistoryDto {
+  enabled: boolean
+  items: LocalOpsMetricsSnapshotDto[]
+  limitations: string[]
+  generatedAt: string
+}
+
 export interface WorkerDto {
   name: string
   enabledByEnv: boolean

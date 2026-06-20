@@ -89,6 +89,16 @@ export class PrismaLiveSnapshotRepository implements LiveSnapshotRepository {
   findAfter(fixtureId: string, afterDate: Date, limit?: number) { return prisma.liveSnapshot.findMany({ where: { fixtureId, capturedAt: { gt: afterDate } }, orderBy: { capturedAt: 'asc' }, take: limit || 50 }) }
   listRecent(filters: { fixtureId?: string; limit?: number }) { return prisma.liveSnapshot.findMany({ where: filters.fixtureId ? { fixtureId: filters.fixtureId } : {}, orderBy: { capturedAt: 'desc' }, take: filters.limit || 20 }) }
   create(input: Json) { return prisma.liveSnapshot.create({ data: input as any }) }
+  // ── B32: lifecycle — Prisma schema has no lifecycle columns (db:generate not run).
+  // Reads remain unfiltered (all docs are implicitly active); mutating lifecycle is
+  // honestly unsupported here (Firebase mode is the primary persistence). No throws.
+  listLiveSnapshotsForRetention(params: { limit?: number; includeSoftDeleted?: boolean }) { return prisma.liveSnapshot.findMany({ orderBy: { capturedAt: 'desc' }, take: params.limit || 500 }) }
+  async getLiveSnapshotLifecycle(snapshotId: string) { const s = await prisma.liveSnapshot.findUnique({ where: { id: snapshotId } }); return s ? { id: (s as any).id, fixtureId: (s as any).fixtureId, lifecycleState: 'active', deletedAt: null, deletedBy: null, deletionReason: null, markedAt: null, retentionRunId: null } : null }
+  async updateLiveSnapshotLifecycle() { return { count: 0 } }
+  async markLiveSnapshotForDeletion() { return { count: 0, supported: false } }
+  async softDeleteLiveSnapshot() { return { count: 0, supported: false } }
+  async restoreSoftDeletedLiveSnapshot() { return { count: 0, supported: false } }
+  async hardDeleteLiveSnapshot() { return { count: 0, supported: false } }
 }
 
 // ─── Provider Health ─────────────────────────────────────────────────────────

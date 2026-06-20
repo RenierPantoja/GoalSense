@@ -251,3 +251,113 @@ export function classifySnapshotRetention(i: RetentionDecisionInput): RetentionD
   if (i.ageDays > i.retentionDaysRaw) return { category: 'raw', protectedRecord: false, wouldDelete: true, reason: `raw_older_than_${i.retentionDaysRaw}d` }
   return { category: 'raw', protectedRecord: false, wouldDelete: false, reason: 'raw_within_window' }
 }
+
+// ── Snapshot lifecycle helpers (Phase B32) — pure, protect-first ─────────────
+
+import type {
+  SnapshotLifecycleState, SnapshotProtectionReason, SnapshotRetentionMode,
+} from '../snapshotLifecycle.types.js'
+
+export interface ProtectionInput {
+  ageDays: number
+  rawRetentionDays: number
+  linkedToAlert?: boolean
+  linkedToOutcome?: boolean
+  linkedToBacktest?: boolean
+  linkedToReplay?: boolean
+  linkedToLearning?: boolean
+  linkedToPromotedAlert?: boolean
+  hasImportantEvent?: boolean
+  manualProtected?: boolean
+  /** When false, the dependency could not be resolved → protect (unknown_dependency). */
+  dependencyResolvable: boolean
+}
+
+export interface ProtectionResult {
+  reasons: SnapshotProtectionReason[]
+  protectedRecord: boolean
+}
+
+/**
+ * Derive protection reasons for a snapshot. PROTECT-FIRST: any linkage, recent
+ * age, evidence, manual flag, or an unresolvable dependency protects the record.
+ * Never invents a link — only reports what was provided.
+ */
+export function deriveProtectionReasons(i: ProtectionInput): ProtectionResult {
+  const reasons: SnapshotProtectionReason[] = []
+  if (i.ageDays <= i.rawRetentionDays) reasons.push('recent_snapshot')
+  if (i.linkedToPromotedAlert) reasons.push('linked_to_promoted_alert')
+  if (i.linkedToAlert) reasons.push('linked_to_alert')
+  if (i.linkedToOutcome) reasons.push('linked_to_outcome')
+  if (i.linkedToBacktest) reasons.push('linked_to_backtest')
+  if (i.linkedToReplay) reasons.push('linked_to_replay')
+  if (i.linkedToLearning) reasons.push('linked_to_learning')
+  if (i.hasImportantEvent) { reasons.push('important_event'); reasons.push('evidence_snapshot') }
+  if (i.manualProtected) reasons.push('manual_protection')
+  if (!i.dependencyResolvable) reasons.push('unknown_dependency')
+  return { reasons, protectedRecord: reasons.length > 0 }
+}
+
+export interface LifecycleEligibilityInput {
+  currentState: SnapshotLifecycleState
+  protectedRecord: boolean
+  ageDays: number
+  rawRetentionDays: number
+}
+export interface LifecycleEligibility {
+  eligibleForSoftDelete: boolean
+  eligibleForHardDelete: boolean
+  blocked: boolean
+  blockedReason: string | null
+}
+
+/**
+ * Compute what transitions a snapshot is eligible for. Protected snapshots and
+ * unknown dependencies are never deletable. Hard-delete only from soft_deleted or
+ * marked_for_deletion (and never on active/protected).
+ */
+export function evaluateLifecycleEligibility(i: LifecycleEligibilityInput): LifecycleEligibility {
+  if (i.protectedRecord) return { eligibleForSoftDelete: false, eligibleForHardDelete: false, blocked: true, blockedReason: 'protected' }
+  if (i.currentState === 'hard_deleted' || i.currentState === 'deletion_blocked') {
+    return { eligibleForSoftDelete: false, eligibleForHardDelete: false, blocked: true, blockedReason: i.currentState }
+  }
+  const oldEnough = i.ageDays > i.rawRetentionDays
+  const eligibleForSoftDelete = oldEnough && (i.currentState === 'active' || i.currentState === 'marked_for_deletion')
+  const eligibleForHardDelete = i.currentState === 'soft_deleted' || i.currentState === 'marked_for_deletion'
+  return { eligibleForSoftDelete, eligibleForHardDelete, blocked: false, blockedReason: null }
+}
+
+export interface RetentionModeFlags {
+  retentionEnabled: boolean
+  markEnabled: boolean
+  softEnabled: boolean
+  hardEnabled: boolean
+}
+export interface RetentionModeResolution {
+  effectiveMode: SnapshotRetentionMode
+  requestedMode: SnapshotRetentionMode
+  downgraded: boolean
+  reason: string | null
+}
+
+/**
+ * Gate a requested retention mode by env flags. Always downgrades toward the
+ * safest mode (dry_run). hard_delete requires its own explicit flag.
+ */
+export function resolveRetentionMode(requested: SnapshotRetentionMode, f: RetentionModeFlags): RetentionModeResolution {
+  const safe = (mode: SnapshotRetentionMode, reason: string): RetentionModeResolution =>
+    ({ effectiveMode: mode, requestedMode: requested, downgraded: mode !== requested, reason: mode !== requested ? reason : null })
+  if (!f.retentionEnabled) return safe('dry_run', 'retention_disabled')
+  if (requested === 'dry_run') return safe('dry_run', '')
+  if (requested === 'mark_only') return f.markEnabled ? safe('mark_only', '') : safe('dry_run', 'mark_disabled')
+  if (requested === 'soft_delete') return f.softEnabled ? safe('soft_delete', '') : safe('dry_run', 'soft_delete_disabled')
+  if (requested === 'hard_delete') return f.hardEnabled ? safe('hard_delete', '') : safe('dry_run', 'hard_delete_disabled')
+  return safe('dry_run', 'unknown_mode')
+}
+
+/** A doc without a lifecycle field is implicitly active. */
+export function normalizeLifecycleState(v: unknown): SnapshotLifecycleState {
+  const s = String(v || 'active')
+  const valid: SnapshotLifecycleState[] = ['active', 'protected', 'marked_for_deletion', 'soft_deleted', 'hard_deleted', 'deletion_blocked']
+  return (valid as string[]).includes(s) ? (s as SnapshotLifecycleState) : 'active'
+}

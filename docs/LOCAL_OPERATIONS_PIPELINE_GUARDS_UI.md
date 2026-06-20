@@ -32,3 +32,11 @@ Sourced from the backend status: `guard_observe_only`, `guard_off`,
 `getSnapshotRetentionPlan()`, `runSnapshotRetention()` (plus the B30 methods).
 Types in `src/features/command/intelligence/localOperationsTypes.ts`
 (`GuardMetricsDto`, `SnapshotRetentionPlanDto`, `SnapshotRetentionRunResultDto`).
+
+---
+
+## B32 additions
+The panel adds a "Ciclo de vida de snapshots" section (lifecycle counts +
+dry-run/mark/soft-delete/hard-delete actions, protect-first) and a "Histórico
+operacional (métricas)" section (persisted metric captures). Hard-delete is hidden
+unless flags + real mode allow it and requires admin. See `SNAPSHOT_LIFECYCLE_UI.md`.

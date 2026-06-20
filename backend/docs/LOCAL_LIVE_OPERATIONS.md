@@ -93,3 +93,18 @@ The B30 guards are now wired into the **real** pipeline (observe-first, default-
 Precedence: `LOCAL_OPS_GUARD_MODE` (observe|enforce) always wins; the profile only
 recommends. Counters are in-memory (reset on restart). Retention is dry-run only
 (append-only repos, no delete backend).
+
+---
+
+## B32 — Snapshot Lifecycle + Persistent Local Ops Metrics
+- Safe snapshot lifecycle (active → marked → soft_deleted → hard_deleted; protected
+  never deletable). Retention V2 modes `dry_run/mark_only/soft_delete/hard_delete`,
+  all default-safe and flag-gated; hard-delete also requires admin. Read-path hides
+  soft/hard-deleted by default; docs without a lifecycle field are active.
+  See `SNAPSHOT_LIFECYCLE.md`.
+- Optional persistence of local-ops metrics (`ENABLE_LOCAL_OPS_METRICS_PERSISTENCE`,
+  disabled by default) so operational history survives restarts. See
+  `LOCAL_OPS_METRICS_PERSISTENCE.md`.
+- New endpoints under `/api/system/local-operations`: `snapshot-retention/plan?mode`,
+  `snapshot-retention/run`, `snapshot-retention/runs[/:id]`, `metrics/history`,
+  `metrics/capture`.

@@ -69,6 +69,15 @@ export interface LiveSnapshotRepository {
   findAfter(fixtureId: string, afterDate: Date, limit?: number): Promise<Json[]>
   listRecent(filters: { fixtureId?: string; limit?: number }): Promise<Json[]>
   create(input: Json): Promise<Json>
+  // ── B32: snapshot lifecycle (safe, append-only-friendly) ──────────────────
+  /** List snapshots for retention. `includeSoftDeleted` only for admin/retention. */
+  listLiveSnapshotsForRetention(params: { limit?: number; includeSoftDeleted?: boolean }): Promise<Json[]>
+  getLiveSnapshotLifecycle(snapshotId: string): Promise<Json | null>
+  updateLiveSnapshotLifecycle(snapshotId: string, lifecycle: Json): Promise<{ count: number }>
+  markLiveSnapshotForDeletion(snapshotId: string, metadata: Json): Promise<{ count: number; supported: boolean }>
+  softDeleteLiveSnapshot(snapshotId: string, metadata: Json): Promise<{ count: number; supported: boolean }>
+  restoreSoftDeletedLiveSnapshot(snapshotId: string): Promise<{ count: number; supported: boolean }>
+  hardDeleteLiveSnapshot(snapshotId: string): Promise<{ count: number; supported: boolean }>
 }
 
 // ─── Provider Health ─────────────────────────────────────────────────────────
@@ -146,6 +155,7 @@ import type {
   AutoAlertPolicy, AutoAlertPolicyEvaluation,
 } from '../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
 import type { AdminAuditEntry } from '../modules/audit/adminAudit.types.js'
+import type { SnapshotRetentionRun, LocalOpsMetricsSnapshot } from '../modules/localops/snapshotLifecycle.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -270,6 +280,14 @@ export interface IntelligenceRepository {
   // ── B26: admin audit trail (never stores tokens/secrets) ────────────────────
   createAdminAuditEntry(entry: AdminAuditEntry): Promise<AdminAuditEntry>
   listAdminAuditEntries(limit?: number): Promise<AdminAuditEntry[]>
+
+  // ── B32: snapshot retention run audit + local-ops metrics persistence ───────
+  createSnapshotRetentionRun(run: SnapshotRetentionRun): Promise<SnapshotRetentionRun>
+  updateSnapshotRetentionRun(id: string, patch: Partial<SnapshotRetentionRun>): Promise<{ count: number }>
+  getSnapshotRetentionRun(id: string): Promise<SnapshotRetentionRun | null>
+  listSnapshotRetentionRuns(limit?: number): Promise<SnapshotRetentionRun[]>
+  createLocalOpsMetricsSnapshot(snapshot: LocalOpsMetricsSnapshot): Promise<LocalOpsMetricsSnapshot>
+  listLocalOpsMetricsSnapshots(limit?: number): Promise<LocalOpsMetricsSnapshot[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

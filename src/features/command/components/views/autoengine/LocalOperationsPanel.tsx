@@ -6,12 +6,12 @@
  * states; admin/owner controls; no secrets. Auto-create/Telegram flags surfaced.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw, Activity, Database, ShieldAlert, Gauge, Cpu, Pause, Play, RotateCcw, AlertTriangle, ShieldCheck, Trash2, Layers } from 'lucide-react'
+import { RefreshCw, Activity, Database, ShieldAlert, Gauge, Cpu, Pause, Play, RotateCcw, AlertTriangle, ShieldCheck, Trash2, Layers, History, Save } from 'lucide-react'
 import { localOperationsApi } from '@/services/localOperationsApi'
 import { useAuth } from '@/auth/useAuth'
 import type {
   LocalOperationsStatusDto, ProviderUsageDto, SnapshotGuardDto, CoverageDto, WorkerDto,
-  GuardMetricsDto, SnapshotRetentionPlanDto,
+  GuardMetricsDto, SnapshotRetentionPlanV2Dto, LocalOpsMetricsHistoryDto, SnapshotRetentionModeDto,
 } from '@/features/command/intelligence/localOperationsTypes'
 import { RISK_LABEL, RISK_TONE } from '@/features/command/intelligence/localOperationsTypes'
 
@@ -30,7 +30,8 @@ export function LocalOperationsPanel() {
   const [coverage, setCoverage] = useState<CoverageDto | null>(null)
   const [workers, setWorkers] = useState<WorkerDto[]>([])
   const [metrics, setMetrics] = useState<GuardMetricsDto | null>(null)
-  const [retention, setRetention] = useState<SnapshotRetentionPlanDto | null>(null)
+  const [retention, setRetention] = useState<SnapshotRetentionPlanV2Dto | null>(null)
+  const [history, setHistory] = useState<LocalOpsMetricsHistoryDto | null>(null)
   const [loading, setLoading] = useState(true)
   const [disabled, setDisabled] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -40,10 +41,11 @@ export function LocalOperationsPanel() {
     const s = await localOperationsApi.getStatus()
     if (s.reason === 'env_gate' || s.status === 403) { setDisabled(true); setLoading(false); return }
     if (s.ok) setStatus(s.data)
-    const [u, g, c, w, m, r] = await Promise.all([
+    const [u, g, c, w, m, r, h] = await Promise.all([
       localOperationsApi.getProviderUsage(), localOperationsApi.getSnapshotGuard(),
       localOperationsApi.getCoverage(), localOperationsApi.getWorkers(),
-      localOperationsApi.getGuardMetrics(), localOperationsApi.getSnapshotRetentionPlan(),
+      localOperationsApi.getGuardMetrics(), localOperationsApi.getSnapshotRetentionPlan('dry_run'),
+      localOperationsApi.getLocalOpsMetricsHistory(),
     ])
     if (u.ok) setUsage(u.data)
     if (g.ok) setSnap(g.data)
@@ -51,6 +53,7 @@ export function LocalOperationsPanel() {
     if (w.ok && w.data) setWorkers(w.data)
     if (m.ok) setMetrics(m.data)
     if (r.ok) setRetention(r.data)
+    if (h.ok) setHistory(h.data)
     setLoading(false)
   }, [])
 
@@ -62,16 +65,25 @@ export function LocalOperationsPanel() {
     if (r.ok) await load()
   }
 
-  const runRetention = async () => {
-    const realDelete = retention?.enabled && !retention?.dryRun
-    const confirmText = realDelete
-      ? 'ATENÇÃO: a retenção está habilitada e NÃO está em dry-run. Mesmo assim, nenhum backend de exclusão existe (deleted=0). Confirmar execução?'
-      : 'Executar plano de retenção em dry-run? Nenhum snapshot será apagado.'
+  const runRetention = async (mode: SnapshotRetentionModeDto) => {
+    const confirmText = mode === 'hard_delete'
+      ? 'ATENÇÃO: hard-delete apaga snapshots fisicamente (apenas já soft_deleted/marcados e não protegidos). Esta ação é irreversível. Confirmar?'
+      : mode === 'soft_delete'
+        ? 'Soft-delete dos candidatos elegíveis (reversível, some das leituras). Confirmar?'
+        : mode === 'mark_only'
+          ? 'Marcar candidatos para deleção (reversível, não apaga). Confirmar?'
+          : 'Executar plano em dry-run? Nada será alterado.'
     if (!window.confirm(confirmText)) return
-    const r = await localOperationsApi.runSnapshotRetention()
+    const r = await localOperationsApi.runSnapshotRetention(mode)
     setMsg(r.ok && r.data
-      ? `Retenção: ${r.data.deleted} apagados · ${r.data.wouldDelete} candidatos · ${r.data.protectedRecords} protegidos (${r.data.dryRun ? 'dry-run' : 'real'}).`
+      ? `Retenção [${r.data.mode}]: marcados ${r.data.marked} · soft ${r.data.softDeleted} · hard ${r.data.hardDeleted} · bloqueados ${r.data.blocked} · protegidos ${r.data.protectedRecords}.`
       : (r.reason === 'forbidden' ? 'Sem permissão para esta ação.' : r.error || 'Falha.'))
+    if (r.ok) await load()
+  }
+
+  const captureMetrics = async () => {
+    const r = await localOperationsApi.captureLocalOpsMetrics()
+    setMsg(r.ok && r.data ? r.data.note : (r.reason === 'forbidden' ? 'Sem permissão.' : r.error || 'Falha.'))
     if (r.ok) await load()
   }
 
@@ -177,25 +189,63 @@ export function LocalOperationsPanel() {
         </Card>
       )}
 
-      {/* B31: snapshot retention (dry-run foundation) */}
+      {/* B32: snapshot lifecycle + retention */}
       {retention && (
-        <Card title="Retenção de snapshots (dry-run)" icon={<Layers size={14} />}>
+        <Card title="Ciclo de vida de snapshots (B32)" icon={<Layers size={14} />}>
           <div className="flex items-center gap-2 flex-wrap mb-2">
             <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${retention.enabled ? 'border-[#2DD4BF]/25 text-[#7FE9DC]' : 'border-white/10 text-white/40'}`}>{retention.enabled ? 'habilitada' : 'desabilitada'}</span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${retention.dryRun ? 'border-sky-400/20 text-sky-200/85' : 'border-amber-400/20 text-amber-100/80'}`}>{retention.dryRun ? 'dry-run' : 'real (sem backend de delete)'}</span>
-            <span className="text-[10px] text-white/40">raw &gt; {retention.thresholds.rawDays}d · importante {retention.thresholds.importantDays}d</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${retention.dryRun ? 'border-sky-400/20 text-sky-200/85' : 'border-amber-400/20 text-amber-100/80'}`}>{retention.dryRun ? 'dry-run' : 'modo real'}</span>
+            <span className="text-[10px] text-white/40">raw &gt; {retention.thresholds.rawDays}d · marca-antes-de-apagar: {retention.requireMarkBeforeDelete ? 'sim' : 'não'}</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
             <KV k="varridos" v={retention.scanned} />
-            <KV k="candidatos" v={retention.candidates} />
             <KV k="protegidos" v={retention.protectedRecords} />
-            <KV k="apagaria" v={retention.wouldDelete} />
+            <KV k="candidatos" v={retention.candidates} />
+            <KV k="active" v={retention.byLifecycleState.active ?? 0} />
+            <KV k="marked" v={retention.byLifecycleState.marked_for_deletion ?? 0} />
+            <KV k="soft_deleted" v={retention.byLifecycleState.soft_deleted ?? 0} />
           </div>
-          {retention.oldestCandidateAgeDays != null && <p className="text-[10.5px] text-white/45 mt-1">Candidato mais antigo: {retention.oldestCandidateAgeDays}d</p>}
-          {isAdmin && (
-            <button type="button" onClick={runRetention} className="mt-2 h-8 px-3 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-[11.5px] text-white/65 hover:text-white/90 inline-flex items-center gap-1.5"><Trash2 size={12} />Executar plano (dry-run)</button>
+          {retention.protectedRecords > 0 && retention.candidates === 0 && (
+            <p className="text-[11px] text-[#7FE9DC]/75 mb-1">Retenção em modo proteção máxima — nada elegível para deleção agora.</p>
           )}
-          {retention.limitations.length > 0 && <p className="text-[10px] text-white/35 mt-2">{retention.limitations[retention.limitations.length - 1]}</p>}
+          {isAdmin && (
+            <div className="flex items-center gap-1.5 flex-wrap mt-1">
+              <button type="button" onClick={() => runRetention('dry_run')} className="h-8 px-3 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-[11.5px] text-white/65 inline-flex items-center gap-1.5"><Layers size={12} />Dry-run</button>
+              <button type="button" onClick={() => runRetention('mark_only')} className="h-8 px-3 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-[11.5px] text-white/65 inline-flex items-center gap-1.5">Marcar</button>
+              <button type="button" onClick={() => runRetention('soft_delete')} className="h-8 px-3 rounded-lg border border-amber-400/15 bg-amber-500/8 hover:bg-amber-500/15 text-[11.5px] text-amber-100/80 inline-flex items-center gap-1.5">Soft-delete</button>
+              {metrics?.retentionEnabled === true && retention.enabled && !retention.dryRun && (
+                <button type="button" onClick={() => runRetention('hard_delete')} className="h-8 px-3 rounded-lg border border-rose-400/25 bg-rose-500/10 hover:bg-rose-500/20 text-[11.5px] text-rose-200/85 inline-flex items-center gap-1.5"><Trash2 size={12} />Hard-delete</button>
+              )}
+            </div>
+          )}
+          {retention.downgraded && <p className="text-[10.5px] text-amber-100/75 mt-1.5">Modo solicitado rebaixado: {retention.downgradeReason}</p>}
+          {retention.limitations.length > 0 && <p className="text-[10px] text-white/35 mt-1.5">{retention.limitations[retention.limitations.length - 1]}</p>}
+          <p className="text-[10px] text-white/35 mt-1">Protegido nunca é deletado. Hard-delete só aparece com flag + modo real e exige admin.</p>
+        </Card>
+      )}
+
+      {/* B32: persistent local-ops metrics history */}
+      {history && (
+        <Card title="Histórico operacional (métricas)" icon={<History size={14} />}>
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${history.enabled ? 'border-[#2DD4BF]/25 text-[#7FE9DC]' : 'border-white/10 text-white/40'}`}>persistência {history.enabled ? 'on' : 'off'}</span>
+            {isAdmin && <button type="button" onClick={captureMetrics} className="h-7 px-2.5 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-[11px] text-white/65 inline-flex items-center gap-1"><Save size={11} />Capturar agora</button>}
+          </div>
+          {history.items.length === 0
+            ? <p className="text-[11px] text-white/35">Sem capturas. {history.enabled ? 'Capture para começar o histórico.' : 'Habilite ENABLE_LOCAL_OPS_METRICS_PERSISTENCE.'}</p>
+            : (
+              <div className="space-y-1">
+                {history.items.slice(0, 8).map(h => (
+                  <div key={h.id} className="flex items-center gap-2 text-[11px] text-white/60 border-b border-white/[0.04] pb-1 flex-wrap">
+                    <span className="text-white/45 tabular-nums">{new Date(h.capturedAt).toLocaleString()}</span>
+                    <span className={`px-1.5 py-0.5 rounded-full border text-[9.5px] ${RISK_TONE[h.riskLevel as keyof typeof RISK_TONE] || 'border-white/10 text-white/40'}`}>{h.riskLevel}</span>
+                    <span className="text-white/50">{h.guardMode}</span>
+                    <span className="ml-auto tabular-nums">prov {h.providerCallsBlocked} bloq · snap {h.snapshotsWritten}w/{h.snapshotsSkippedDuplicate + h.snapshotsSkippedInterval + h.snapshotsSkippedMax}sk · cap {h.fixturesSkippedByCap}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          {history.limitations.length > 0 && <p className="text-[10px] text-white/35 mt-1.5">{history.limitations[history.limitations.length - 1]}</p>}
         </Card>
       )}
 

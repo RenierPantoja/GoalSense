@@ -7,7 +7,8 @@
 import { apiFetch } from './apiClient'
 import type {
   LocalOperationsStatusDto, ProviderUsageDto, SnapshotGuardDto, CoverageDto, WorkerDto,
-  GuardMetricsDto, SnapshotRetentionPlanDto, SnapshotRetentionRunResultDto,
+  GuardMetricsDto, SnapshotRetentionPlanV2Dto, SnapshotRetentionRunDto,
+  SnapshotRetentionModeDto, LocalOpsMetricsHistoryDto, LocalOpsMetricsSnapshotDto,
 } from '@/features/command/intelligence/localOperationsTypes'
 
 const BASE = '/api/system/local-operations'
@@ -19,8 +20,12 @@ export const localOperationsApi = {
   getCoverage() { return apiFetch<CoverageDto>(`${BASE}/coverage`) },
   getWorkers() { return apiFetch<WorkerDto[]>(`${BASE}/workers`) },
   getGuardMetrics() { return apiFetch<GuardMetricsDto>(`${BASE}/guard-metrics`) },
-  getSnapshotRetentionPlan() { return apiFetch<SnapshotRetentionPlanDto>(`${BASE}/snapshot-retention/plan`) },
-  runSnapshotRetention() { return apiFetch<SnapshotRetentionRunResultDto>(`${BASE}/snapshot-retention/run`, { method: 'POST', body: '{}' }) },
+  getSnapshotRetentionPlan(mode: SnapshotRetentionModeDto = 'dry_run') { return apiFetch<SnapshotRetentionPlanV2Dto>(`${BASE}/snapshot-retention/plan?mode=${encodeURIComponent(mode)}`) },
+  getSnapshotRetentionRuns() { return apiFetch<SnapshotRetentionRunDto[]>(`${BASE}/snapshot-retention/runs`) },
+  getSnapshotRetentionRun(runId: string) { return apiFetch<SnapshotRetentionRunDto>(`${BASE}/snapshot-retention/runs/${encodeURIComponent(runId)}`) },
+  runSnapshotRetention(mode: SnapshotRetentionModeDto = 'dry_run') { return apiFetch<SnapshotRetentionRunDto>(`${BASE}/snapshot-retention/run`, { method: 'POST', body: JSON.stringify({ mode }) }) },
+  getLocalOpsMetricsHistory() { return apiFetch<LocalOpsMetricsHistoryDto>(`${BASE}/metrics/history`) },
+  captureLocalOpsMetrics() { return apiFetch<{ captured: boolean; persisted: boolean; snapshot: LocalOpsMetricsSnapshotDto; note: string }>(`${BASE}/metrics/capture`, { method: 'POST', body: '{}' }) },
   pauseWorker(name: string) { return apiFetch<{ worker: string; paused: boolean }>(`${BASE}/workers/${encodeURIComponent(name)}/pause`, { method: 'POST', body: '{}' }) },
   resumeWorker(name: string) { return apiFetch<{ worker: string; paused: boolean }>(`${BASE}/workers/${encodeURIComponent(name)}/resume`, { method: 'POST', body: '{}' }) },
   resetGuardCounters() { return apiFetch<{ reset: boolean; note: string }>(`${BASE}/guards/reset-counters`, { method: 'POST', body: '{}' }) },

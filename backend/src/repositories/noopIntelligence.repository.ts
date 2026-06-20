@@ -30,6 +30,7 @@ import type {
   AutoEngineLearningRun, AutoEngineLearningProfile, AutoOpportunityTypeProfile,
   AutoEngineLearningRecommendation,
 } from '../modules/intelligence/autoEngine/autoEngineLearning.types.js'
+import type { SnapshotRetentionRun, LocalOpsMetricsSnapshot } from '../modules/localops/snapshotLifecycle.types.js'
 import type {
   AutoAlertPolicy, AutoAlertPolicyEvaluation,
 } from '../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
@@ -165,4 +166,12 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   // ── B26 (Noop): audit accepted without persistence; reads empty ──
   async createAdminAuditEntry(entry: AdminAuditEntry): Promise<AdminAuditEntry> { return entry }
   async listAdminAuditEntries(): Promise<AdminAuditEntry[]> { return [] }
+
+  // ── B32 (Noop): retention run audit + local-ops metrics not persisted ──
+  async createSnapshotRetentionRun(run: SnapshotRetentionRun): Promise<SnapshotRetentionRun> { warnOnce(); return run }
+  async updateSnapshotRetentionRun(): Promise<{ count: number }> { return { count: 0 } }
+  async getSnapshotRetentionRun(): Promise<SnapshotRetentionRun | null> { return null }
+  async listSnapshotRetentionRuns(): Promise<SnapshotRetentionRun[]> { return [] }
+  async createLocalOpsMetricsSnapshot(snapshot: LocalOpsMetricsSnapshot): Promise<LocalOpsMetricsSnapshot> { warnOnce(); return snapshot }
+  async listLocalOpsMetricsSnapshots(): Promise<LocalOpsMetricsSnapshot[]> { return [] }
 }

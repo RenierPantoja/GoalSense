@@ -17,8 +17,10 @@ import { getSnapshotGuardStatus, resetSnapshotGuardCounters } from './snapshotWr
 import { getCoverageReport } from './dataCoverageMonitor.service.js'
 import { pauseWorker, resumeWorker, getGuardRuntimeSummary } from './workerRegistry.service.js'
 import { getGuardMetrics, resetGuardMetrics } from './livePipelineGuard.service.js'
-import { getSnapshotRetentionPlan, runSnapshotRetention } from './snapshotRetention.service.js'
+import { getSnapshotRetentionPlan, runSnapshotRetention, listSnapshotRetentionRuns, getSnapshotRetentionRun } from './snapshotRetention.service.js'
+import { getLocalOpsMetricsHistory, captureLocalOpsMetrics } from './localOpsMetricsPersistence.service.js'
 import { recordAdminAudit } from '../audit/adminAudit.service.js'
+import type { SnapshotRetentionMode } from './snapshotLifecycle.types.js'
 
 function gate(reply: any): boolean {
   if (!isLocalOperationsPanelEnabled()) {
@@ -69,17 +71,51 @@ export async function localOperationsRoutes(app: FastifyInstance) {
     return ok(getGuardRuntimeSummary())
   })
 
-  // ── B31: snapshot retention (dry-run foundation) ────────────────────────────
-  app.get(`${BASE}/snapshot-retention/plan`, async (_req, reply) => {
+  // ── B31/B32: snapshot retention (lifecycle: dry_run/mark_only/soft_delete/hard_delete) ──
+  app.get(`${BASE}/snapshot-retention/plan`, async (req, reply) => {
     if (!gate(reply)) return
-    try { return ok(await getSnapshotRetentionPlan()) }
+    const mode = ((req.query as any)?.mode || 'dry_run') as SnapshotRetentionMode
+    try { return ok(await getSnapshotRetentionPlan(mode)) }
     catch (e: any) { app.log.warn(`retention plan failed: ${e?.message || e}`); return ok(null) }
+  })
+
+  app.get(`${BASE}/snapshot-retention/runs`, async (_req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await listSnapshotRetentionRuns(20)) }
+    catch (e: any) { app.log.warn(`retention runs failed: ${e?.message || e}`); return ok([]) }
+  })
+
+  app.get(`${BASE}/snapshot-retention/runs/:runId`, async (req, reply) => {
+    if (!gate(reply)) return
+    const { runId } = req.params as { runId: string }
+    try { return ok(await getSnapshotRetentionRun(runId)) }
+    catch (e: any) { app.log.warn(`retention run failed: ${e?.message || e}`); return ok(null) }
   })
 
   app.post(`${BASE}/snapshot-retention/run`, { preHandler: [requirePermission({ permission: 'run:scan' })] }, async (req, reply) => {
     if (!gate(reply)) return
-    const result = await runSnapshotRetention()
-    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'snapshot_retention', resourceId: 'run', metadata: { enabled: result.enabled, dryRun: result.dryRun, deleted: result.deleted, wouldDelete: result.wouldDelete } })
+    const requestedMode = ((req.body as any)?.mode || 'dry_run') as SnapshotRetentionMode
+    // hard_delete additionally requires admin.
+    if (requestedMode === 'hard_delete' && !(req.auth?.user?.role === 'admin' || req.auth?.user?.role === 'owner')) {
+      void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'denied', resourceType: 'snapshot_retention', resourceId: 'run', metadata: { requestedMode, reason: 'admin_required' } })
+      return reply.status(403).send(badRequest('hard_delete requer admin/owner.', { reason: 'admin_required' }))
+    }
+    const result = await runSnapshotRetention({ requestedMode, requestedBy: req.auth?.user?.userId ?? null })
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'snapshot_retention', resourceId: result.id, metadata: { mode: result.mode, marked: result.marked, softDeleted: result.softDeleted, hardDeleted: result.hardDeleted, blocked: result.blocked } })
+    return ok(result)
+  })
+
+  // ── B32: local-ops metrics persistence (optional, disabled by default) ──────
+  app.get(`${BASE}/metrics/history`, async (_req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await getLocalOpsMetricsHistory(50)) }
+    catch (e: any) { app.log.warn(`metrics history failed: ${e?.message || e}`); return ok(null) }
+  })
+
+  app.post(`${BASE}/metrics/capture`, { preHandler: [requirePermission({ permission: 'run:scan' })] }, async (req, reply) => {
+    if (!gate(reply)) return
+    const result = await captureLocalOpsMetrics()
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'local_ops_metrics', resourceId: result.snapshot.id, metadata: { persisted: result.persisted } })
     return ok(result)
   })
 

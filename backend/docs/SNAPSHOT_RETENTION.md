@@ -47,3 +47,15 @@ Any linkage protects the record regardless of age.
 - Scan is bounded to the 500 most-recent snapshots (partial coverage).
 - Per-snapshot backtest/replay/learning linkage is approximated (protect-first).
 - Counters/plan reflect a point-in-time read; nothing is cached destructively.
+
+---
+
+## B32 update — Retention V2 (lifecycle)
+Retention is no longer dry-run-only. It now supports a safe lifecycle with modes
+`dry_run | mark_only | soft_delete | hard_delete`, each gated by its own flag and
+downgraded toward `dry_run` when the flag is off. Hard-delete requires
+`ENABLE_SNAPSHOT_HARD_DELETE=true`, acts only on already soft_deleted/marked +
+unprotected snapshots, and requires admin/owner on the API route. Every run is
+audited (`snapshotRetentionRuns`). Protection is computed by the Snapshot
+Protection Index (protect-first; `unknown_dependency` protects). Read-path excludes
+soft/hard-deleted by default. Full detail: `SNAPSHOT_LIFECYCLE.md`.

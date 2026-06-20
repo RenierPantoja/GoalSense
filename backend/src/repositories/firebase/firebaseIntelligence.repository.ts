@@ -39,6 +39,7 @@ import type {
   AutoAlertPolicy, AutoAlertPolicyEvaluation,
 } from '../../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
 import type { AdminAuditEntry } from '../../modules/audit/adminAudit.types.js'
+import type { SnapshotRetentionRun, LocalOpsMetricsSnapshot } from '../../modules/localops/snapshotLifecycle.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -67,6 +68,8 @@ const AUTO_LEARNING_PROFILES = 'autoEngineLearningProfiles'
 const AUTO_ALERT_POLICIES = 'autoAlertPolicies'
 const AUTO_ALERT_POLICY_EVALS = 'autoAlertPolicyEvaluations'
 const ADMIN_AUDIT = 'adminAuditTrail'
+const SNAPSHOT_RETENTION_RUNS = 'snapshotRetentionRuns'
+const LOCAL_OPS_METRICS = 'localOpsMetrics'
 
 const READ_CAP = 2000
 
@@ -644,5 +647,44 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     const snap = await db.collection(ADMIN_AUDIT).limit(READ_CAP).get()
     return snap.docs.map((d: any) => docData<AdminAuditEntry>(d))
       .sort(byCreatedAtDesc).slice(0, limit || 100)
+  }
+
+  // ── B32: snapshot retention run audit + local-ops metrics persistence ───────
+  async createSnapshotRetentionRun(run: SnapshotRetentionRun): Promise<SnapshotRetentionRun> {
+    const db = await getFirestore()
+    await db.collection(SNAPSHOT_RETENTION_RUNS).doc(run.id).set(run, { merge: true })
+    return run
+  }
+  async updateSnapshotRetentionRun(id: string, patch: Partial<SnapshotRetentionRun>): Promise<{ count: number }> {
+    const db = await getFirestore()
+    const ref = db.collection(SNAPSHOT_RETENTION_RUNS).doc(id)
+    const doc = await ref.get()
+    if (!doc.exists) return { count: 0 }
+    const clean: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(patch)) { if (v !== undefined) clean[k] = v }
+    await ref.set(clean, { merge: true })
+    return { count: 1 }
+  }
+  async getSnapshotRetentionRun(id: string): Promise<SnapshotRetentionRun | null> {
+    const db = await getFirestore()
+    const doc = await db.collection(SNAPSHOT_RETENTION_RUNS).doc(id).get()
+    return doc.exists ? docData<SnapshotRetentionRun>(doc) : null
+  }
+  async listSnapshotRetentionRuns(limit?: number): Promise<SnapshotRetentionRun[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(SNAPSHOT_RETENTION_RUNS).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<SnapshotRetentionRun>(d))
+      .sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
+  }
+  async createLocalOpsMetricsSnapshot(snapshot: LocalOpsMetricsSnapshot): Promise<LocalOpsMetricsSnapshot> {
+    const db = await getFirestore()
+    await db.collection(LOCAL_OPS_METRICS).doc(snapshot.id).set(snapshot, { merge: true })
+    return snapshot
+  }
+  async listLocalOpsMetricsSnapshots(limit?: number): Promise<LocalOpsMetricsSnapshot[]> {
+    const db = await getFirestore()
+    const snap = await db.collection(LOCAL_OPS_METRICS).limit(READ_CAP).get()
+    return snap.docs.map((d: any) => docData<LocalOpsMetricsSnapshot>(d))
+      .sort((a: any, b: any) => (b.capturedAt || '').localeCompare(a.capturedAt || '')).slice(0, limit || 100)
   }
 }
