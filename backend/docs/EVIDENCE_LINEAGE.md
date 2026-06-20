@@ -59,3 +59,13 @@ of a fixture, while never authorizing a delete on uncertainty.
 - Backtest links cover up to 30 snapshots/fixture; replay up to 60 — bounded to
   limit writes.
 - Prisma mode does not persist links (Noop) — use Firebase mode.
+
+---
+
+## B34 update — live exact capture
+Triggers, outcomes, opportunities and policy evaluations now carry the **exact**
+`snapshotId` they evaluated (when one exists), via typed helpers
+`linkTriggerSnapshot` / `linkOutcomeSnapshot` / `linkOpportunitySnapshot` /
+`linkPolicySnapshot` / `linkPromotionSnapshot`. This closes the B33 gap where only
+backtest/replay produced exact links. Strength stays honest (exact only with a real
+id; `snapshot_not_written` limitation otherwise). See `LIVE_ALERT_EVIDENCE_CAPTURE.md`.

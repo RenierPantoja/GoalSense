@@ -42,6 +42,84 @@ export async function linkSnapshotsToSource(inputs: LinkSnapshotInput[]): Promis
   }
 }
 
+// ── B34: typed helpers (exact when a real snapshotId exists, else inferred) ───
+
+/** Link an alert's TRIGGER snapshot. Exact when triggerSnapshotId is real. */
+export async function linkTriggerSnapshot(p: {
+  fixtureId: string; alertId: string; patternId: string | null; minute: number | null
+  snapshotId: string | null; capturedAt: string | null; provider?: string | null
+}): Promise<EvidenceSnapshotReference | null> {
+  return linkSnapshotToSource({
+    snapshotId: p.snapshotId, fixtureId: p.fixtureId, provider: p.provider ?? null,
+    capturedAt: p.capturedAt, minute: p.minute,
+    linkStrength: p.snapshotId ? 'exact' : 'window_inferred',
+    source: 'signal_ledger', sourceId: p.alertId, sourceType: 'SignalLedgerEntry',
+    alertId: p.alertId, patternId: p.patternId, evidenceKind: 'trigger_state',
+    reason: p.snapshotId ? 'Snapshot exato avaliado no gatilho do alerta.' : 'Gatilho sem snapshotId — vínculo por fixture/janela.',
+    limitations: p.snapshotId ? [] : ['snapshot_not_written'],
+  })
+}
+
+/** Link an alert's OUTCOME snapshot. Exact when outcomeSnapshotId is real. */
+export async function linkOutcomeSnapshot(p: {
+  fixtureId: string; alertId: string; patternId: string | null; outcomeId: string; minute: number | null
+  snapshotId: string | null; capturedAt: string | null
+}): Promise<EvidenceSnapshotReference | null> {
+  return linkSnapshotToSource({
+    snapshotId: p.snapshotId, fixtureId: p.fixtureId, capturedAt: p.capturedAt, minute: p.minute,
+    linkStrength: p.snapshotId ? 'exact' : 'window_inferred',
+    source: 'alert_outcome', sourceId: p.outcomeId, sourceType: 'AlertOutcomeRecord',
+    alertId: p.alertId, patternId: p.patternId, outcomeId: p.outcomeId, evidenceKind: 'outcome_state',
+    reason: p.snapshotId ? 'Snapshot exato usado na resolução do outcome.' : 'Resolução sem snapshotId — vínculo por fixture/janela.',
+    limitations: p.snapshotId ? [] : ['snapshot_not_written'],
+  })
+}
+
+/** Link an opportunity's evidence snapshot. Exact when evidenceSnapshotId is real. */
+export async function linkOpportunitySnapshot(p: {
+  fixtureId: string; opportunityId: string; minute: number | null
+  snapshotId: string | null; capturedAt: string | null
+}): Promise<EvidenceSnapshotReference | null> {
+  return linkSnapshotToSource({
+    snapshotId: p.snapshotId, fixtureId: p.fixtureId, capturedAt: p.capturedAt, minute: p.minute,
+    linkStrength: p.snapshotId ? 'exact' : 'window_inferred',
+    source: 'auto_opportunity', sourceId: p.opportunityId, sourceType: 'AutoOpportunity',
+    opportunityId: p.opportunityId, evidenceKind: 'auto_opportunity_evidence',
+    reason: p.snapshotId ? 'Snapshot exato avaliado na geração da oportunidade.' : 'Oportunidade sem snapshotId — vínculo por fixture/janela.',
+    limitations: p.snapshotId ? [] : ['snapshot_not_written'],
+  })
+}
+
+/** Link a policy evaluation's evidence snapshot. Exact when id is real. */
+export async function linkPolicySnapshot(p: {
+  fixtureId: string; opportunityId: string; policyEvaluationId: string; minute: number | null
+  snapshotId: string | null; capturedAt: string | null
+}): Promise<EvidenceSnapshotReference | null> {
+  return linkSnapshotToSource({
+    snapshotId: p.snapshotId, fixtureId: p.fixtureId, capturedAt: p.capturedAt, minute: p.minute,
+    linkStrength: p.snapshotId ? 'exact' : 'window_inferred',
+    source: 'auto_alert_policy_evaluation', sourceId: p.policyEvaluationId, sourceType: 'AutoAlertPolicyEvaluation',
+    opportunityId: p.opportunityId, policyEvaluationId: p.policyEvaluationId, evidenceKind: 'policy_gate_evidence',
+    reason: p.snapshotId ? 'Snapshot exato da oportunidade usado na avaliação da política.' : 'Avaliação de política sem snapshotId — vínculo inferido.',
+    limitations: p.snapshotId ? [] : ['snapshot_not_written'],
+  })
+}
+
+/** Link a promoted alert to the opportunity's evidence snapshot. */
+export async function linkPromotionSnapshot(p: {
+  fixtureId: string; alertId: string; opportunityId: string; minute: number | null
+  snapshotId: string | null; capturedAt: string | null
+}): Promise<EvidenceSnapshotReference | null> {
+  return linkSnapshotToSource({
+    snapshotId: p.snapshotId, fixtureId: p.fixtureId, capturedAt: p.capturedAt, minute: p.minute,
+    linkStrength: p.snapshotId ? 'exact' : 'window_inferred',
+    source: 'promoted_alert', sourceId: p.alertId, sourceType: 'PromotedAlert',
+    alertId: p.alertId, opportunityId: p.opportunityId, evidenceKind: 'auto_opportunity_evidence',
+    reason: p.snapshotId ? 'Alerta promovido herda o snapshot exato da oportunidade.' : 'Alerta promovido sem snapshotId — vínculo inferido.',
+    limitations: p.snapshotId ? [] : ['snapshot_not_written'],
+  })
+}
+
 // ── Bundle building ──────────────────────────────────────────────────────────
 
 function toTimeline(refs: EvidenceSnapshotReference[]): EvidenceTimelineEntry[] {

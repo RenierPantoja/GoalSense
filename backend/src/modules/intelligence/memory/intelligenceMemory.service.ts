@@ -19,7 +19,7 @@ import { buildLedgerEntry } from './signalLedger.service.js'
 import { buildFailureAnalysis, buildLearningEvent, learningTypeForResult } from '../learning/learningEvent.service.js'
 import { outcomeId } from '../utils/intelligenceId.util.js'
 import { buildLiveAvailabilityMap, collectMissingData, inferProviderQuality } from '../utils/dataAvailability.util.js'
-import { linkSnapshotToSource } from '../evidence/evidenceLineage.service.js'
+import { linkTriggerSnapshot, linkOutcomeSnapshot } from '../evidence/evidenceLineage.service.js'
 
 export interface AlertCreatedContext {
   alertId: string
@@ -44,6 +44,9 @@ export interface AlertCreatedContext {
     competitionType: string; stage: string; isKnockout: boolean
     importance: number; importanceLabel: string; notes: string[]
   } | null
+  // ── B34 (optional): exact trigger snapshot evidence ──
+  triggerSnapshotId?: string | null
+  triggerSnapshotCapturedAt?: string | null
 }
 
 export interface AlertResolvedContext {
@@ -60,6 +63,10 @@ export interface AlertResolvedContext {
   hasTimedEvents: boolean
   momentumSource: string | null
   dataWarnings: string[]
+  // ── B34 (optional): exact outcome snapshot evidence ──
+  outcomeSnapshotId?: string | null
+  outcomeSnapshotCapturedAt?: string | null
+  outcomeMinute?: number | null
 }
 
 function toIso(v: string | Date): string {
@@ -123,16 +130,18 @@ export async function recordAlertCreated(ctx: AlertCreatedContext): Promise<void
       dataAvailability: availability,
     })
 
-    await repos.intelligence.createSignalLedgerEntry(entry)
+    await repos.intelligence.createSignalLedgerEntry({
+      ...entry,
+      triggerSnapshotId: ctx.triggerSnapshotId ?? null,
+      triggerSnapshotCapturedAt: ctx.triggerSnapshotCapturedAt ?? null,
+      triggerEvidenceStrength: ctx.triggerSnapshotId ? 'exact' : 'window_inferred',
+    })
 
-    // B33: non-fatal evidence link (no snapshotId captured at trigger → inferred).
+    // B33/B34: non-fatal evidence link — EXACT when the evaluated snapshotId is known.
     if (String(env.ENABLE_EVIDENCE_LINEAGE).toLowerCase() === 'true') {
-      void linkSnapshotToSource({
-        fixtureId: ctx.fixture.id, minute: ctx.minute, linkStrength: 'window_inferred',
-        source: 'signal_ledger', sourceId: entry.id, sourceType: 'SignalLedgerEntry',
-        alertId: ctx.alertId, patternId: ctx.pattern.id, evidenceKind: 'trigger_state',
-        reason: 'Ledger criado sem snapshotId no gatilho — vínculo por fixture/janela.',
-        limitations: ['Sem snapshotId exato no momento do gatilho.'],
+      void linkTriggerSnapshot({
+        fixtureId: ctx.fixture.id, alertId: ctx.alertId, patternId: ctx.pattern.id, minute: ctx.minute,
+        snapshotId: ctx.triggerSnapshotId ?? null, capturedAt: ctx.triggerSnapshotCapturedAt ?? null, provider: ctx.provider,
       })
     }
 
@@ -189,21 +198,20 @@ export async function recordAlertResolved(ctx: AlertResolvedContext): Promise<vo
       resolvedAt: now.toISOString(),
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
+      outcomeSnapshotId: ctx.outcomeSnapshotId ?? null,
+      outcomeSnapshotCapturedAt: ctx.outcomeSnapshotCapturedAt ?? null,
     })
 
     // Transition the ledger entry (if present) to resolved.
     const patch: Partial<SignalLedgerEntry> = { signalStatus: 'resolved' }
     await repos.intelligence.updateSignalLedgerEntry(`led_${ctx.alertId}`, patch)
 
-    // B33: non-fatal evidence link for the outcome state (inferred, no snapshotId).
+    // B33/B34: non-fatal evidence link for the outcome — EXACT when a real snapshotId is known.
     if (String(env.ENABLE_EVIDENCE_LINEAGE).toLowerCase() === 'true') {
-      void linkSnapshotToSource({
-        fixtureId: ctx.fixtureId, minute: null, linkStrength: 'window_inferred',
-        source: 'alert_outcome', sourceId: outcomeId(ctx.alertId), sourceType: 'AlertOutcomeRecord',
-        alertId: ctx.alertId, patternId: ctx.patternId, outcomeId: outcomeId(ctx.alertId),
-        evidenceKind: 'outcome_state',
-        reason: 'Outcome resolvido sem snapshotId exato — vínculo por fixture/janela.',
-        limitations: ['Sem snapshotId exato no momento da resolução.'],
+      void linkOutcomeSnapshot({
+        fixtureId: ctx.fixtureId, alertId: ctx.alertId, patternId: ctx.patternId,
+        outcomeId: outcomeId(ctx.alertId), minute: ctx.outcomeMinute ?? null,
+        snapshotId: ctx.outcomeSnapshotId ?? null, capturedAt: ctx.outcomeSnapshotCapturedAt ?? null,
       })
     }
 

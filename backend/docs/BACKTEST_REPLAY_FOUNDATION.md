@@ -128,3 +128,11 @@ documents they actually consume (`backtest_result` / `replay_step`, gated by
 produce `exact` links today (they iterate real snapshot docs with ids), which lets
 snapshot retention protect precisely the snapshots a backtest/replay depended on.
 Results/timelines and outcomes are unchanged. See `EVIDENCE_LINEAGE.md`.
+
+---
+
+## B34 note
+Backtest/replay remain the exact-link sources for historical snapshots; B34 adds
+exact links for live triggers/outcomes/opportunities/policies. Per-row backtest
+result snapshot badges are still not surfaced (no snapshot-id field on the persisted
+result) — run-level exact links exist via the evidence API.

@@ -43,3 +43,11 @@ Protection reasons shown in the lifecycle section are now informed by the Eviden
 Lineage index (exact vs inferred). The detailed per-alert evidence trail (snapshots,
 timeline, strengths) is in Alertas 2.0 → Evidências; ReplayViewer shows a fixture
 lineage summary badge. See `EVIDENCE_LINEAGE_UI.md`.
+
+---
+
+## B34 additions
+Protection precision improves as live capture (B34) yields exact trigger/outcome/
+opportunity/policy snapshot links. The per-alert and per-opportunity evidence trails
+(exact vs inferred) are in Alertas 2.0 → Evidências and the AutoOpportunityDrawer.
+See `INLINE_EVIDENCE_UX.md`.

@@ -33,7 +33,7 @@ const lineage = await load('../dist/modules/intelligence/evidence/evidenceLineag
 const flagOn = String(env.ENABLE_EVIDENCE_LINEAGE_BACKFILL).toLowerCase() === 'true'
 const willWrite = PERSIST && flagOn
 
-const report = { mode: willWrite ? 'persist' : 'dry_run', exactCreated: 0, inferredCreated: 0, unknown: 0, skipped: 0, limitations: [] }
+const report = { mode: willWrite ? 'persist' : 'dry_run', exactFromStoredSnapshotId: 0, inferredWindow: 0, unknown: 0, skipped: 0, limitations: [] }
 if (PERSIST && !flagOn) report.limitations.push('--persist ignorado: ENABLE_EVIDENCE_LINEAGE_BACKFILL!=true (dry-run forçado).')
 
 function inWindow(iso) {
@@ -55,14 +55,18 @@ for (const l of ledger) {
   if (FIXTURE && l.fixtureId !== FIXTURE) { report.skipped++; continue }
   if (!inWindow(l.createdAt)) { report.skipped++; continue }
   if (!l.fixtureId) { report.unknown++; continue }
+  // B34: use the stored triggerSnapshotId for an EXACT link when present.
+  const snapId = l.triggerSnapshotId ?? null
   inputs.push({
-    fixtureId: l.fixtureId, minute: l.minute ?? null, linkStrength: 'window_inferred',
+    snapshotId: snapId, fixtureId: l.fixtureId, minute: l.minute ?? null,
+    capturedAt: l.triggerSnapshotCapturedAt ?? null,
+    linkStrength: snapId ? 'exact' : 'window_inferred',
     source: 'signal_ledger', sourceId: l.id, sourceType: 'SignalLedgerEntry',
     alertId: l.alertId ?? null, patternId: l.patternId ?? null, evidenceKind: 'trigger_state',
-    reason: 'Backfill: ledger histórico sem snapshotId — vínculo por fixture/janela.',
-    createdBy: 'backfill', limitations: ['Backfill inferido; sem snapshotId exato.'],
+    reason: snapId ? 'Backfill: snapshotId exato armazenado no ledger.' : 'Backfill: ledger histórico sem snapshotId — vínculo por fixture/janela.',
+    createdBy: 'backfill', limitations: snapId ? [] : ['snapshot_not_written'],
   })
-  report.inferredCreated++
+  if (snapId) report.exactFromStoredSnapshotId++; else report.inferredWindow++
 }
 
 // 2) Alert Outcomes → outcome_state window_inferred links.
@@ -72,17 +76,20 @@ for (const o of outcomes) {
   if (FIXTURE && o.fixtureId !== FIXTURE) { report.skipped++; continue }
   if (!inWindow(o.createdAt)) { report.skipped++; continue }
   if (!o.fixtureId) { report.unknown++; continue }
+  const snapId = o.outcomeSnapshotId ?? null
   inputs.push({
-    fixtureId: o.fixtureId, minute: o.resolutionMinute ?? null, linkStrength: 'window_inferred',
+    snapshotId: snapId, fixtureId: o.fixtureId, minute: o.resolutionMinute ?? null,
+    capturedAt: o.outcomeSnapshotCapturedAt ?? null,
+    linkStrength: snapId ? 'exact' : 'window_inferred',
     source: 'alert_outcome', sourceId: o.id, sourceType: 'AlertOutcomeRecord',
     alertId: o.alertId ?? null, patternId: o.patternId ?? null, outcomeId: o.id, evidenceKind: 'outcome_state',
-    reason: 'Backfill: outcome histórico sem snapshotId — vínculo por fixture/janela.',
-    createdBy: 'backfill', limitations: ['Backfill inferido; sem snapshotId exato.'],
+    reason: snapId ? 'Backfill: snapshotId exato armazenado no outcome.' : 'Backfill: outcome histórico sem snapshotId — vínculo por fixture/janela.',
+    createdBy: 'backfill', limitations: snapId ? [] : ['snapshot_not_written'],
   })
-  report.inferredCreated++
+  if (snapId) report.exactFromStoredSnapshotId++; else report.inferredWindow++
 }
 
-report.limitations.push('Backfill nunca cria links exact (sem snapshotId nas fontes históricas).')
+report.limitations.push('Backfill cria exact apenas quando há triggerSnapshotId/outcomeSnapshotId armazenado (B34); caso contrário, window_inferred.')
 report.limitations.push('Nenhum dado original foi alterado ou apagado.')
 
 if (willWrite && inputs.length > 0) {

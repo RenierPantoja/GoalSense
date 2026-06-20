@@ -12,7 +12,7 @@ import { buildLedgerEntry } from '../memory/signalLedger.service.js'
 import { createOpportunityAction } from './autoOpportunityActions.service.js'
 import { buildPromotionPreview, evaluatePromotionGuard } from './utils/autoOpportunityAlertPromotion.util.js'
 import { OPP_TYPE_LABEL } from './utils/autoSignalLabels.util.js'
-import { linkSnapshotToSource } from '../evidence/evidenceLineage.service.js'
+import { linkPromotionSnapshot } from '../evidence/evidenceLineage.service.js'
 import type {
   AutoOpportunity, ManualAlertPromotionPreview, ManualAlertPromotionRequest,
   ManualAlertPromotionResult, ManualPromotedAlertLink, PromotedAlertProvenance,
@@ -175,14 +175,12 @@ export async function promoteOpportunityToManualAlert(request: ManualAlertPromot
     })
     await repos.intelligence.createSignalLedgerEntry(entry)
     ledgerId = entry.id
-    // B33: inferred evidence link for the promoted alert's opportunity (no snapshotId).
+    // B33/B34: evidence link for the promoted alert — EXACT when the opportunity
+    // carries a real evidenceSnapshotId, else inferred by fixture/window.
     if (String(env.ENABLE_EVIDENCE_LINEAGE).toLowerCase() === 'true') {
-      void linkSnapshotToSource({
-        fixtureId: opp.fixtureId, minute: opp.minute, linkStrength: 'window_inferred',
-        source: 'promoted_alert', sourceId: alertId, sourceType: 'PromotedAlert',
-        alertId, opportunityId: opp.id, evidenceKind: 'auto_opportunity_evidence',
-        reason: 'Alerta promovido de oportunidade — vínculo por fixture/janela (sem snapshotId).',
-        limitations: ['Sem snapshotId exato da oportunidade.'],
+      void linkPromotionSnapshot({
+        fixtureId: opp.fixtureId, alertId, opportunityId: opp.id, minute: opp.minute,
+        snapshotId: (opp as any).evidenceSnapshotId ?? null, capturedAt: (opp as any).evidenceSnapshotCapturedAt ?? null,
       })
     }
   } catch (e: any) {

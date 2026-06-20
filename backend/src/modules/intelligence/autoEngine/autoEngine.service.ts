@@ -15,6 +15,7 @@ import { evaluateOpportunitiesForRun } from './autoAlertPolicyEvaluation.service
 import { isAutoAlertPolicyEnabled } from './autoAlertPolicyConfig.service.js'
 import { rankOpportunities } from './utils/autoSignalRanking.util.js'
 import { autoRunId } from './utils/autoSignalId.util.js'
+import { linkOpportunitySnapshot } from '../evidence/evidenceLineage.service.js'
 import type { AutoEngineRun, AutoEngineRunConfig, AutoOpportunity, AutoEngineOverview } from './autoEngine.types.js'
 import type { SampleQuality } from '../contracts/learning.types.js'
 
@@ -93,7 +94,10 @@ export async function runAutoEngineScan(opts: ScanOptions = {}): Promise<AutoEng
         runId: run.id, fixtureId: fx.id, fixtureLabel: `${fx.homeName} vs ${fx.awayName}`,
         config, input, context, profiles, activePatterns, hasRecentManualAlert, snapshotAgeMs,
       })
-      for (const o of opps) allOpps.push(o)
+      // B34: attach the EXACT evidence snapshot the scan evaluated (no recompute).
+      const evSnapId = (snapshot as any)?.id ? String((snapshot as any).id) : null
+      const evSnapAt = (snapshot as any)?.capturedAt ? toDate((snapshot as any).capturedAt).toISOString() : null
+      for (const o of opps) { o.evidenceSnapshotId = evSnapId; o.evidenceSnapshotCapturedAt = evSnapAt; allOpps.push(o) }
     }
 
     const ranked = rankOpportunities(allOpps)
@@ -107,6 +111,15 @@ export async function runAutoEngineScan(opts: ScanOptions = {}): Promise<AutoEng
 
     if (write) {
       for (const o of ranked) { try { await repos.intelligence.upsertAutoOpportunity(o) } catch { /* never block */ } }
+      // B34: non-fatal exact evidence links for opportunities with a real snapshotId.
+      if (String(env.ENABLE_EVIDENCE_LINEAGE).toLowerCase() === 'true') {
+        for (const o of ranked) {
+          void linkOpportunitySnapshot({
+            fixtureId: o.fixtureId, opportunityId: o.id, minute: o.minute,
+            snapshotId: o.evidenceSnapshotId ?? null, capturedAt: o.evidenceSnapshotCapturedAt ?? null,
+          })
+        }
+      }
     } else {
       run.notes.push('Dry-run / WRITE=false — nada persistido.')
     }

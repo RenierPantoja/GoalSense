@@ -32,3 +32,11 @@ a pointer to this script; the heavy job intentionally runs from the CLI.
 - Inferred-only by nature; precision improves going forward as backtest/replay
   produce exact links.
 - Under Prisma mode nothing is persisted (Noop).
+
+---
+
+## B34 update — exact from stored snapshot ids
+The backfill now creates **exact** links from stored `triggerSnapshotId` /
+`outcomeSnapshotId` (captured since B34) and `window_inferred` otherwise. Report
+fields: `exactFromStoredSnapshotId`, `inferredWindow`, `unknown`, `skipped`,
+`persistedCreated`. Still dry-run default; `--persist` requires the env flag.

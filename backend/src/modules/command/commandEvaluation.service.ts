@@ -421,6 +421,8 @@ export async function runPatternEvaluation(maxFixtures: number): Promise<WorkerR
               dataQuality: input.dataQuality,
               scopeReason: scopeDecision.reason,
               matchContext: { competitionType: context.competitionType, stage: context.stage, isKnockout: context.isKnockout, importance: context.importance, importanceLabel: context.importanceLabel, notes: context.notes },
+              triggerSnapshotId: (snapshot as any)?.id ?? null,
+              triggerSnapshotCapturedAt: (snapshot as any)?.capturedAt ? toDate((snapshot as any).capturedAt).toISOString() : null,
             })
           } catch (e: any) {
             console.warn(`[PatternWorker] intelligence ledger failed for ${createdAlert?.id}: ${e?.message || e}`)

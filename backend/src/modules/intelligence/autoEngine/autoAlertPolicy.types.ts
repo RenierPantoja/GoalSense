@@ -98,6 +98,9 @@ export interface AutoAlertPolicyEvaluation {
   limitations: string[]
   promotedAlertId: string | null
   source: 'auto_alert_policy'
+  // ── B34 (optional): evidence snapshot inherited from the opportunity ──
+  policyEvidenceSnapshotId?: string | null
+  policyEvidenceCapturedAt?: string | null
 }
 
 /** Lightweight audit trail entry (decision history is the evaluations themselves). */

@@ -90,3 +90,11 @@ precise `linked_to_*` reasons; absence of a link falls back to protect-first
 (recent / fixture-has-alert / `unknown_dependency`). This reduces over-protection
 where exact links exist, without ever authorizing a delete on uncertainty. See
 `EVIDENCE_LINEAGE.md`.
+
+---
+
+## B34 update — exact protection from live capture
+With B34, triggers/outcomes/opportunities/policies carry exact snapshot ids, so the
+protection index can protect precisely the referenced snapshots (not the whole
+fixture window) in more cases. Inferred/unknown still protect conservatively;
+`unknown` never authorizes a delete. See `LIVE_ALERT_EVIDENCE_CAPTURE.md`.

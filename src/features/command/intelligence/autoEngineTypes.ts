@@ -98,6 +98,9 @@ export interface AutoOpportunityDto {
   explanation: AutoSignalExplanationDto
   createdAt: string
   updatedAt: string
+  // B34 (optional): exact evidence snapshot of the scan that produced this opp.
+  evidenceSnapshotId?: string | null
+  evidenceSnapshotCapturedAt?: string | null
 }
 
 export interface AutoEngineRunConfigDto {

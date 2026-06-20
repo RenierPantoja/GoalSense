@@ -206,6 +206,22 @@ export function AutoOpportunityDrawer({ opportunity: o, onClose, onGoToBacktest,
                 </div>
               </div>
               <Section title="Por que agora"><List items={o.explanation.whyNow} tone="ok" /></Section>
+              <Section title="Evidência da oportunidade">
+                {o.evidenceSnapshotId ? (
+                  <>
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-[#2DD4BF]/25 text-[#7FE9DC]">Exato</span>
+                      <span className="text-[11px] text-white/55">snapshot avaliado na geração</span>
+                    </div>
+                    <KV k="snapshotId" v={o.evidenceSnapshotId.slice(0, 10) + '…'} />
+                    <KV k="capturado em" v={o.evidenceSnapshotCapturedAt ? new Date(o.evidenceSnapshotCapturedAt).toLocaleString('pt-BR') : '—'} />
+                    <KV k="minuto" v={o.minute == null ? '—' : `${o.minute}'`} />
+                    <p className="text-[10px] text-white/35 mt-1.5">Vínculo exato (B34). Não altera score nem decisão; serve à auditoria e à proteção de retenção.</p>
+                  </>
+                ) : (
+                  <p className="text-[11.5px] text-white/50 leading-relaxed">Sem snapshotId exato — evidência inferida por fixture/janela. Esta oportunidade pode ser anterior à captura de evidência ao vivo (B34).</p>
+                )}
+              </Section>
               {(promotedAlertId || outcome) && (
                 <Section title="Resultado do alerta promovido">
                   {(() => {

@@ -124,6 +124,10 @@ export interface SignalLedgerEntry {
   dataAvailability: DataAvailabilityMap
   createdAt: string
   updatedAt: string
+  // ── B34 (optional): exact trigger snapshot evidence when available ──
+  triggerSnapshotId?: string | null
+  triggerSnapshotCapturedAt?: string | null
+  triggerEvidenceStrength?: string
   // ── B23 (optional): outcome layer for resolved signals (esp. promoted alerts) ──
   /** Terminal outcome when the signal was resolved (mirror of AlertOutcomeRecord.result). */
   outcomeResult?: AlertResult
@@ -174,6 +178,9 @@ export interface AlertOutcomeRecord {
   resolvedAt: string | null
   createdAt: string
   updatedAt: string
+  // ── B34 (optional): exact outcome snapshot evidence when available ──
+  outcomeSnapshotId?: string | null
+  outcomeSnapshotCapturedAt?: string | null
 }
 
 // ─── Failure analysis (deterministic, honest — no fake causality) ──────────────

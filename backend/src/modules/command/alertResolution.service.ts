@@ -28,6 +28,10 @@ export interface ResolutionResult {
   reason: string
   windowMinutes: number
   evidence: ResolutionEvidence
+  // ── B34 (optional): exact outcome snapshot used for resolution ──
+  outcomeSnapshotId?: string | null
+  outcomeSnapshotCapturedAt?: string | null
+  outcomeMinute?: number | null
 }
 
 export interface ResolutionEvidence {
@@ -326,31 +330,43 @@ async function resolveSingleAlert(alert: {
     snapshots as any, windowMinutes,
   )
 
+  // B34: the most recent snapshot within the window is the outcome evidence (exact).
+  const outcomeSnap: any = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null
+  const attach = (r: ResolutionResult | null): ResolutionResult | null => {
+    if (!r) return r
+    if (outcomeSnap?.id) {
+      r.outcomeSnapshotId = String(outcomeSnap.id)
+      r.outcomeSnapshotCapturedAt = outcomeSnap.capturedAt ? toDate(outcomeSnap.capturedAt).toISOString() : null
+      r.outcomeMinute = typeof outcomeSnap.minute === 'number' ? outcomeSnap.minute : null
+    }
+    return r
+  }
+
   // Route to type-specific resolver
   if (GOAL_TYPES.has(resolutionType)) {
-    return resolveGoalType(analysis, windowMinutes)
+    return attach(resolveGoalType(analysis, windowMinutes))
   }
   if (CORNER_TYPES.has(resolutionType)) {
-    return resolveCornerType(analysis, windowMinutes)
+    return attach(resolveCornerType(analysis, windowMinutes))
   }
   if (CARD_TYPES.has(resolutionType)) {
-    return resolveCardType(analysis, windowMinutes)
+    return attach(resolveCardType(analysis, windowMinutes))
   }
 
   // Custom/unknown type — use goal-like resolution as fallback
   if (analysis.goalsInWindow > 0) {
-    return { outcome: 'confirmed_partial', resolutionType, reason: 'Goal occurred within window (custom pattern)', windowMinutes, evidence: { snapshotsAnalyzed: analysis.snapshotsCount, scoreDelta: analysis.scoreDelta, goalsInWindow: analysis.goalsInWindow, cornersInWindow: analysis.cornersInWindow, cardsInWindow: analysis.cardsInWindow, hasTimedEvents: analysis.hasTimedEvents, hasStats: analysis.hasStats, dataWarnings: analysis.dataWarnings } }
+    return attach({ outcome: 'confirmed_partial', resolutionType, reason: 'Goal occurred within window (custom pattern)', windowMinutes, evidence: { snapshotsAnalyzed: analysis.snapshotsCount, scoreDelta: analysis.scoreDelta, goalsInWindow: analysis.goalsInWindow, cornersInWindow: analysis.cornersInWindow, cardsInWindow: analysis.cardsInWindow, hasTimedEvents: analysis.hasTimedEvents, hasStats: analysis.hasStats, dataWarnings: analysis.dataWarnings } })
   }
 
   // Force resolution if alert is too old
   if (alertAge > maxWaitMs) {
     if (analysis.snapshotsCount === 0) {
-      return { outcome: 'expired', resolutionType, reason: 'Alert expired without snapshots', windowMinutes, evidence: { snapshotsAnalyzed: 0, scoreDelta: { home: 0, away: 0 }, goalsInWindow: 0, cornersInWindow: 0, cardsInWindow: 0, hasTimedEvents: false, hasStats: false, dataWarnings: ['No data available'] } }
+      return attach({ outcome: 'expired', resolutionType, reason: 'Alert expired without snapshots', windowMinutes, evidence: { snapshotsAnalyzed: 0, scoreDelta: { home: 0, away: 0 }, goalsInWindow: 0, cornersInWindow: 0, cardsInWindow: 0, hasTimedEvents: false, hasStats: false, dataWarnings: ['No data available'] } })
     }
     if (!analysis.hasTimedEvents && !analysis.hasStats) {
-      return { outcome: 'unknown', resolutionType, reason: 'Expired without sufficient data', windowMinutes, evidence: { snapshotsAnalyzed: analysis.snapshotsCount, scoreDelta: analysis.scoreDelta, goalsInWindow: 0, cornersInWindow: 0, cardsInWindow: 0, hasTimedEvents: false, hasStats: false, dataWarnings: ['Insufficient data at expiry'] } }
+      return attach({ outcome: 'unknown', resolutionType, reason: 'Expired without sufficient data', windowMinutes, evidence: { snapshotsAnalyzed: analysis.snapshotsCount, scoreDelta: analysis.scoreDelta, goalsInWindow: 0, cornersInWindow: 0, cardsInWindow: 0, hasTimedEvents: false, hasStats: false, dataWarnings: ['Insufficient data at expiry'] } })
     }
-    return { outcome: 'failed', resolutionType, reason: `No expected outcome within ${windowMinutes}min (expired)`, windowMinutes, evidence: { snapshotsAnalyzed: analysis.snapshotsCount, scoreDelta: analysis.scoreDelta, goalsInWindow: analysis.goalsInWindow, cornersInWindow: analysis.cornersInWindow, cardsInWindow: analysis.cardsInWindow, hasTimedEvents: analysis.hasTimedEvents, hasStats: analysis.hasStats, dataWarnings: analysis.dataWarnings } }
+    return attach({ outcome: 'failed', resolutionType, reason: `No expected outcome within ${windowMinutes}min (expired)`, windowMinutes, evidence: { snapshotsAnalyzed: analysis.snapshotsCount, scoreDelta: analysis.scoreDelta, goalsInWindow: analysis.goalsInWindow, cornersInWindow: analysis.cornersInWindow, cardsInWindow: analysis.cardsInWindow, hasTimedEvents: analysis.hasTimedEvents, hasStats: analysis.hasStats, dataWarnings: analysis.dataWarnings } })
   }
 
   // Not enough time/data yet — skip
@@ -448,6 +464,9 @@ export async function resolvePendingAlerts(maxAlerts: number): Promise<Resolutio
           hasTimedEvents: ev.hasTimedEvents,
           momentumSource: null,
           dataWarnings: ev.dataWarnings,
+          outcomeSnapshotId: resolution.outcomeSnapshotId ?? null,
+          outcomeSnapshotCapturedAt: resolution.outcomeSnapshotCapturedAt ?? null,
+          outcomeMinute: resolution.outcomeMinute ?? null,
         })
       } catch (e: any) {
         console.warn(`[ResolutionWorker] intelligence outcome failed for ${alert.id}: ${e?.message || e}`)

@@ -33,3 +33,10 @@ New "Evidência & Linhagem" block:
 - Backtest results table does not yet render per-result trigger/outcome snapshot
   badges inline (lineage is available via the evidence API and the alert drawer);
   step-level snapshot ids are not carried in the replay timeline type.
+
+---
+
+## B34 additions
+The alert drawer now shows exact trigger/outcome snapshot links (when captured live);
+the AutoOpportunityDrawer gains an "Evidência da oportunidade" section
+(evidenceSnapshotId / capturedAt / minute / exact badge). See `INLINE_EVIDENCE_UX.md`.

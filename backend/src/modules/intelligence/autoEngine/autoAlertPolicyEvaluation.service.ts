@@ -7,9 +7,11 @@
  * gates pass. Shadow-first by default. Never odds, never Telegram, never bet.
  */
 import { createRepositories } from '../../../repositories/index.js'
+import { env } from '../../../env.js'
 import { evaluatePolicyGates } from './utils/autoAlertPolicyGuard.util.js'
 import { getAutoOpportunityTypeProfile } from './autoEngineCalibration.service.js'
 import { createAutoAlertFromPolicy, isAutoAlertCreateEnabled } from './autoOpportunityAlertPromotion.service.js'
+import { linkPolicySnapshot } from '../evidence/evidenceLineage.service.js'
 import {
   isAutoAlertPolicyEnabled, isAutoAlertCreateFlagEnabled, isAutoEngineToAlertsEnabled, getDefaultPolicyTemplate,
 } from './autoAlertPolicyConfig.service.js'
@@ -123,9 +125,18 @@ export async function evaluateOpportunityPolicies(
       calibrationSnapshot: calibration,
       riskGateSnapshot: { allowed: opp.riskGate?.allowed ?? false, blockReasons: opp.riskGate?.blockReasons ?? [], warnings: opp.riskGate?.warnings ?? [] },
       reasons, limitations: guard.limitations, promotedAlertId, source: 'auto_alert_policy',
+      policyEvidenceSnapshotId: (opp as any).evidenceSnapshotId ?? null,
+      policyEvidenceCapturedAt: (opp as any).evidenceSnapshotCapturedAt ?? null,
     }
 
     try { await repos.intelligence.createAutoAlertPolicyEvaluation(evaluation) } catch { /* never block */ }
+    // B34: non-fatal exact policy evidence link (inherits the opportunity snapshot).
+    if (String(env.ENABLE_EVIDENCE_LINEAGE).toLowerCase() === 'true') {
+      void linkPolicySnapshot({
+        fixtureId: opp.fixtureId, opportunityId, policyEvaluationId: evaluation.id, minute: opp.minute ?? null,
+        snapshotId: (opp as any).evidenceSnapshotId ?? null, capturedAt: (opp as any).evidenceSnapshotCapturedAt ?? null,
+      })
+    }
     try {
       const ev: LearningEvent = {
         id: `lev_aap_${evaluation.id}`, type: DECISION_EVENT[decision] || 'auto_alert_policy_evaluated',

@@ -267,3 +267,12 @@ Promoted alerts now create a non-fatal `window_inferred` evidence link
 (`auto_opportunity_evidence`) tying the opportunity's fixture to the snapshot
 window. This is observational lineage only — it never changes scoring, confidence,
 the opportunity decision, or counters. See `EVIDENCE_LINEAGE.md`.
+
+---
+
+## B34 note — opportunity/policy exact evidence
+The scanner now attaches the evaluated snapshot's id to each opportunity
+(`evidenceSnapshotId`) and creates an exact evidence link on write; policy
+evaluations inherit it (`policyEvidenceSnapshotId`). This is observational lineage
+only — no recompute of score/risk gate, no decision change, no alert, no Telegram.
+See `LIVE_ALERT_EVIDENCE_CAPTURE.md`.
