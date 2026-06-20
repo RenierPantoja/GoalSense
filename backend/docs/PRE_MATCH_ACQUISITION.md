@@ -86,3 +86,13 @@ detection) now feed Acquisition Runner V2 (`runAcquisitionForFixtureV2`/`…Toda
 providerNotConfigured / providerNotSupported / conflicts / manualRequiredDomains). See
 `REAL_PRE_MATCH_PROVIDER_INTEGRATION.md`, `MANUAL_INTELLIGENCE_INTAKE.md`,
 `PRE_MATCH_DATA_MERGE.md`.
+
+## B42 — bridge-aware acquisition
+
+Acquisition Report V2 now reports `providerMappingStatus`, `providerMappingConfidence`,
+`blockedByMissingMapping`, `blockedByAmbiguousMapping` and a `suggestedAction`
+(`run_identity_resolution` | `confirm_mapping` | `use_manual_intake` |
+`configure_provider`). The router consults the Provider Bridge before any external
+per-fixture fetch and returns `blocked_missing_provider_mapping` /
+`blocked_ambiguous_provider_mapping` when there is no confirmed mapping. See
+`PROVIDER_BRIDGE.md`.

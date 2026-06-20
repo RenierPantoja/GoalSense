@@ -38,6 +38,8 @@ import { buildFundamentalReadinessV3 } from '../modules/footballIntelligence/fun
 import { runAlertDecisionPrecheckV3 } from '../modules/footballIntelligence/alertDecisionPrecheck.service.js'
 import { runAcquisitionForFixtureV2, runAcquisitionForTodayV2 } from '../modules/footballIntelligence/preMatchAcquisitionRunner.service.js'
 import { createManualRecord, updateManualRecord, deleteManualRecord, listManualRecordsForFixture, getManualRecord } from '../modules/footballIntelligence/manualIntelligenceIntake.service.js'
+import { buildCandidatesForToday, buildCandidatesForFixture, resolveFixtureIdentity, getBestMappingForFixture, confirmMapping, rejectMapping } from '../modules/footballIntelligence/identity/fixtureIdentityResolution.service.js'
+import { listTeamAliases, listCompetitionAliases } from '../modules/footballIntelligence/identity/teamCompetitionAlias.service.js'
 import { createRepositories } from '../repositories/index.js'
 
 const flag = (v: unknown) => String(v).toLowerCase() === 'true'
@@ -287,5 +289,59 @@ export async function matchIntelligenceRoutes(app: FastifyInstance) {
     const res = await runAcquisitionForTodayV2()
     void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'pre_match_acquisition', resourceId: res.run.id, metadata: { scope: 'today_v2' } })
     return ok(res)
+  })
+
+  // ── B42: cross-provider identity resolution ──
+  app.get(`${BASE}/identity/resolution-runs`, async (_req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await createRepositories().intelligence.listFixtureIdentityResolutionRuns(50)) } catch { return ok([]) }
+  })
+  app.get(`${BASE}/identity/resolution-runs/:id`, async (req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await createRepositories().intelligence.getFixtureIdentityResolutionRun(String((req.params as any).id))) } catch { return ok(null) }
+  })
+  app.post(`${BASE}/identity/resolve/today`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const run = await buildCandidatesForToday()
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'identity_resolution', resourceId: run.id, metadata: { scope: 'today', status: run.status } })
+    return ok(run)
+  })
+  app.post(`${BASE}/identity/resolve/fixtures/:fixtureId`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const res = await resolveFixtureIdentity(fid(req))
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'identity_resolution', resourceId: fid(req), metadata: { status: res.status } })
+    return ok(res)
+  })
+  app.get(`${BASE}/identity/fixtures/:fixtureId/candidates`, async (req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await buildCandidatesForFixture(fid(req))) } catch { return ok([]) }
+  })
+  app.get(`${BASE}/identity/fixtures/:fixtureId/mapping`, async (req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await getBestMappingForFixture(fid(req))) } catch { return ok(null) }
+  })
+  app.post(`${BASE}/identity/mappings/:mappingId/confirm`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const id = String((req.params as any).mappingId)
+    const res = await confirmMapping(id, req.auth?.user?.userId ?? null)
+    if (!res.ok) return reply.status(404).send(badRequest('mapping_not_found'))
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'identity_mapping', resourceId: id, metadata: { op: 'confirm' } })
+    return ok(res)
+  })
+  app.post(`${BASE}/identity/mappings/:mappingId/reject`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const id = String((req.params as any).mappingId)
+    const res = await rejectMapping(id, req.auth?.user?.userId ?? null)
+    if (!res.ok) return reply.status(404).send(badRequest('mapping_not_found'))
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'identity_mapping', resourceId: id, metadata: { op: 'reject' } })
+    return ok(res)
+  })
+  app.get(`${BASE}/identity/aliases/teams`, async (_req, reply) => {
+    if (!gate(reply)) return
+    return ok(await listTeamAliases())
+  })
+  app.get(`${BASE}/identity/aliases/competitions`, async (_req, reply) => {
+    if (!gate(reply)) return
+    return ok(await listCompetitionAliases())
   })
 }

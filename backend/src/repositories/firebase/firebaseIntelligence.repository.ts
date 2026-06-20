@@ -51,6 +51,9 @@ import type {
   PreMatchDomainSnapshot, PreMatchAcquisitionRun,
 } from '../../modules/footballIntelligence/preMatchAcquisition.types.js'
 import type { ManualIntelligenceRecord } from '../../modules/footballIntelligence/manualIntelligence.types.js'
+import type {
+  ProviderEntityMapping, TeamAlias, CompetitionAlias, FixtureIdentityResolutionRun, ProviderEntityMappingStatus,
+} from '../../modules/footballIntelligence/identity/providerIdentity.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -93,6 +96,10 @@ const LV_ATTACH_RUNS = 'dynamicFixtureAttachRuns'
 const PM_DOMAIN_SNAPSHOTS = 'preMatchDomainSnapshots'
 const PM_ACQUISITION_RUNS = 'preMatchAcquisitionRuns'
 const MANUAL_RECORDS = 'manualIntelligenceRecords'
+const PROVIDER_MAPPINGS = 'providerEntityMappings'
+const TEAM_ALIASES = 'teamAliases'
+const COMPETITION_ALIASES = 'competitionAliases'
+const IDENTITY_RUNS = 'fixtureIdentityResolutionRuns'
 
 const READ_CAP = 2000
 
@@ -975,5 +982,63 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     const db = await getFirestore(); const ref = db.collection(MANUAL_RECORDS).doc(id); const doc = await ref.get()
     if (!doc.exists) return { count: 0 }
     await ref.set({ deleted: true, updatedAt: new Date().toISOString() }, { merge: true }); return { count: 1 }
+  }
+
+  // ── B42: cross-provider identity resolution ──
+  async saveProviderEntityMapping(mapping: ProviderEntityMapping): Promise<ProviderEntityMapping> {
+    const db = await getFirestore(); await db.collection(PROVIDER_MAPPINGS).doc(mapping.id).set(mapping, { merge: true }); return mapping
+  }
+  async getProviderEntityMapping(id: string): Promise<ProviderEntityMapping | null> {
+    const db = await getFirestore(); const doc = await db.collection(PROVIDER_MAPPINGS).doc(id).get()
+    return doc.exists ? docData<ProviderEntityMapping>(doc) : null
+  }
+  async listProviderEntityMappings(limit?: number): Promise<ProviderEntityMapping[]> {
+    const db = await getFirestore(); const snap = await db.collection(PROVIDER_MAPPINGS).get()
+    return snap.docs.map((d: any) => docData<ProviderEntityMapping>(d)).sort((a: any, b: any) => (b.updatedAt || '').localeCompare(a.updatedAt || '')).slice(0, limit || 200)
+  }
+  async listProviderMappingsForEntity(identityType: string, primaryProviderEntityId: string, limit?: number): Promise<ProviderEntityMapping[]> {
+    const db = await getFirestore(); const snap = await db.collection(PROVIDER_MAPPINGS).where('identityType', '==', identityType).where('primaryProviderEntityId', '==', primaryProviderEntityId).get()
+    return snap.docs.map((d: any) => docData<ProviderEntityMapping>(d)).slice(0, limit || 50)
+  }
+  async listProviderMappingsByStatus(status: ProviderEntityMappingStatus, limit?: number): Promise<ProviderEntityMapping[]> {
+    const db = await getFirestore(); const snap = await db.collection(PROVIDER_MAPPINGS).where('status', '==', status).get()
+    return snap.docs.map((d: any) => docData<ProviderEntityMapping>(d)).slice(0, limit || 200)
+  }
+  async updateProviderEntityMappingStatus(id: string, patch: Partial<ProviderEntityMapping>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(PROVIDER_MAPPINGS).doc(id); const doc = await ref.get()
+    if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async saveTeamAlias(alias: TeamAlias): Promise<TeamAlias> {
+    const db = await getFirestore(); await db.collection(TEAM_ALIASES).doc(alias.id).set(alias, { merge: true }); return alias
+  }
+  async listTeamAliases(limit?: number): Promise<TeamAlias[]> {
+    const db = await getFirestore(); const snap = await db.collection(TEAM_ALIASES).get()
+    return snap.docs.map((d: any) => docData<TeamAlias>(d)).slice(0, limit || 500)
+  }
+  async saveCompetitionAlias(alias: CompetitionAlias): Promise<CompetitionAlias> {
+    const db = await getFirestore(); await db.collection(COMPETITION_ALIASES).doc(alias.id).set(alias, { merge: true }); return alias
+  }
+  async listCompetitionAliases(limit?: number): Promise<CompetitionAlias[]> {
+    const db = await getFirestore(); const snap = await db.collection(COMPETITION_ALIASES).get()
+    return snap.docs.map((d: any) => docData<CompetitionAlias>(d)).slice(0, limit || 500)
+  }
+  async createFixtureIdentityResolutionRun(run: FixtureIdentityResolutionRun): Promise<FixtureIdentityResolutionRun> {
+    const db = await getFirestore(); await db.collection(IDENTITY_RUNS).doc(run.id).set(run, { merge: true }); return run
+  }
+  async updateFixtureIdentityResolutionRun(id: string, patch: Partial<FixtureIdentityResolutionRun>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(IDENTITY_RUNS).doc(id); const doc = await ref.get()
+    if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async getFixtureIdentityResolutionRun(id: string): Promise<FixtureIdentityResolutionRun | null> {
+    const db = await getFirestore(); const doc = await db.collection(IDENTITY_RUNS).doc(id).get()
+    return doc.exists ? docData<FixtureIdentityResolutionRun>(doc) : null
+  }
+  async listFixtureIdentityResolutionRuns(limit?: number): Promise<FixtureIdentityResolutionRun[]> {
+    const db = await getFirestore(); const snap = await db.collection(IDENTITY_RUNS).get()
+    return snap.docs.map((d: any) => docData<FixtureIdentityResolutionRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
   }
 }

@@ -50,3 +50,13 @@ becomes an empty list. Confirmed empty → `available_empty_confirmed`. Missing 
 
 The richest pre-match domains require either an ESPN→provider id mapping (not built, to
 avoid wrong-match data) or operator **manual intake** (see `MANUAL_INTELLIGENCE_INTAKE.md`).
+
+## B42 — id mapping resolved (Provider Bridge)
+
+The B41 ID-mapping blocker is addressed by the Cross-Provider Identity Resolution engine
++ Provider Bridge. With a CONFIRMED ESPN→API-Football fixture mapping, the adapter
+unlocks documented per-fixture calls — `fixture_details` (`/fixtures?id=`),
+`post_match_stats` (`/fixtures/statistics?fixture=`) and `confirmed_lineups`
+(`/fixtures/lineups?fixture=`). injuries/suspensions/standings/H2H stay
+`not_implemented_with_docs_needed` (need team/league id mappings; no guessing). See
+`CROSS_PROVIDER_IDENTITY_RESOLUTION.md` + `PROVIDER_BRIDGE.md`.

@@ -35,3 +35,11 @@ journalist_report/broadcast → medium; manual_operator/other → unknown.
 Manual never overwrites a provider — it complements (see `PRE_MATCH_DATA_MERGE.md`).
 A payload that simulates a provider is not accepted (sourceType is mandatory). Audit is
 mandatory. URL optional. Manual data carries a `manual` badge in the UI.
+
+## B42 note
+
+Manual intake remains the path for domains still blocked after identity resolution
+(injuries/suspensions/standings/H2H need team/league id mappings, kept
+`not_implemented_with_docs_needed`). Confirmed fixture mappings unlock
+`fixture_details`/`post_match_stats`/`confirmed_lineups` from API-Football; everything
+else stays manual. See `CROSS_PROVIDER_IDENTITY_RESOLUTION.md`.

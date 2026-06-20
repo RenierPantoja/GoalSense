@@ -167,6 +167,9 @@ import type {
   PreMatchDomainSnapshot, PreMatchAcquisitionRun,
 } from '../modules/footballIntelligence/preMatchAcquisition.types.js'
 import type { ManualIntelligenceRecord } from '../modules/footballIntelligence/manualIntelligence.types.js'
+import type {
+  ProviderEntityMapping, TeamAlias, CompetitionAlias, FixtureIdentityResolutionRun, ProviderEntityMappingStatus,
+} from '../modules/footballIntelligence/identity/providerIdentity.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -363,6 +366,22 @@ export interface IntelligenceRepository {
   listManualIntelligenceRecords(filters: { fixtureId?: string; teamId?: string; limit?: number }): Promise<ManualIntelligenceRecord[]>
   updateManualIntelligenceRecord(id: string, patch: Partial<ManualIntelligenceRecord>): Promise<{ count: number }>
   deleteManualIntelligenceRecord(id: string): Promise<{ count: number }>
+
+  // ── B42: cross-provider identity resolution ─────────────────────────────────
+  saveProviderEntityMapping(mapping: ProviderEntityMapping): Promise<ProviderEntityMapping>
+  getProviderEntityMapping(id: string): Promise<ProviderEntityMapping | null>
+  listProviderEntityMappings(limit?: number): Promise<ProviderEntityMapping[]>
+  listProviderMappingsForEntity(identityType: string, primaryProviderEntityId: string, limit?: number): Promise<ProviderEntityMapping[]>
+  listProviderMappingsByStatus(status: ProviderEntityMappingStatus, limit?: number): Promise<ProviderEntityMapping[]>
+  updateProviderEntityMappingStatus(id: string, patch: Partial<ProviderEntityMapping>): Promise<{ count: number }>
+  saveTeamAlias(alias: TeamAlias): Promise<TeamAlias>
+  listTeamAliases(limit?: number): Promise<TeamAlias[]>
+  saveCompetitionAlias(alias: CompetitionAlias): Promise<CompetitionAlias>
+  listCompetitionAliases(limit?: number): Promise<CompetitionAlias[]>
+  createFixtureIdentityResolutionRun(run: FixtureIdentityResolutionRun): Promise<FixtureIdentityResolutionRun>
+  updateFixtureIdentityResolutionRun(id: string, patch: Partial<FixtureIdentityResolutionRun>): Promise<{ count: number }>
+  getFixtureIdentityResolutionRun(id: string): Promise<FixtureIdentityResolutionRun | null>
+  listFixtureIdentityResolutionRuns(limit?: number): Promise<FixtureIdentityResolutionRun[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

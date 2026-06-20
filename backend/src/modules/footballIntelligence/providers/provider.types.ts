@@ -15,6 +15,7 @@ export type AcquisitionDomain =
 export type FetchAvailability =
   | 'available' | 'available_empty_confirmed' | 'partial' | 'unavailable' | 'provider_not_supported'
   | 'provider_not_configured' | 'not_available_yet' | 'budget_blocked' | 'unknown'
+  | 'blocked_missing_provider_mapping' | 'blocked_ambiguous_provider_mapping' | 'not_implemented_with_docs_needed'
 
 export type Freshness = 'realtime' | 'near_realtime' | 'fresh' | 'stale' | 'pre_match_only' | 'unknown'
 
@@ -69,6 +70,8 @@ export interface FetchParams {
   competition?: string
   date?: string
   providerFixtureId?: string | null
+  /** B42: external provider fixture id resolved by the Provider Bridge (confirmed mapping). */
+  resolvedExternalFixtureId?: string | null
 }
 
 export interface ProviderStackReport {

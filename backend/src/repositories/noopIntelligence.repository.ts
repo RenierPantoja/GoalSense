@@ -43,6 +43,9 @@ import type {
 } from '../modules/footballIntelligence/preMatchAcquisition.types.js'
 import type { ManualIntelligenceRecord } from '../modules/footballIntelligence/manualIntelligence.types.js'
 import type {
+  ProviderEntityMapping, TeamAlias, CompetitionAlias, FixtureIdentityResolutionRun,
+} from '../modules/footballIntelligence/identity/providerIdentity.types.js'
+import type {
   AutoAlertPolicy, AutoAlertPolicyEvaluation,
 } from '../modules/intelligence/autoEngine/autoAlertPolicy.types.js'
 import type { AdminAuditEntry } from '../modules/audit/adminAudit.types.js'
@@ -248,4 +251,20 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async listManualIntelligenceRecords(): Promise<ManualIntelligenceRecord[]> { return [] }
   async updateManualIntelligenceRecord(): Promise<{ count: number }> { return { count: 0 } }
   async deleteManualIntelligenceRecord(): Promise<{ count: number }> { return { count: 0 } }
+
+  // ── B42 (Noop): identity resolution not persisted ──
+  async saveProviderEntityMapping(m: ProviderEntityMapping): Promise<ProviderEntityMapping> { return m }
+  async getProviderEntityMapping(): Promise<ProviderEntityMapping | null> { return null }
+  async listProviderEntityMappings(): Promise<ProviderEntityMapping[]> { return [] }
+  async listProviderMappingsForEntity(): Promise<ProviderEntityMapping[]> { return [] }
+  async listProviderMappingsByStatus(): Promise<ProviderEntityMapping[]> { return [] }
+  async updateProviderEntityMappingStatus(): Promise<{ count: number }> { return { count: 0 } }
+  async saveTeamAlias(a: TeamAlias): Promise<TeamAlias> { return a }
+  async listTeamAliases(): Promise<TeamAlias[]> { return [] }
+  async saveCompetitionAlias(a: CompetitionAlias): Promise<CompetitionAlias> { return a }
+  async listCompetitionAliases(): Promise<CompetitionAlias[]> { return [] }
+  async createFixtureIdentityResolutionRun(r: FixtureIdentityResolutionRun): Promise<FixtureIdentityResolutionRun> { return r }
+  async updateFixtureIdentityResolutionRun(): Promise<{ count: number }> { return { count: 0 } }
+  async getFixtureIdentityResolutionRun(): Promise<FixtureIdentityResolutionRun | null> { return null }
+  async listFixtureIdentityResolutionRuns(): Promise<FixtureIdentityResolutionRun[]> { return [] }
 }

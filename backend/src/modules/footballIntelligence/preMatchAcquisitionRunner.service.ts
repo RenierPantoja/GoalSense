@@ -124,6 +124,7 @@ export async function buildAcquisitionReport(fixtureId: string): Promise<{ fixtu
 import { buildPreMatchMergeReport } from './preMatchDataMerge.service.js'
 import { buildProviderIntegrationReadiness } from './providerIntegrationReadiness.service.js'
 import { listManualRecordsForFixture } from './manualIntelligenceIntake.service.js'
+import { getProviderFixtureId } from './identity/providerBridge.service.js'
 
 const CRITICAL: AcquisitionDomain[] = ['confirmed_lineups', 'injuries', 'suspensions', 'standings']
 
@@ -137,6 +138,11 @@ export interface AcquisitionReportV2 {
   conflicts: Array<{ domain: string; detail: string }>
   criticalBlockers: string[]
   manualRequiredDomains: string[]
+  providerMappingStatus: string | null
+  providerMappingConfidence: number | null
+  blockedByMissingMapping: boolean
+  blockedByAmbiguousMapping: boolean
+  suggestedAction: 'run_identity_resolution' | 'confirm_mapping' | 'use_manual_intake' | 'configure_provider' | 'none'
   nextRecommendedRefreshAt: string | null
   generatedAt: string
   limitations: string[]
@@ -168,12 +174,26 @@ export async function buildAcquisitionReportV2(fixtureId: string): Promise<Acqui
   const criticalBlockers = CRITICAL.filter(d => stillMissing.includes(d))
   const manualRequiredDomains = criticalBlockers.filter(d => providerNotConfigured.includes(d) || providerNotSupported.includes(d) || !byDomain.has(d))
 
+  // B42: mapping diagnostics.
+  const mapping = await getProviderFixtureId(fixtureId, 'api_football').catch(() => null)
+  const blockedByMissingMapping = [...byDomain.values()].some((s: any) => s.availability === 'blocked_missing_provider_mapping')
+  const blockedByAmbiguousMapping = [...byDomain.values()].some((s: any) => s.availability === 'blocked_ambiguous_provider_mapping')
+  const providerReady = buildProviderIntegrationReadiness().providers.find(p => p.providerName === 'api_football')
+  let suggestedAction: AcquisitionReportV2['suggestedAction'] = 'none'
+  if (providerReady && providerReady.adapterStatus !== 'real') suggestedAction = 'configure_provider'
+  else if (blockedByAmbiguousMapping) suggestedAction = 'confirm_mapping'
+  else if (blockedByMissingMapping) suggestedAction = 'run_identity_resolution'
+  else if (manualRequiredDomains.length > 0) suggestedAction = 'use_manual_intake'
+
   return {
     fixtureId, fetchedFromProvider, filledByManual, stillMissing,
     providerNotConfigured, providerNotSupported, conflicts,
-    criticalBlockers, manualRequiredDomains, nextRecommendedRefreshAt: null,
+    criticalBlockers, manualRequiredDomains,
+    providerMappingStatus: mapping?.mappingStatus ?? null, providerMappingConfidence: mapping?.mappingConfidence ?? null,
+    blockedByMissingMapping, blockedByAmbiguousMapping, suggestedAction,
+    nextRecommendedRefreshAt: null,
     generatedAt: new Date().toISOString(),
-    limitations: ['Diagnóstico V2: separa provider × manual × ausente; conflitos exigem revisão; nada inventado.'],
+    limitations: ['Diagnóstico V2: separa provider × manual × ausente; conflitos e bloqueio por mapping explícitos; nada inventado.'],
   }
 }
 

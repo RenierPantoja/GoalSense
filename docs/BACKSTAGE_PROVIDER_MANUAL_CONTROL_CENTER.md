@@ -34,3 +34,10 @@ operator+.
 `src/services/matchIntelligenceApi.ts` (B41 methods) → `/api/match-intelligence/*`
 (providers/readiness, manual-records CRUD, merge-report, readiness-v3, precheck-v3,
 acquisition/run-v2). Types in `manualIntelligenceTypes.ts` + `providerReadinessTypes.ts`.
+
+## B42 — identity resolution panel
+
+Backstage now embeds `ProviderIdentityResolutionPanel` per fixture: ESPN↔external mapping
+status, candidates (with ambiguity/warnings), and operator confirm/reject + "Resolver
+identidade". Confirmed mappings unlock fixture-scoped provider fetch. See
+`PROVIDER_IDENTITY_RESOLUTION_UI.md`.

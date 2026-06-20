@@ -151,6 +151,13 @@ const envSchema = z.object({
   API_FOOTBALL_BASE_URL: z.string().default('https://v3.football.api-sports.io'),
   FOOTBALL_DATA_BASE_URL: z.string().default('https://api.football-data.org/v4'),
   PROVIDER_FETCH_TIMEOUT_MS: z.coerce.number().default(8000),
+  // B42: cross-provider fixture identity resolution.
+  ENABLE_FIXTURE_IDENTITY_RESOLUTION: z.string().default('true'),
+  FIXTURE_IDENTITY_AUTO_CONFIRM: z.string().default('true'),
+  FIXTURE_IDENTITY_HIGH_CONFIDENCE_THRESHOLD: z.coerce.number().default(0.88),
+  FIXTURE_IDENTITY_MEDIUM_CONFIDENCE_THRESHOLD: z.coerce.number().default(0.70),
+  FIXTURE_IDENTITY_MAX_KICKOFF_DELTA_MINUTES: z.coerce.number().default(120),
+  FIXTURE_IDENTITY_REQUIRE_COMPETITION_MATCH: z.string().default('false'),
   ENABLE_PROVIDER_API_FOOTBALL: z.string().default('false'),
   ENABLE_PROVIDER_SPORTMONKS: z.string().default('false'),
   ENABLE_PROVIDER_FOOTBALL_DATA: z.string().default('false'),
