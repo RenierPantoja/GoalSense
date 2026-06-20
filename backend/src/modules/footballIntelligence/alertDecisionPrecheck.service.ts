@@ -313,3 +313,58 @@ export async function runAlertDecisionPrecheckV4(fixtureId: string): Promise<Ale
   out.enforced = enabled && mode === 'enforce' && (decision === 'avoid' || decision.startsWith('wait'))
   return out
 }
+
+// ─── Precheck V5 (B44) — critical domain-aware, observe-first ──────────────────
+import { buildFundamentalReadinessV5 } from './fundamentalReadinessEngine.service.js'
+
+export type PrecheckV5Decision =
+  | 'avoid' | 'wait_for_lineup' | 'wait_for_domain_fetch' | 'wait_for_mapping' | 'wait_for_manual_review'
+  | 'wait_for_live_confirmation' | 'monitor' | 'alert_candidate' | 'strong_alert' | 'post_match_learning_only'
+
+export interface AlertDecisionPrecheckV5Result {
+  fixtureId: string
+  mode: 'observe' | 'enforce'
+  enabled: boolean
+  enforced: boolean
+  decision: PrecheckV5Decision
+  reasons: string[]
+  limitations: string[]
+  generatedAt: string
+}
+
+export async function runAlertDecisionPrecheckV5(fixtureId: string): Promise<AlertDecisionPrecheckV5Result> {
+  const enabled = isPrecheckEnabled()
+  const mode = precheckMode()
+  const out: AlertDecisionPrecheckV5Result = {
+    fixtureId, mode, enabled, enforced: false, decision: 'monitor', reasons: [],
+    limitations: ['Precheck V5 observacional: nunca bloqueia alerta real em observe; não altera score/confiança/resultado.'], generatedAt: new Date().toISOString(),
+  }
+  const pkg = await buildMatchIntelligencePackage(fixtureId).catch(() => null)
+  if (!pkg) { out.reasons.push('Pacote indisponível.'); return out }
+  const v5 = await buildFundamentalReadinessV5(fixtureId).catch(() => null)
+
+  const reasons: string[] = []
+  if ((v5?.blockedCriticalDomains.length ?? 0) > 0) reasons.push('critical_domain_missing')
+  if ((v5?.staleCriticalDomains.length ?? 0) > 0) reasons.push('critical_domain_stale')
+  if ((v5?.providerNotConfiguredDomains.length ?? 0) > 0 || (v5?.endpointMissingDocsDomains.length ?? 0) > 0) reasons.push('critical_domain_provider_limited')
+  if (v5?.blockedCriticalDomains.includes('injuries')) reasons.push('injuries_unknown')
+  if (v5?.blockedCriticalDomains.includes('standings')) reasons.push('standings_missing')
+  if (v5?.fetchedCriticalDomains.length) reasons.push('real_provider_data_supports_pattern')
+  if (v5?.manualCriticalDomains.length) reasons.push('manual_data_supports_pattern')
+  if (pkg.squads?.waitForLineupRecommended) reasons.push('lineup_not_confirmed')
+
+  let decision: PrecheckV5Decision
+  if (pkg.phase === 'post_match') decision = 'post_match_learning_only'
+  else if (pkg.squads?.waitForLineupRecommended || v5?.status === 'wait_for_lineup') decision = 'wait_for_lineup'
+  else if (v5?.status === 'wait_for_mapping') decision = 'wait_for_mapping'
+  else if (v5?.status === 'wait_for_domain_fetch') decision = 'wait_for_domain_fetch'
+  else if (pkg.phase === 'live' && !(pkg.live?.hasStats)) decision = 'wait_for_live_confirmation'
+  else if (v5?.status === 'stay_out_data_insufficient') decision = 'avoid'
+  else if (v5?.status === 'ready_with_real_provider_data' || v5?.status === 'ready_with_mixed_provider_manual_data') decision = 'alert_candidate'
+  else decision = 'monitor'
+
+  out.decision = decision
+  out.reasons = [...new Set(reasons)]
+  out.enforced = enabled && mode === 'enforce' && (decision === 'avoid' || decision.startsWith('wait'))
+  return out
+}

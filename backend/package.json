@@ -25,6 +25,7 @@
     "smoke:real-pre-match-provider": "node scripts/smokeRealPreMatchProviderIntegration.mjs",
     "smoke:cross-provider-identity": "node scripts/smokeCrossProviderIdentityResolution.mjs",
     "smoke:team-competition-identity": "node scripts/smokeTeamCompetitionIdentityMapping.mjs",
+    "smoke:critical-pre-match-domains": "node scripts/smokeCriticalPreMatchDomains.mjs",
     "backfill:live-session-attribution": "node scripts/backfillLiveValidationSessionAttribution.mjs",
     "reindex:live-session-records": "node scripts/reindexLiveValidationSessionRecords.mjs",
     "reprocess:bt-replay-evidence": "node scripts/reprocessBacktestReplayEvidence.mjs",

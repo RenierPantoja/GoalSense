@@ -178,3 +178,55 @@ export async function buildPostMatchExplanationV2(fixtureId: string): Promise<Po
     shouldHaveWaitedLiveConfirmation: pkg?.phase !== 'post_match' ? false : (v1.outcome === 'failed' && !(pkg?.live?.hasStats)),
   }
 }
+
+// ─── Post-Match Explanation V3 (B44) — data-domain failure analysis ────────────
+import { listPreMatchDomainSnapshots, effectiveFreshness } from './preMatchDataStore.service.js'
+
+export interface PostMatchExplanationV3 extends PostMatchExplanation {
+  domainsAvailableBeforeAlert: string[]
+  domainsMissingBeforeAlert: string[]
+  domainsStaleBeforeAlert: string[]
+  missingDomainContributedToError: boolean
+  staleDataContributedToError: boolean
+  shouldHaveWaitedForDomain: boolean
+  shouldHaveUsedManualIntake: boolean
+  providerLimitationWasCritical: boolean
+  domainRefinementCandidates: string[]
+}
+
+const PM_CRITICAL = ['confirmed_lineups', 'injuries', 'standings']
+
+export async function buildPostMatchExplanationV3(fixtureId: string): Promise<PostMatchExplanationV3 | null> {
+  const v1 = await buildPostMatchExplanation(fixtureId)
+  if (!v1) return null
+  const snapshots = await listPreMatchDomainSnapshots(fixtureId, 200).catch(() => [])
+  const byDomain = new Map<string, any>()
+  for (const s of snapshots) if (!byDomain.has(s.domain) || s.fetchedAt > byDomain.get(s.domain).fetchedAt) byDomain.set(s.domain, s)
+
+  const available: string[] = [], missing: string[] = [], stale: string[] = []
+  for (const d of PM_CRITICAL) {
+    const s = byDomain.get(d)
+    const usable = s && (s.availability === 'available' || s.availability === 'partial' || s.availability === 'available_empty_confirmed')
+    if (usable && effectiveFreshness(s) !== 'stale') available.push(d)
+    else if (usable) stale.push(d)
+    else missing.push(d)
+  }
+
+  const failed = v1.outcome === 'failed'
+  const missingDomainContributedToError = failed && missing.length > 0 && !v1.wasMostlyRandom
+  const staleDataContributedToError = failed && stale.length > 0 && !v1.wasMostlyRandom
+  const providerLimitationWasCritical = failed && (v1.wasProviderLimited || missing.length === PM_CRITICAL.length)
+
+  const domainRefinementCandidates: string[] = []
+  if (missingDomainContributedToError) domainRefinementCandidates.push(`Buscar domínios ausentes antes de alertar: ${missing.join(', ')}.`)
+  if (staleDataContributedToError) domainRefinementCandidates.push(`Atualizar domínios stale: ${stale.join(', ')}.`)
+
+  return {
+    ...v1,
+    domainsAvailableBeforeAlert: available, domainsMissingBeforeAlert: missing, domainsStaleBeforeAlert: stale,
+    missingDomainContributedToError, staleDataContributedToError,
+    shouldHaveWaitedForDomain: missingDomainContributedToError || staleDataContributedToError,
+    shouldHaveUsedManualIntake: missingDomainContributedToError && missing.length > 0,
+    providerLimitationWasCritical, domainRefinementCandidates,
+  }
+}

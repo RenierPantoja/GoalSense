@@ -48,3 +48,9 @@ Backstage now also embeds `ProviderEntityMappingPanel`: team/competition mapping
 (derive/confirm/reject) and per-fixture domain unlock status (standings/injuries unlock
 when mappings are confirmed; suspensions/H2H/squads stay endpoint-not-implemented). See
 `PROVIDER_ENTITY_MAPPING_UI.md`.
+
+## B44 — critical domain acquisition panel
+
+Backstage now also embeds `CriticalDomainAcquisitionPanel`: per-fixture critical-domain
+table (status / resolved-missing ids / next action), Readiness V5, run-critical-acquisition
+and per-domain refresh. See `CRITICAL_DOMAIN_ACQUISITION_UI.md`.

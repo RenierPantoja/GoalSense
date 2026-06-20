@@ -38,3 +38,9 @@ the adapter params; otherwise it returns a blocked result and the adapter is not
 Candidate/ambiguous never unlock a critical fetch. Provider without env returns
 `blocked_provider_not_configured` (no call). Undocumented endpoints return
 `blocked_endpoint_not_implemented` (no guessing). Blocked is never a failure.
+
+## B44 — Matrix V2
+
+`getDomainUnlockStatusV2` / `getAllDomainUnlockStatuses` extend this with the endpoint
+catalog (`endpointStatus`/`endpointKey`), resolved/missing ids, manual fallback and a
+`recommendedNextAction`. See `DOMAIN_UNLOCK_MATRIX_V2.md`.

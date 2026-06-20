@@ -43,7 +43,13 @@ import { listTeamAliases, listCompetitionAliases } from '../modules/footballInte
 import { deriveEntityMappings } from '../modules/footballIntelligence/identity/providerEntityMappingDerivation.service.js'
 import { confirmTeamMapping, rejectTeamMapping, confirmCompetitionMapping, rejectCompetitionMapping, listTeamMappings, listCompetitionMappings } from '../modules/footballIntelligence/identity/providerEntityMappingReview.service.js'
 import { getDomainUnlockStatus } from '../modules/footballIntelligence/identity/providerBridge.service.js'
-import { runAcquisitionForFixtureV3, runAcquisitionForTodayV3, buildAcquisitionReportV3 } from '../modules/footballIntelligence/preMatchAcquisitionRunner.service.js'
+import { getAllDomainUnlockStatuses, getDomainUnlockStatusV2 } from '../modules/footballIntelligence/identity/providerBridge.service.js'
+import { listProviderEndpointCatalog } from '../modules/footballIntelligence/providers/providerEndpointCatalog.service.js'
+import { runAcquisitionForFixtureV3, runAcquisitionForTodayV3, buildAcquisitionReportV3, runDomainAcquisition, runCriticalDomainAcquisitionForFixture, runCriticalDomainAcquisitionForToday, buildCriticalDomainAcquisitionReport } from '../modules/footballIntelligence/preMatchAcquisitionRunner.service.js'
+import { buildFundamentalReadinessV5 } from '../modules/footballIntelligence/fundamentalReadinessEngine.service.js'
+import { runAlertDecisionPrecheckV5 } from '../modules/footballIntelligence/alertDecisionPrecheck.service.js'
+import { buildPostMatchExplanationV3 } from '../modules/footballIntelligence/postMatchExplanationEngine.service.js'
+import { buildMatchIntelligencePackageV3 } from '../modules/footballIntelligence/matchIntelligencePackageV3.service.js'
 import { createRepositories } from '../repositories/index.js'
 
 const flag = (v: unknown) => String(v).toLowerCase() === 'true'
@@ -420,5 +426,60 @@ export async function matchIntelligenceRoutes(app: FastifyInstance) {
     const res = await runAcquisitionForTodayV3()
     void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'pre_match_acquisition', resourceId: res.run.id, metadata: { scope: 'today_v3' } })
     return ok(res)
+  })
+
+  // ── B44 / Bloco 1: critical domain acquisition + endpoint catalog + V5 ──
+  app.get(`${BASE}/providers/endpoints`, async (_req, reply) => {
+    if (!gate(reply)) return
+    return ok(listProviderEndpointCatalog())
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/domain-unlock-matrix`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await getAllDomainUnlockStatuses(fid(req), 'api_football'))
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/domains/:domain`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await getDomainUnlockStatusV2(fid(req), String((req.params as any).domain), 'api_football'))
+  })
+  app.post(`${BASE}/fixtures/:fixtureId/domains/:domain/refresh`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const id = fid(req)
+    const res = await runDomainAcquisition(id, String((req.params as any).domain) as any)
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'critical_domain', resourceId: id, metadata: { domain: (req.params as any).domain } })
+    return ok(res)
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/critical-acquisition-report`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await buildCriticalDomainAcquisitionReport(fid(req)))
+  })
+  app.post(`${BASE}/fixtures/:fixtureId/acquisition/critical/run`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const id = fid(req)
+    const report = await runCriticalDomainAcquisitionForFixture(id)
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'critical_domain', resourceId: id, metadata: { scope: 'fixture_critical' } })
+    return ok(report)
+  })
+  app.post(`${BASE}/today/acquisition/critical/run`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const res = await runCriticalDomainAcquisitionForToday()
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'critical_domain', resourceId: 'today', metadata: { scope: 'today_critical', fixtures: res.fixtures } })
+    return ok(res)
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/readiness-v5`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await buildFundamentalReadinessV5(fid(req)))
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/precheck-v5`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await runAlertDecisionPrecheckV5(fid(req)))
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/post-match-explanation-v3`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await buildPostMatchExplanationV3(fid(req)))
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/package-v3`, async (req, reply) => {
+    if (!gate(reply)) return
+    const pkg = await buildMatchIntelligencePackageV3(fid(req))
+    return pkg ? ok(pkg) : reply.status(404).send(badRequest('fixture_not_found'))
   })
 }

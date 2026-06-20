@@ -45,3 +45,9 @@ domains; reject is not auto-reused.
 
 Derived from real fixture co-occurrence, never names. Homonyms surface as ambiguous.
 Provider without env is never called (derivation returns `provider_not_configured`).
+
+## B44 note
+
+Confirmed team/competition mappings now feed the Domain Unlock Matrix V2 + Acquisition
+Runner V4, which unlock standings (league+season) and injuries (team ids) for real
+fetch. See `CRITICAL_PRE_MATCH_DATA_ACQUISITION.md`.

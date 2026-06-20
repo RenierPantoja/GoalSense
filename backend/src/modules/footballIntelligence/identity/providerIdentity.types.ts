@@ -202,6 +202,15 @@ export interface DomainUnlockStatus {
   currentStatus: DomainUnlockState
   reasons: string[]
   suggestedActions: Array<'run_identity_resolution' | 'run_entity_mapping_derivation' | 'confirm_mapping' | 'configure_provider' | 'use_manual_intake' | 'none'>
+  // ── B44: Domain Unlock Matrix V2 ──
+  endpointStatus?: string
+  endpointKey?: string | null
+  endpointImplemented?: boolean
+  endpointDocumented?: boolean
+  idsResolved?: { fixtureId?: string | null; homeTeamId?: string | null; awayTeamId?: string | null; leagueId?: string | null; season?: string | null }
+  idsMissing?: string[]
+  manualFallbackAvailable?: boolean
+  recommendedNextAction?: 'configure_provider' | 'run_fixture_mapping' | 'run_entity_mapping' | 'confirm_mapping' | 'use_manual_intake' | 'provide_endpoint_docs' | 'ready_to_fetch' | 'stay_out'
 }
 
 export interface EntityMappingDerivationRun {

@@ -251,3 +251,119 @@ export async function runAcquisitionForTodayV3(max?: number): Promise<{ run: Pre
   const run = await runAcquisitionForToday(max)
   return { run }
 }
+
+// ─── Acquisition Runner V4 (B44) — critical domain orchestration ───────────────
+import { getDomainUnlockStatusV2 } from './identity/providerBridge.service.js'
+import { normalizeDomainResult } from './canonicalNormalizer.service.js'
+import { selectFixturesForAnalysis } from './matchDayScope.service.js'
+
+const CRITICAL_ORDER: AcquisitionDomain[] = ['fixture_details', 'standings', 'squads', 'injuries', 'suspensions', 'confirmed_lineups', 'probable_lineups', 'head_to_head', 'team_form', 'post_match_stats']
+
+export interface DomainAcquisitionResult {
+  domain: string
+  attempted: boolean
+  availability: string
+  endpointStatus: string | null
+  recommendedNextAction: string | undefined
+  manualFallbackAvailable: boolean
+  confirmedEmpty: boolean
+}
+
+export interface CriticalDomainAcquisitionReport {
+  fixtureId: string
+  results: DomainAcquisitionResult[]
+  domainsFetched: string[]
+  domainsBlocked: string[]
+  domainsManualRecommended: string[]
+  domainsProviderNotConfigured: string[]
+  domainsEndpointMissingDocs: string[]
+  domainsWithConfirmedEmpty: string[]
+  criticalDomainsReady: string[]
+  criticalDomainsMissing: string[]
+  nextRefreshRecommendations: string[]
+  generatedAt: string
+  limitations: string[]
+}
+
+const CRITICAL_SET = ['confirmed_lineups', 'injuries', 'standings']
+
+export async function runDomainAcquisition(fixtureId: string, domain: AcquisitionDomain): Promise<DomainAcquisitionResult> {
+  const repos = createRepositories()
+  const matrix = await getDomainUnlockStatusV2(fixtureId, domain, 'api_football').catch(() => null)
+  const fixture = await repos.fixtures.findById(fixtureId).catch(() => null)
+  const params = { fixtureId, homeTeam: fixture?.homeName, awayTeam: fixture?.awayName, competition: fixture?.competition, providerFixtureId: fixture?.providerFixtureId ?? null }
+
+  // Only attempt a real fetch when the matrix says ready_to_fetch; otherwise record the
+  // blocker WITHOUT calling the provider.
+  const ready = matrix?.recommendedNextAction === 'ready_to_fetch'
+  let availability = matrix?.endpointStatus || 'blocked'
+  let confirmedEmpty = false
+  if (ready) {
+    const res = await fetchDomain(domain, params).catch(() => null)
+    if (res) {
+      availability = res.availability
+      confirmedEmpty = res.availability === 'available_empty_confirmed'
+      const envelope = normalizeDomainResult(res, (matrix?.idsResolved as any) ?? {})
+      const snap = fromFetchResult(fixtureId, res)
+      snap.providerEndpointKey = matrix?.endpointKey ?? null
+      snap.domainUnlockStatus = matrix?.currentStatus
+      snap.idsResolved = (matrix?.idsResolved as any) ?? {}
+      snap.idsMissing = matrix?.idsMissing ?? []
+      snap.sourceBreakdown = { provider: envelope.source === 'provider', manual: envelope.source === 'manual' }
+      snap.manualFallbackAvailable = !!matrix?.manualFallbackAvailable
+      snap.providerResponseStatus = res.availability
+      snap.confirmedEmpty = confirmedEmpty
+      snap.reliability = envelope.reliability
+      snap.refreshReason = 'critical_domain_acquisition_v4'
+      await savePreMatchDomainSnapshot(snap)
+    }
+  }
+  return {
+    domain, attempted: ready, availability,
+    endpointStatus: matrix?.endpointStatus ?? null, recommendedNextAction: matrix?.recommendedNextAction,
+    manualFallbackAvailable: !!matrix?.manualFallbackAvailable, confirmedEmpty,
+  }
+}
+
+export async function runCriticalDomainAcquisitionForFixture(fixtureId: string): Promise<CriticalDomainAcquisitionReport> {
+  const results: DomainAcquisitionResult[] = []
+  for (const d of CRITICAL_ORDER) {
+    try { results.push(await runDomainAcquisition(fixtureId, d)) } catch { /* non-fatal */ }
+  }
+  return buildReport(fixtureId, results)
+}
+
+function buildReport(fixtureId: string, results: DomainAcquisitionResult[]): CriticalDomainAcquisitionReport {
+  const domainsFetched = results.filter(r => r.attempted && (r.availability === 'available' || r.availability === 'partial' || r.availability === 'available_empty_confirmed')).map(r => r.domain)
+  const domainsBlocked = results.filter(r => !r.attempted).map(r => r.domain)
+  const domainsManualRecommended = results.filter(r => r.recommendedNextAction === 'use_manual_intake').map(r => r.domain)
+  const domainsProviderNotConfigured = results.filter(r => r.endpointStatus === 'blocked_missing_env').map(r => r.domain)
+  const domainsEndpointMissingDocs = results.filter(r => r.endpointStatus === 'blocked_not_documented' || r.endpointStatus === 'not_implemented').map(r => r.domain)
+  const domainsWithConfirmedEmpty = results.filter(r => r.confirmedEmpty).map(r => r.domain)
+  const criticalDomainsReady = results.filter(r => CRITICAL_SET.includes(r.domain) && domainsFetched.includes(r.domain)).map(r => r.domain)
+  const criticalDomainsMissing = CRITICAL_SET.filter(d => !criticalDomainsReady.includes(d))
+  const nextRefreshRecommendations = results.filter(r => r.recommendedNextAction && r.recommendedNextAction !== 'ready_to_fetch' && r.recommendedNextAction !== 'stay_out').map(r => `${r.domain}: ${r.recommendedNextAction}`)
+  return {
+    fixtureId, results, domainsFetched, domainsBlocked, domainsManualRecommended, domainsProviderNotConfigured,
+    domainsEndpointMissingDocs, domainsWithConfirmedEmpty, criticalDomainsReady, criticalDomainsMissing, nextRefreshRecommendations,
+    generatedAt: new Date().toISOString(),
+    limitations: ['Orquestração V4: só busca domínios ready_to_fetch; bloqueado não chama provider e não é falha; nada inventado.'],
+  }
+}
+
+export async function buildCriticalDomainAcquisitionReport(fixtureId: string): Promise<CriticalDomainAcquisitionReport> {
+  // Read-only: report current matrix without fetching.
+  const results: DomainAcquisitionResult[] = []
+  for (const d of CRITICAL_ORDER) {
+    const m = await getDomainUnlockStatusV2(fixtureId, d, 'api_football').catch(() => null)
+    results.push({ domain: d, attempted: false, availability: m?.endpointStatus || 'unknown', endpointStatus: m?.endpointStatus ?? null, recommendedNextAction: m?.recommendedNextAction, manualFallbackAvailable: !!m?.manualFallbackAvailable, confirmedEmpty: false })
+  }
+  return buildReport(fixtureId, results)
+}
+
+export async function runCriticalDomainAcquisitionForToday(max?: number): Promise<{ fixtures: number; reports: CriticalDomainAcquisitionReport[] }> {
+  const fixtures = await selectFixturesForAnalysis(new Date(), max).catch(() => [])
+  const reports: CriticalDomainAcquisitionReport[] = []
+  for (const f of fixtures) { try { reports.push(await runCriticalDomainAcquisitionForFixture(f.fixtureId)) } catch { /* non-fatal */ } }
+  return { fixtures: fixtures.length, reports }
+}

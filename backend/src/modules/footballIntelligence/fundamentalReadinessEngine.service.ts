@@ -345,3 +345,76 @@ export async function buildFundamentalReadinessV4(fixtureId: string): Promise<Fu
     limitations: ['Readiness V4 não é probabilidade; mede desbloqueio por identidade/provider + cobertura manual. Manual confiável compensa provider bloqueado, mas aparece como manual.'],
   }
 }
+
+// ─── Readiness V5 (B44) — critical data-domain readiness ───────────────────────
+import { getAllDomainUnlockStatuses } from './identity/providerBridge.service.js'
+import { listPreMatchDomainSnapshots, effectiveFreshness } from './preMatchDataStore.service.js'
+
+export type ReadinessV5Status =
+  | 'ready_with_real_provider_data' | 'ready_with_mixed_provider_manual_data' | 'partially_ready_provider_limited'
+  | 'wait_for_lineup' | 'wait_for_domain_fetch' | 'wait_for_mapping' | 'wait_for_manual_input' | 'stay_out_data_insufficient'
+
+export interface FundamentalReadinessV5 {
+  status: ReadinessV5Status
+  criticalDomainReadiness: number
+  domainReliabilityScore: number
+  fetchedCriticalDomains: string[]
+  blockedCriticalDomains: string[]
+  staleCriticalDomains: string[]
+  manualCriticalDomains: string[]
+  endpointMissingDocsDomains: string[]
+  providerNotConfiguredDomains: string[]
+  limitations: string[]
+}
+
+const V5_CRITICAL = ['confirmed_lineups', 'injuries', 'standings']
+const V5_MANUAL: Record<string, string> = { confirmed_lineups: 'lineup', injuries: 'injury', standings: 'context' }
+
+export async function buildFundamentalReadinessV5(fixtureId: string): Promise<FundamentalReadinessV5 | null> {
+  const repos = createRepositories()
+  const fixture = await repos.fixtures.findById(fixtureId).catch(() => null)
+  if (!fixture) return null
+
+  const [matrix, snapshots, manual] = await Promise.all([
+    getAllDomainUnlockStatuses(fixtureId, 'api_football').catch(() => []),
+    listPreMatchDomainSnapshots(fixtureId, 200).catch(() => []),
+    listManualRecordsForFixture(fixtureId, 200).catch(() => []),
+  ])
+  const snapByDomain = new Map<string, any>()
+  for (const s of snapshots) if (!snapByDomain.has(s.domain) || s.fetchedAt > snapByDomain.get(s.domain).fetchedAt) snapByDomain.set(s.domain, s)
+  const manualKinds = new Set((manual as any[]).map(m => m.domain))
+
+  const fetched: string[] = [], blocked: string[] = [], stale: string[] = [], manualC: string[] = []
+  const endpointMissingDocs: string[] = [], providerNotConfigured: string[] = []
+  for (const d of V5_CRITICAL) {
+    const m = matrix.find(x => x.domain === d)
+    const snap = snapByDomain.get(d)
+    const usable = snap && (snap.availability === 'available' || snap.availability === 'partial' || snap.availability === 'available_empty_confirmed')
+    if (usable && effectiveFreshness(snap) !== 'stale') fetched.push(d)
+    else if (usable) stale.push(d)
+    else if (manualKinds.has(V5_MANUAL[d])) manualC.push(d)
+    else blocked.push(d)
+    if (m?.endpointStatus === 'blocked_not_documented' || m?.endpointStatus === 'not_implemented') endpointMissingDocs.push(d)
+    if (m?.endpointStatus === 'blocked_missing_env') providerNotConfigured.push(d)
+  }
+
+  const criticalDomainReadiness = Math.round(((fetched.length + manualC.length) / V5_CRITICAL.length) * 100)
+  const domainReliabilityScore = Math.round((fetched.length / V5_CRITICAL.length) * 100)
+
+  let status: ReadinessV5Status
+  if (fetched.length === V5_CRITICAL.length) status = 'ready_with_real_provider_data'
+  else if (fetched.length > 0 && manualC.length > 0) status = 'ready_with_mixed_provider_manual_data'
+  else if (manualC.length >= 1 && fetched.length === 0) status = 'wait_for_manual_input'
+  else if (stale.length > 0) status = 'wait_for_domain_fetch'
+  else if (blocked.some(d => matrix.find(x => x.domain === d)?.currentStatus === 'blocked_missing_mapping')) status = 'wait_for_mapping'
+  else if (providerNotConfigured.length === V5_CRITICAL.length || endpointMissingDocs.length === V5_CRITICAL.length) status = 'partially_ready_provider_limited'
+  else if (fetched.length > 0) status = 'ready_with_mixed_provider_manual_data'
+  else status = 'stay_out_data_insufficient'
+
+  return {
+    status, criticalDomainReadiness, domainReliabilityScore,
+    fetchedCriticalDomains: fetched, blockedCriticalDomains: blocked, staleCriticalDomains: stale, manualCriticalDomains: manualC,
+    endpointMissingDocsDomains: endpointMissingDocs, providerNotConfiguredDomains: providerNotConfigured,
+    limitations: ['Readiness V5 não é probabilidade; mede cobertura real por domínio crítico (provider/manual). Ausência reduz readiness; manual confiável conta como manual.'],
+  }
+}

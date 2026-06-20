@@ -94,3 +94,11 @@ detection; and Readiness V3 / Precheck V3 / Acquisition Runner V2 consuming both
 stays the wired live source. Nothing fabricated; observe-first; no score/confidence
 changes. See `REAL_PRE_MATCH_PROVIDER_INTEGRATION.md`, `MANUAL_INTELLIGENCE_INTAKE.md`,
 `PRE_MATCH_DATA_MERGE.md`, `READINESS_V3.md`, `PRECHECK_V3.md`.
+
+## B44 / Bloco 1 — critical pre-match data acquisition (additive)
+
+Adds a Provider Endpoint Catalog, Domain Unlock Matrix V2, canonical normalizer V2,
+critical-domain snapshot store V2, Acquisition Runner V4, Readiness V5, Precheck V5,
+Post-Match V3 and Match Intelligence Package V3. Real fetch happens only for documented
+endpoints with env + confirmed mappings; everything else is honestly blocked or manual.
+See `CRITICAL_PRE_MATCH_DATA_ACQUISITION.md`.

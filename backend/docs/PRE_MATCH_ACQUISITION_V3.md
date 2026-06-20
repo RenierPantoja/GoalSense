@@ -26,3 +26,9 @@ actions: `run_identity_resolution`, `run_entity_mapping_derivation`, `confirm_ma
 
 No fetch when locked. Bridge resolves only CONFIRMED mappings to ids. Nothing invented.
 V1/V2 reports remain; V3 is additive.
+
+## B44 — Acquisition Runner V4 (critical orchestration)
+
+V4 (`runCriticalDomainAcquisitionForFixture/Today`) orchestrates the critical domain set
+governed by the Provider Endpoint Catalog + Domain Unlock Matrix V2, fetching only
+`ready_to_fetch` domains. See `ACQUISITION_RUNNER_V4.md` + `CRITICAL_PRE_MATCH_DATA_ACQUISITION.md`.

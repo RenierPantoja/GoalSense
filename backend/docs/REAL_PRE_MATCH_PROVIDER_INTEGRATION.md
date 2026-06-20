@@ -68,3 +68,10 @@ documented `standings` (`/standings?league=&season=`) and `injuries`
 (`/injuries?team=&season=`) calls. suspensions/H2H/squads/team_form stay
 `not_implemented_with_docs_needed` (no documented endpoint in the project) → manual
 intake. See `TEAM_COMPETITION_IDENTITY_MAPPING.md`, `DOMAIN_UNLOCK_STATUS.md`.
+
+## B44 — endpoint catalog governs real fetch
+
+The Provider Endpoint Catalog (`PROVIDER_ENDPOINT_CATALOG.md`) now governs which
+endpoints are safe to call; the Acquisition Runner V4 fetches only `ready_to_fetch`
+domains (env + confirmed mappings + documented endpoint). Undocumented endpoints stay
+`blocked_not_documented`.

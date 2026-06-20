@@ -40,6 +40,18 @@ export interface PreMatchDomainSnapshot {
   canonicalData: unknown | null
   limitations: string[]
   expiresAt: string | null
+  // ── B44: critical domain snapshot store V2 (all optional, additive) ──
+  providerEntityMappingsUsed?: string[]
+  providerEndpointKey?: string | null
+  domainUnlockStatus?: string
+  idsResolved?: Record<string, string | null>
+  idsMissing?: string[]
+  sourceBreakdown?: { provider: boolean; manual: boolean }
+  manualFallbackAvailable?: boolean
+  providerResponseStatus?: string
+  confirmedEmpty?: boolean
+  reliability?: 'high' | 'medium' | 'low' | 'unknown'
+  refreshReason?: string
 }
 
 export type AcquisitionRunStatus = 'completed' | 'completed_with_limitations' | 'failed_non_fatal' | 'disabled'

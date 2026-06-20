@@ -161,3 +161,66 @@ export async function explainDomainUnlockStatus(fixtureId: string, domain: strin
   const s = await getDomainUnlockStatus(fixtureId, domain, provider)
   return `${domain}: ${s.currentStatus}${s.reasons.length ? ` — ${s.reasons.join('; ')}` : ''}`
 }
+
+// ─── Domain Unlock Matrix V2 (B44) — catalog + mappings + resolved ids ─────────
+import { getEndpointForDomain, canCallEndpoint } from '../providers/providerEndpointCatalog.service.js'
+import { listManualRecordsForFixture } from '../manualIntelligenceIntake.service.js'
+
+const MATRIX_DOMAINS: AcquisitionDomain[] = ['fixture_details', 'today_fixtures', 'standings', 'head_to_head', 'squads', 'injuries', 'suspensions', 'confirmed_lineups', 'probable_lineups', 'team_form', 'post_match_stats', 'competition_context']
+const MANUAL_FOR_DOMAIN: Record<string, string> = { confirmed_lineups: 'lineup', probable_lineups: 'lineup', injuries: 'injury', suspensions: 'suspension', squads: 'squad', standings: 'context', competition_context: 'context' }
+
+async function resolveIdsForDomain(fixtureId: string, domain: AcquisitionDomain, provider: string) {
+  const ids: { fixtureId?: string | null; homeTeamId?: string | null; awayTeamId?: string | null; leagueId?: string | null; season?: string | null } = {}
+  if (['fixture_details', 'post_match_stats', 'confirmed_lineups', 'probable_lineups'].includes(domain)) {
+    const f = await getProviderFixtureId(fixtureId, provider); ids.fixtureId = f.providerFixtureId
+  }
+  if (domain === 'standings' || domain === 'competition_context') {
+    const l = await getProviderCompetitionContextForFixture(fixtureId, provider); ids.leagueId = l.leagueId; ids.season = l.season
+  }
+  if (['injuries', 'suspensions', 'squads', 'head_to_head', 'team_form'].includes(domain)) {
+    const t = await getProviderHomeAwayTeamIdsForFixture(fixtureId, provider); ids.homeTeamId = t.homeTeamId; ids.awayTeamId = t.awayTeamId
+  }
+  return ids
+}
+
+export async function getDomainUnlockStatusV2(fixtureId: string, domain: string, provider = 'api_football'): Promise<DomainUnlockStatus> {
+  const baseV1 = await getDomainUnlockStatus(fixtureId, domain, provider)
+  const d = domain as AcquisitionDomain
+  const entry = getEndpointForDomain(provider, d)
+  const ids = await resolveIdsForDomain(fixtureId, d, provider).catch(() => ({}))
+  const callability = canCallEndpoint(provider, d, ids)
+  const manual = await listManualRecordsForFixture(fixtureId, 100).catch(() => [])
+  const manualKind = MANUAL_FOR_DOMAIN[domain]
+  const manualFallbackAvailable = !!manualKind && (manual as any[]).some(m => m.domain === manualKind)
+
+  let recommendedNextAction: DomainUnlockStatus['recommendedNextAction'] = 'stay_out'
+  if (baseV1.currentStatus === 'unlocked' && callability.callable) recommendedNextAction = 'ready_to_fetch'
+  else if (callability.safetyStatus === 'blocked_missing_env') recommendedNextAction = 'configure_provider'
+  else if (callability.safetyStatus === 'blocked_not_documented' || callability.safetyStatus === 'not_implemented' || callability.safetyStatus === 'not_supported') recommendedNextAction = manualFallbackAvailable ? 'use_manual_intake' : 'provide_endpoint_docs'
+  else if (callability.missingIds.includes('fixtureId')) recommendedNextAction = 'run_fixture_mapping'
+  else if (callability.missingIds.length > 0) recommendedNextAction = baseV1.currentStatus === 'blocked_ambiguous_mapping' ? 'confirm_mapping' : 'run_entity_mapping'
+  else if (manualFallbackAvailable) recommendedNextAction = 'use_manual_intake'
+
+  return {
+    ...baseV1,
+    endpointStatus: callability.safetyStatus,
+    endpointKey: callability.endpointKey,
+    endpointImplemented: entry?.implemented ?? false,
+    endpointDocumented: entry?.documented ?? false,
+    idsResolved: ids,
+    idsMissing: callability.missingIds,
+    manualFallbackAvailable,
+    recommendedNextAction,
+  }
+}
+
+export async function getAllDomainUnlockStatuses(fixtureId: string, provider = 'api_football'): Promise<DomainUnlockStatus[]> {
+  return Promise.all(MATRIX_DOMAINS.map(d => getDomainUnlockStatusV2(fixtureId, d, provider)))
+}
+
+export async function explainDomainUnlockMatrix(fixtureId: string, provider = 'api_football'): Promise<string> {
+  const all = await getAllDomainUnlockStatuses(fixtureId, provider)
+  return all.map(s => `${s.domain}: ${s.currentStatus}/${s.endpointStatus} → ${s.recommendedNextAction}`).join(' | ')
+}
+
+export { MATRIX_DOMAINS }
