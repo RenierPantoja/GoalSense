@@ -60,3 +60,11 @@ unlocks documented per-fixture calls — `fixture_details` (`/fixtures?id=`),
 (`/fixtures/lineups?fixture=`). injuries/suspensions/standings/H2H stay
 `not_implemented_with_docs_needed` (need team/league id mappings; no guessing). See
 `CROSS_PROVIDER_IDENTITY_RESOLUTION.md` + `PROVIDER_BRIDGE.md`.
+
+## B43 — standings + injuries unlocked via entity mappings
+
+With CONFIRMED league+season and team mappings, the API-Football adapter now performs
+documented `standings` (`/standings?league=&season=`) and `injuries`
+(`/injuries?team=&season=`) calls. suspensions/H2H/squads/team_form stay
+`not_implemented_with_docs_needed` (no documented endpoint in the project) → manual
+intake. See `TEAM_COMPETITION_IDENTITY_MAPPING.md`, `DOMAIN_UNLOCK_STATUS.md`.

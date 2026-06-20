@@ -207,3 +207,47 @@ export async function runAcquisitionForTodayV2(max?: number): Promise<{ run: Pre
   const run = await runAcquisitionForToday(max)
   return { run, providerReadiness: buildProviderIntegrationReadiness() }
 }
+
+// ─── Acquisition V3 (B43) — identity-driven domain unlock diagnostics ──────────
+import { getDomainUnlockStatus } from './identity/providerBridge.service.js'
+import type { DomainUnlockStatus } from './identity/providerIdentity.types.js'
+
+const V3_DOMAINS = ['fixture_details', 'confirmed_lineups', 'post_match_stats', 'standings', 'injuries', 'suspensions', 'head_to_head', 'squads']
+
+export interface AcquisitionReportV3 {
+  fixtureId: string
+  domainUnlockStatuses: DomainUnlockStatus[]
+  domainsUnlocked: string[]
+  domainsStillBlocked: string[]
+  missingMappings: string[]
+  ambiguousMappings: string[]
+  manualIntakeRecommended: string[]
+  generatedAt: string
+  limitations: string[]
+}
+
+export async function buildAcquisitionReportV3(fixtureId: string): Promise<AcquisitionReportV3> {
+  const statuses = await Promise.all(V3_DOMAINS.map(d => getDomainUnlockStatus(fixtureId, d, 'api_football').catch(() => null)))
+  const domainUnlockStatuses = statuses.filter((s): s is DomainUnlockStatus => !!s)
+  const domainsUnlocked = domainUnlockStatuses.filter(s => s.currentStatus === 'unlocked').map(s => s.domain)
+  const domainsStillBlocked = domainUnlockStatuses.filter(s => s.currentStatus !== 'unlocked').map(s => s.domain)
+  const missingMappings = domainUnlockStatuses.filter(s => s.currentStatus === 'blocked_missing_mapping').map(s => s.domain)
+  const ambiguousMappings = domainUnlockStatuses.filter(s => s.currentStatus === 'blocked_ambiguous_mapping').map(s => s.domain)
+  const manualIntakeRecommended = domainUnlockStatuses.filter(s => s.currentStatus === 'blocked_endpoint_not_implemented' || s.currentStatus === 'blocked_provider_not_supported').map(s => s.domain)
+  return {
+    fixtureId, domainUnlockStatuses, domainsUnlocked, domainsStillBlocked, missingMappings, ambiguousMappings, manualIntakeRecommended,
+    generatedAt: new Date().toISOString(),
+    limitations: ['Diagnóstico V3: status de desbloqueio por domínio (identidade/provider/endpoint). Bloqueado não é falha; nada inventado.'],
+  }
+}
+
+export async function runAcquisitionForFixtureV3(fixtureId: string): Promise<{ run: PreMatchAcquisitionRun; reportV2: AcquisitionReportV2; reportV3: AcquisitionReportV3 }> {
+  const run = await runAcquisitionForFixture(fixtureId)
+  const [reportV2, reportV3] = await Promise.all([buildAcquisitionReportV2(fixtureId), buildAcquisitionReportV3(fixtureId)])
+  return { run, reportV2, reportV3 }
+}
+
+export async function runAcquisitionForTodayV3(max?: number): Promise<{ run: PreMatchAcquisitionRun }> {
+  const run = await runAcquisitionForToday(max)
+  return { run }
+}

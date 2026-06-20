@@ -119,3 +119,104 @@ export interface FixtureIdentityResolutionRun {
   status: 'completed' | 'completed_with_limitations' | 'provider_not_configured' | 'failed_non_fatal' | 'disabled'
   limitations: string[]
 }
+
+// ─── B43: entity identity (team / competition / season) ───────────────────────
+
+export type EntityMappingStatus = 'candidate' | 'auto_confirmed' | 'manually_confirmed' | 'ambiguous' | 'rejected' | 'invalidated'
+export type EntityMappingStrength = 'fixture_derived' | 'alias_derived' | 'manual_confirmed' | 'provider_exact' | 'weak_name_match' | 'unknown'
+
+export interface ProviderTeamMapping {
+  id: string
+  canonicalTeamId: string
+  canonicalTeamName: string
+  primaryProvider: string
+  primaryProviderTeamId: string | null
+  secondaryProvider: string
+  secondaryProviderTeamId: string | null
+  secondaryProviderTeamName: string | null
+  country: string | null
+  competitionHints: string[]
+  status: EntityMappingStatus
+  confidenceScore: number
+  confidenceBand: ConfidenceBand
+  strength: EntityMappingStrength
+  matchedFixtures: string[]
+  conflictingFixtures: string[]
+  matchedFields: string[]
+  conflictingFields: string[]
+  limitations: string[]
+  audit: MappingAuditEntry[]
+  createdAt: string
+  updatedAt: string
+  confirmedAt: string | null
+  confirmedBy: string | null
+}
+
+export interface ProviderCompetitionMapping {
+  id: string
+  canonicalCompetitionId: string
+  canonicalCompetitionName: string
+  primaryProvider: string
+  primaryProviderCompetitionId: string | null
+  secondaryProvider: string
+  secondaryProviderCompetitionId: string | null
+  secondaryProviderCompetitionName: string | null
+  country: string | null
+  season: string | null
+  type: string | null
+  status: EntityMappingStatus
+  confidenceScore: number
+  confidenceBand: ConfidenceBand
+  strength: EntityMappingStrength
+  matchedFixtures: string[]
+  conflictingFixtures: string[]
+  limitations: string[]
+  audit: MappingAuditEntry[]
+  createdAt: string
+  updatedAt: string
+  confirmedAt: string | null
+  confirmedBy: string | null
+}
+
+export interface ProviderSeasonMapping {
+  id: string
+  primaryProvider: string
+  secondaryProvider: string
+  canonicalCompetitionId: string
+  secondaryProviderLeagueId: string | null
+  season: string | null
+  status: EntityMappingStatus
+  limitations: string[]
+}
+
+export type DomainUnlockState =
+  | 'unlocked' | 'blocked_missing_mapping' | 'blocked_ambiguous_mapping'
+  | 'blocked_provider_not_configured' | 'blocked_provider_not_supported'
+  | 'blocked_endpoint_not_implemented' | 'blocked_operator_review'
+
+export interface DomainUnlockStatus {
+  domain: string
+  fixtureId: string
+  provider: string
+  requiredMappings: Array<'fixture' | 'home_team' | 'away_team' | 'league' | 'season' | 'country'>
+  currentStatus: DomainUnlockState
+  reasons: string[]
+  suggestedActions: Array<'run_identity_resolution' | 'run_entity_mapping_derivation' | 'confirm_mapping' | 'configure_provider' | 'use_manual_intake' | 'none'>
+}
+
+export interface EntityMappingDerivationRun {
+  id: string
+  startedAt: string
+  completedAt: string | null
+  secondaryProvider: string
+  confirmedFixtureMappingsScanned: number
+  teamCandidates: number
+  teamAutoConfirmed: number
+  teamAmbiguous: number
+  competitionCandidates: number
+  competitionAutoConfirmed: number
+  competitionAmbiguous: number
+  errors: string[]
+  status: 'completed' | 'completed_with_limitations' | 'provider_not_configured' | 'failed_non_fatal' | 'disabled'
+  limitations: string[]
+}

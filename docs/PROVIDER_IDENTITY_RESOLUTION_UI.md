@@ -26,3 +26,9 @@ resolves the ESPN↔external id blocker.
 (resolution-runs, resolve/today, resolve/fixtures/:id, candidates, mapping,
 mappings/:id/confirm|reject, aliases/teams|competitions). Types in
 `providerIdentityTypes.ts`.
+
+## B43 — entity mapping panel
+
+Below the fixture identity panel, `ProviderEntityMappingPanel` shows team/competition
+mappings (confirm/reject + derive) and per-fixture domain unlock status. See
+`PROVIDER_ENTITY_MAPPING_UI.md`.

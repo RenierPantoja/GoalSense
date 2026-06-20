@@ -8,27 +8,30 @@
  */
 import { guardProviderCall } from '../../localops/livePipelineGuard.service.js'
 import { getAdapter, getProvidersForDomain, listRegisteredProviders } from './providerRegistry.service.js'
-import { canFetchDomainForFixture } from '../identity/providerBridge.service.js'
+import { canFetchDomainForFixtureV2 } from '../identity/providerBridge.service.js'
 import type { AcquisitionDomain, DomainFetchResult, FetchParams } from './provider.types.js'
 
-const BRIDGE_DOMAINS: AcquisitionDomain[] = ['confirmed_lineups', 'probable_lineups', 'injuries', 'suspensions', 'fixture_details', 'post_match_stats', 'head_to_head']
+const BRIDGE_DOMAINS: AcquisitionDomain[] = ['confirmed_lineups', 'probable_lineups', 'injuries', 'suspensions', 'fixture_details', 'post_match_stats', 'head_to_head', 'standings']
 
-/** Resolve the external fixture id via the bridge for keyed providers. Returns either a
- * params patch (allow) or a blocked result (no fetch). ESPN/manual are never bridged. */
+/** Resolve external ids via the bridge for keyed providers. Returns either a params
+ * patch (allow) or a blocked result (no fetch). ESPN/manual are never bridged. */
 async function bridgeGate(provider: string, requiresApiKey: boolean, domain: AcquisitionDomain, params: FetchParams): Promise<{ blocked: DomainFetchResult | null; params: FetchParams }> {
   if (!requiresApiKey || provider === 'espn' || provider === 'manual') return { blocked: null, params }
   if (!BRIDGE_DOMAINS.includes(domain) || !params.fixtureId) return { blocked: null, params }
-  const decision = await canFetchDomainForFixture(params.fixtureId, domain, provider).catch(() => null)
-  if (!decision) return { blocked: null, params }
-  if (decision.decision === 'allow_confirmed' && decision.providerFixtureId) {
-    return { blocked: null, params: { ...params, resolvedExternalFixtureId: decision.providerFixtureId } }
+  const v2 = await canFetchDomainForFixtureV2(params.fixtureId, domain, provider).catch(() => null)
+  if (!v2) return { blocked: null, params }
+  if (v2.allow) {
+    return { blocked: null, params: { ...params, resolvedExternalFixtureId: v2.resolvedFixtureId, resolvedLeagueId: v2.resolvedLeagueId, resolvedSeason: v2.resolvedSeason, resolvedHomeTeamId: v2.resolvedHomeTeamId, resolvedAwayTeamId: v2.resolvedAwayTeamId } }
   }
-  const avail = decision.decision === 'blocked_ambiguous_provider_mapping' ? 'blocked_ambiguous_provider_mapping' : 'blocked_missing_provider_mapping'
+  const avail = v2.status === 'blocked_ambiguous_mapping' ? 'blocked_ambiguous_provider_mapping'
+    : v2.status === 'blocked_endpoint_not_implemented' ? 'not_implemented_with_docs_needed'
+      : v2.status === 'blocked_provider_not_configured' ? 'provider_not_configured'
+        : 'blocked_missing_provider_mapping'
   return {
     blocked: {
       domain, provider, availability: avail, freshness: 'unknown', dataQuality: 'unavailable',
-      fetchedAt: new Date().toISOString(), canonicalData: null, payloadSummary: '', reasons: [decision.reason],
-      limitations: ['Rode a resolução de identidade ou confirme o mapping; ou use intake manual.'], providerCandidatesTried: [provider],
+      fetchedAt: new Date().toISOString(), canonicalData: null, payloadSummary: '', reasons: [`Bridge: ${v2.status}`],
+      limitations: ['Rode a derivação/resolução de identidade ou confirme o mapping; ou use intake manual.'], providerCandidatesTried: [provider],
     }, params,
   }
 }

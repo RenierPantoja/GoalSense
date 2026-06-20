@@ -53,6 +53,7 @@ import type {
 import type { ManualIntelligenceRecord } from '../../modules/footballIntelligence/manualIntelligence.types.js'
 import type {
   ProviderEntityMapping, TeamAlias, CompetitionAlias, FixtureIdentityResolutionRun, ProviderEntityMappingStatus,
+  ProviderTeamMapping, ProviderCompetitionMapping, ProviderSeasonMapping, EntityMappingDerivationRun, EntityMappingStatus,
 } from '../../modules/footballIntelligence/identity/providerIdentity.types.js'
 
 const LEDGER = 'signalLedger'
@@ -100,6 +101,10 @@ const PROVIDER_MAPPINGS = 'providerEntityMappings'
 const TEAM_ALIASES = 'teamAliases'
 const COMPETITION_ALIASES = 'competitionAliases'
 const IDENTITY_RUNS = 'fixtureIdentityResolutionRuns'
+const TEAM_MAPPINGS = 'providerTeamMappings'
+const COMPETITION_MAPPINGS = 'providerCompetitionMappings'
+const SEASON_MAPPINGS = 'providerSeasonMappings'
+const ENTITY_DERIVATION_RUNS = 'entityMappingDerivationRuns'
 
 const READ_CAP = 2000
 
@@ -1040,5 +1045,70 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
   async listFixtureIdentityResolutionRuns(limit?: number): Promise<FixtureIdentityResolutionRun[]> {
     const db = await getFirestore(); const snap = await db.collection(IDENTITY_RUNS).get()
     return snap.docs.map((d: any) => docData<FixtureIdentityResolutionRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
+  }
+
+  // ── B43: entity mappings ──
+  async saveProviderTeamMapping(m: ProviderTeamMapping): Promise<ProviderTeamMapping> {
+    const db = await getFirestore(); await db.collection(TEAM_MAPPINGS).doc(m.id).set(m, { merge: true }); return m
+  }
+  async getProviderTeamMapping(id: string): Promise<ProviderTeamMapping | null> {
+    const db = await getFirestore(); const doc = await db.collection(TEAM_MAPPINGS).doc(id).get(); return doc.exists ? docData<ProviderTeamMapping>(doc) : null
+  }
+  async listProviderTeamMappings(limit?: number): Promise<ProviderTeamMapping[]> {
+    const db = await getFirestore(); const snap = await db.collection(TEAM_MAPPINGS).get()
+    return snap.docs.map((d: any) => docData<ProviderTeamMapping>(d)).slice(0, limit || 500)
+  }
+  async listProviderTeamMappingsByStatus(status: EntityMappingStatus, limit?: number): Promise<ProviderTeamMapping[]> {
+    const db = await getFirestore(); const snap = await db.collection(TEAM_MAPPINGS).where('status', '==', status).get()
+    return snap.docs.map((d: any) => docData<ProviderTeamMapping>(d)).slice(0, limit || 500)
+  }
+  async updateProviderTeamMappingStatus(id: string, patch: Partial<ProviderTeamMapping>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(TEAM_MAPPINGS).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async saveProviderCompetitionMapping(m: ProviderCompetitionMapping): Promise<ProviderCompetitionMapping> {
+    const db = await getFirestore(); await db.collection(COMPETITION_MAPPINGS).doc(m.id).set(m, { merge: true }); return m
+  }
+  async getProviderCompetitionMapping(id: string): Promise<ProviderCompetitionMapping | null> {
+    const db = await getFirestore(); const doc = await db.collection(COMPETITION_MAPPINGS).doc(id).get(); return doc.exists ? docData<ProviderCompetitionMapping>(doc) : null
+  }
+  async listProviderCompetitionMappings(limit?: number): Promise<ProviderCompetitionMapping[]> {
+    const db = await getFirestore(); const snap = await db.collection(COMPETITION_MAPPINGS).get()
+    return snap.docs.map((d: any) => docData<ProviderCompetitionMapping>(d)).slice(0, limit || 500)
+  }
+  async listProviderCompetitionMappingsByStatus(status: EntityMappingStatus, limit?: number): Promise<ProviderCompetitionMapping[]> {
+    const db = await getFirestore(); const snap = await db.collection(COMPETITION_MAPPINGS).where('status', '==', status).get()
+    return snap.docs.map((d: any) => docData<ProviderCompetitionMapping>(d)).slice(0, limit || 500)
+  }
+  async updateProviderCompetitionMappingStatus(id: string, patch: Partial<ProviderCompetitionMapping>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(COMPETITION_MAPPINGS).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async saveProviderSeasonMapping(m: ProviderSeasonMapping): Promise<ProviderSeasonMapping> {
+    const db = await getFirestore(); await db.collection(SEASON_MAPPINGS).doc(m.id).set(m, { merge: true }); return m
+  }
+  async getProviderSeasonMapping(id: string): Promise<ProviderSeasonMapping | null> {
+    const db = await getFirestore(); const doc = await db.collection(SEASON_MAPPINGS).doc(id).get(); return doc.exists ? docData<ProviderSeasonMapping>(doc) : null
+  }
+  async listProviderSeasonMappings(limit?: number): Promise<ProviderSeasonMapping[]> {
+    const db = await getFirestore(); const snap = await db.collection(SEASON_MAPPINGS).get()
+    return snap.docs.map((d: any) => docData<ProviderSeasonMapping>(d)).slice(0, limit || 500)
+  }
+  async createEntityMappingDerivationRun(run: EntityMappingDerivationRun): Promise<EntityMappingDerivationRun> {
+    const db = await getFirestore(); await db.collection(ENTITY_DERIVATION_RUNS).doc(run.id).set(run, { merge: true }); return run
+  }
+  async updateEntityMappingDerivationRun(id: string, patch: Partial<EntityMappingDerivationRun>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(ENTITY_DERIVATION_RUNS).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async getEntityMappingDerivationRun(id: string): Promise<EntityMappingDerivationRun | null> {
+    const db = await getFirestore(); const doc = await db.collection(ENTITY_DERIVATION_RUNS).doc(id).get(); return doc.exists ? docData<EntityMappingDerivationRun>(doc) : null
+  }
+  async listEntityMappingDerivationRuns(limit?: number): Promise<EntityMappingDerivationRun[]> {
+    const db = await getFirestore(); const snap = await db.collection(ENTITY_DERIVATION_RUNS).get()
+    return snap.docs.map((d: any) => docData<EntityMappingDerivationRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
   }
 }

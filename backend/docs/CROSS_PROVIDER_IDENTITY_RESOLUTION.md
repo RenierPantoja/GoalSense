@@ -49,3 +49,10 @@ swapped / medium → `ambiguous`. A previously `rejected` fingerprint is not re-
 No guessed ids. Name-only never high. Ambiguous never auto-confirms. Rejected not
 reused unless the fingerprint changes. `inferred` never pretends to be confirmed. No
 odds; provider without env is never called.
+
+## B43 — entity identity (teams/competitions/seasons)
+
+Confirmed fixture mappings now feed an entity derivation engine that maps ESPN teams →
+API-Football team ids and ESPN competitions → API league ids/seasons (evidence from
+fixture co-occurrence, never name-only). See `TEAM_COMPETITION_IDENTITY_MAPPING.md`,
+`DOMAIN_UNLOCK_STATUS.md`.

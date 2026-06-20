@@ -158,6 +158,12 @@ const envSchema = z.object({
   FIXTURE_IDENTITY_MEDIUM_CONFIDENCE_THRESHOLD: z.coerce.number().default(0.70),
   FIXTURE_IDENTITY_MAX_KICKOFF_DELTA_MINUTES: z.coerce.number().default(120),
   FIXTURE_IDENTITY_REQUIRE_COMPETITION_MATCH: z.string().default('false'),
+  // B43: team/competition entity mapping derivation.
+  ENABLE_ENTITY_MAPPING_DERIVATION: z.string().default('true'),
+  ENTITY_MAPPING_AUTO_CONFIRM: z.string().default('true'),
+  TEAM_MAPPING_MIN_CONFIRMED_FIXTURES: z.coerce.number().default(2),
+  COMPETITION_MAPPING_MIN_CONFIRMED_FIXTURES: z.coerce.number().default(2),
+  ENTITY_MAPPING_HIGH_CONFIDENCE_THRESHOLD: z.coerce.number().default(0.90),
   ENABLE_PROVIDER_API_FOOTBALL: z.string().default('false'),
   ENABLE_PROVIDER_SPORTMONKS: z.string().default('false'),
   ENABLE_PROVIDER_FOOTBALL_DATA: z.string().default('false'),

@@ -34,3 +34,12 @@ ESPN and manual providers are never bridged.
 The bridge never guesses an id. Only a confirmed mapping unlocks a critical fetch;
 candidates are preview-only. This is what finally removes the name-guess dependency from
 the router.
+
+## B43 — Provider Bridge V2
+
+Adds `getProviderTeamId`, `getProviderLeagueId`, `getProviderSeason`,
+`getProviderHomeAwayTeamIdsForFixture`, `getProviderCompetitionContextForFixture`,
+`canFetchDomainForFixtureV2` and `getDomainUnlockStatus`. Unlocks standings (league +
+season) and injuries (team ids) when CONFIRMED entity mappings exist; everything else
+stays `blocked_endpoint_not_implemented`/`blocked_missing_mapping`. See
+`DOMAIN_UNLOCK_STATUS.md`.

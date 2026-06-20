@@ -252,3 +252,64 @@ export async function runAlertDecisionPrecheckV3(fixtureId: string): Promise<Ale
   out.enforced = enabled && mode === 'enforce' && (decision === 'avoid' || decision.startsWith('wait'))
   return out
 }
+
+// ─── Precheck V4 (B43) — entity-mapping/domain-unlock aware, observe-first ─────
+import { buildFundamentalReadinessV4 } from './fundamentalReadinessEngine.service.js'
+import { getDomainUnlockStatus } from './identity/providerBridge.service.js'
+
+export type PrecheckV4Decision =
+  | 'avoid' | 'wait_for_lineup' | 'wait_for_manual_review' | 'wait_for_entity_mapping'
+  | 'wait_for_live_confirmation' | 'monitor' | 'alert_candidate' | 'strong_alert' | 'post_match_learning_only'
+
+export interface AlertDecisionPrecheckV4Result {
+  fixtureId: string
+  mode: 'observe' | 'enforce'
+  enabled: boolean
+  enforced: boolean
+  decision: PrecheckV4Decision
+  reasons: string[]
+  limitations: string[]
+  generatedAt: string
+}
+
+export async function runAlertDecisionPrecheckV4(fixtureId: string): Promise<AlertDecisionPrecheckV4Result> {
+  const enabled = isPrecheckEnabled()
+  const mode = precheckMode()
+  const out: AlertDecisionPrecheckV4Result = {
+    fixtureId, mode, enabled, enforced: false, decision: 'monitor', reasons: [],
+    limitations: ['Precheck V4 observacional: nunca bloqueia alerta real em observe; não altera score/confiança/resultado.'], generatedAt: new Date().toISOString(),
+  }
+  const pkg = await buildMatchIntelligencePackage(fixtureId).catch(() => null)
+  if (!pkg) { out.reasons.push('Pacote indisponível.'); return out }
+
+  const [readinessV4, lineup, standings, injuries] = await Promise.all([
+    buildFundamentalReadinessV4(fixtureId).catch(() => null),
+    getDomainUnlockStatus(fixtureId, 'confirmed_lineups', 'api_football').catch(() => null),
+    getDomainUnlockStatus(fixtureId, 'standings', 'api_football').catch(() => null),
+    getDomainUnlockStatus(fixtureId, 'injuries', 'api_football').catch(() => null),
+  ])
+  const reasons: string[] = []
+  if (injuries?.currentStatus === 'blocked_missing_mapping') reasons.push('missing_team_mapping')
+  if (standings?.currentStatus === 'blocked_missing_mapping') reasons.push('missing_league_mapping')
+  if (injuries?.currentStatus === 'blocked_ambiguous_mapping') reasons.push('ambiguous_team_mapping')
+  if (standings?.currentStatus === 'blocked_ambiguous_mapping') reasons.push('ambiguous_league_mapping')
+  if (lineup?.currentStatus === 'blocked_endpoint_not_implemented' || injuries?.currentStatus === 'blocked_endpoint_not_implemented') reasons.push('provider_domain_locked')
+  if ((readinessV4?.criticalDomainsFilledByManual.length ?? 0) > 0) reasons.push('manual_data_available')
+  if ((readinessV4?.providerUnlockProgress ?? 0) > 0) reasons.push('provider_data_unlocked')
+  if (readinessV4?.mappingReviewRequired) reasons.push('operator_review_required')
+
+  let decision: PrecheckV4Decision
+  if (pkg.phase === 'post_match') decision = 'post_match_learning_only'
+  else if (readinessV4?.status === 'wait_for_operator_mapping_review') decision = 'wait_for_manual_review'
+  else if (pkg.squads?.waitForLineupRecommended) decision = 'wait_for_lineup'
+  else if (readinessV4?.status === 'wait_for_entity_mapping') decision = 'wait_for_entity_mapping'
+  else if (pkg.phase === 'live' && !(pkg.live?.hasStats)) decision = 'wait_for_live_confirmation'
+  else if (readinessV4?.status === 'stay_out') decision = 'avoid'
+  else if (readinessV4?.status === 'provider_unlocked_ready' || readinessV4?.status === 'manual_only_ready') decision = 'alert_candidate'
+  else decision = 'monitor'
+
+  out.decision = decision
+  out.reasons = [...new Set(reasons)]
+  out.enforced = enabled && mode === 'enforce' && (decision === 'avoid' || decision.startsWith('wait'))
+  return out
+}

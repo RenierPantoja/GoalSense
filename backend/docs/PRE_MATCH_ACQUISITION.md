@@ -96,3 +96,10 @@ Acquisition Report V2 now reports `providerMappingStatus`, `providerMappingConfi
 per-fixture fetch and returns `blocked_missing_provider_mapping` /
 `blocked_ambiguous_provider_mapping` when there is no confirmed mapping. See
 `PROVIDER_BRIDGE.md`.
+
+## B43 — Acquisition V3 (identity-driven)
+
+`buildAcquisitionReportV3` + `runAcquisitionForFixtureV3`/`…TodayV3` add per-domain
+unlock diagnostics (unlocked / missing mapping / ambiguous / provider not configured /
+endpoint not implemented) so the operator knows whether the blocker is identity,
+provider, or endpoint. See `PRE_MATCH_ACQUISITION_V3.md` + `DOMAIN_UNLOCK_STATUS.md`.

@@ -278,3 +278,70 @@ export async function buildFundamentalReadinessV3(fixtureId: string): Promise<Fu
     limitations: ['Readiness V3 não é probabilidade; pondera cobertura provider/manual e penaliza conflito. Dado manual confiável habilita análise com badge manual.'],
   }
 }
+
+// ─── Readiness V4 (B43) — entity-mapping/domain-unlock aware ───────────────────
+import { getDomainUnlockStatus } from './identity/providerBridge.service.js'
+import { listManualRecordsForFixture } from './manualIntelligenceIntake.service.js'
+
+export type ReadinessV4Status =
+  | 'provider_unlocked_ready' | 'provider_unlocked_partial' | 'manual_only_ready'
+  | 'wait_for_entity_mapping' | 'wait_for_operator_mapping_review' | 'provider_limited' | 'stay_out'
+
+export interface FundamentalReadinessV4 {
+  status: ReadinessV4Status
+  score: number
+  entityMappingReadiness: number
+  providerUnlockProgress: number
+  criticalDomainsBlockedByMapping: string[]
+  criticalDomainsBlockedByProvider: string[]
+  criticalDomainsFilledByManual: string[]
+  mappingReviewRequired: boolean
+  limitations: string[]
+}
+
+const V4_CRITICAL = ['confirmed_lineups', 'standings', 'injuries']
+const MANUAL_FOR_DOMAIN: Record<string, string> = { confirmed_lineups: 'lineup', standings: 'context', injuries: 'injury' }
+
+export async function buildFundamentalReadinessV4(fixtureId: string): Promise<FundamentalReadinessV4 | null> {
+  const repos = createRepositories()
+  const fixture = await repos.fixtures.findById(fixtureId).catch(() => null)
+  if (!fixture) return null
+
+  const [statuses, manual] = await Promise.all([
+    Promise.all(V4_CRITICAL.map(d => getDomainUnlockStatus(fixtureId, d, 'api_football').catch(() => null))),
+    listManualRecordsForFixture(fixtureId, 200).catch(() => []),
+  ])
+  const unlock = statuses.filter(Boolean) as Array<{ domain: string; currentStatus: string }>
+  const unlocked = unlock.filter(s => s.currentStatus === 'unlocked').map(s => s.domain)
+  const blockedByMapping = unlock.filter(s => s.currentStatus === 'blocked_missing_mapping').map(s => s.domain)
+  const ambiguous = unlock.filter(s => s.currentStatus === 'blocked_ambiguous_mapping').map(s => s.domain)
+  const blockedByProvider = unlock.filter(s => s.currentStatus === 'blocked_provider_not_configured' || s.currentStatus === 'blocked_endpoint_not_implemented' || s.currentStatus === 'blocked_provider_not_supported').map(s => s.domain)
+
+  const manualDomains = new Set((manual as any[]).map(m => m.domain))
+  const filledByManual = V4_CRITICAL.filter(d => manualDomains.has(MANUAL_FOR_DOMAIN[d]))
+
+  const total = V4_CRITICAL.length
+  const providerUnlockProgress = Math.round((unlocked.length / total) * 100)
+  const entityMappingReadiness = Math.round(((unlocked.length + filledByManual.length) / total) * 100)
+  const mappingReviewRequired = ambiguous.length > 0
+
+  let status: ReadinessV4Status
+  if (mappingReviewRequired) status = 'wait_for_operator_mapping_review'
+  else if (unlocked.length === total) status = 'provider_unlocked_ready'
+  else if (unlocked.length > 0) status = 'provider_unlocked_partial'
+  else if (filledByManual.length >= 1) status = 'manual_only_ready'
+  else if (blockedByMapping.length > 0) status = 'wait_for_entity_mapping'
+  else if (blockedByProvider.length === total) status = 'provider_limited'
+  else status = 'stay_out'
+
+  let score = 20 + Math.round(providerUnlockProgress * 0.4 + (entityMappingReadiness - providerUnlockProgress) * 0.2)
+  if (status === 'wait_for_operator_mapping_review' || status === 'wait_for_entity_mapping') score = Math.min(score, 45)
+  score = Math.max(0, Math.min(100, score))
+
+  return {
+    status, score, entityMappingReadiness, providerUnlockProgress,
+    criticalDomainsBlockedByMapping: blockedByMapping, criticalDomainsBlockedByProvider: blockedByProvider,
+    criticalDomainsFilledByManual: filledByManual, mappingReviewRequired,
+    limitations: ['Readiness V4 não é probabilidade; mede desbloqueio por identidade/provider + cobertura manual. Manual confiável compensa provider bloqueado, mas aparece como manual.'],
+  }
+}

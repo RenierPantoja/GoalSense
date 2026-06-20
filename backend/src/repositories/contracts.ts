@@ -169,6 +169,7 @@ import type {
 import type { ManualIntelligenceRecord } from '../modules/footballIntelligence/manualIntelligence.types.js'
 import type {
   ProviderEntityMapping, TeamAlias, CompetitionAlias, FixtureIdentityResolutionRun, ProviderEntityMappingStatus,
+  ProviderTeamMapping, ProviderCompetitionMapping, ProviderSeasonMapping, EntityMappingDerivationRun, EntityMappingStatus,
 } from '../modules/footballIntelligence/identity/providerIdentity.types.js'
 
 export interface IntelligenceRepository {
@@ -382,6 +383,25 @@ export interface IntelligenceRepository {
   updateFixtureIdentityResolutionRun(id: string, patch: Partial<FixtureIdentityResolutionRun>): Promise<{ count: number }>
   getFixtureIdentityResolutionRun(id: string): Promise<FixtureIdentityResolutionRun | null>
   listFixtureIdentityResolutionRuns(limit?: number): Promise<FixtureIdentityResolutionRun[]>
+
+  // ── B43: entity (team/competition/season) mappings ──────────────────────────
+  saveProviderTeamMapping(mapping: ProviderTeamMapping): Promise<ProviderTeamMapping>
+  getProviderTeamMapping(id: string): Promise<ProviderTeamMapping | null>
+  listProviderTeamMappings(limit?: number): Promise<ProviderTeamMapping[]>
+  listProviderTeamMappingsByStatus(status: EntityMappingStatus, limit?: number): Promise<ProviderTeamMapping[]>
+  updateProviderTeamMappingStatus(id: string, patch: Partial<ProviderTeamMapping>): Promise<{ count: number }>
+  saveProviderCompetitionMapping(mapping: ProviderCompetitionMapping): Promise<ProviderCompetitionMapping>
+  getProviderCompetitionMapping(id: string): Promise<ProviderCompetitionMapping | null>
+  listProviderCompetitionMappings(limit?: number): Promise<ProviderCompetitionMapping[]>
+  listProviderCompetitionMappingsByStatus(status: EntityMappingStatus, limit?: number): Promise<ProviderCompetitionMapping[]>
+  updateProviderCompetitionMappingStatus(id: string, patch: Partial<ProviderCompetitionMapping>): Promise<{ count: number }>
+  saveProviderSeasonMapping(mapping: ProviderSeasonMapping): Promise<ProviderSeasonMapping>
+  getProviderSeasonMapping(id: string): Promise<ProviderSeasonMapping | null>
+  listProviderSeasonMappings(limit?: number): Promise<ProviderSeasonMapping[]>
+  createEntityMappingDerivationRun(run: EntityMappingDerivationRun): Promise<EntityMappingDerivationRun>
+  updateEntityMappingDerivationRun(id: string, patch: Partial<EntityMappingDerivationRun>): Promise<{ count: number }>
+  getEntityMappingDerivationRun(id: string): Promise<EntityMappingDerivationRun | null>
+  listEntityMappingDerivationRuns(limit?: number): Promise<EntityMappingDerivationRun[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

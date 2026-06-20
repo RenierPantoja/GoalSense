@@ -41,3 +41,10 @@ Backstage now embeds `ProviderIdentityResolutionPanel` per fixture: ESPN↔exter
 status, candidates (with ambiguity/warnings), and operator confirm/reject + "Resolver
 identidade". Confirmed mappings unlock fixture-scoped provider fetch. See
 `PROVIDER_IDENTITY_RESOLUTION_UI.md`.
+
+## B43 — entity mapping + domain unlock
+
+Backstage now also embeds `ProviderEntityMappingPanel`: team/competition mappings
+(derive/confirm/reject) and per-fixture domain unlock status (standings/injuries unlock
+when mappings are confirmed; suspensions/H2H/squads stay endpoint-not-implemented). See
+`PROVIDER_ENTITY_MAPPING_UI.md`.

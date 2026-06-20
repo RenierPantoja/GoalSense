@@ -21,6 +21,7 @@ import { READINESS_V3_LABEL } from '@/features/matchIntelligence/providerReadine
 import type { ManualIntelligenceRecordDto, ManualDomain, ManualIntelligenceSource } from '@/features/matchIntelligence/manualIntelligenceTypes'
 import { MANUAL_DOMAIN_LABEL, MANUAL_SOURCE_LABEL } from '@/features/matchIntelligence/manualIntelligenceTypes'
 import { ProviderIdentityResolutionPanel } from './ProviderIdentityResolutionPanel'
+import { ProviderEntityMappingPanel } from './ProviderEntityMappingPanel'
 
 function Card({ title, icon, children, action }: { title: string; icon?: React.ReactNode; children: React.ReactNode; action?: React.ReactNode }) {
   return <div className="rounded-2xl border border-white/[0.07] bg-white/[0.012] p-4"><div className="flex items-center gap-2 mb-3"><span className="text-white/35">{icon}</span><h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45 flex-1">{title}</h4>{action}</div>{children}</div>
@@ -371,6 +372,9 @@ export function BackstageMatchIntelligencePanel() {
 
               {/* B42: cross-provider identity resolution */}
               <ProviderIdentityResolutionPanel fixtureId={selected} isAdmin={isAdmin} />
+
+              {/* B43: entity mapping + domain unlock */}
+              <ProviderEntityMappingPanel fixtureId={selected} isAdmin={isAdmin} />
 
               {/* Post-match */}
               {pkg.phase === 'post_match' && postMatch && (

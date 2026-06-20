@@ -44,6 +44,7 @@ import type {
 import type { ManualIntelligenceRecord } from '../modules/footballIntelligence/manualIntelligence.types.js'
 import type {
   ProviderEntityMapping, TeamAlias, CompetitionAlias, FixtureIdentityResolutionRun,
+  ProviderTeamMapping, ProviderCompetitionMapping, ProviderSeasonMapping, EntityMappingDerivationRun,
 } from '../modules/footballIntelligence/identity/providerIdentity.types.js'
 import type {
   AutoAlertPolicy, AutoAlertPolicyEvaluation,
@@ -267,4 +268,23 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async updateFixtureIdentityResolutionRun(): Promise<{ count: number }> { return { count: 0 } }
   async getFixtureIdentityResolutionRun(): Promise<FixtureIdentityResolutionRun | null> { return null }
   async listFixtureIdentityResolutionRuns(): Promise<FixtureIdentityResolutionRun[]> { return [] }
+
+  // ── B43 (Noop): entity mappings not persisted ──
+  async saveProviderTeamMapping(m: ProviderTeamMapping): Promise<ProviderTeamMapping> { return m }
+  async getProviderTeamMapping(): Promise<ProviderTeamMapping | null> { return null }
+  async listProviderTeamMappings(): Promise<ProviderTeamMapping[]> { return [] }
+  async listProviderTeamMappingsByStatus(): Promise<ProviderTeamMapping[]> { return [] }
+  async updateProviderTeamMappingStatus(): Promise<{ count: number }> { return { count: 0 } }
+  async saveProviderCompetitionMapping(m: ProviderCompetitionMapping): Promise<ProviderCompetitionMapping> { return m }
+  async getProviderCompetitionMapping(): Promise<ProviderCompetitionMapping | null> { return null }
+  async listProviderCompetitionMappings(): Promise<ProviderCompetitionMapping[]> { return [] }
+  async listProviderCompetitionMappingsByStatus(): Promise<ProviderCompetitionMapping[]> { return [] }
+  async updateProviderCompetitionMappingStatus(): Promise<{ count: number }> { return { count: 0 } }
+  async saveProviderSeasonMapping(m: ProviderSeasonMapping): Promise<ProviderSeasonMapping> { return m }
+  async getProviderSeasonMapping(): Promise<ProviderSeasonMapping | null> { return null }
+  async listProviderSeasonMappings(): Promise<ProviderSeasonMapping[]> { return [] }
+  async createEntityMappingDerivationRun(r: EntityMappingDerivationRun): Promise<EntityMappingDerivationRun> { return r }
+  async updateEntityMappingDerivationRun(): Promise<{ count: number }> { return { count: 0 } }
+  async getEntityMappingDerivationRun(): Promise<EntityMappingDerivationRun | null> { return null }
+  async listEntityMappingDerivationRuns(): Promise<EntityMappingDerivationRun[]> { return [] }
 }

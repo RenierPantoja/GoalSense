@@ -72,6 +72,11 @@ export interface FetchParams {
   providerFixtureId?: string | null
   /** B42: external provider fixture id resolved by the Provider Bridge (confirmed mapping). */
   resolvedExternalFixtureId?: string | null
+  /** B43: resolved external entity ids (confirmed entity mappings). */
+  resolvedLeagueId?: string | null
+  resolvedSeason?: string | null
+  resolvedHomeTeamId?: string | null
+  resolvedAwayTeamId?: string | null
 }
 
 export interface ProviderStackReport {

@@ -40,6 +40,10 @@ import { runAcquisitionForFixtureV2, runAcquisitionForTodayV2 } from '../modules
 import { createManualRecord, updateManualRecord, deleteManualRecord, listManualRecordsForFixture, getManualRecord } from '../modules/footballIntelligence/manualIntelligenceIntake.service.js'
 import { buildCandidatesForToday, buildCandidatesForFixture, resolveFixtureIdentity, getBestMappingForFixture, confirmMapping, rejectMapping } from '../modules/footballIntelligence/identity/fixtureIdentityResolution.service.js'
 import { listTeamAliases, listCompetitionAliases } from '../modules/footballIntelligence/identity/teamCompetitionAlias.service.js'
+import { deriveEntityMappings } from '../modules/footballIntelligence/identity/providerEntityMappingDerivation.service.js'
+import { confirmTeamMapping, rejectTeamMapping, confirmCompetitionMapping, rejectCompetitionMapping, listTeamMappings, listCompetitionMappings } from '../modules/footballIntelligence/identity/providerEntityMappingReview.service.js'
+import { getDomainUnlockStatus } from '../modules/footballIntelligence/identity/providerBridge.service.js'
+import { runAcquisitionForFixtureV3, runAcquisitionForTodayV3, buildAcquisitionReportV3 } from '../modules/footballIntelligence/preMatchAcquisitionRunner.service.js'
 import { createRepositories } from '../repositories/index.js'
 
 const flag = (v: unknown) => String(v).toLowerCase() === 'true'
@@ -343,5 +347,78 @@ export async function matchIntelligenceRoutes(app: FastifyInstance) {
   app.get(`${BASE}/identity/aliases/competitions`, async (_req, reply) => {
     if (!gate(reply)) return
     return ok(await listCompetitionAliases())
+  })
+
+  // ── B43: entity mappings (team/competition/season) + domain unlock + acquisition V3 ──
+  app.get(`${BASE}/identity/entity-mappings/teams`, async (_req, reply) => {
+    if (!gate(reply)) return
+    return ok(await listTeamMappings())
+  })
+  app.get(`${BASE}/identity/entity-mappings/competitions`, async (_req, reply) => {
+    if (!gate(reply)) return
+    return ok(await listCompetitionMappings())
+  })
+  app.get(`${BASE}/identity/entity-mappings/seasons`, async (_req, reply) => {
+    if (!gate(reply)) return
+    try { return ok(await createRepositories().intelligence.listProviderSeasonMappings(200)) } catch { return ok([]) }
+  })
+  app.post(`${BASE}/identity/entity-mappings/derive`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const run = await deriveEntityMappings('api_football')
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'entity_mapping_derivation', resourceId: run.id, metadata: { status: run.status } })
+    return ok(run)
+  })
+  app.post(`${BASE}/identity/entity-mappings/teams/:mappingId/confirm`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const id = String((req.params as any).mappingId)
+    const res = await confirmTeamMapping(id, req.auth?.user?.userId ?? null)
+    if (!res.ok) return reply.status(404).send(badRequest('mapping_not_found'))
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'team_mapping', resourceId: id, metadata: { op: 'confirm' } })
+    return ok(res)
+  })
+  app.post(`${BASE}/identity/entity-mappings/teams/:mappingId/reject`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const id = String((req.params as any).mappingId)
+    const res = await rejectTeamMapping(id, req.auth?.user?.userId ?? null)
+    if (!res.ok) return reply.status(404).send(badRequest('mapping_not_found'))
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'team_mapping', resourceId: id, metadata: { op: 'reject' } })
+    return ok(res)
+  })
+  app.post(`${BASE}/identity/entity-mappings/competitions/:mappingId/confirm`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const id = String((req.params as any).mappingId)
+    const res = await confirmCompetitionMapping(id, req.auth?.user?.userId ?? null)
+    if (!res.ok) return reply.status(404).send(badRequest('mapping_not_found'))
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'competition_mapping', resourceId: id, metadata: { op: 'confirm' } })
+    return ok(res)
+  })
+  app.post(`${BASE}/identity/entity-mappings/competitions/:mappingId/reject`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const id = String((req.params as any).mappingId)
+    const res = await rejectCompetitionMapping(id, req.auth?.user?.userId ?? null)
+    if (!res.ok) return reply.status(404).send(badRequest('mapping_not_found'))
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'competition_mapping', resourceId: id, metadata: { op: 'reject' } })
+    return ok(res)
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/domain-unlock-status`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await buildAcquisitionReportV3(fid(req)))
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/domain-unlock-status/:domain`, async (req, reply) => {
+    if (!gate(reply)) return
+    return ok(await getDomainUnlockStatus(fid(req), String((req.params as any).domain), 'api_football'))
+  })
+  app.post(`${BASE}/fixtures/:fixtureId/acquisition/run-v3`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const id = fid(req)
+    const res = await runAcquisitionForFixtureV3(id)
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'pre_match_acquisition', resourceId: res.run.id, metadata: { scope: 'fixture_v3', fixtureId: id } })
+    return ok(res)
+  })
+  app.post(`${BASE}/today/acquisition/run-v3`, op, async (req, reply) => {
+    if (!gate(reply)) return
+    const res = await runAcquisitionForTodayV3()
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'pre_match_acquisition', resourceId: res.run.id, metadata: { scope: 'today_v3' } })
+    return ok(res)
   })
 }
