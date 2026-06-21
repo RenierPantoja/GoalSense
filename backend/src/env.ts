@@ -198,6 +198,15 @@ const envSchema = z.object({
   ENABLE_ALERT_GOVERNANCE_LIVE_RECHECK: z.string().default('true'),
   ALERT_GOVERNANCE_MAX_RESULTS_PER_FIXTURE: z.coerce.number().default(100),
   ALERT_GOVERNANCE_HOLD_TTL_MINUTES: z.coerce.number().default(180),
+  // B48: post-match causal learning + governance calibration loop (manual-first; scheduler OFF).
+  ENABLE_CAUSAL_LEARNING: z.string().default('true'),
+  ENABLE_CAUSAL_LEARNING_BUILD: z.string().default('true'),
+  ENABLE_CAUSAL_LEARNING_SCHEDULER: z.string().default('false'),
+  ENABLE_CAUSAL_CALIBRATION_SUGGESTIONS: z.string().default('true'),
+  CAUSAL_LEARNING_MAX_FIXTURES_PER_RUN: z.coerce.number().default(20),
+  CAUSAL_LEARNING_MAX_CASES_PER_RUN: z.coerce.number().default(200),
+  CAUSAL_MIN_CASES_FOR_MEDIUM_SUGGESTION: z.coerce.number().default(10),
+  CAUSAL_MIN_CASES_FOR_HIGH_SUGGESTION: z.coerce.number().default(25),
 }).superRefine((val, ctx) => {
   // Conditional validation by persistence provider
   if (val.PERSISTENCE_PROVIDER === 'prisma') {

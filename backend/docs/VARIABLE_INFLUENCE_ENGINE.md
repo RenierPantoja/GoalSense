@@ -50,3 +50,10 @@ confidenceOfAssessment, blockers, waits, live-confirmation, conflicts) together 
 Readiness V7 and Precheck V7 to decide allow/monitor/wait/block/stay-out — in shadow by
 default (never blocks a real alert). influenceScore remains an internal weight, never a
 probability. See `ALERT_DECISION_GOVERNANCE.md`.
+
+## Calibration suggested by Causal Learning (B48)
+
+B48 may emit `VariableInfluenceCalibrationSuggestion`s when influence was repeatedly
+over/underestimated for a pattern family. These are human-review-only proposals
+(`autoApplyAllowed=false`) and DO NOT change the deterministic rule-engine weights at
+runtime. See `VARIABLE_INFLUENCE_CALIBRATION.md`.

@@ -65,6 +65,10 @@ import type {
 import type {
   AlertDecisionGovernanceResult, AlertGovernanceHold, AlertGovernanceRun, AssumptionInvalidation,
 } from '../../modules/footballIntelligence/governance/alertDecisionGovernance.types.js'
+import type {
+  CausalLearningCase, DecisionOutcomeLink, CausalLearningInsight,
+  GovernanceCalibrationSuggestion, VariableInfluenceCalibrationSuggestion, CausalLearningRun,
+} from '../../modules/footballIntelligence/causal/causalLearning.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -128,6 +132,12 @@ const GOV_RESULTS = 'alertDecisionGovernanceResults'
 const GOV_HOLDS = 'alertGovernanceHolds'
 const GOV_RUNS = 'alertGovernanceRuns'
 const GOV_INVALIDATIONS = 'assumptionInvalidations'
+const CAUSAL_CASES = 'causalLearningCases'
+const CAUSAL_LINKS = 'decisionOutcomeLinks'
+const CAUSAL_INSIGHTS = 'causalLearningInsights'
+const CAUSAL_GOV_SUGGESTIONS = 'governanceCalibrationSuggestions'
+const CAUSAL_INF_SUGGESTIONS = 'variableInfluenceCalibrationSuggestions'
+const CAUSAL_RUNS = 'causalLearningRuns'
 
 const READ_CAP = 2000
 
@@ -1302,5 +1312,91 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
   async listAssumptionInvalidationsByFixture(fixtureId: string, limit?: number): Promise<AssumptionInvalidation[]> {
     const db = await getFirestore(); const snap = await db.collection(GOV_INVALIDATIONS).where('fixtureId', '==', fixtureId).get()
     return snap.docs.map((d: any) => docData<AssumptionInvalidation>(d)).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit || 100)
+  }
+
+  // ── B48: post-match causal learning ──
+  async saveCausalLearningCase(c: CausalLearningCase): Promise<CausalLearningCase> {
+    const db = await getFirestore(); await db.collection(CAUSAL_CASES).doc(c.id).set(c, { merge: true }); return c
+  }
+  async getCausalLearningCase(id: string): Promise<CausalLearningCase | null> {
+    const db = await getFirestore(); const doc = await db.collection(CAUSAL_CASES).doc(id).get(); return doc.exists ? docData<CausalLearningCase>(doc) : null
+  }
+  async listCausalLearningCases(limit?: number): Promise<CausalLearningCase[]> {
+    const db = await getFirestore(); const snap = await db.collection(CAUSAL_CASES).get()
+    return snap.docs.map((d: any) => docData<CausalLearningCase>(d)).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit || 200)
+  }
+  async listCausalLearningCasesByFixture(fixtureId: string, limit?: number): Promise<CausalLearningCase[]> {
+    const db = await getFirestore(); const snap = await db.collection(CAUSAL_CASES).where('fixtureId', '==', fixtureId).get()
+    return snap.docs.map((d: any) => docData<CausalLearningCase>(d)).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit || 100)
+  }
+  async listCausalLearningCasesByPattern(patternId: string, limit?: number): Promise<CausalLearningCase[]> {
+    const db = await getFirestore(); const snap = await db.collection(CAUSAL_CASES).where('patternId', '==', patternId).get()
+    return snap.docs.map((d: any) => docData<CausalLearningCase>(d)).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit || 100)
+  }
+  async saveDecisionOutcomeLink(l: DecisionOutcomeLink): Promise<DecisionOutcomeLink> {
+    const db = await getFirestore(); await db.collection(CAUSAL_LINKS).doc(l.id).set(l, { merge: true }); return l
+  }
+  async getDecisionOutcomeLink(id: string): Promise<DecisionOutcomeLink | null> {
+    const db = await getFirestore(); const doc = await db.collection(CAUSAL_LINKS).doc(id).get(); return doc.exists ? docData<DecisionOutcomeLink>(doc) : null
+  }
+  async listDecisionOutcomeLinks(filters: { fixtureId?: string; alertId?: string; limit?: number }): Promise<DecisionOutcomeLink[]> {
+    const db = await getFirestore(); let q: any = db.collection(CAUSAL_LINKS)
+    if (filters.fixtureId) q = q.where('fixtureId', '==', filters.fixtureId)
+    else if (filters.alertId) q = q.where('alertId', '==', filters.alertId)
+    const snap = await q.get()
+    return snap.docs.map((d: any) => docData<DecisionOutcomeLink>(d)).slice(0, filters.limit || 100)
+  }
+  async saveCausalLearningInsight(i: CausalLearningInsight): Promise<CausalLearningInsight> {
+    const db = await getFirestore(); await db.collection(CAUSAL_INSIGHTS).doc(i.id).set(i, { merge: true }); return i
+  }
+  async listCausalLearningInsights(limit?: number): Promise<CausalLearningInsight[]> {
+    const db = await getFirestore(); const snap = await db.collection(CAUSAL_INSIGHTS).get()
+    return snap.docs.map((d: any) => docData<CausalLearningInsight>(d)).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit || 200)
+  }
+  async listCausalLearningInsightsByFixture(fixtureId: string, limit?: number): Promise<CausalLearningInsight[]> {
+    const db = await getFirestore(); const snap = await db.collection(CAUSAL_INSIGHTS).where('fixtureId', '==', fixtureId).get()
+    return snap.docs.map((d: any) => docData<CausalLearningInsight>(d)).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit || 100)
+  }
+  async saveGovernanceCalibrationSuggestion(s: GovernanceCalibrationSuggestion): Promise<GovernanceCalibrationSuggestion> {
+    const db = await getFirestore(); await db.collection(CAUSAL_GOV_SUGGESTIONS).doc(s.id).set(s, { merge: true }); return s
+  }
+  async getGovernanceCalibrationSuggestion(id: string): Promise<GovernanceCalibrationSuggestion | null> {
+    const db = await getFirestore(); const doc = await db.collection(CAUSAL_GOV_SUGGESTIONS).doc(id).get(); return doc.exists ? docData<GovernanceCalibrationSuggestion>(doc) : null
+  }
+  async listGovernanceCalibrationSuggestions(limit?: number): Promise<GovernanceCalibrationSuggestion[]> {
+    const db = await getFirestore(); const snap = await db.collection(CAUSAL_GOV_SUGGESTIONS).get()
+    return snap.docs.map((d: any) => docData<GovernanceCalibrationSuggestion>(d)).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit || 100)
+  }
+  async updateGovernanceCalibrationSuggestion(id: string, patch: Partial<GovernanceCalibrationSuggestion>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(CAUSAL_GOV_SUGGESTIONS).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async saveVariableInfluenceCalibrationSuggestion(s: VariableInfluenceCalibrationSuggestion): Promise<VariableInfluenceCalibrationSuggestion> {
+    const db = await getFirestore(); await db.collection(CAUSAL_INF_SUGGESTIONS).doc(s.id).set(s, { merge: true }); return s
+  }
+  async getVariableInfluenceCalibrationSuggestion(id: string): Promise<VariableInfluenceCalibrationSuggestion | null> {
+    const db = await getFirestore(); const doc = await db.collection(CAUSAL_INF_SUGGESTIONS).doc(id).get(); return doc.exists ? docData<VariableInfluenceCalibrationSuggestion>(doc) : null
+  }
+  async listVariableInfluenceCalibrationSuggestions(limit?: number): Promise<VariableInfluenceCalibrationSuggestion[]> {
+    const db = await getFirestore(); const snap = await db.collection(CAUSAL_INF_SUGGESTIONS).get()
+    return snap.docs.map((d: any) => docData<VariableInfluenceCalibrationSuggestion>(d)).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit || 100)
+  }
+  async updateVariableInfluenceCalibrationSuggestion(id: string, patch: Partial<VariableInfluenceCalibrationSuggestion>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(CAUSAL_INF_SUGGESTIONS).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async createCausalLearningRun(run: CausalLearningRun): Promise<CausalLearningRun> {
+    const db = await getFirestore(); await db.collection(CAUSAL_RUNS).doc(run.id).set(run, { merge: true }); return run
+  }
+  async updateCausalLearningRun(id: string, patch: Partial<CausalLearningRun>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(CAUSAL_RUNS).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async listCausalLearningRuns(limit?: number): Promise<CausalLearningRun[]> {
+    const db = await getFirestore(); const snap = await db.collection(CAUSAL_RUNS).get()
+    return snap.docs.map((d: any) => docData<CausalLearningRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
   }
 }

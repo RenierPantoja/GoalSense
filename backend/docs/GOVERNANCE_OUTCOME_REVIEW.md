@@ -17,3 +17,10 @@ declares a miss "random" without analysis; never changes alert results.
 
 This feeds the causal post-match learning of Bloco 5; nothing here mutates score/
 confidence/counters/alert results.
+
+## Superseded by causal Post-Match V7 (B48)
+
+PostMatch V6's "latest decision per fixture" heuristic is improved by B48's Decision-Outcome
+Linker (explicit link strength: exact → unknown). PostMatch V7 carries the full causal case
+(classification, success/failure categories, insights and calibration suggestions). V6
+remains available; V7 is the richer causal view. See `POST_MATCH_CAUSAL_LEARNING.md`.

@@ -37,3 +37,11 @@ alert results.
 Causal post-match learning will consume Governance Outcome Review (V6) to calibrate the
 policy. Drawer badges (allowed / monitor_only / would_wait / would_block / overridden) on
 `AlertSignalDrawer` / `ServerAlertList` remain a follow-up.
+
+## Followed by the Causal Learning panel + drawer badge (B48)
+
+Below the Alert Governance panel, the Backstage now renders the `CausalLearningPanel` (B48).
+The B47 follow-up (governance visible outside the Backstage) is addressed by
+`AlertGovernanceBadge`, a compact read-only badge in the alert drawer showing the governance
+action, "observe · não bloqueia", would_block/would_wait and a causal classification when a
+case exists. See `docs/CAUSAL_LEARNING_UI.md`.

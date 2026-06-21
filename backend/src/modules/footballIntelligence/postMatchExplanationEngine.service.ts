@@ -425,3 +425,55 @@ export async function buildPostMatchExplanationV6(fixtureId: string): Promise<Po
     governanceRefinementCandidates: govRefs,
   }
 }
+
+// ─── Post-Match Explanation V7 (B48) — causal learning output ──────────────────
+import { buildCasesForFixture } from './causal/causalLearningCaseBuilder.service.js'
+import { generateInsightsForCase } from './causal/causalInsightGenerator.service.js'
+import { suggestGovernancePolicyRefinements, suggestVariableInfluenceRefinements } from './causal/calibrationSuggestion.service.js'
+import type { CausalLearningCase, CausalLearningInsight, GovernanceCalibrationSuggestion, VariableInfluenceCalibrationSuggestion } from './causal/causalLearning.types.js'
+
+export interface PostMatchExplanationV7 extends PostMatchExplanation {
+  causalLearningCaseId: string | null
+  decisionOutcomeLinkStrength: string | null
+  causalClassification: string | null
+  causalFailureCategories: string[]
+  causalSuccessCategories: string[]
+  causalInsights: CausalLearningInsight[]
+  governanceCalibrationSuggestions: GovernanceCalibrationSuggestion[]
+  influenceCalibrationSuggestions: VariableInfluenceCalibrationSuggestion[]
+  dataAcquisitionRefinements: string[]
+  timingRefinements: string[]
+  finalCausalSummary: string
+}
+
+export async function buildPostMatchExplanationV7(fixtureId: string): Promise<PostMatchExplanationV7 | null> {
+  const v1 = await buildPostMatchExplanation(fixtureId)
+  if (!v1) return null
+
+  const cases = await buildCasesForFixture(fixtureId).catch(() => [] as CausalLearningCase[])
+  // Prefer an evaluable case; else the first.
+  const primary = cases.find(c => c.evaluable) ?? cases[0] ?? null
+  const insights = primary ? generateInsightsForCase(primary) : []
+  const govSuggestions = suggestGovernancePolicyRefinements(cases)
+  const infSuggestions = suggestVariableInfluenceRefinements(cases)
+
+  const dataAcquisitionRefinements = insights.filter(i => i.insightType === 'data_acquisition').map(i => i.suggestedRefinement || i.title)
+  const timingRefinements = insights.filter(i => i.insightType === 'live_recheck' || i.insightType === 'alert_timing').map(i => i.suggestedRefinement || i.title)
+
+  const finalCausalSummary = primary
+    ? `Classificação: ${primary.classification} (link ${primary.linkStrength}). ${primary.evaluable ? `${insights.length} insight(s).` : 'Não avaliável (sem vínculo forte ou outcome pendente).'} Sugestões exigem revisão humana.`
+    : 'Sem casos causais para esta partida (insufficient/Noop).'
+
+  return {
+    ...v1,
+    causalLearningCaseId: primary?.id ?? null,
+    decisionOutcomeLinkStrength: primary?.linkStrength ?? null,
+    causalClassification: primary?.classification ?? null,
+    causalFailureCategories: primary?.failureCategories ?? [],
+    causalSuccessCategories: primary?.successCategories ?? [],
+    causalInsights: insights,
+    governanceCalibrationSuggestions: govSuggestions,
+    influenceCalibrationSuggestions: infSuggestions,
+    dataAcquisitionRefinements, timingRefinements, finalCausalSummary,
+  }
+}

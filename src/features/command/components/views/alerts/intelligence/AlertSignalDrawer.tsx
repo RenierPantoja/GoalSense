@@ -9,6 +9,7 @@ import { alertIntelligenceApi } from '@/services/alertIntelligenceApi'
 import { evidenceLineageApi } from '@/services/evidenceLineageApi'
 import { ReplayViewer } from '../../backtest/ReplayViewer'
 import { RelatedAlertsPanel } from './RelatedAlertsPanel'
+import { AlertGovernanceBadge } from './AlertGovernanceBadge'
 import type {
   SignalLedgerEntry, AlertOutcomeRecord, PatternLearningProfile, LearningEvent, AlertResult, SignalFailureAnalysis, AlertIntelFilters,
 } from '../../../../intelligence/alertIntelligenceTypes'
@@ -137,6 +138,7 @@ export function AlertSignalDrawer({ alertId, headline, onClose, onGoToBacktest, 
             <>
               {tab === 'resumo' && (
                 <>
+                  <AlertGovernanceBadge alertId={alertId} fixtureId={(ledger as any).fixtureId ?? null} />
                   {ledger.validationSessionId && (
                     <div className="rounded-xl border border-[#2DD4BF]/15 bg-[#13B8A6]/[0.05] px-3.5 py-2 mb-1">
                       <span className="text-[10px] text-[#7FE9DC]/85">Sessão de validação: <span className="font-mono">{ledger.validationSessionId.slice(0, 12)}…</span> · atribuição exata (B38)</span>

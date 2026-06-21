@@ -41,3 +41,10 @@ A decision is NOT a probability and NOT a promise; observe/shadow never blocks a
 alert; enforce is flag-gated and conservative; holds expire; live recheck never sends an
 alert and never changes alert results; conflicts are explicit; overrides are audited;
 score/confidence/counters/patterns/alert results are untouched.
+
+## Calibrated by Causal Learning (B48)
+
+B48 consumes governance results + outcomes (via the Decision-Outcome Linker) to classify
+whether each decision was aligned / too strict / too loose, and proposes conservative
+governance calibration suggestions — for HUMAN review only. Nothing auto-applies; the
+policy and modes here remain exactly as coded. See `GOVERNANCE_CALIBRATION_LOOP.md`.

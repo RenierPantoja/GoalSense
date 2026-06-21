@@ -79,7 +79,16 @@ import { getGovernanceMode, getDefaultPolicy } from '../modules/footballIntellig
 import { listActiveHoldsForFixture, resolveHold, expireOldHolds } from '../modules/footballIntelligence/governance/alertGovernanceHold.service.js'
 import { handleLiveTrigger } from '../modules/footballIntelligence/governance/liveGovernanceReevaluation.service.js'
 import { buildPostMatchExplanationV6 } from '../modules/footballIntelligence/postMatchExplanationEngine.service.js'
+import { buildPostMatchExplanationV7 } from '../modules/footballIntelligence/postMatchExplanationEngine.service.js'
 import type { AlertGovernanceRecheckTrigger } from '../modules/footballIntelligence/governance/alertDecisionGovernance.types.js'
+import {
+  runCausalLearningForFixture, runCausalLearningForToday, runCausalLearningForAlert,
+  runCausalLearningForGovernanceResult, listCausalLearningRuns, isCausalLearningEnabled,
+} from '../modules/footballIntelligence/causal/causalLearningRunner.service.js'
+import {
+  buildGovernanceCalibrationReport, listGovernanceCalibrationSuggestions, listInfluenceCalibrationSuggestions,
+  markSuggestionReviewed, rejectSuggestion, acceptSuggestionForFutureImplementation,
+} from '../modules/footballIntelligence/causal/governanceCalibrationReview.service.js'
 
 const flag = (v: unknown) => String(v).toLowerCase() === 'true'
 
@@ -722,5 +731,98 @@ export async function matchIntelligenceRoutes(app: FastifyInstance) {
   app.get(`${BASE}/fixtures/:fixtureId/post-match-explanation-v6`, async (req, reply) => {
     if (!governanceGate(reply)) return
     return ok(await buildPostMatchExplanationV6(fid(req)))
+  })
+
+  // ── B48: post-match causal learning ──
+  function causalGate(reply: any): boolean {
+    if (!gate(reply)) return false
+    if (!isCausalLearningEnabled()) {
+      reply.status(403).send({ success: false, error: { message: 'Causal Learning desabilitado (ENABLE_CAUSAL_LEARNING=false).', reason: 'env_gate_disabled' } })
+      return false
+    }
+    return true
+  }
+  const cid = (req: any) => String((req.params as any).caseId)
+  const sid = (req: any) => String((req.params as any).suggestionId)
+  const aid2 = (req: any) => String((req.params as any).alertId)
+
+  app.get(`${BASE}/causal/cases`, async (_req, reply) => {
+    if (!causalGate(reply)) return
+    try { return ok(await createRepositories().intelligence.listCausalLearningCases(100)) } catch { return ok([]) }
+  })
+  app.get(`${BASE}/causal/cases/:caseId`, async (req, reply) => {
+    if (!causalGate(reply)) return
+    const c = await createRepositories().intelligence.getCausalLearningCase(cid(req)).catch(() => null)
+    return c ? ok(c) : reply.status(404).send(badRequest('case_not_found'))
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/causal/cases`, async (req, reply) => {
+    if (!causalGate(reply)) return
+    try { return ok(await createRepositories().intelligence.listCausalLearningCasesByFixture(fid(req), 100)) } catch { return ok([]) }
+  })
+  app.post(`${BASE}/fixtures/:fixtureId/causal/run`, op, async (req, reply) => {
+    if (!causalGate(reply)) return
+    const run = await runCausalLearningForFixture(fid(req))
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'causal_learning', resourceId: fid(req), metadata: { scope: 'fixture', cases: run.casesAnalyzed } })
+    return ok(run)
+  })
+  app.post(`${BASE}/causal/today/run`, op, async (req, reply) => {
+    if (!causalGate(reply)) return
+    const run = await runCausalLearningForToday()
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'causal_learning', resourceId: 'today', metadata: { cases: run.casesAnalyzed } })
+    return ok(run)
+  })
+  app.post(`${BASE}/alerts/:alertId/causal/run`, op, async (req, reply) => {
+    if (!causalGate(reply)) return
+    return ok(await runCausalLearningForAlert(aid2(req)))
+  })
+  app.post(`${BASE}/governance/results/:resultId/causal/run`, op, async (req, reply) => {
+    if (!causalGate(reply)) return
+    return ok(await runCausalLearningForGovernanceResult(rid(req)))
+  })
+  app.get(`${BASE}/causal/insights`, async (_req, reply) => {
+    if (!causalGate(reply)) return
+    try { return ok(await createRepositories().intelligence.listCausalLearningInsights(100)) } catch { return ok([]) }
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/causal/insights`, async (req, reply) => {
+    if (!causalGate(reply)) return
+    try { return ok(await createRepositories().intelligence.listCausalLearningInsightsByFixture(fid(req), 100)) } catch { return ok([]) }
+  })
+  app.get(`${BASE}/causal/calibration/governance`, async (_req, reply) => {
+    if (!causalGate(reply)) return
+    return ok(await listGovernanceCalibrationSuggestions())
+  })
+  app.get(`${BASE}/causal/calibration/influence`, async (_req, reply) => {
+    if (!causalGate(reply)) return
+    return ok(await listInfluenceCalibrationSuggestions())
+  })
+  app.get(`${BASE}/causal/calibration/report`, async (_req, reply) => {
+    if (!causalGate(reply)) return
+    return ok(await buildGovernanceCalibrationReport())
+  })
+  app.post(`${BASE}/causal/calibration/:suggestionId/review`, op, async (req, reply) => {
+    if (!causalGate(reply)) return
+    const r = await markSuggestionReviewed(sid(req), req.auth?.user?.userId ?? null)
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'causal_calibration', resourceId: sid(req), metadata: { status: 'reviewed' } })
+    return ok(r)
+  })
+  app.post(`${BASE}/causal/calibration/:suggestionId/reject`, op, async (req, reply) => {
+    if (!causalGate(reply)) return
+    const r = await rejectSuggestion(sid(req), req.auth?.user?.userId ?? null)
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'causal_calibration', resourceId: sid(req), metadata: { status: 'rejected' } })
+    return ok(r)
+  })
+  app.post(`${BASE}/causal/calibration/:suggestionId/accept-for-future`, op, async (req, reply) => {
+    if (!causalGate(reply)) return
+    const r = await acceptSuggestionForFutureImplementation(sid(req), req.auth?.user?.userId ?? null)
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'causal_calibration', resourceId: sid(req), metadata: { status: 'accepted_for_future' } })
+    return ok(r)
+  })
+  app.get(`${BASE}/causal/runs`, async (_req, reply) => {
+    if (!causalGate(reply)) return
+    return ok(await listCausalLearningRuns(50))
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/post-match-explanation-v7`, async (req, reply) => {
+    if (!causalGate(reply)) return
+    return ok(await buildPostMatchExplanationV7(fid(req)))
   })
 }

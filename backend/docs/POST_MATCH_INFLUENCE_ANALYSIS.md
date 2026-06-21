@@ -26,3 +26,10 @@ analysis: it compares the pre-alert governance decision (allow/wait/block) with 
 outcome and flags `ignored_blocker` / `ignored_wait_reason` /
 `possible_overconservative_policy`. Observational; feeds Bloco 5. See
 `GOVERNANCE_OUTCOME_REVIEW.md`.
+
+## Followed by causal Post-Match V7 (B48)
+
+Post-Match V7 (`buildPostMatchExplanationV7`) wraps the causal case for the fixture:
+classification, success/failure categories, insights, and governance + variable-influence
+calibration suggestions (human-review-only). Influence calibration suggestions never change
+the B46 weights at runtime. See `VARIABLE_INFLUENCE_CALIBRATION.md`.

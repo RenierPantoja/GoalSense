@@ -181,6 +181,10 @@ import type {
 import type {
   AlertDecisionGovernanceResult, AlertGovernanceHold, AlertGovernanceRun, AssumptionInvalidation,
 } from '../modules/footballIntelligence/governance/alertDecisionGovernance.types.js'
+import type {
+  CausalLearningCase, DecisionOutcomeLink, CausalLearningInsight,
+  GovernanceCalibrationSuggestion, VariableInfluenceCalibrationSuggestion, CausalLearningRun,
+} from '../modules/footballIntelligence/causal/causalLearning.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -461,6 +465,30 @@ export interface IntelligenceRepository {
   listAlertGovernanceRuns(limit?: number): Promise<AlertGovernanceRun[]>
   saveAssumptionInvalidation(inv: AssumptionInvalidation): Promise<AssumptionInvalidation>
   listAssumptionInvalidationsByFixture(fixtureId: string, limit?: number): Promise<AssumptionInvalidation[]>
+
+  // ── B48: post-match causal learning ─────────────────────────────────────────
+  saveCausalLearningCase(c: CausalLearningCase): Promise<CausalLearningCase>
+  getCausalLearningCase(id: string): Promise<CausalLearningCase | null>
+  listCausalLearningCases(limit?: number): Promise<CausalLearningCase[]>
+  listCausalLearningCasesByFixture(fixtureId: string, limit?: number): Promise<CausalLearningCase[]>
+  listCausalLearningCasesByPattern(patternId: string, limit?: number): Promise<CausalLearningCase[]>
+  saveDecisionOutcomeLink(link: DecisionOutcomeLink): Promise<DecisionOutcomeLink>
+  getDecisionOutcomeLink(id: string): Promise<DecisionOutcomeLink | null>
+  listDecisionOutcomeLinks(filters: { fixtureId?: string; alertId?: string; limit?: number }): Promise<DecisionOutcomeLink[]>
+  saveCausalLearningInsight(insight: CausalLearningInsight): Promise<CausalLearningInsight>
+  listCausalLearningInsights(limit?: number): Promise<CausalLearningInsight[]>
+  listCausalLearningInsightsByFixture(fixtureId: string, limit?: number): Promise<CausalLearningInsight[]>
+  saveGovernanceCalibrationSuggestion(s: GovernanceCalibrationSuggestion): Promise<GovernanceCalibrationSuggestion>
+  getGovernanceCalibrationSuggestion(id: string): Promise<GovernanceCalibrationSuggestion | null>
+  listGovernanceCalibrationSuggestions(limit?: number): Promise<GovernanceCalibrationSuggestion[]>
+  updateGovernanceCalibrationSuggestion(id: string, patch: Partial<GovernanceCalibrationSuggestion>): Promise<{ count: number }>
+  saveVariableInfluenceCalibrationSuggestion(s: VariableInfluenceCalibrationSuggestion): Promise<VariableInfluenceCalibrationSuggestion>
+  getVariableInfluenceCalibrationSuggestion(id: string): Promise<VariableInfluenceCalibrationSuggestion | null>
+  listVariableInfluenceCalibrationSuggestions(limit?: number): Promise<VariableInfluenceCalibrationSuggestion[]>
+  updateVariableInfluenceCalibrationSuggestion(id: string, patch: Partial<VariableInfluenceCalibrationSuggestion>): Promise<{ count: number }>
+  createCausalLearningRun(run: CausalLearningRun): Promise<CausalLearningRun>
+  updateCausalLearningRun(id: string, patch: Partial<CausalLearningRun>): Promise<{ count: number }>
+  listCausalLearningRuns(limit?: number): Promise<CausalLearningRun[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

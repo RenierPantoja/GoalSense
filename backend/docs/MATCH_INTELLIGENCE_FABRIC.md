@@ -167,3 +167,23 @@ sends an alert; conflicts/overrides are audited; it never changes score/confiden
 patterns/alert results. See `ALERT_DECISION_GOVERNANCE.md`, `GOVERNANCE_POLICY.md`,
 `GOVERNANCE_HOLDS.md`, `LIVE_GOVERNANCE_REEVALUATION.md`, `ASSUMPTION_INVALIDATION.md`,
 `GOVERNANCE_OUTCOME_REVIEW.md`.
+
+## B48 / Bloco 5 — Post-Match Causal Learning layer
+
+The fabric now has a causal-learning layer under `modules/footballIntelligence/causal/`:
+- `causalLearning.types.ts`, `decisionOutcomeLinker.service.ts`,
+  `causalLearningCaseBuilder.service.ts`, `causalOutcomeClassifier.service.ts`,
+  `causalInsightGenerator.service.ts`, `calibrationSuggestion.service.ts`,
+  `governanceCalibrationReview.service.ts`, `causalLearningRunner.service.ts`.
+- Post-Match **V7** (causal learning output).
+- Routes under `/api/match-intelligence/causal`: `cases` (+`/:id`, fixture-scoped),
+  `run` (fixture/today/alert/governance-result), `insights`, `calibration/governance|influence|report`,
+  `calibration/:id/review|reject|accept-for-future`, `runs`, plus
+  `fixtures/:id/post-match-explanation-v7`.
+
+Causal learning is observational: classification is NOT a probability; an error is not
+chance without evidence; weak links never become strong causality; suggestions never
+auto-apply (accept = future only) and require human review; it never changes score/
+confidence/patterns/alert results/enforce. See `POST_MATCH_CAUSAL_LEARNING.md`,
+`DECISION_OUTCOME_LINKER.md`, `CAUSAL_OUTCOME_CLASSIFIER.md`, `CAUSAL_INSIGHT_GENERATOR.md`,
+`GOVERNANCE_CALIBRATION_LOOP.md`, `VARIABLE_INFLUENCE_CALIBRATION.md`, `CAUSAL_LEARNING_RUNNER.md`.

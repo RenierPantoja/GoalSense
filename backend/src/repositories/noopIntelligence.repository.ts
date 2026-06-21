@@ -60,6 +60,10 @@ import type {
 import type {
   AlertDecisionGovernanceResult, AlertGovernanceHold, AlertGovernanceRun, AssumptionInvalidation,
 } from '../modules/footballIntelligence/governance/alertDecisionGovernance.types.js'
+import type {
+  CausalLearningCase, DecisionOutcomeLink, CausalLearningInsight,
+  GovernanceCalibrationSuggestion, VariableInfluenceCalibrationSuggestion, CausalLearningRun,
+} from '../modules/footballIntelligence/causal/causalLearning.types.js'
 let warned = false
 function warnOnce(): void {
   if (warned) return
@@ -345,4 +349,28 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async listAlertGovernanceRuns(): Promise<AlertGovernanceRun[]> { return [] }
   async saveAssumptionInvalidation(i: AssumptionInvalidation): Promise<AssumptionInvalidation> { return i }
   async listAssumptionInvalidationsByFixture(): Promise<AssumptionInvalidation[]> { return [] }
+
+  // ── B48 (Noop): causal learning not persisted; reads empty ──
+  async saveCausalLearningCase(c: CausalLearningCase): Promise<CausalLearningCase> { return c }
+  async getCausalLearningCase(): Promise<CausalLearningCase | null> { return null }
+  async listCausalLearningCases(): Promise<CausalLearningCase[]> { return [] }
+  async listCausalLearningCasesByFixture(): Promise<CausalLearningCase[]> { return [] }
+  async listCausalLearningCasesByPattern(): Promise<CausalLearningCase[]> { return [] }
+  async saveDecisionOutcomeLink(l: DecisionOutcomeLink): Promise<DecisionOutcomeLink> { return l }
+  async getDecisionOutcomeLink(): Promise<DecisionOutcomeLink | null> { return null }
+  async listDecisionOutcomeLinks(): Promise<DecisionOutcomeLink[]> { return [] }
+  async saveCausalLearningInsight(i: CausalLearningInsight): Promise<CausalLearningInsight> { return i }
+  async listCausalLearningInsights(): Promise<CausalLearningInsight[]> { return [] }
+  async listCausalLearningInsightsByFixture(): Promise<CausalLearningInsight[]> { return [] }
+  async saveGovernanceCalibrationSuggestion(s: GovernanceCalibrationSuggestion): Promise<GovernanceCalibrationSuggestion> { return s }
+  async getGovernanceCalibrationSuggestion(): Promise<GovernanceCalibrationSuggestion | null> { return null }
+  async listGovernanceCalibrationSuggestions(): Promise<GovernanceCalibrationSuggestion[]> { return [] }
+  async updateGovernanceCalibrationSuggestion(): Promise<{ count: number }> { return { count: 0 } }
+  async saveVariableInfluenceCalibrationSuggestion(s: VariableInfluenceCalibrationSuggestion): Promise<VariableInfluenceCalibrationSuggestion> { return s }
+  async getVariableInfluenceCalibrationSuggestion(): Promise<VariableInfluenceCalibrationSuggestion | null> { return null }
+  async listVariableInfluenceCalibrationSuggestions(): Promise<VariableInfluenceCalibrationSuggestion[]> { return [] }
+  async updateVariableInfluenceCalibrationSuggestion(): Promise<{ count: number }> { return { count: 0 } }
+  async createCausalLearningRun(r: CausalLearningRun): Promise<CausalLearningRun> { return r }
+  async updateCausalLearningRun(): Promise<{ count: number }> { return { count: 0 } }
+  async listCausalLearningRuns(): Promise<CausalLearningRun[]> { return [] }
 }

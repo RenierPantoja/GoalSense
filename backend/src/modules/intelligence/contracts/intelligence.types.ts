@@ -274,6 +274,13 @@ export type LearningEventType =
   | 'auto_alert_policy_blocked'
   | 'auto_alert_policy_suggested_manual_review'
   | 'auto_alert_policy_auto_created'
+  // B48 — observational causal-learning events. source = 'causal_learning'.
+  // NEVER auto-tunes; suggestions require human review; unknown ≠ failed.
+  | 'causal_case_created'
+  | 'causal_insight_created'
+  | 'governance_calibration_suggested'
+  | 'influence_calibration_suggested'
+  | 'causal_learning_run_completed'
 
 export interface LearningEvent {
   id: string
@@ -286,7 +293,7 @@ export interface LearningEvent {
   evidenceRef: string | null
   confidence: Confidence
   /** B21/B22: provenance of human-originated, non-statistical observations. */
-  source?: 'system' | 'user_feedback' | 'user_action' | 'promoted_alert_resolution' | 'auto_engine_calibration' | 'auto_alert_policy'
+  source?: 'system' | 'user_feedback' | 'user_action' | 'promoted_alert_resolution' | 'auto_engine_calibration' | 'auto_alert_policy' | 'causal_learning'
   createdAt: string
 }
 

@@ -68,3 +68,14 @@ buttons and a recent-decision history. In observe/shadow it never blocks a real 
 governance is advisory and never displayed as a probability. Env-gated by
 `ENABLE_ALERT_DECISION_GOVERNANCE`; POST actions need operator. See
 `docs/ALERT_GOVERNANCE_UI.md`.
+
+## B48 — Causal Learning panel + alert drawer badge
+
+The Backstage selected-fixture column now ends with the `CausalLearningPanel` (B48), after
+the B47 Governance panel. It runs post-match causal learning and shows cases (classification
++ link strength), why it worked/failed (insights), and conservative calibration suggestions
+with human review (revisar / aceitar p/ futuro / rejeitar). Additionally, the alert drawer
+(`AlertSignalDrawer`) now shows a compact `AlertGovernanceBadge` (governance action, mode,
+would_block/would_wait, causal classification). Causal learning is observational — never a
+probability, never auto-applied; nothing changes score/confidence/patterns/alerts/enforce.
+See `docs/CAUSAL_LEARNING_UI.md`.
