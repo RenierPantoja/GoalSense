@@ -12,6 +12,7 @@ import { deriveMatchContext, contextConfidenceDelta } from './matchContext.servi
 import { evaluatePatternScope, parseScopeExtended, parseScopeFilter } from './backendScopeFilter.service.js'
 import { recordAlertCreated } from '../intelligence/memory/intelligenceMemory.service.js'
 import { classifyConditionKind, flattenStats } from '../intelligence/explainability/signalExplainability.service.js'
+import { evaluatePatternCandidate, isGovernanceEnabled } from '../footballIntelligence/governance/alertDecisionGovernor.service.js'
 
 const DEFAULT_USER = 'default'
 
@@ -426,6 +427,14 @@ export async function runPatternEvaluation(maxFixtures: number): Promise<WorkerR
             })
           } catch (e: any) {
             console.warn(`[PatternWorker] intelligence ledger failed for ${createdAlert?.id}: ${e?.message || e}`)
+          }
+          // ── B47: Alert Decision Governance shadow (observe-first; NEVER blocks here) ──
+          try {
+            if (isGovernanceEnabled()) {
+              void evaluatePatternCandidate(fixture.id, pattern.id, 'command_pattern', createdAlert?.id ?? null)
+            }
+          } catch (e: any) {
+            console.warn(`[PatternWorker] governance shadow failed for ${createdAlert?.id} (non-blocking): ${e?.message || e}`)
           }
         })
         result.alertsCreated++

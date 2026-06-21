@@ -355,3 +355,73 @@ export async function buildPostMatchExplanationV5(fixtureId: string): Promise<Po
     ignoredBlockers, ignoredWaitReasons, influenceRefinementCandidates,
   }
 }
+
+// ─── Post-Match Explanation V6 (B47) — governance outcome review ───────────────
+
+export interface PostMatchExplanationV6 extends PostMatchExplanation {
+  governanceActionBeforeAlert: string | null
+  wouldHaveBlocked: boolean
+  wouldHaveWaited: boolean
+  wouldHaveAllowed: boolean
+  actualAlertCreated: boolean
+  overrideUsed: boolean
+  governanceWasAligned: boolean
+  governanceWasTooStrict: boolean
+  governanceWasTooLoose: boolean
+  ignoredHold: boolean
+  ignoredBlocker: boolean
+  alertTooEarly: boolean
+  alertTooLate: boolean
+  shouldHaveWaitedGovernance: boolean
+  shouldHaveStayedOutGovernance: boolean
+  governanceRefinementCandidates: string[]
+}
+
+export async function buildPostMatchExplanationV6(fixtureId: string): Promise<PostMatchExplanationV6 | null> {
+  const v1 = await buildPostMatchExplanation(fixtureId)
+  if (!v1) return null
+  const repos = createRepositories()
+
+  // Most recent governance result for this fixture (pre-alert decision view).
+  let govResults: any[] = []
+  try { govResults = await repos.intelligence.listGovernanceResultsByFixture(fixtureId, 50) } catch { /* noop */ }
+  // Prefer a command/promoted decision; fall back to the latest.
+  const decision = govResults.find(r => r.source === 'command_pattern' || r.source === 'promoted_opportunity') || govResults[0] || null
+
+  const confirmed = v1.outcome === 'confirmed' || v1.outcome === 'confirmed_partial'
+  const failed = v1.outcome === 'failed'
+  const actualAlertCreated = v1.alertId != null && v1.outcome !== 'no_alert'
+
+  const action: string | null = decision?.action ?? null
+  const wouldHaveBlocked = !!decision?.wouldHaveBlocked
+  const wouldHaveWaited = !!action && action.startsWith('wait_')
+  const wouldHaveAllowed = !!decision?.wouldHaveAllowed
+  const overrideUsed = actualAlertCreated && (wouldHaveBlocked || wouldHaveWaited)
+
+  // Alignment: blocked/wait → outcome failed = aligned; allowed → confirmed = aligned.
+  const governanceWasAligned = (wouldHaveBlocked && failed) || (wouldHaveWaited && failed) || (wouldHaveAllowed && confirmed)
+  const governanceWasTooStrict = (wouldHaveBlocked || wouldHaveWaited) && confirmed
+  const governanceWasTooLoose = wouldHaveAllowed && failed
+
+  const ignoredHold = overrideUsed && wouldHaveWaited && failed
+  const ignoredBlocker = overrideUsed && wouldHaveBlocked && failed
+
+  const govRefs: string[] = []
+  if (ignoredBlocker) govRefs.push('ignored_blocker: governança recomendou bloquear e o alerta falhou.')
+  if (ignoredHold) govRefs.push('ignored_wait_reason: governança recomendou esperar e o alerta falhou.')
+  if (governanceWasTooStrict) govRefs.push('possible_overconservative_policy: governança bloquearia/esperaria mas o resultado confirmou.')
+  if (governanceWasTooLoose) govRefs.push('governança permitiria mas falhou — reforçar gates.')
+
+  return {
+    ...v1,
+    governanceActionBeforeAlert: action,
+    wouldHaveBlocked, wouldHaveWaited, wouldHaveAllowed, actualAlertCreated, overrideUsed,
+    governanceWasAligned, governanceWasTooStrict, governanceWasTooLoose,
+    ignoredHold, ignoredBlocker,
+    alertTooEarly: wouldHaveWaited && failed,
+    alertTooLate: false,
+    shouldHaveWaitedGovernance: wouldHaveWaited && failed,
+    shouldHaveStayedOutGovernance: wouldHaveBlocked && failed,
+    governanceRefinementCandidates: govRefs,
+  }
+}

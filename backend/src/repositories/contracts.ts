@@ -178,6 +178,9 @@ import type {
 import type {
   InfluenceLedgerEntry, InfluenceBuildRun,
 } from '../modules/footballIntelligence/influence/variableInfluence.types.js'
+import type {
+  AlertDecisionGovernanceResult, AlertGovernanceHold, AlertGovernanceRun, AssumptionInvalidation,
+} from '../modules/footballIntelligence/governance/alertDecisionGovernance.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -441,6 +444,23 @@ export interface IntelligenceRepository {
   updateInfluenceBuildRun(id: string, patch: Partial<InfluenceBuildRun>): Promise<{ count: number }>
   getInfluenceBuildRun(id: string): Promise<InfluenceBuildRun | null>
   listInfluenceBuildRuns(limit?: number): Promise<InfluenceBuildRun[]>
+
+  // ── B47: alert decision governance (results + holds + runs + invalidations) ──
+  saveAlertDecisionGovernanceResult(result: AlertDecisionGovernanceResult): Promise<AlertDecisionGovernanceResult>
+  getAlertDecisionGovernanceResult(id: string): Promise<AlertDecisionGovernanceResult | null>
+  listAlertDecisionGovernanceResults(limit?: number): Promise<AlertDecisionGovernanceResult[]>
+  listGovernanceResultsByFixture(fixtureId: string, limit?: number): Promise<AlertDecisionGovernanceResult[]>
+  listGovernanceResultsByPattern(patternId: string, limit?: number): Promise<AlertDecisionGovernanceResult[]>
+  listGovernanceResultsByCandidate(candidateAlertId: string, limit?: number): Promise<AlertDecisionGovernanceResult[]>
+  saveAlertGovernanceHold(hold: AlertGovernanceHold): Promise<AlertGovernanceHold>
+  getAlertGovernanceHold(id: string): Promise<AlertGovernanceHold | null>
+  listAlertGovernanceHolds(filters: { fixtureId?: string; status?: string; limit?: number }): Promise<AlertGovernanceHold[]>
+  updateAlertGovernanceHold(id: string, patch: Partial<AlertGovernanceHold>): Promise<{ count: number }>
+  createAlertGovernanceRun(run: AlertGovernanceRun): Promise<AlertGovernanceRun>
+  updateAlertGovernanceRun(id: string, patch: Partial<AlertGovernanceRun>): Promise<{ count: number }>
+  listAlertGovernanceRuns(limit?: number): Promise<AlertGovernanceRun[]>
+  saveAssumptionInvalidation(inv: AssumptionInvalidation): Promise<AssumptionInvalidation>
+  listAssumptionInvalidationsByFixture(fixtureId: string, limit?: number): Promise<AssumptionInvalidation[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

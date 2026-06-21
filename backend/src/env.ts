@@ -189,6 +189,15 @@ const envSchema = z.object({
   ENABLE_VARIABLE_INFLUENCE_BUILD: z.string().default('true'),
   VARIABLE_INFLUENCE_MODE: z.enum(['observe', 'enforce']).default('observe'),
   VARIABLE_INFLUENCE_MAX_PATTERNS_PER_FIXTURE: z.coerce.number().default(20),
+  // B47: alert decision governance + shadow wiring + live re-evaluation (observe-first).
+  ENABLE_ALERT_DECISION_GOVERNANCE: z.string().default('true'),
+  ALERT_GOVERNANCE_MODE: z.enum(['observe', 'shadow', 'shadow_block', 'enforce']).default('observe'),
+  ENABLE_ALERT_GOVERNANCE_SHADOW_BLOCK: z.string().default('false'),
+  ENABLE_ALERT_GOVERNANCE_ENFORCE: z.string().default('false'),
+  ENABLE_ALERT_GOVERNANCE_HOLDS: z.string().default('true'),
+  ENABLE_ALERT_GOVERNANCE_LIVE_RECHECK: z.string().default('true'),
+  ALERT_GOVERNANCE_MAX_RESULTS_PER_FIXTURE: z.coerce.number().default(100),
+  ALERT_GOVERNANCE_HOLD_TTL_MINUTES: z.coerce.number().default(180),
 }).superRefine((val, ctx) => {
   // Conditional validation by persistence provider
   if (val.PERSISTENCE_PROVIDER === 'prisma') {

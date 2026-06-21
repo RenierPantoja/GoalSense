@@ -62,6 +62,9 @@ import type {
 import type {
   InfluenceLedgerEntry, InfluenceBuildRun,
 } from '../../modules/footballIntelligence/influence/variableInfluence.types.js'
+import type {
+  AlertDecisionGovernanceResult, AlertGovernanceHold, AlertGovernanceRun, AssumptionInvalidation,
+} from '../../modules/footballIntelligence/governance/alertDecisionGovernance.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -121,6 +124,10 @@ const TABOO_CANDIDATES = 'tabooCandidates'
 const MEMORY_BUILD_RUNS = 'memoryBuildRuns'
 const INFLUENCE_LEDGER = 'influenceLedgerEntries'
 const INFLUENCE_BUILD_RUNS = 'influenceBuildRuns'
+const GOV_RESULTS = 'alertDecisionGovernanceResults'
+const GOV_HOLDS = 'alertGovernanceHolds'
+const GOV_RUNS = 'alertGovernanceRuns'
+const GOV_INVALIDATIONS = 'assumptionInvalidations'
 
 const READ_CAP = 2000
 
@@ -1234,5 +1241,66 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
   async listInfluenceBuildRuns(limit?: number): Promise<InfluenceBuildRun[]> {
     const db = await getFirestore(); const snap = await db.collection(INFLUENCE_BUILD_RUNS).get()
     return snap.docs.map((d: any) => docData<InfluenceBuildRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
+  }
+
+  // ── B47: alert decision governance ──
+  async saveAlertDecisionGovernanceResult(r: AlertDecisionGovernanceResult): Promise<AlertDecisionGovernanceResult> {
+    const db = await getFirestore(); await db.collection(GOV_RESULTS).doc(r.id).set(r, { merge: true }); return r
+  }
+  async getAlertDecisionGovernanceResult(id: string): Promise<AlertDecisionGovernanceResult | null> {
+    const db = await getFirestore(); const doc = await db.collection(GOV_RESULTS).doc(id).get(); return doc.exists ? docData<AlertDecisionGovernanceResult>(doc) : null
+  }
+  async listAlertDecisionGovernanceResults(limit?: number): Promise<AlertDecisionGovernanceResult[]> {
+    const db = await getFirestore(); const snap = await db.collection(GOV_RESULTS).get()
+    return snap.docs.map((d: any) => docData<AlertDecisionGovernanceResult>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit || 200)
+  }
+  async listGovernanceResultsByFixture(fixtureId: string, limit?: number): Promise<AlertDecisionGovernanceResult[]> {
+    const db = await getFirestore(); const snap = await db.collection(GOV_RESULTS).where('fixtureId', '==', fixtureId).get()
+    return snap.docs.map((d: any) => docData<AlertDecisionGovernanceResult>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit || 100)
+  }
+  async listGovernanceResultsByPattern(patternId: string, limit?: number): Promise<AlertDecisionGovernanceResult[]> {
+    const db = await getFirestore(); const snap = await db.collection(GOV_RESULTS).where('patternId', '==', patternId).get()
+    return snap.docs.map((d: any) => docData<AlertDecisionGovernanceResult>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit || 100)
+  }
+  async listGovernanceResultsByCandidate(candidateAlertId: string, limit?: number): Promise<AlertDecisionGovernanceResult[]> {
+    const db = await getFirestore(); const snap = await db.collection(GOV_RESULTS).where('candidateAlertId', '==', candidateAlertId).get()
+    return snap.docs.map((d: any) => docData<AlertDecisionGovernanceResult>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit || 50)
+  }
+  async saveAlertGovernanceHold(h: AlertGovernanceHold): Promise<AlertGovernanceHold> {
+    const db = await getFirestore(); await db.collection(GOV_HOLDS).doc(h.id).set(h, { merge: true }); return h
+  }
+  async getAlertGovernanceHold(id: string): Promise<AlertGovernanceHold | null> {
+    const db = await getFirestore(); const doc = await db.collection(GOV_HOLDS).doc(id).get(); return doc.exists ? docData<AlertGovernanceHold>(doc) : null
+  }
+  async listAlertGovernanceHolds(filters: { fixtureId?: string; status?: string; limit?: number }): Promise<AlertGovernanceHold[]> {
+    const db = await getFirestore(); let q: any = db.collection(GOV_HOLDS)
+    if (filters.fixtureId) q = q.where('fixtureId', '==', filters.fixtureId)
+    else if (filters.status) q = q.where('status', '==', filters.status)
+    const snap = await q.get()
+    return snap.docs.map((d: any) => docData<AlertGovernanceHold>(d)).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, filters.limit || 100)
+  }
+  async updateAlertGovernanceHold(id: string, patch: Partial<AlertGovernanceHold>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(GOV_HOLDS).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async createAlertGovernanceRun(r: AlertGovernanceRun): Promise<AlertGovernanceRun> {
+    const db = await getFirestore(); await db.collection(GOV_RUNS).doc(r.id).set(r, { merge: true }); return r
+  }
+  async updateAlertGovernanceRun(id: string, patch: Partial<AlertGovernanceRun>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(GOV_RUNS).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async listAlertGovernanceRuns(limit?: number): Promise<AlertGovernanceRun[]> {
+    const db = await getFirestore(); const snap = await db.collection(GOV_RUNS).get()
+    return snap.docs.map((d: any) => docData<AlertGovernanceRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
+  }
+  async saveAssumptionInvalidation(i: AssumptionInvalidation): Promise<AssumptionInvalidation> {
+    const db = await getFirestore(); await db.collection(GOV_INVALIDATIONS).doc(i.id).set(i, { merge: true }); return i
+  }
+  async listAssumptionInvalidationsByFixture(fixtureId: string, limit?: number): Promise<AssumptionInvalidation[]> {
+    const db = await getFirestore(); const snap = await db.collection(GOV_INVALIDATIONS).where('fixtureId', '==', fixtureId).get()
+    return snap.docs.map((d: any) => docData<AssumptionInvalidation>(d)).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit || 100)
   }
 }

@@ -16,6 +16,7 @@ import { isAutoAlertPolicyEnabled } from './autoAlertPolicyConfig.service.js'
 import { rankOpportunities } from './utils/autoSignalRanking.util.js'
 import { autoRunId } from './utils/autoSignalId.util.js'
 import { linkOpportunitySnapshot } from '../evidence/evidenceLineage.service.js'
+import { evaluateOpportunity, isGovernanceEnabled } from '../../footballIntelligence/governance/alertDecisionGovernor.service.js'
 import { resolveSessionAttribution, recordAttributionEvent } from '../../validation/liveValidationAttribution.service.js'
 import { linkRecordToSession } from '../../validation/liveValidationRecordIndex.service.js'
 import { incrementSessionMetric } from '../../validation/liveValidationSessionMetrics.service.js'
@@ -119,6 +120,10 @@ export async function runAutoEngineScan(opts: ScanOptions = {}): Promise<AutoEng
 
     if (write) {
       for (const o of ranked) { try { await repos.intelligence.upsertAutoOpportunity(o) } catch { /* never block */ } }
+      // ── B47: Alert Decision Governance shadow for opportunities (advisory; never blocks) ──
+      if (isGovernanceEnabled()) {
+        for (const o of ranked) { try { void evaluateOpportunity(o.id) } catch { /* non-blocking */ } }
+      }
       // B34: non-fatal exact evidence links for opportunities with a real snapshotId.
       if (String(env.ENABLE_EVIDENCE_LINEAGE).toLowerCase() === 'true') {
         for (const o of ranked) {

@@ -18,3 +18,11 @@ extends V1 with influence-outcome analysis to start calibrating weights.
 A miss is not "random" without evidence (inherited from V1). Weak/old samples are named as
 sample problems, not pattern failures. `unknown` / `not_evaluable` / `pending` are never
 failures. Learning only — never rewrites score/confidence/counters/alert results.
+
+## Extended by Post-Match V6 (B47)
+
+`buildPostMatchExplanationV6` adds a governance outcome review on top of V5's influence
+analysis: it compares the pre-alert governance decision (allow/wait/block) with the actual
+outcome and flags `ignored_blocker` / `ignored_wait_reason` /
+`possible_overconservative_policy`. Observational; feeds Bloco 5. See
+`GOVERNANCE_OUTCOME_REVIEW.md`.

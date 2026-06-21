@@ -72,6 +72,14 @@ import {
   composeInfluence, buildFixtureInfluence, buildPatternInfluence,
   listInfluenceBuildRuns, isInfluenceEngineEnabled,
 } from '../modules/footballIntelligence/influence/influenceLedger.service.js'
+import {
+  evaluateAlertCandidate, isGovernanceEnabled, explainGovernanceDecision,
+} from '../modules/footballIntelligence/governance/alertDecisionGovernor.service.js'
+import { getGovernanceMode, getDefaultPolicy } from '../modules/footballIntelligence/governance/alertGovernancePolicy.service.js'
+import { listActiveHoldsForFixture, resolveHold, expireOldHolds } from '../modules/footballIntelligence/governance/alertGovernanceHold.service.js'
+import { handleLiveTrigger } from '../modules/footballIntelligence/governance/liveGovernanceReevaluation.service.js'
+import { buildPostMatchExplanationV6 } from '../modules/footballIntelligence/postMatchExplanationEngine.service.js'
+import type { AlertGovernanceRecheckTrigger } from '../modules/footballIntelligence/governance/alertDecisionGovernance.types.js'
 
 const flag = (v: unknown) => String(v).toLowerCase() === 'true'
 
@@ -638,5 +646,81 @@ export async function matchIntelligenceRoutes(app: FastifyInstance) {
   app.get(`${BASE}/influence/build-runs`, async (_req, reply) => {
     if (!influenceGate(reply)) return
     return ok(await listInfluenceBuildRuns(50))
+  })
+
+  // ── B47: alert decision governance ──
+  function governanceGate(reply: any): boolean {
+    if (!gate(reply)) return false
+    if (!isGovernanceEnabled()) {
+      reply.status(403).send({ success: false, error: { message: 'Alert Decision Governance desabilitado (ENABLE_ALERT_DECISION_GOVERNANCE=false).', reason: 'env_gate_disabled' } })
+      return false
+    }
+    return true
+  }
+  const hid = (req: any) => String((req.params as any).holdId)
+  const rid = (req: any) => String((req.params as any).resultId)
+
+  app.get(`${BASE}/governance/mode`, async (_req, reply) => {
+    if (!gate(reply)) return
+    return ok({ mode: getGovernanceMode(), enabled: isGovernanceEnabled(), policy: getDefaultPolicy() })
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/governance`, async (req, reply) => {
+    if (!governanceGate(reply)) return
+    const repos = createRepositories()
+    const [results, holds] = await Promise.all([
+      repos.intelligence.listGovernanceResultsByFixture(fid(req), 50).catch(() => []),
+      listActiveHoldsForFixture(fid(req)).catch(() => []),
+    ])
+    return ok({ mode: getGovernanceMode(), results, holds })
+  })
+  app.post(`${BASE}/fixtures/:fixtureId/governance/evaluate`, op, async (req, reply) => {
+    if (!governanceGate(reply)) return
+    const body = (req.body || {}) as any
+    const result = await evaluateAlertCandidate({ fixtureId: fid(req), patternId: body.patternId ?? null, source: body.source || 'manual_review', candidateAlertId: body.candidateAlertId ?? null })
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'alert_governance', resourceId: fid(req), metadata: { action: result.action, mode: result.mode } })
+    return ok(result)
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/governance/holds`, async (req, reply) => {
+    if (!governanceGate(reply)) return
+    return ok(await listActiveHoldsForFixture(fid(req)))
+  })
+  app.post(`${BASE}/governance/holds/:holdId/recheck`, op, async (req, reply) => {
+    if (!governanceGate(reply)) return
+    const repos = createRepositories()
+    const hold = await repos.intelligence.getAlertGovernanceHold(hid(req)).catch(() => null)
+    if (!hold) return reply.status(404).send(badRequest('hold_not_found'))
+    const trigger = (((req.body || {}) as any).trigger || 'minute_threshold') as AlertGovernanceRecheckTrigger
+    const out = await handleLiveTrigger(hold.fixtureId, trigger)
+    return ok(out)
+  })
+  app.post(`${BASE}/governance/holds/:holdId/resolve`, op, async (req, reply) => {
+    if (!governanceGate(reply)) return
+    const res = await resolveHold(hid(req), 'operator_resolved')
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'alert_governance_hold', resourceId: hid(req), metadata: { resolved: res.count } })
+    return ok(res)
+  })
+  app.get(`${BASE}/governance/results/:resultId`, async (req, reply) => {
+    if (!governanceGate(reply)) return
+    const r = await createRepositories().intelligence.getAlertDecisionGovernanceResult(rid(req)).catch(() => null)
+    return r ? ok({ result: r, explanation: await explainGovernanceDecision(rid(req)) }) : reply.status(404).send(badRequest('result_not_found'))
+  })
+  app.get(`${BASE}/governance/runs`, async (_req, reply) => {
+    if (!governanceGate(reply)) return
+    try { return ok(await createRepositories().intelligence.listAlertGovernanceRuns(50)) } catch { return ok([]) }
+  })
+  app.post(`${BASE}/fixtures/:fixtureId/governance/live-trigger`, op, async (req, reply) => {
+    if (!governanceGate(reply)) return
+    const trigger = (((req.body || {}) as any).trigger || 'minute_threshold') as AlertGovernanceRecheckTrigger
+    const out = await handleLiveTrigger(fid(req), trigger)
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'alert_governance', resourceId: fid(req), metadata: { trigger, results: out.results.length } })
+    return ok(out)
+  })
+  app.post(`${BASE}/governance/holds/expire`, op, async (_req, reply) => {
+    if (!governanceGate(reply)) return
+    return ok({ expired: await expireOldHolds() })
+  })
+  app.get(`${BASE}/fixtures/:fixtureId/post-match-explanation-v6`, async (req, reply) => {
+    if (!governanceGate(reply)) return
+    return ok(await buildPostMatchExplanationV6(fid(req)))
   })
 }

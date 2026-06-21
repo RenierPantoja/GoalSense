@@ -57,3 +57,14 @@ never displayed as a probability; absent variables appear as uncertainty, weak s
 strong, manual data is badged manual, conflicts are explicit. Env-gated by
 `ENABLE_VARIABLE_INFLUENCE_ENGINE`; the build button needs operator. See
 `docs/VARIABLE_INFLUENCE_UI.md`.
+
+## B47 — Alert Governance panel
+
+The Backstage selected-fixture column now ends with the `AlertGovernancePanel` (B47),
+after the B46 Variable Influence panel. It shows the decision brain: governance mode
+(observe/shadow/enforce), the current decision (allow/monitor/wait/block/stay-out) with
+reasons and conflicts, active holds (with next re-check and resolve), live re-evaluation
+buttons and a recent-decision history. In observe/shadow it never blocks a real alert;
+governance is advisory and never displayed as a probability. Env-gated by
+`ENABLE_ALERT_DECISION_GOVERNANCE`; POST actions need operator. See
+`docs/ALERT_GOVERNANCE_UI.md`.

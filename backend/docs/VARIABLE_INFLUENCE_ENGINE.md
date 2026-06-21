@@ -42,3 +42,11 @@ Firebase: `influenceLedgerEntries`, `influenceBuildRuns`. Noop under Prisma (rea
 ## Surfaced via
 Package V5, Readiness V7, Precheck V7 (observe), PostMatch V5, DecisionInputLedger V2,
 Backstage `VariableInfluencePanel`. Next block: governance linking decision → alert engine.
+
+## Consumed by Alert Decision Governance (B47)
+
+B47's Alert Decision Governor consumes the InfluenceAggregate (net band, influenceScore,
+confidenceOfAssessment, blockers, waits, live-confirmation, conflicts) together with
+Readiness V7 and Precheck V7 to decide allow/monitor/wait/block/stay-out — in shadow by
+default (never blocks a real alert). influenceScore remains an internal weight, never a
+probability. See `ALERT_DECISION_GOVERNANCE.md`.

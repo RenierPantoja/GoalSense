@@ -147,3 +147,23 @@ conflicts are explicit; blocking dominates; it never changes score/confidence/pa
 alerts and the precheck stays observe. See `VARIABLE_INFLUENCE_ENGINE.md`,
 `VARIABLE_TAXONOMY.md`, `PATTERN_SENSITIVITY_PROFILES.md`, `INFLUENCE_AGGREGATOR.md`,
 `INFLUENCE_AWARE_PRECHECK.md`, `POST_MATCH_INFLUENCE_ANALYSIS.md`.
+
+## B47 / Bloco 4 — Alert Decision Governance layer
+
+The fabric now has a governance layer under `modules/footballIntelligence/governance/`:
+- `alertDecisionGovernance.types.ts`, `alertGovernancePolicy.service.ts`,
+  `alertDecisionGovernor.service.ts`, `alertGovernanceHold.service.ts`,
+  `liveGovernanceReevaluation.service.ts`, `assumptionInvalidation.service.ts`.
+- Post-Match **V6** (governance outcome review).
+- Shadow wiring (observe-first): command pattern flow, Auto Engine opportunities,
+  promoted opportunities.
+- Routes under `/api/match-intelligence/governance`: `mode`, `fixtures/:id/governance`
+  (+`/evaluate`, `/holds`, `/live-trigger`), `holds/:id/recheck|resolve`, `holds/expire`,
+  `results/:id`, `runs`, plus `fixtures/:id/post-match-explanation-v6`.
+
+Governance is advisory: a decision is NOT a probability; observe/shadow never blocks a
+real alert; enforce is flag-gated and ultra-conservative; holds expire; live recheck never
+sends an alert; conflicts/overrides are audited; it never changes score/confidence/
+patterns/alert results. See `ALERT_DECISION_GOVERNANCE.md`, `GOVERNANCE_POLICY.md`,
+`GOVERNANCE_HOLDS.md`, `LIVE_GOVERNANCE_REEVALUATION.md`, `ASSUMPTION_INVALIDATION.md`,
+`GOVERNANCE_OUTCOME_REVIEW.md`.

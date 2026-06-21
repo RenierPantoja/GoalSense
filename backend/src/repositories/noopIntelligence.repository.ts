@@ -57,6 +57,9 @@ import type {
 import type {
   InfluenceLedgerEntry, InfluenceBuildRun,
 } from '../modules/footballIntelligence/influence/variableInfluence.types.js'
+import type {
+  AlertDecisionGovernanceResult, AlertGovernanceHold, AlertGovernanceRun, AssumptionInvalidation,
+} from '../modules/footballIntelligence/governance/alertDecisionGovernance.types.js'
 let warned = false
 function warnOnce(): void {
   if (warned) return
@@ -325,4 +328,21 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async updateInfluenceBuildRun(): Promise<{ count: number }> { return { count: 0 } }
   async getInfluenceBuildRun(): Promise<InfluenceBuildRun | null> { return null }
   async listInfluenceBuildRuns(): Promise<InfluenceBuildRun[]> { return [] }
+
+  // ── B47 (Noop): governance not persisted; reads empty (shadow still works) ──
+  async saveAlertDecisionGovernanceResult(r: AlertDecisionGovernanceResult): Promise<AlertDecisionGovernanceResult> { return r }
+  async getAlertDecisionGovernanceResult(): Promise<AlertDecisionGovernanceResult | null> { return null }
+  async listAlertDecisionGovernanceResults(): Promise<AlertDecisionGovernanceResult[]> { return [] }
+  async listGovernanceResultsByFixture(): Promise<AlertDecisionGovernanceResult[]> { return [] }
+  async listGovernanceResultsByPattern(): Promise<AlertDecisionGovernanceResult[]> { return [] }
+  async listGovernanceResultsByCandidate(): Promise<AlertDecisionGovernanceResult[]> { return [] }
+  async saveAlertGovernanceHold(h: AlertGovernanceHold): Promise<AlertGovernanceHold> { return h }
+  async getAlertGovernanceHold(): Promise<AlertGovernanceHold | null> { return null }
+  async listAlertGovernanceHolds(): Promise<AlertGovernanceHold[]> { return [] }
+  async updateAlertGovernanceHold(): Promise<{ count: number }> { return { count: 0 } }
+  async createAlertGovernanceRun(r: AlertGovernanceRun): Promise<AlertGovernanceRun> { return r }
+  async updateAlertGovernanceRun(): Promise<{ count: number }> { return { count: 0 } }
+  async listAlertGovernanceRuns(): Promise<AlertGovernanceRun[]> { return [] }
+  async saveAssumptionInvalidation(i: AssumptionInvalidation): Promise<AssumptionInvalidation> { return i }
+  async listAssumptionInvalidationsByFixture(): Promise<AssumptionInvalidation[]> { return [] }
 }

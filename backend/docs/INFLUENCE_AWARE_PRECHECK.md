@@ -32,3 +32,10 @@ into the alert engine.
 deterministic-id inputs: variable_supports_pattern, variable_contradicts_pattern,
 variable_blocks_pattern, variable_requires_wait, variable_requires_live_confirmation,
 variable_uncertain, influence_aggregate_summary. Explanatory, never the final decider.
+
+## Wired into governance (B47)
+
+Precheck V7's decision feeds the Alert Decision Governor (B47) as one of its inputs
+(alongside Readiness V7 and the InfluenceAggregate). The governor — not the precheck — is
+the single decision door, and it stays observe/shadow by default. See
+`ALERT_DECISION_GOVERNANCE.md`.

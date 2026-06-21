@@ -13,6 +13,7 @@ import { createOpportunityAction } from './autoOpportunityActions.service.js'
 import { buildPromotionPreview, evaluatePromotionGuard } from './utils/autoOpportunityAlertPromotion.util.js'
 import { OPP_TYPE_LABEL } from './utils/autoSignalLabels.util.js'
 import { linkPromotionSnapshot } from '../evidence/evidenceLineage.service.js'
+import { evaluatePromotedOpportunity, isGovernanceEnabled } from '../../footballIntelligence/governance/alertDecisionGovernor.service.js'
 import type {
   AutoOpportunity, ManualAlertPromotionPreview, ManualAlertPromotionRequest,
   ManualAlertPromotionResult, ManualPromotedAlertLink, PromotedAlertProvenance,
@@ -92,6 +93,12 @@ export async function promoteOpportunityToManualAlert(request: ManualAlertPromot
   if (request.userConfirmed !== true || !request.acknowledgeNoTelegram || !request.acknowledgeNoOdds || !request.acknowledgeNotGuaranteed) {
     return fail('confirmation_required')
   }
+
+  // ── B47: Alert Decision Governance shadow on promotion (observe-first; never blocks
+  // the human here). Records wouldHaveBlocked/wait so the override is auditable. ──
+  try {
+    if (isGovernanceEnabled()) void evaluatePromotedOpportunity(opportunityId)
+  } catch { /* non-blocking */ }
 
   const promotedAt = new Date().toISOString()
   const typeLabel = OPP_TYPE_LABEL[opp.opportunityType] || 'Oportunidade'

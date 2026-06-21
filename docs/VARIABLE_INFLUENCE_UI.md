@@ -33,3 +33,10 @@ never changes score/confidence/patterns/alerts.
 `/api/match-intelligence/fixtures/:id/influence` (+`/influence/build`),
 `.../patterns/:patternId/influence` (+build), `.../package-v5`, `.../readiness-v7`,
 `.../precheck-v7`, `.../post-match-explanation-v5`, `/influence/build-runs`.
+
+## Followed by the Alert Governance panel (B47)
+
+Below the Variable Influence panel, the Backstage selected-fixture column now renders the
+`AlertGovernancePanel` (B47): governance mode, current decision (allow/monitor/wait/block/
+stay-out), reasons, active holds and live re-evaluation. Advisory only; in observe/shadow
+it never blocks a real alert. See `docs/ALERT_GOVERNANCE_UI.md`.
