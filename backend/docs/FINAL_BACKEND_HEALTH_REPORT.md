@@ -19,3 +19,11 @@ the local backend.
 `buildCommercialReadinessReport`, `listCriticalBackendBlockers`, `listRecommendedFixes`.
 
 Commercial readiness is NOT a sales guarantee; a metric is not a promise of accuracy.
+
+## B50 — controlled-beta readiness gate
+
+B50 adds `controlledBetaReadiness.service` on top of the backend health report: a dedicated,
+PURE-classifiable gate (`classifyControlledBeta`) that stays at `internal_alpha`/`not_ready`
+without a real provider + Firebase + `>= 7` accumulated daily validation reports, and goes
+`blocked` if enforce is ON without validation. It is technical only — never a commercial
+guarantee. See `CONTROLLED_BETA_READINESS.md`.

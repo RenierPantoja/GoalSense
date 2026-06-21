@@ -94,6 +94,9 @@ import { runValidationForToday, runValidationForFixture, cancelValidationRun, ge
 import { buildProviderCoverageReport } from '../modules/footballIntelligence/validation/providerCoverageReport.service.js'
 import { buildBackendHealthReport } from '../modules/footballIntelligence/validation/localBackendHealthReport.service.js'
 import { repairLinksForFixture, repairLinksForToday } from '../modules/footballIntelligence/validation/decisionOutcomeLinkRepair.service.js'
+import { generateDailyValidationReport, getDailyValidationReport, listDailyValidationReports } from '../modules/footballIntelligence/validation/dailyValidationReport.service.js'
+import { createValidationCampaign, listCampaigns, getCampaign, closeCampaign, attachDailyReport } from '../modules/footballIntelligence/validation/validationCampaign.service.js'
+import { buildControlledBetaReadiness } from '../modules/footballIntelligence/validation/controlledBetaReadiness.service.js'
 
 const flag = (v: unknown) => String(v).toLowerCase() === 'true'
 
@@ -909,5 +912,49 @@ export async function matchIntelligenceRoutes(app: FastifyInstance) {
   app.post(`${BASE}/local-validation/links/repair/fixtures/:fixtureId`, op, async (req, reply) => {
     if (!lvGate(reply)) return
     return ok(await repairLinksForFixture(fid(req)))
+  })
+
+  // ── B50: daily validation report, campaigns, controlled-beta readiness ──
+  const campaignIdParam = (req: any) => String((req.params as any).campaignId)
+
+  app.get(`${BASE}/local-validation/daily-report`, async (req, reply) => {
+    if (!lvGate(reply)) return
+    const date = String((req.query as any)?.date || new Date().toISOString().slice(0, 10))
+    const existing = await getDailyValidationReport(date)
+    return ok(existing ?? await listDailyValidationReports(1).then(rs => rs[0] ?? null))
+  })
+  app.post(`${BASE}/local-validation/daily-report/generate`, op, async (req, reply) => {
+    if (!lvGate(reply)) return
+    const date = String(((req.body || {}) as any).date || new Date().toISOString().slice(0, 10))
+    const report = await generateDailyValidationReport(date)
+    // Optionally attach to a running campaign if campaignId is provided.
+    const campaignId = ((req.body || {}) as any).campaignId
+    if (campaignId) await attachDailyReport(String(campaignId), report).catch(() => null)
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'daily_validation_report', resourceId: date, metadata: { fixturesAnalyzed: report.fixturesAnalyzed } })
+    return ok(report)
+  })
+  app.get(`${BASE}/local-validation/campaigns`, async (_req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(await listCampaigns(50))
+  })
+  app.post(`${BASE}/local-validation/campaigns`, op, async (req, reply) => {
+    if (!lvGate(reply)) return
+    const body = (req.body || {}) as any
+    const c = await createValidationCampaign(String(body.title || ''), Number(body.targetDays || 14))
+    return ok(c)
+  })
+  app.get(`${BASE}/local-validation/campaigns/:campaignId`, async (req, reply) => {
+    if (!lvGate(reply)) return
+    const c = await getCampaign(campaignIdParam(req))
+    return c ? ok(c) : reply.status(404).send(badRequest('campaign_not_found'))
+  })
+  app.post(`${BASE}/local-validation/campaigns/:campaignId/close`, op, async (req, reply) => {
+    if (!lvGate(reply)) return
+    const c = await closeCampaign(campaignIdParam(req))
+    return c ? ok(c) : reply.status(404).send(badRequest('campaign_not_found'))
+  })
+  app.get(`${BASE}/local-validation/controlled-beta-readiness`, async (_req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(await buildControlledBetaReadiness())
   })
 }

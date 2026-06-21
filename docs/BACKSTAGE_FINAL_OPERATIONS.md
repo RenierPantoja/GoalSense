@@ -29,3 +29,13 @@ a probability of winning. Heavy panels remain self-contained and read-only by de
 actions require operator. See `docs/LOCAL_VALIDATION_UI.md`, `docs/CAUSAL_LEARNING_UI.md`,
 `docs/ALERT_GOVERNANCE_UI.md`, `docs/VARIABLE_INFLUENCE_UI.md`, `docs/HISTORICAL_MEMORY_UI.md`,
 `docs/CRITICAL_DOMAIN_ACQUISITION_UI.md`.
+
+## B50 — campaign console
+
+The global header now includes the daily report, campaign tracker and controlled-beta
+readiness (B50), turning the Backstage into the console for a multi-day validation campaign:
+run the day → generate the daily report → attach to a campaign → repeat 7–14 days → review
+controlled-beta readiness. The live-recheck bridge can be enabled (observe, rate-limited) to
+re-evaluate governance automatically during live matches without ever alerting/blocking. See
+`docs/DAILY_VALIDATION_REPORT_UI.md`, `docs/VALIDATION_CAMPAIGN_UI.md`,
+`backend/docs/FIRST_REAL_VALIDATION_DAY_RUNBOOK.md`.

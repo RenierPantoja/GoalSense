@@ -28,3 +28,11 @@ failure. No betting language; no enforce; no Telegram. Env-gated by
 `runs` (+`/:id`, `/cancel`), `runs/:id/metrics/{reliability,coverage,cost}`,
 `runs/:id/report/{readiness,go-no-go}`, `provider-coverage`, `backend-health`,
 `links/repair/{today,fixtures/:id}`.
+
+## B50 — daily report, campaign and beta readiness panels
+
+The Backstage global header now also renders `DailyValidationReportPanel`,
+`ValidationCampaignPanel` and `ControlledBetaReadinessCard` (B50) alongside the Local
+Validation panel. They surface the per-day report, the multi-day campaign aggregate and the
+conservative controlled-beta readiness — all observational, never a probability, never a
+commercial guarantee. See `docs/DAILY_VALIDATION_REPORT_UI.md`, `docs/VALIDATION_CAMPAIGN_UI.md`.

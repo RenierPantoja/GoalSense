@@ -17,3 +17,10 @@ are collected (`collectRunMetrics`) and the per-run cache is cleared.
 Scheduler OFF; observe/shadow; never blocks an alert; never enforces; never sends
 Telegram/odds; never changes alert results. Respects `LOCAL_VALIDATION_MAX_FIXTURES` and
 `LOCAL_VALIDATION_MAX_DURATION_MINUTES`. Under Noop returns a cancelled/empty run honestly.
+
+## B50 — feeds the daily report + campaign
+
+After validation runs (B49), B50's `dailyValidationReport.service` consolidates the latest
+run's metrics + backend health + provider coverage into a per-day report, which can be
+attached to a `ValidationCampaign`. The runner itself is unchanged (still manual-first,
+observe/shadow, non-fatal). See `DAILY_VALIDATION_REPORT.md`.

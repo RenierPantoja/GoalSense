@@ -189,6 +189,9 @@ import type {
   LocalValidationRun, LocalValidationFixtureSummary, LocalValidationReliabilityMetrics,
   LocalValidationCoverageMetrics, LocalValidationCostMetrics, LocalValidationGoNoGoReport, BackendHealthReport,
 } from '../modules/footballIntelligence/validation/localValidation.types.js'
+import type {
+  DailyValidationReport, ValidationCampaign,
+} from '../modules/footballIntelligence/validation/validationCampaign.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -511,6 +514,15 @@ export interface IntelligenceRepository {
   getLocalValidationGoNoGoReport(runId: string): Promise<LocalValidationGoNoGoReport | null>
   saveBackendHealthReport(r: BackendHealthReport): Promise<BackendHealthReport>
   getBackendHealthReport(id: string): Promise<BackendHealthReport | null>
+
+  // ── B50: daily validation reports + validation campaigns ────────────────────
+  saveDailyValidationReport(r: DailyValidationReport): Promise<DailyValidationReport>
+  getDailyValidationReport(date: string): Promise<DailyValidationReport | null>
+  listDailyValidationReports(limit?: number): Promise<DailyValidationReport[]>
+  saveValidationCampaign(c: ValidationCampaign): Promise<ValidationCampaign>
+  getValidationCampaign(id: string): Promise<ValidationCampaign | null>
+  listValidationCampaigns(limit?: number): Promise<ValidationCampaign[]>
+  updateValidationCampaign(id: string, patch: Partial<ValidationCampaign>): Promise<{ count: number }>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

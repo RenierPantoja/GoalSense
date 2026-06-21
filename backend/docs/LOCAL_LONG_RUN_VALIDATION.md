@@ -43,3 +43,13 @@ Firebase: `localValidationRuns`, `localValidationFixtureSummaries`,
 `localValidationReliabilityMetrics`, `localValidationCoverageMetrics`,
 `localValidationCostMetrics`, `localValidationGoNoGoReports`, `backendHealthReports`.
 Noop under Prisma → empty reads → `insufficient_data` (honest).
+
+## B50 — first real campaign + daily report + safe live bridge wiring
+
+B50 builds the operational layer on top of B49: a per-day `DailyValidationReport`
+(service/API/UI), a `ValidationCampaign` tracker grouping 7–14 days, a conservative
+`ControlledBetaReadiness` gate, and the live-recheck bridge now wired into the live monitor
+(OFF by default, observe, rate-limited, never alerts/blocks). Use the runbook
+(`FIRST_REAL_VALIDATION_DAY_RUNBOOK.md`) and the env template (`.env.local.validation.example`,
+no secrets). See `FIRST_LOCAL_VALIDATION_CAMPAIGN.md`, `DAILY_VALIDATION_REPORT.md`,
+`VALIDATION_CAMPAIGN_TRACKER.md`, `CONTROLLED_BETA_READINESS.md`, `LIVE_RECHECK_BRIDGE_WIRING.md`.

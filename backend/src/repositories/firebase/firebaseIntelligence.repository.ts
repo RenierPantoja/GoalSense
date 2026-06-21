@@ -73,6 +73,9 @@ import type {
   LocalValidationRun, LocalValidationFixtureSummary, LocalValidationReliabilityMetrics,
   LocalValidationCoverageMetrics, LocalValidationCostMetrics, LocalValidationGoNoGoReport, BackendHealthReport,
 } from '../../modules/footballIntelligence/validation/localValidation.types.js'
+import type {
+  DailyValidationReport, ValidationCampaign,
+} from '../../modules/footballIntelligence/validation/validationCampaign.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -149,6 +152,8 @@ const LV_COVERAGE = 'localValidationCoverageMetrics'
 const LV_COST = 'localValidationCostMetrics'
 const LV_GO_NO_GO = 'localValidationGoNoGoReports'
 const LV_BACKEND_HEALTH = 'backendHealthReports'
+const LV_DAILY_REPORTS = 'dailyValidationReports'
+const LV_CAMPAIGNS = 'validationCampaigns'
 
 const READ_CAP = 2000
 
@@ -1463,5 +1468,32 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
   }
   async getBackendHealthReport(id: string): Promise<BackendHealthReport | null> {
     const db = await getFirestore(); const doc = await db.collection(LV_BACKEND_HEALTH).doc(id).get(); return doc.exists ? docData<BackendHealthReport>(doc) : null
+  }
+
+  // ── B50: daily validation reports + validation campaigns ──
+  async saveDailyValidationReport(r: DailyValidationReport): Promise<DailyValidationReport> {
+    const db = await getFirestore(); await db.collection(LV_DAILY_REPORTS).doc(r.date).set(r, { merge: true }); return r
+  }
+  async getDailyValidationReport(date: string): Promise<DailyValidationReport | null> {
+    const db = await getFirestore(); const doc = await db.collection(LV_DAILY_REPORTS).doc(date).get(); return doc.exists ? docData<DailyValidationReport>(doc) : null
+  }
+  async listDailyValidationReports(limit?: number): Promise<DailyValidationReport[]> {
+    const db = await getFirestore(); const snap = await db.collection(LV_DAILY_REPORTS).get()
+    return snap.docs.map((d: any) => docData<DailyValidationReport>(d)).sort((a: any, b: any) => (b.date || '').localeCompare(a.date || '')).slice(0, limit || 30)
+  }
+  async saveValidationCampaign(c: ValidationCampaign): Promise<ValidationCampaign> {
+    const db = await getFirestore(); await db.collection(LV_CAMPAIGNS).doc(c.id).set(c, { merge: true }); return c
+  }
+  async getValidationCampaign(id: string): Promise<ValidationCampaign | null> {
+    const db = await getFirestore(); const doc = await db.collection(LV_CAMPAIGNS).doc(id).get(); return doc.exists ? docData<ValidationCampaign>(doc) : null
+  }
+  async listValidationCampaigns(limit?: number): Promise<ValidationCampaign[]> {
+    const db = await getFirestore(); const snap = await db.collection(LV_CAMPAIGNS).get()
+    return snap.docs.map((d: any) => docData<ValidationCampaign>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
+  }
+  async updateValidationCampaign(id: string, patch: Partial<ValidationCampaign>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(LV_CAMPAIGNS).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
   }
 }

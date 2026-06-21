@@ -18,6 +18,8 @@ dist
 !**/*.env.example
 !**/.env.staging.example
 !backend/.env.staging.example
+!backend/.env.local.validation.example
+!**/*.env.local.validation.example
 
 # Backend
 backend/dist

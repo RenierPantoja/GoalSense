@@ -31,6 +31,8 @@
     "smoke:alert-governance": "node scripts/smokeAlertDecisionGovernance.mjs",
     "smoke:causal-learning": "node scripts/smokePostMatchCausalLearning.mjs",
     "smoke:local-long-run-validation": "node scripts/smokeLocalLongRunValidation.mjs",
+    "smoke:live-recheck-bridge-wiring": "node scripts/smokeLiveRecheckBridgeWiring.mjs",
+    "smoke:first-local-validation-campaign": "node scripts/smokeFirstLocalValidationCampaign.mjs",
     "backfill:live-session-attribution": "node scripts/backfillLiveValidationSessionAttribution.mjs",
     "reindex:live-session-records": "node scripts/reindexLiveValidationSessionRecords.mjs",
     "reprocess:bt-replay-evidence": "node scripts/reprocessBacktestReplayEvidence.mjs",

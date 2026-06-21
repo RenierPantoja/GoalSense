@@ -68,6 +68,9 @@ import type {
   LocalValidationRun, LocalValidationFixtureSummary, LocalValidationReliabilityMetrics,
   LocalValidationCoverageMetrics, LocalValidationCostMetrics, LocalValidationGoNoGoReport, BackendHealthReport,
 } from '../modules/footballIntelligence/validation/localValidation.types.js'
+import type {
+  DailyValidationReport, ValidationCampaign,
+} from '../modules/footballIntelligence/validation/validationCampaign.types.js'
 let warned = false
 function warnOnce(): void {
   if (warned) return
@@ -395,4 +398,13 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async getLocalValidationGoNoGoReport(): Promise<LocalValidationGoNoGoReport | null> { return null }
   async saveBackendHealthReport(r: BackendHealthReport): Promise<BackendHealthReport> { return r }
   async getBackendHealthReport(): Promise<BackendHealthReport | null> { return null }
+
+  // ── B50 (Noop): daily reports + campaigns not persisted; reads empty ──
+  async saveDailyValidationReport(r: DailyValidationReport): Promise<DailyValidationReport> { return r }
+  async getDailyValidationReport(): Promise<DailyValidationReport | null> { return null }
+  async listDailyValidationReports(): Promise<DailyValidationReport[]> { return [] }
+  async saveValidationCampaign(c: ValidationCampaign): Promise<ValidationCampaign> { return c }
+  async getValidationCampaign(): Promise<ValidationCampaign | null> { return null }
+  async listValidationCampaigns(): Promise<ValidationCampaign[]> { return [] }
+  async updateValidationCampaign(): Promise<{ count: number }> { return { count: 0 } }
 }

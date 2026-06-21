@@ -14,6 +14,7 @@ import type { SnapshotState } from '../localops/utils/localOps.util.js'
 import { resolveSessionAttribution, recordAttributionEvent } from '../validation/liveValidationAttribution.service.js'
 import { linkRecordToSession } from '../validation/liveValidationRecordIndex.service.js'
 import { incrementSessionMetric } from '../validation/liveValidationSessionMetrics.service.js'
+import { isBridgeEnabled as isLiveRecheckBridgeEnabled, onLiveSnapshotCaptured, processRecheckQueue } from '../footballIntelligence/validation/localLiveReevaluationBridge.service.js'
 
 // ─── Fixture Upsert ──────────────────────────────────────────────────────────
 
@@ -138,6 +139,10 @@ export async function captureLiveSnapshot(
   // B38: optional session attribution (non-fatal, metadata only).
   const attribution = await resolveSessionAttribution(fixtureId).catch(() => null)
 
+  // B50: capture the previous snapshot ONLY when the live-recheck bridge is enabled
+  // (so the delta-based triggers have a baseline). Extra read avoided when bridge is off.
+  const prevSnapshotForBridge = isLiveRecheckBridgeEnabled() ? await repos.liveSnapshots.findLatestByFixture(fixtureId).catch(() => null) : null
+
   const created = await repos.liveSnapshots.create({
     fixtureId,
     minute: pf.minute,
@@ -159,6 +164,13 @@ export async function captureLiveSnapshot(
     const snapshotId = String((created as any)?.id ?? `snap_${fixtureId}_${pf.minute ?? 'na'}_${Date.now()}`)
     void linkRecordToSession({ validationSessionId: attribution.validationSessionId, sessionName: attribution.sessionName ?? null, recordType: 'snapshot', recordId: snapshotId, fixtureId, snapshotId, source: 'live_monitor', attributionStrength: 'exact_session_id', linkReason: 'snapshot written during running session' })
     incrementSessionMetric(attribution.validationSessionId, 'snapshotsWritten')
+  }
+  // B50: safe, flag-gated live → governance re-evaluation bridge. Non-fatal; never
+  // sends/blocks an alert; rate-limited per fixture inside the bridge.
+  if (isLiveRecheckBridgeEnabled()) {
+    void onLiveSnapshotCaptured(created, prevSnapshotForBridge)
+      .then(r => { if (r.enqueued.length > 0) return processRecheckQueue() })
+      .catch(() => { /* never break the live monitor */ })
   }
   return true
 }

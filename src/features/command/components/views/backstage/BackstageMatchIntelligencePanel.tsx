@@ -28,6 +28,9 @@ import { VariableInfluencePanel } from './VariableInfluencePanel'
 import { AlertGovernancePanel } from './AlertGovernancePanel'
 import { CausalLearningPanel } from './CausalLearningPanel'
 import { LocalValidationPanel } from './LocalValidationPanel'
+import { DailyValidationReportPanel } from './DailyValidationReportPanel'
+import { ValidationCampaignPanel } from './ValidationCampaignPanel'
+import { ControlledBetaReadinessCard } from './ControlledBetaReadinessCard'
 
 function Card({ title, icon, children, action }: { title: string; icon?: React.ReactNode; children: React.ReactNode; action?: React.ReactNode }) {
   return <div className="rounded-2xl border border-white/[0.07] bg-white/[0.012] p-4"><div className="flex items-center gap-2 mb-3"><span className="text-white/35">{icon}</span><h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45 flex-1">{title}</h4>{action}</div>{children}</div>
@@ -148,6 +151,13 @@ export function BackstageMatchIntelligencePanel() {
 
       {/* B49: local long-run validation + backend health (global, não fixture-scoped) */}
       <LocalValidationPanel isAdmin={isAdmin} />
+
+      {/* B50: daily report, campaign tracker, controlled-beta readiness (global) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <DailyValidationReportPanel isAdmin={isAdmin} />
+        <ValidationCampaignPanel isAdmin={isAdmin} />
+      </div>
+      <ControlledBetaReadinessCard />
 
       {/* B41: provider integration readiness (global) */}
       {providerReadiness && (
