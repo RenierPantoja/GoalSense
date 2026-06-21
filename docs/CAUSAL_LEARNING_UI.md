@@ -36,3 +36,10 @@ the B47 follow-up of surfacing governance outside the Backstage.
 today/alert/governance-result), `causal/insights`, `causal/calibration/governance|influence`,
 `causal/calibration/:id/review|reject|accept-for-future`, `causal/runs`,
 `fixtures/:id/post-match-explanation-v7`.
+
+## B49 — surfaced in local validation
+
+Causal learning now also runs inside the B49 local validation runner (per finished fixture)
+and its evaluable-vs-not_evaluable counts appear in the Local Validation panel's reliability
+metrics. Link repair (`decisionOutcomeLinkRepair`) improves evaluability without promoting
+weak links to exact. See `docs/LOCAL_VALIDATION_UI.md`.

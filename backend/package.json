@@ -30,6 +30,7 @@
     "smoke:variable-influence": "node scripts/smokeVariableInfluenceEngine.mjs",
     "smoke:alert-governance": "node scripts/smokeAlertDecisionGovernance.mjs",
     "smoke:causal-learning": "node scripts/smokePostMatchCausalLearning.mjs",
+    "smoke:local-long-run-validation": "node scripts/smokeLocalLongRunValidation.mjs",
     "backfill:live-session-attribution": "node scripts/backfillLiveValidationSessionAttribution.mjs",
     "reindex:live-session-records": "node scripts/reindexLiveValidationSessionRecords.mjs",
     "reprocess:bt-replay-evidence": "node scripts/reprocessBacktestReplayEvidence.mjs",

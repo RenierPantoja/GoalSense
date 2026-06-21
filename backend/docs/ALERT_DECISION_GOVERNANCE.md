@@ -48,3 +48,10 @@ B48 consumes governance results + outcomes (via the Decision-Outcome Linker) to 
 whether each decision was aligned / too strict / too loose, and proposes conservative
 governance calibration suggestions — for HUMAN review only. Nothing auto-applies; the
 policy and modes here remain exactly as coded. See `GOVERNANCE_CALIBRATION_LOOP.md`.
+
+## B49 — live recheck bridge (safe automation)
+
+The B47 "live recheck is on-demand only" limitation is addressed by the B49
+`localLiveReevaluationBridge` (OFF by default, rate-limited, observe-only), which feeds live
+triggers into `handleLiveTrigger` without ever sending or blocking an alert. Governance
+remains observe/shadow with enforce OFF. See `LIVE_RECHECK_BRIDGE.md`.

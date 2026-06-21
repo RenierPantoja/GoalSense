@@ -27,6 +27,7 @@ import { HistoricalMemoryPanel } from './HistoricalMemoryPanel'
 import { VariableInfluencePanel } from './VariableInfluencePanel'
 import { AlertGovernancePanel } from './AlertGovernancePanel'
 import { CausalLearningPanel } from './CausalLearningPanel'
+import { LocalValidationPanel } from './LocalValidationPanel'
 
 function Card({ title, icon, children, action }: { title: string; icon?: React.ReactNode; children: React.ReactNode; action?: React.ReactNode }) {
   return <div className="rounded-2xl border border-white/[0.07] bg-white/[0.012] p-4"><div className="flex items-center gap-2 mb-3"><span className="text-white/35">{icon}</span><h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45 flex-1">{title}</h4>{action}</div>{children}</div>
@@ -144,6 +145,9 @@ export function BackstageMatchIntelligencePanel() {
     <div className="space-y-4">
       <p className="text-[12px] text-white/45">Backstage — cérebro fundamentalista dos jogos de hoje. Observacional: decide quando analisar, esperar ou ficar fora. Sem previsão inventada, sem odds, sem aposta.</p>
       {msg && <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-2.5 text-[12px] text-white/70">{msg}</div>}
+
+      {/* B49: local long-run validation + backend health (global, não fixture-scoped) */}
+      <LocalValidationPanel isAdmin={isAdmin} />
 
       {/* B41: provider integration readiness (global) */}
       {providerReadiness && (

@@ -141,3 +141,12 @@ The Match Intelligence Fabric's MatchDayScope respects `LOCAL_MAX_LIVE_FIXTURES`
 refresh endpoints consult the provider-budget guard (`guardProviderCall`). It never
 fetches "the whole world" — only today's already-ingested fixtures. See
 `MATCH_INTELLIGENCE_FABRIC.md`.
+
+## B49 — Local long-run validation + safe live recheck bridge
+
+Local operations now include a long-run validation runner (`validation/localValidationRunner`)
+and a safe, flag-gated live re-evaluation bridge (`validation/localLiveReevaluationBridge`,
+OFF by default, rate-limited, observe-only — never alerts/blocks). Validation respects the
+existing local caps/guards (ProviderUsageGuard, SnapshotWriteGuard, LOCAL_MAX_LIVE_FIXTURES)
+and estimates Firebase read/write cost per run. See `LOCAL_LONG_RUN_VALIDATION.md`,
+`LIVE_RECHECK_BRIDGE.md`, `LOCAL_VALIDATION_COST_AND_CACHE.md`.

@@ -207,6 +207,18 @@ const envSchema = z.object({
   CAUSAL_LEARNING_MAX_CASES_PER_RUN: z.coerce.number().default(200),
   CAUSAL_MIN_CASES_FOR_MEDIUM_SUGGESTION: z.coerce.number().default(10),
   CAUSAL_MIN_CASES_FOR_HIGH_SUGGESTION: z.coerce.number().default(25),
+  // B49: local long-run validation + reliability + final hardening (manual-first; scheduler OFF).
+  ENABLE_LOCAL_LONG_RUN_VALIDATION: z.string().default('true'),
+  ENABLE_LOCAL_VALIDATION_SCHEDULER: z.string().default('false'),
+  LOCAL_VALIDATION_MODE: z.enum(['dry_run', 'shadow_only', 'observe', 'full_local_validation']).default('shadow_only'),
+  LOCAL_VALIDATION_MAX_FIXTURES: z.coerce.number().default(10),
+  LOCAL_VALIDATION_MAX_DURATION_MINUTES: z.coerce.number().default(720),
+  LOCAL_VALIDATION_ENABLE_CAUSAL: z.string().default('true'),
+  LOCAL_VALIDATION_ENABLE_LIVE_RECHECK: z.string().default('true'),
+  LOCAL_VALIDATION_ENABLE_COST_METRICS: z.string().default('true'),
+  ENABLE_LOCAL_LIVE_RECHECK_BRIDGE: z.string().default('false'),
+  LOCAL_LIVE_RECHECK_BRIDGE_MODE: z.enum(['observe', 'enforce']).default('observe'),
+  LOCAL_LIVE_RECHECK_MIN_INTERVAL_SECONDS: z.coerce.number().default(60),
 }).superRefine((val, ctx) => {
   // Conditional validation by persistence provider
   if (val.PERSISTENCE_PROVIDER === 'prisma') {

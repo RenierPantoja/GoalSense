@@ -64,6 +64,10 @@ import type {
   CausalLearningCase, DecisionOutcomeLink, CausalLearningInsight,
   GovernanceCalibrationSuggestion, VariableInfluenceCalibrationSuggestion, CausalLearningRun,
 } from '../modules/footballIntelligence/causal/causalLearning.types.js'
+import type {
+  LocalValidationRun, LocalValidationFixtureSummary, LocalValidationReliabilityMetrics,
+  LocalValidationCoverageMetrics, LocalValidationCostMetrics, LocalValidationGoNoGoReport, BackendHealthReport,
+} from '../modules/footballIntelligence/validation/localValidation.types.js'
 let warned = false
 function warnOnce(): void {
   if (warned) return
@@ -373,4 +377,22 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async createCausalLearningRun(r: CausalLearningRun): Promise<CausalLearningRun> { return r }
   async updateCausalLearningRun(): Promise<{ count: number }> { return { count: 0 } }
   async listCausalLearningRuns(): Promise<CausalLearningRun[]> { return [] }
+
+  // ── B49 (Noop): local validation not persisted; reads empty (→ insufficient_data) ──
+  async saveLocalValidationRun(r: LocalValidationRun): Promise<LocalValidationRun> { return r }
+  async getLocalValidationRun(): Promise<LocalValidationRun | null> { return null }
+  async listLocalValidationRuns(): Promise<LocalValidationRun[]> { return [] }
+  async updateLocalValidationRun(): Promise<{ count: number }> { return { count: 0 } }
+  async saveLocalValidationFixtureSummary(s: LocalValidationFixtureSummary): Promise<LocalValidationFixtureSummary> { return s }
+  async listLocalValidationFixtureSummaries(): Promise<LocalValidationFixtureSummary[]> { return [] }
+  async saveLocalValidationReliabilityMetrics(m: LocalValidationReliabilityMetrics): Promise<LocalValidationReliabilityMetrics> { return m }
+  async getLocalValidationReliabilityMetrics(): Promise<LocalValidationReliabilityMetrics | null> { return null }
+  async saveLocalValidationCoverageMetrics(m: LocalValidationCoverageMetrics): Promise<LocalValidationCoverageMetrics> { return m }
+  async getLocalValidationCoverageMetrics(): Promise<LocalValidationCoverageMetrics | null> { return null }
+  async saveLocalValidationCostMetrics(m: LocalValidationCostMetrics): Promise<LocalValidationCostMetrics> { return m }
+  async getLocalValidationCostMetrics(): Promise<LocalValidationCostMetrics | null> { return null }
+  async saveLocalValidationGoNoGoReport(r: LocalValidationGoNoGoReport): Promise<LocalValidationGoNoGoReport> { return r }
+  async getLocalValidationGoNoGoReport(): Promise<LocalValidationGoNoGoReport | null> { return null }
+  async saveBackendHealthReport(r: BackendHealthReport): Promise<BackendHealthReport> { return r }
+  async getBackendHealthReport(): Promise<BackendHealthReport | null> { return null }
 }

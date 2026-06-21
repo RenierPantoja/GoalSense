@@ -38,3 +38,12 @@ data_insufficient, variance_or_shock, not_evaluable, unknown.
 Firebase: `causalLearningCases`, `decisionOutcomeLinks`, `causalLearningInsights`,
 `governanceCalibrationSuggestions`, `variableInfluenceCalibrationSuggestions`,
 `causalLearningRuns`. Noop under Prisma (empty reads). Surfaced via PostMatch V7 + Backstage.
+
+## B49 — link repair improves evaluability (honestly)
+
+The B48 "exact link depends on candidateAlertId" limitation is partly addressed by the B49
+`decisionOutcomeLinkRepair`, which backfills/upgrades links WITHOUT lying: it never promotes
+a weak/temporal link to `exact` (real ids required) and only upgrades `temporal_contextual`
+→ `strong_contextual` under strict conditions. Validation runs also drive causal learning per
+fixture and report causal evaluable vs not_evaluable. See `DECISION_OUTCOME_LINK_REPAIR.md`,
+`LOCAL_VALIDATION_METRICS.md`.

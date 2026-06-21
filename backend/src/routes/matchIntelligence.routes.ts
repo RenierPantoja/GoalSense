@@ -89,6 +89,11 @@ import {
   buildGovernanceCalibrationReport, listGovernanceCalibrationSuggestions, listInfluenceCalibrationSuggestions,
   markSuggestionReviewed, rejectSuggestion, acceptSuggestionForFutureImplementation,
 } from '../modules/footballIntelligence/causal/governanceCalibrationReview.service.js'
+import { buildTodayValidationPlan, isLocalValidationEnabled } from '../modules/footballIntelligence/validation/localValidationPlan.service.js'
+import { runValidationForToday, runValidationForFixture, cancelValidationRun, getValidationRun, listValidationRuns } from '../modules/footballIntelligence/validation/localValidationRunner.service.js'
+import { buildProviderCoverageReport } from '../modules/footballIntelligence/validation/providerCoverageReport.service.js'
+import { buildBackendHealthReport } from '../modules/footballIntelligence/validation/localBackendHealthReport.service.js'
+import { repairLinksForFixture, repairLinksForToday } from '../modules/footballIntelligence/validation/decisionOutcomeLinkRepair.service.js'
 
 const flag = (v: unknown) => String(v).toLowerCase() === 'true'
 
@@ -824,5 +829,85 @@ export async function matchIntelligenceRoutes(app: FastifyInstance) {
   app.get(`${BASE}/fixtures/:fixtureId/post-match-explanation-v7`, async (req, reply) => {
     if (!causalGate(reply)) return
     return ok(await buildPostMatchExplanationV7(fid(req)))
+  })
+
+  // ── B49: local long-run validation ──
+  function lvGate(reply: any): boolean {
+    if (!gate(reply)) return false
+    if (!isLocalValidationEnabled()) {
+      reply.status(403).send({ success: false, error: { message: 'Local Long-Run Validation desabilitado (ENABLE_LOCAL_LONG_RUN_VALIDATION=false).', reason: 'env_gate_disabled' } })
+      return false
+    }
+    return true
+  }
+  const runIdParam = (req: any) => String((req.params as any).runId)
+  const repos2 = () => createRepositories()
+
+  app.get(`${BASE}/local-validation/plan/today`, async (_req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(await buildTodayValidationPlan())
+  })
+  app.post(`${BASE}/local-validation/run/today`, op, async (req, reply) => {
+    if (!lvGate(reply)) return
+    const run = await runValidationForToday()
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'local_validation', resourceId: run.id, metadata: { scope: 'today', selected: run.selectedFixtures } })
+    return ok(run)
+  })
+  app.post(`${BASE}/local-validation/run/fixtures/:fixtureId`, op, async (req, reply) => {
+    if (!lvGate(reply)) return
+    const run = await runValidationForFixture(fid(req))
+    void recordAdminAudit({ auth: req.auth, action: 'opportunity_action', route: req.url, method: req.method, result: 'success', resourceType: 'local_validation', resourceId: run.id, metadata: { fixtureId: fid(req) } })
+    return ok(run)
+  })
+  app.get(`${BASE}/local-validation/runs`, async (_req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(await listValidationRuns(50))
+  })
+  app.get(`${BASE}/local-validation/runs/:runId`, async (req, reply) => {
+    if (!lvGate(reply)) return
+    const r = await getValidationRun(runIdParam(req))
+    return r ? ok(r) : reply.status(404).send(badRequest('run_not_found'))
+  })
+  app.post(`${BASE}/local-validation/runs/:runId/cancel`, op, async (req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(await cancelValidationRun(runIdParam(req)))
+  })
+  app.get(`${BASE}/local-validation/runs/:runId/metrics/reliability`, async (req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(await repos2().intelligence.getLocalValidationReliabilityMetrics(runIdParam(req)).catch(() => null))
+  })
+  app.get(`${BASE}/local-validation/runs/:runId/metrics/coverage`, async (req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(await repos2().intelligence.getLocalValidationCoverageMetrics(runIdParam(req)).catch(() => null))
+  })
+  app.get(`${BASE}/local-validation/runs/:runId/metrics/cost`, async (req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(await repos2().intelligence.getLocalValidationCostMetrics(runIdParam(req)).catch(() => null))
+  })
+  app.get(`${BASE}/local-validation/runs/:runId/report/readiness`, async (req, reply) => {
+    if (!lvGate(reply)) return
+    // Readiness report is derived & not separately persisted; rebuild from summaries.
+    const summaries = await repos2().intelligence.listLocalValidationFixtureSummaries(runIdParam(req), 200).catch(() => [])
+    return ok({ runId: runIdParam(req), fixtures: summaries.length, providerNotConfiguredDomains: [...new Set(summaries.flatMap((s: any) => s.providerLimitations || []))] })
+  })
+  app.get(`${BASE}/local-validation/runs/:runId/report/go-no-go`, async (req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(await repos2().intelligence.getLocalValidationGoNoGoReport(runIdParam(req)).catch(() => null))
+  })
+  app.get(`${BASE}/local-validation/provider-coverage`, async (_req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(buildProviderCoverageReport())
+  })
+  app.get(`${BASE}/local-validation/backend-health`, async (_req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(await buildBackendHealthReport())
+  })
+  app.post(`${BASE}/local-validation/links/repair/today`, op, async (req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(await repairLinksForToday())
+  })
+  app.post(`${BASE}/local-validation/links/repair/fixtures/:fixtureId`, op, async (req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(await repairLinksForFixture(fid(req)))
   })
 }

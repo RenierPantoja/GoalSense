@@ -79,3 +79,13 @@ with human review (revisar / aceitar p/ futuro / rejeitar). Additionally, the al
 would_block/would_wait, causal classification). Causal learning is observational — never a
 probability, never auto-applied; nothing changes score/confidence/patterns/alerts/enforce.
 See `docs/CAUSAL_LEARNING_UI.md`.
+
+## B49 — Local Validation panel + final operations console
+
+The Backstage now opens with a global `LocalValidationPanel` (B49): today's validation plan
+(selection + estimated cost + risks), run controls, reliability/coverage/cost metrics,
+provider coverage and the go/no-go + backend health verdict. The selected-fixture column
+ends with the full chain (Critical Domain → Memory → Influence → Governance → Causal),
+making the Backstage the complete local operations console. Everything is observe/shadow,
+never a probability, never auto-applied. See `docs/LOCAL_VALIDATION_UI.md` and
+`docs/BACKSTAGE_FINAL_OPERATIONS.md`.

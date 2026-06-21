@@ -187,3 +187,23 @@ auto-apply (accept = future only) and require human review; it never changes sco
 confidence/patterns/alert results/enforce. See `POST_MATCH_CAUSAL_LEARNING.md`,
 `DECISION_OUTCOME_LINKER.md`, `CAUSAL_OUTCOME_CLASSIFIER.md`, `CAUSAL_INSIGHT_GENERATOR.md`,
 `GOVERNANCE_CALIBRATION_LOOP.md`, `VARIABLE_INFLUENCE_CALIBRATION.md`, `CAUSAL_LEARNING_RUNNER.md`.
+
+## B49 / Bloco 6 — Local Long-Run Validation layer (final)
+
+The fabric is closed by a local validation/hardening layer under
+`modules/footballIntelligence/validation/`:
+- `localValidation.types.ts`, `localValidationPlan.service.ts`, `localValidationRunner.service.ts`,
+  `localValidationMetrics.service.ts`, `localValidationCache.service.ts`,
+  `localLiveReevaluationBridge.service.ts`, `decisionOutcomeLinkRepair.service.ts`,
+  `providerCoverageReport.service.ts`, `localBackendHealthReport.service.ts`.
+- Routes under `/api/match-intelligence/local-validation`: `plan/today`, `run/today`,
+  `run/fixtures/:id`, `runs` (+`/:id`, `/cancel`), `runs/:id/metrics/{reliability,coverage,cost}`,
+  `runs/:id/report/{readiness,go-no-go}`, `provider-coverage`, `backend-health`,
+  `links/repair/{today,fixtures/:id}`.
+
+This measures the local backend (coverage/reliability/cost) and emits an honest go/no-go +
+backend health. Manual-first, scheduler OFF, observe/shadow, never blocks alerts, never
+enforces; a metric is not a promise of accuracy and commercial readiness is conservative.
+See `LOCAL_LONG_RUN_VALIDATION.md`, `LOCAL_VALIDATION_RUNNER.md`, `LOCAL_VALIDATION_METRICS.md`,
+`LOCAL_VALIDATION_COST_AND_CACHE.md`, `LIVE_RECHECK_BRIDGE.md`, `DECISION_OUTCOME_LINK_REPAIR.md`,
+`FINAL_BACKEND_HEALTH_REPORT.md`. This completes the 6-block roadmap (B44–B49).

@@ -185,6 +185,10 @@ import type {
   CausalLearningCase, DecisionOutcomeLink, CausalLearningInsight,
   GovernanceCalibrationSuggestion, VariableInfluenceCalibrationSuggestion, CausalLearningRun,
 } from '../modules/footballIntelligence/causal/causalLearning.types.js'
+import type {
+  LocalValidationRun, LocalValidationFixtureSummary, LocalValidationReliabilityMetrics,
+  LocalValidationCoverageMetrics, LocalValidationCostMetrics, LocalValidationGoNoGoReport, BackendHealthReport,
+} from '../modules/footballIntelligence/validation/localValidation.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -489,6 +493,24 @@ export interface IntelligenceRepository {
   createCausalLearningRun(run: CausalLearningRun): Promise<CausalLearningRun>
   updateCausalLearningRun(id: string, patch: Partial<CausalLearningRun>): Promise<{ count: number }>
   listCausalLearningRuns(limit?: number): Promise<CausalLearningRun[]>
+
+  // ── B49: local long-run validation ──────────────────────────────────────────
+  saveLocalValidationRun(run: LocalValidationRun): Promise<LocalValidationRun>
+  getLocalValidationRun(id: string): Promise<LocalValidationRun | null>
+  listLocalValidationRuns(limit?: number): Promise<LocalValidationRun[]>
+  updateLocalValidationRun(id: string, patch: Partial<LocalValidationRun>): Promise<{ count: number }>
+  saveLocalValidationFixtureSummary(s: LocalValidationFixtureSummary): Promise<LocalValidationFixtureSummary>
+  listLocalValidationFixtureSummaries(runId: string, limit?: number): Promise<LocalValidationFixtureSummary[]>
+  saveLocalValidationReliabilityMetrics(m: LocalValidationReliabilityMetrics): Promise<LocalValidationReliabilityMetrics>
+  getLocalValidationReliabilityMetrics(runId: string): Promise<LocalValidationReliabilityMetrics | null>
+  saveLocalValidationCoverageMetrics(m: LocalValidationCoverageMetrics): Promise<LocalValidationCoverageMetrics>
+  getLocalValidationCoverageMetrics(runId: string): Promise<LocalValidationCoverageMetrics | null>
+  saveLocalValidationCostMetrics(m: LocalValidationCostMetrics): Promise<LocalValidationCostMetrics>
+  getLocalValidationCostMetrics(runId: string): Promise<LocalValidationCostMetrics | null>
+  saveLocalValidationGoNoGoReport(r: LocalValidationGoNoGoReport): Promise<LocalValidationGoNoGoReport>
+  getLocalValidationGoNoGoReport(runId: string): Promise<LocalValidationGoNoGoReport | null>
+  saveBackendHealthReport(r: BackendHealthReport): Promise<BackendHealthReport>
+  getBackendHealthReport(id: string): Promise<BackendHealthReport | null>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

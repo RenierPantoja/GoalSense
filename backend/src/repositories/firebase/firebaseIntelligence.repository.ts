@@ -69,6 +69,10 @@ import type {
   CausalLearningCase, DecisionOutcomeLink, CausalLearningInsight,
   GovernanceCalibrationSuggestion, VariableInfluenceCalibrationSuggestion, CausalLearningRun,
 } from '../../modules/footballIntelligence/causal/causalLearning.types.js'
+import type {
+  LocalValidationRun, LocalValidationFixtureSummary, LocalValidationReliabilityMetrics,
+  LocalValidationCoverageMetrics, LocalValidationCostMetrics, LocalValidationGoNoGoReport, BackendHealthReport,
+} from '../../modules/footballIntelligence/validation/localValidation.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -138,6 +142,13 @@ const CAUSAL_INSIGHTS = 'causalLearningInsights'
 const CAUSAL_GOV_SUGGESTIONS = 'governanceCalibrationSuggestions'
 const CAUSAL_INF_SUGGESTIONS = 'variableInfluenceCalibrationSuggestions'
 const CAUSAL_RUNS = 'causalLearningRuns'
+const LV_RUNS = 'localValidationRuns'
+const LV_FIXTURE_SUMMARIES = 'localValidationFixtureSummaries'
+const LV_RELIABILITY = 'localValidationReliabilityMetrics'
+const LV_COVERAGE = 'localValidationCoverageMetrics'
+const LV_COST = 'localValidationCostMetrics'
+const LV_GO_NO_GO = 'localValidationGoNoGoReports'
+const LV_BACKEND_HEALTH = 'backendHealthReports'
 
 const READ_CAP = 2000
 
@@ -1398,5 +1409,59 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
   async listCausalLearningRuns(limit?: number): Promise<CausalLearningRun[]> {
     const db = await getFirestore(); const snap = await db.collection(CAUSAL_RUNS).get()
     return snap.docs.map((d: any) => docData<CausalLearningRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
+  }
+
+  // ── B49: local long-run validation ──
+  async saveLocalValidationRun(r: LocalValidationRun): Promise<LocalValidationRun> {
+    const db = await getFirestore(); await db.collection(LV_RUNS).doc(r.id).set(r, { merge: true }); return r
+  }
+  async getLocalValidationRun(id: string): Promise<LocalValidationRun | null> {
+    const db = await getFirestore(); const doc = await db.collection(LV_RUNS).doc(id).get(); return doc.exists ? docData<LocalValidationRun>(doc) : null
+  }
+  async listLocalValidationRuns(limit?: number): Promise<LocalValidationRun[]> {
+    const db = await getFirestore(); const snap = await db.collection(LV_RUNS).get()
+    return snap.docs.map((d: any) => docData<LocalValidationRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
+  }
+  async updateLocalValidationRun(id: string, patch: Partial<LocalValidationRun>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(LV_RUNS).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async saveLocalValidationFixtureSummary(s: LocalValidationFixtureSummary): Promise<LocalValidationFixtureSummary> {
+    const db = await getFirestore(); await db.collection(LV_FIXTURE_SUMMARIES).doc(s.id).set(s, { merge: true }); return s
+  }
+  async listLocalValidationFixtureSummaries(runId: string, limit?: number): Promise<LocalValidationFixtureSummary[]> {
+    const db = await getFirestore(); const snap = await db.collection(LV_FIXTURE_SUMMARIES).where('runId', '==', runId).get()
+    return snap.docs.map((d: any) => docData<LocalValidationFixtureSummary>(d)).slice(0, limit || 200)
+  }
+  async saveLocalValidationReliabilityMetrics(m: LocalValidationReliabilityMetrics): Promise<LocalValidationReliabilityMetrics> {
+    const db = await getFirestore(); await db.collection(LV_RELIABILITY).doc(m.runId).set(m, { merge: true }); return m
+  }
+  async getLocalValidationReliabilityMetrics(runId: string): Promise<LocalValidationReliabilityMetrics | null> {
+    const db = await getFirestore(); const doc = await db.collection(LV_RELIABILITY).doc(runId).get(); return doc.exists ? docData<LocalValidationReliabilityMetrics>(doc) : null
+  }
+  async saveLocalValidationCoverageMetrics(m: LocalValidationCoverageMetrics): Promise<LocalValidationCoverageMetrics> {
+    const db = await getFirestore(); await db.collection(LV_COVERAGE).doc(m.runId).set(m, { merge: true }); return m
+  }
+  async getLocalValidationCoverageMetrics(runId: string): Promise<LocalValidationCoverageMetrics | null> {
+    const db = await getFirestore(); const doc = await db.collection(LV_COVERAGE).doc(runId).get(); return doc.exists ? docData<LocalValidationCoverageMetrics>(doc) : null
+  }
+  async saveLocalValidationCostMetrics(m: LocalValidationCostMetrics): Promise<LocalValidationCostMetrics> {
+    const db = await getFirestore(); await db.collection(LV_COST).doc(m.runId).set(m, { merge: true }); return m
+  }
+  async getLocalValidationCostMetrics(runId: string): Promise<LocalValidationCostMetrics | null> {
+    const db = await getFirestore(); const doc = await db.collection(LV_COST).doc(runId).get(); return doc.exists ? docData<LocalValidationCostMetrics>(doc) : null
+  }
+  async saveLocalValidationGoNoGoReport(r: LocalValidationGoNoGoReport): Promise<LocalValidationGoNoGoReport> {
+    const db = await getFirestore(); await db.collection(LV_GO_NO_GO).doc(r.runId).set(r, { merge: true }); return r
+  }
+  async getLocalValidationGoNoGoReport(runId: string): Promise<LocalValidationGoNoGoReport | null> {
+    const db = await getFirestore(); const doc = await db.collection(LV_GO_NO_GO).doc(runId).get(); return doc.exists ? docData<LocalValidationGoNoGoReport>(doc) : null
+  }
+  async saveBackendHealthReport(r: BackendHealthReport): Promise<BackendHealthReport> {
+    const db = await getFirestore(); await db.collection(LV_BACKEND_HEALTH).doc(r.id).set(r, { merge: true }); return r
+  }
+  async getBackendHealthReport(id: string): Promise<BackendHealthReport | null> {
+    const db = await getFirestore(); const doc = await db.collection(LV_BACKEND_HEALTH).doc(id).get(); return doc.exists ? docData<BackendHealthReport>(doc) : null
   }
 }

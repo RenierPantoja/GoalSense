@@ -45,3 +45,10 @@ The B47 follow-up (governance visible outside the Backstage) is addressed by
 `AlertGovernanceBadge`, a compact read-only badge in the alert drawer showing the governance
 action, "observe · não bloqueia", would_block/would_wait and a causal classification when a
 case exists. See `docs/CAUSAL_LEARNING_UI.md`.
+
+## B49 — governance metrics in local validation
+
+Governance evaluations (wouldAllow/Monitor/Wait/Block, aligned/too-strict/too-loose) are now
+aggregated per run in the B49 Local Validation panel's reliability metrics, and the safe
+live-recheck bridge can feed live triggers into governance re-evaluation (OFF by default,
+observe-only, never alerts/blocks). See `docs/LOCAL_VALIDATION_UI.md`, `LIVE_RECHECK_BRIDGE.md`.
