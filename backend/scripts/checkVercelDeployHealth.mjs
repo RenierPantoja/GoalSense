@@ -25,9 +25,9 @@ for (const path of paths) {
   const json = await res.json().catch(() => null)
   const safeSummary = {
     ok: json?.ok === true,
-    environment: json?.environment || json?.runtime?.environment || json?.data?.runtime?.environment || 'unknown',
-    readOnly: json?.isReadOnlyControlPlane ?? json?.runtime?.readOnlyControlPlane ?? json?.data?.readOnly ?? null,
-    persistentWorkerAllowed: json?.isPersistentWorkerAllowed ?? json?.runtime?.persistentWorkerAllowed ?? json?.data?.runtime?.persistentWorkerAllowed ?? null,
+    environment: json?.environment || json?.runtime?.environment || json?.data?.runtime?.environment || (json?.data?.readOnlyControlPlane ? 'vercel_production' : 'unknown'),
+    readOnly: json?.isReadOnlyControlPlane ?? json?.runtime?.readOnlyControlPlane ?? json?.data?.readOnly ?? json?.data?.readOnlyControlPlane ?? null,
+    persistentWorkerAllowed: json?.isPersistentWorkerAllowed ?? json?.runtime?.persistentWorkerAllowed ?? json?.data?.runtime?.persistentWorkerAllowed ?? json?.data?.persistentWorkerAllowed ?? null,
   }
   console.log(`[PASS] ${path}`, JSON.stringify(safeSummary))
 }
