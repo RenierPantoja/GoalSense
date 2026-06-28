@@ -1,5 +1,8 @@
 {
   "rewrites": [
+    { "source": "/api/runtime", "destination": "/api/misc?fn=runtime" },
+    { "source": "/api/worker-control-plane/status", "destination": "/api/misc?fn=worker-control-plane-status" },
+    { "source": "/api/worker-control-plane/readiness", "destination": "/api/misc?fn=worker-control-plane-readiness" },
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/((?!api/).*)", "destination": "/" }
   ],

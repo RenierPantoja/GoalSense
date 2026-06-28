@@ -10,6 +10,8 @@ Vercel responsibilities:
 - show limitations and runtime mode;
 - block long-running worker commands unless explicitly configured otherwise.
 
+On the Vercel Hobby plan, the control-plane URLs are served through the consolidated `api/misc.ts` function via rewrites. The public URLs remain `/api/runtime`, `/api/worker-control-plane/status`, and `/api/worker-control-plane/readiness`, but they do not add extra serverless functions.
+
 Vercel does not:
 
 - start persistent ESPN Live-First workers;

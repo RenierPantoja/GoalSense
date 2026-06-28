@@ -1,4 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import {
+  detectRuntimeEnvironment,
+  explainRuntimeGuardDecision,
+  isPersistentWorkerAllowed,
+  isReadOnlyControlPlane,
+} from './_runtimeGuard.js';
+import {
+  getControlPlaneReadinessModel,
+  getControlPlaneStatusReadModel,
+} from './_workerControlPlaneReadModel.js';
 
 /**
  * Consolidated handler for less-critical endpoints.
@@ -15,6 +25,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     switch (fn) {
       case 'provider-capabilities':
         return res.status(200).json({ ok: true, providers: ['espn', 'football-data', 'api-football'] });
+
+      case 'runtime': {
+        const environment = detectRuntimeEnvironment();
+        return res.status(200).json({
+          ok: true,
+          environment,
+          isPersistentWorkerAllowed: isPersistentWorkerAllowed(),
+          isReadOnlyControlPlane: isReadOnlyControlPlane(),
+          decisions: {
+            startWorker: explainRuntimeGuardDecision('start_worker'),
+            resumeWorker: explainRuntimeGuardDecision('resume_worker'),
+            recoverySweep: explainRuntimeGuardDecision('recovery_sweep'),
+            postMatchSweeper: explainRuntimeGuardDecision('post_match_sweeper'),
+            readStatus: explainRuntimeGuardDecision('read_status'),
+          },
+          limitations: isReadOnlyControlPlane()
+            ? ['Vercel is a read-only control plane; persistent ESPN Live-First workers run locally or in a dedicated runtime.']
+            : ['Worker commands require an explicit local_worker runtime and safety flags.'],
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      case 'worker-control-plane-status':
+        return res.status(200).json({ ok: true, data: await getControlPlaneStatusReadModel() });
+
+      case 'worker-control-plane-readiness':
+        return res.status(200).json({ ok: true, data: await getControlPlaneReadinessModel() });
 
       case 'team-logo-resolver': {
         const name = getQuery('name');

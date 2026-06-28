@@ -19,12 +19,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     const data = await resp.json()
 
-    return res.status(500).json({
+    res.setHeader("Cache-Control", "public, max-age=3600")
+    return res.status(200).json({
       ok: true,
       source: "football_data",
       fetchedAt: new Date().toISOString(),
       competitions: data.competitions || [],
-    }, { headers: { "Cache-Control": "public, max-age=3600" } })
+    })
   } catch (err: any) {
     return res.status(200).json({ ok: false, message: err.message })
   }
