@@ -36,6 +36,14 @@ node scripts/runControlPlaneE2EDrill.mjs --duration 10 --max-fixtures 2 --poll 4
 
 The drill confirms Vercel read-only status, local worker persistence, control-plane freshness, and daily-report visibility.
 
+If the Vercel panel remains empty, run:
+
+```bash
+node scripts/checkVercelFirebaseControlPlane.mjs https://goal-sense.vercel.app
+```
+
+`missing_firebase_env` means the Vercel project needs the Firebase Web envs configured in Production.
+
 Safety:
 
 - no odds;

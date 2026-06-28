@@ -16,6 +16,10 @@ On the Vercel Hobby plan, the control-plane URLs are served through the consolid
 
 The control plane exposes freshness and lag diagnostics for local worker data persisted to Firebase. Use `node scripts/runControlPlaneE2EDrill.mjs` from `backend` to validate Local Worker -> Firebase -> Vercel Control Plane visibility without invoking any worker command from Vercel.
 
+## B63 Firebase Public Env Wiring
+
+Vercel requires `VITE_FIREBASE_PROJECT_ID` and `VITE_FIREBASE_API_KEY` to read Firestore through the read-only control plane. Missing env is reported as `missing_firebase_env` and is distinct from `empty_firestore`.
+
 Vercel does not:
 
 - start persistent ESPN Live-First workers;

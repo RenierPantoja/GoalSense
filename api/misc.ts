@@ -9,6 +9,8 @@ import {
   getControlPlaneReadinessModel,
   getControlPlaneStatusReadModel,
 } from './_workerControlPlaneReadModel.js';
+import { buildFirebaseEnvSafeSummary } from './_firebaseControlPlaneEnv.js';
+import { buildControlPlaneFirebaseReadReport } from './_firebaseControlPlaneReadDiagnostic.js';
 
 /**
  * Consolidated handler for less-critical endpoints.
@@ -41,6 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             postMatchSweeper: explainRuntimeGuardDecision('post_match_sweeper'),
             readStatus: explainRuntimeGuardDecision('read_status'),
           },
+          firebaseEnv: buildFirebaseEnvSafeSummary(),
           limitations: isReadOnlyControlPlane()
             ? ['Vercel is a read-only control plane; persistent ESPN Live-First workers run locally or in a dedicated runtime.']
             : ['Worker commands require an explicit local_worker runtime and safety flags.'],
@@ -55,6 +58,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       case 'worker-control-plane-readiness':
         res.setHeader('Cache-Control', 'no-store, max-age=0');
         return res.status(200).json({ ok: true, data: await getControlPlaneReadinessModel() });
+
+      case 'worker-control-plane-firebase-env':
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
+        return res.status(200).json({
+          ok: true,
+          readOnly: true,
+          generatedAt: new Date().toISOString(),
+          data: buildFirebaseEnvSafeSummary(),
+        });
+
+      case 'worker-control-plane-firebase-read-diagnostic':
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
+        return res.status(200).json({
+          ok: true,
+          readOnly: true,
+          generatedAt: new Date().toISOString(),
+          data: await buildControlPlaneFirebaseReadReport(),
+        });
 
       case 'team-logo-resolver': {
         const name = getQuery('name');

@@ -11,6 +11,8 @@ import {
   getControlPlaneDashboardSummary,
   getControlPlaneReadiness,
 } from '../modules/runtime/workerControlPlaneReadModel.service.js'
+import { buildFirebaseEnvSafeSummary } from '../modules/runtime/firebaseControlPlaneEnv.service.js'
+import { buildControlPlaneFirebaseReadReport } from '../modules/runtime/firebaseControlPlaneReadDiagnostic.service.js'
 
 export async function healthRoutes(app: FastifyInstance) {
   app.get('/health', async () => {
@@ -42,6 +44,7 @@ export async function healthRoutes(app: FastifyInstance) {
         startWorker: explainRuntimeGuardDecision('start_worker'),
         readStatus: explainRuntimeGuardDecision('read_status'),
       },
+      firebaseEnv: buildFirebaseEnvSafeSummary(),
       limitations: isReadOnlyControlPlane()
         ? ['This runtime is a read-only control plane for persistent worker operations.']
         : ['Persistent worker commands require local_worker runtime and safety flags.'],
@@ -57,5 +60,25 @@ export async function healthRoutes(app: FastifyInstance) {
   app.get('/worker-control-plane/readiness', async (_req, reply) => {
     reply.header('Cache-Control', 'no-store, max-age=0')
     return getControlPlaneReadiness()
+  })
+
+  app.get('/worker-control-plane/firebase-env', async (_req, reply) => {
+    reply.header('Cache-Control', 'no-store, max-age=0')
+    return {
+      ok: true,
+      readOnly: true,
+      generatedAt: new Date().toISOString(),
+      data: buildFirebaseEnvSafeSummary(),
+    }
+  })
+
+  app.get('/worker-control-plane/firebase-read-diagnostic', async (_req, reply) => {
+    reply.header('Cache-Control', 'no-store, max-age=0')
+    return {
+      ok: true,
+      readOnly: true,
+      generatedAt: new Date().toISOString(),
+      data: await buildControlPlaneFirebaseReadReport(),
+    }
   })
 }

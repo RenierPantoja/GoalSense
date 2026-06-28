@@ -8,3 +8,5 @@ Use production Vercel as a visual control plane:
 4. Use Backstage to inspect runtime, freshness, sessions, leases, reports, and causal cases.
 
 Do not use Vercel to start persistent workers or long polling loops.
+
+B63 requires Firebase Web envs in Vercel Production before the hosted panel can see persisted worker state. Missing env is shown explicitly and is not treated as empty data.

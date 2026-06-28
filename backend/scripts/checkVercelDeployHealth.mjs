@@ -9,6 +9,8 @@ if (!base) {
 const paths = [
   '/api/health',
   '/api/runtime',
+  '/api/worker-control-plane/firebase-env',
+  '/api/worker-control-plane/firebase-read-diagnostic',
   '/api/worker-control-plane/status',
   '/api/worker-control-plane/readiness',
 ]
@@ -28,6 +30,8 @@ for (const path of paths) {
     environment: json?.environment || json?.runtime?.environment || json?.data?.runtime?.environment || (json?.data?.readOnlyControlPlane ? 'vercel_production' : 'unknown'),
     readOnly: json?.isReadOnlyControlPlane ?? json?.runtime?.readOnlyControlPlane ?? json?.data?.readOnly ?? json?.data?.readOnlyControlPlane ?? null,
     persistentWorkerAllowed: json?.isPersistentWorkerAllowed ?? json?.runtime?.persistentWorkerAllowed ?? json?.data?.runtime?.persistentWorkerAllowed ?? json?.data?.persistentWorkerAllowed ?? null,
+    firebaseEnvStatus: json?.data?.status || json?.data?.env?.status || json?.data?.firebaseEnv?.status || undefined,
+    firebaseReadStatus: json?.data?.freshnessStatus || json?.data?.firebaseReadDiagnostic?.freshnessStatus || undefined,
   }
   console.log(`[PASS] ${path}`, JSON.stringify(safeSummary))
 }

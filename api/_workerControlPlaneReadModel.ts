@@ -4,6 +4,8 @@ import {
   isPersistentWorkerAllowed,
   isReadOnlyControlPlane,
 } from './_runtimeGuard.js';
+import { getFirebaseControlPlaneEnvStatus } from './_firebaseControlPlaneEnv.js';
+import { buildControlPlaneFirebaseReadReport } from './_firebaseControlPlaneReadDiagnostic.js';
 
 type FirestoreValue = { stringValue?: string; integerValue?: string; doubleValue?: number; booleanValue?: boolean; nullValue?: null; arrayValue?: { values?: FirestoreValue[] }; mapValue?: { fields?: Record<string, FirestoreValue> } };
 
@@ -111,6 +113,7 @@ async function listCollection(collection: string, orderField: string, limit: num
 }
 
 export async function getControlPlaneStatusReadModel() {
+  const firebaseEnv = getFirebaseControlPlaneEnvStatus();
   const [runs, sessions, leases, recoveryReports, outcomes, reports, fixtureStates] = await Promise.all([
     listCollection('espnLiveFirstWorkerRuns', 'startedAt', 20),
     listCollection('liveMonitoringSessions', 'startedAt', 50),
@@ -132,6 +135,9 @@ export async function getControlPlaneStatusReadModel() {
     reports: reports.items,
     outcomes: outcomes.items,
   });
+  const firebaseReadDiagnostic = await buildControlPlaneFirebaseReadReport();
+  const missingEnv = firebaseEnv.requiredMissing.length > 0;
+  const emptyFirestore = !missingEnv && firebaseReadDiagnostic.freshnessStatus === 'empty_firestore';
 
   return {
     generatedAt: new Date().toISOString(),
@@ -142,6 +148,15 @@ export async function getControlPlaneStatusReadModel() {
       persistentWorkerAllowed: isPersistentWorkerAllowed(),
     },
     readOnly: isReadOnlyControlPlane(),
+    firebaseEnv,
+    firebaseReadDiagnostic,
+    controlPlaneDataState: missingEnv
+      ? 'missing_firebase_env'
+      : firebaseReadDiagnostic.permissionDenied
+        ? 'firebase_permission_denied'
+        : emptyFirestore
+          ? 'empty_firestore'
+          : freshness.freshnessStatus,
     active: null,
     workerRuns: runs.items,
     runs: runs.items,
@@ -172,6 +187,9 @@ export async function getControlPlaneStatusReadModel() {
     limitations: [
       'Vercel control-plane read model is read-only and never starts persistent workers.',
       'No odds, Telegram, auto-bet, stake, or enforce changes.',
+      ...(missingEnv ? ['missing_firebase_env'] : []),
+      ...(firebaseReadDiagnostic.permissionDenied ? ['firebase_permission_denied'] : []),
+      ...(emptyFirestore ? ['empty_firestore'] : []),
       ...limitations,
     ],
   };
@@ -187,6 +205,9 @@ export async function getControlPlaneReadinessModel() {
     workerCommandAllowed: !status.readOnly,
     persistentWorkerAllowed: status.runtime.persistentWorkerAllowed,
     readOnlyControlPlane: status.readOnly,
+    firebaseEnv: status.firebaseEnv,
+    firebaseReadDiagnostic: status.firebaseReadDiagnostic,
+    controlPlaneDataState: status.controlPlaneDataState,
     freshness: status.freshness,
     controlPlaneFreshnessStatus: status.freshness.freshnessStatus,
     controlPlaneLagMs: status.freshness.lagMs,

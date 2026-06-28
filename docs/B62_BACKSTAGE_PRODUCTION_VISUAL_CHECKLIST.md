@@ -14,3 +14,4 @@
 - No component suggests stake or auto-bet.
 - No component promises accuracy.
 - No frontend component calculates pattern, event, governance, outcome, or probability.
+- Missing Firebase env is shown separately from empty Firestore and stale data.

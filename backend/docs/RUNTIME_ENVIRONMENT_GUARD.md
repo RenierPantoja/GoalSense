@@ -18,6 +18,8 @@ Environment flags:
 
 B62 confirms Vercel production remains read-only during E2E drills. Status/readiness reads are allowed; persistent worker commands remain blocked.
 
+B63 keeps the same command boundary while adding Firebase public env diagnostics.
+
 Rules:
 
 - Vercel preview/production blocks persistent worker commands by default.

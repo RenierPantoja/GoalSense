@@ -3,6 +3,8 @@
     { "source": "/api/runtime", "destination": "/api/misc?fn=runtime" },
     { "source": "/api/worker-control-plane/status", "destination": "/api/misc?fn=worker-control-plane-status" },
     { "source": "/api/worker-control-plane/readiness", "destination": "/api/misc?fn=worker-control-plane-readiness" },
+    { "source": "/api/worker-control-plane/firebase-env", "destination": "/api/misc?fn=worker-control-plane-firebase-env" },
+    { "source": "/api/worker-control-plane/firebase-read-diagnostic", "destination": "/api/misc?fn=worker-control-plane-firebase-read-diagnostic" },
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/((?!api/).*)", "destination": "/" }
   ],

@@ -11,3 +11,5 @@ node scripts/runControlPlaneE2EDrill.mjs --duration 10 --max-fixtures 2 --poll 4
 The script checks Vercel health/runtime/status/readiness, confirms read-only command blocking, starts the local worker, polls local and Vercel status, stops the worker gracefully, runs recovery/post-match/daily report, and prints a safe summary.
 
 It never starts worker commands from Vercel and never prints secrets.
+
+If Vercel reports `missing_firebase_env`, complete B63 env wiring before expecting worker/session visibility from the hosted control plane.

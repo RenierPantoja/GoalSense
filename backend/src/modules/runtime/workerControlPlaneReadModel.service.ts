@@ -6,6 +6,8 @@ import {
   isReadOnlyControlPlane,
 } from './runtimeEnvironmentGuard.service.js'
 import { buildWorkerControlPlaneFreshness } from './workerControlPlaneFreshness.service.js'
+import { buildFirebaseEnvSafeSummary } from './firebaseControlPlaneEnv.service.js'
+import { buildControlPlaneFirebaseReadReport } from './firebaseControlPlaneReadDiagnostic.service.js'
 
 export async function getLatestWorkerStatusReadModel() {
   const repos = createRepositories()
@@ -32,6 +34,9 @@ export async function getLatestWorkerStatusReadModel() {
     causalCases: postMatchOutcomes,
     expectedUpdateSeconds: Math.max(30, runs[0]?.pollIntervalSeconds ?? 90),
   })
+  const firebaseEnv = buildFirebaseEnvSafeSummary()
+  const firebaseReadDiagnostic = await buildControlPlaneFirebaseReadReport()
+  const missingEnv = firebaseEnv.requiredMissing.length > 0
 
   return {
     generatedAt: new Date().toISOString(),
@@ -39,6 +44,15 @@ export async function getLatestWorkerStatusReadModel() {
     runtime: detectRuntimeEnvironment(),
     readOnly: isReadOnlyControlPlane(),
     persistentWorkerAllowed: isPersistentWorkerAllowed(),
+    firebaseEnv,
+    firebaseReadDiagnostic,
+    controlPlaneDataState: missingEnv
+      ? 'missing_firebase_env'
+      : firebaseReadDiagnostic.permissionDenied
+        ? 'firebase_permission_denied'
+        : firebaseReadDiagnostic.freshnessStatus === 'empty_firestore'
+          ? 'empty_firestore'
+          : freshness.freshnessStatus,
     workerRuns: runs,
     runs,
     activeSessions: sessions.filter(session => session.status === 'running'),
@@ -63,6 +77,7 @@ export async function getLatestWorkerStatusReadModel() {
     limitations: [
       'Read-only control-plane model; does not start workers or long polling loops.',
       'No odds, Telegram, auto-bet, stake, or enforce changes.',
+      ...(missingEnv ? ['missing_firebase_env'] : []),
     ],
   }
 }
@@ -122,6 +137,9 @@ export async function getControlPlaneReadiness() {
     workerCommandAllowed: !status.readOnly,
     persistentWorkerAllowed: status.persistentWorkerAllowed,
     readOnlyControlPlane: status.readOnly,
+    firebaseEnv: status.firebaseEnv,
+    firebaseReadDiagnostic: status.firebaseReadDiagnostic,
+    controlPlaneDataState: status.controlPlaneDataState,
     latestWorkerRunVisibleFromControlPlane: status.workerRuns.length > 0,
     latestCausalCasesVisibleFromControlPlane: status.latestCausalCases.length > 0,
     latestDailyReportVisibleFromControlPlane: !!status.latestDailyReport,

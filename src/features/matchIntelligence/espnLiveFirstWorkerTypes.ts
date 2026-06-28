@@ -37,6 +37,34 @@ export interface EspnLiveFirstWorkerStatusDto {
   sessions: Array<{ id: string; status: string; fixtureIds: string[]; snapshotsCaptured: number; liveRechecks: number; limitations: string[] }>
   leases: EspnLiveFirstLeaseDto[]
   fixtureStates?: Array<{ id: string; sessionId: string; fixtureId: string; lastSnapshotAt?: string | null; snapshotCount?: number; updatedAt?: string }>
+  controlPlaneDataState?: 'missing_firebase_env' | 'firebase_permission_denied' | 'empty_firestore' | 'fresh' | 'slightly_stale' | 'stale' | 'empty' | 'unknown'
+  firebaseEnv?: {
+    projectIdPresent: boolean
+    apiKeyPresent: boolean
+    authDomainPresent: boolean
+    appIdPresent: boolean
+    requiredMissing: string[]
+    optionalMissing: string[]
+    firebaseReadableUnknown: boolean
+    firebaseReadable: boolean | null
+    status: string
+    limitations: string[]
+  }
+  firebaseReadDiagnostic?: {
+    firebaseEnvValid: boolean
+    firebaseInitialized: boolean
+    workerRunsReadable: boolean
+    sessionsReadable: boolean
+    leasesReadable: boolean
+    dailyReportsReadable: boolean
+    causalCasesReadable: boolean
+    permissionDenied: boolean
+    missingIndex: boolean
+    emptyCollections: string[]
+    lastErrorSafe: string | null
+    freshnessStatus: string
+    limitations: string[]
+  }
   recoveryReports: Array<{ id: string; generatedAt: string; orphanedSessionsFound: number; recoveredSessions: string[]; closedSessions: string[]; limitations: string[] }>
   postMatchOutcomes: Array<{ fixtureId: string; sessionId: string; evaluable: boolean; reason: string; snapshotCount: number; limitations: string[] }>
   freshness?: {

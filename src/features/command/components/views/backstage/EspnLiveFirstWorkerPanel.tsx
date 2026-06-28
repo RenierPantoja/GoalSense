@@ -44,6 +44,18 @@ export function EspnLiveFirstWorkerPanel({ isAdmin }: { isAdmin: boolean }) {
   const selectedRun = useMemo(() => latestRunnableRun(status?.runs ?? []), [status])
   const readOnlyControlPlane = !!(status?.readOnly || status?.runtime?.readOnlyControlPlane)
   const freshnessStatus = status?.freshness?.freshnessStatus ?? 'unknown'
+  const dataState = status?.controlPlaneDataState ?? freshnessStatus
+  const stateMessage = dataState === 'missing_firebase_env'
+    ? `Configuração Firebase pública ausente no Vercel: ${(status?.firebaseEnv?.requiredMissing ?? []).join(', ') || 'VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_API_KEY'}.`
+    : dataState === 'firebase_permission_denied'
+      ? 'Firebase respondeu permission-denied. Verifique rules do control plane.'
+      : dataState === 'empty_firestore'
+        ? 'Firebase conectado, mas nenhuma sessão/report foi encontrado.'
+        : dataState === 'stale' || dataState === 'slightly_stale'
+          ? (status?.freshness?.staleReasons[0] ?? 'Último worker/report está antigo.')
+          : dataState === 'fresh'
+            ? 'Control Plane atualizado.'
+            : status?.freshness?.staleReasons[0] ?? null
   const runtimeLabel = status?.runtime?.environment === 'vercel_production'
     ? 'Vercel Control Plane'
     : status?.runtime?.environment === 'vercel_preview'
@@ -93,9 +105,9 @@ export function EspnLiveFirstWorkerPanel({ isAdmin }: { isAdmin: boolean }) {
         <Stat label="post-match pend." value={status?.postMatchPending ?? 0} />
       </div>
 
-      {status?.freshness && status.freshness.freshnessStatus !== 'fresh' && (
+      {stateMessage && dataState !== 'fresh' && (
         <p className="mt-3 rounded-lg border border-amber-400/15 bg-amber-500/[0.04] px-3 py-2 text-[10.5px] text-amber-100/70">
-          Freshness {status.freshness.freshnessStatus}: {status.freshness.staleReasons[0] ?? 'sem worker ativo recente; isso não é falha.'}
+          {dataState}: {stateMessage}
         </p>
       )}
 
