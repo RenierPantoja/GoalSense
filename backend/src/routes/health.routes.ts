@@ -30,7 +30,8 @@ export async function healthRoutes(app: FastifyInstance) {
     }
   })
 
-  app.get('/runtime', async () => {
+  app.get('/runtime', async (_req, reply) => {
+    reply.header('Cache-Control', 'no-store, max-age=0')
     const environment = detectRuntimeEnvironment()
     return {
       ok: true,
@@ -48,7 +49,13 @@ export async function healthRoutes(app: FastifyInstance) {
     }
   })
 
-  app.get('/worker-control-plane/status', async () => getControlPlaneDashboardSummary())
+  app.get('/worker-control-plane/status', async (_req, reply) => {
+    reply.header('Cache-Control', 'no-store, max-age=0')
+    return getControlPlaneDashboardSummary()
+  })
 
-  app.get('/worker-control-plane/readiness', async () => getControlPlaneReadiness())
+  app.get('/worker-control-plane/readiness', async (_req, reply) => {
+    reply.header('Cache-Control', 'no-store, max-age=0')
+    return getControlPlaneReadiness()
+  })
 }

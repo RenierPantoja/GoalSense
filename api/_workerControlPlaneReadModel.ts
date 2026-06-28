@@ -26,6 +26,72 @@ function docData(doc: any) {
   return { id: String(doc?.name || '').split('/').pop() || data.id, ...data };
 }
 
+function latestIso(values: Array<string | null | undefined>): string | null {
+  return values
+    .filter((value): value is string => !!value && !Number.isNaN(new Date(value).getTime()))
+    .sort()
+    .at(-1) || null;
+}
+
+function ageMs(value: string | null, now = new Date()): number | null {
+  if (!value) return null;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? null : Math.max(0, now.getTime() - parsed);
+}
+
+function buildFreshness(params: {
+  runs: any[];
+  sessions: any[];
+  fixtureStates: any[];
+  reports: any[];
+  outcomes: any[];
+}) {
+  const latestWorkerHeartbeatAt = latestIso(params.runs.map(run => run.heartbeatAt || run.updatedAt));
+  const latestSessionUpdatedAt = latestIso(params.sessions.map(session => session.updatedAt || session.startedAt));
+  const latestSnapshotAt = latestIso(params.fixtureStates.map(state => state.lastSnapshotAt || state.updatedAt));
+  const latestDailyReportAt = latestIso(params.reports.map(report => report.generatedAt || report.date));
+  const latestCausalCaseAt = latestIso(params.outcomes.map(outcome => outcome.createdAt));
+  const operationalLatest = latestIso([latestWorkerHeartbeatAt, latestSessionUpdatedAt, latestSnapshotAt]);
+  const anyData = !!latestIso([operationalLatest, latestDailyReportAt, latestCausalCaseAt]);
+  const expectedUpdateSeconds = Math.max(30, Number(params.runs[0]?.pollIntervalSeconds || 90));
+  const lagMs = ageMs(operationalLatest);
+  const staleReasons: string[] = [];
+  let freshnessStatus: 'fresh' | 'slightly_stale' | 'stale' | 'empty' | 'unknown' = 'unknown';
+
+  if (!anyData) {
+    freshnessStatus = 'empty';
+    staleReasons.push('No persisted worker/session/report data is visible to the control plane.');
+  } else if (lagMs === null) {
+    freshnessStatus = 'stale';
+    staleReasons.push('No recent worker heartbeat, session update, or snapshot is visible.');
+  } else if (lagMs <= expectedUpdateSeconds * 1000 * 2) {
+    freshnessStatus = 'fresh';
+  } else if (lagMs <= expectedUpdateSeconds * 1000 * 6) {
+    freshnessStatus = 'slightly_stale';
+    staleReasons.push('Latest operational update is delayed beyond the expected polling window.');
+  } else {
+    freshnessStatus = 'stale';
+    staleReasons.push('Latest operational update is old; treat active worker state as stale until refreshed.');
+  }
+
+  return {
+    latestWorkerHeartbeatAt,
+    latestSessionUpdatedAt,
+    latestSnapshotAt,
+    latestDailyReportAt,
+    latestCausalCaseAt,
+    freshnessStatus,
+    staleReasons,
+    nextExpectedUpdate: operationalLatest ? new Date(new Date(operationalLatest).getTime() + expectedUpdateSeconds * 1000).toISOString() : null,
+    lagMs,
+    limitations: [
+      'Freshness describes control-plane visibility only; it is not a prediction or accuracy signal.',
+      'No active worker is not a failure by itself.',
+      'Vercel observes persisted state and does not run worker loops.',
+    ],
+  };
+}
+
 async function listCollection(collection: string, orderField: string, limit: number) {
   const projectId = process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
   const apiKey = process.env.VITE_FIREBASE_API_KEY;
@@ -45,22 +111,31 @@ async function listCollection(collection: string, orderField: string, limit: num
 }
 
 export async function getControlPlaneStatusReadModel() {
-  const [runs, sessions, leases, recoveryReports, outcomes, reports] = await Promise.all([
+  const [runs, sessions, leases, recoveryReports, outcomes, reports, fixtureStates] = await Promise.all([
     listCollection('espnLiveFirstWorkerRuns', 'startedAt', 20),
     listCollection('liveMonitoringSessions', 'startedAt', 50),
     listCollection('espnLiveFirstFixtureLeases', 'heartbeatAt', 200),
     listCollection('espnLiveFirstRecoveryReports', 'generatedAt', 10),
     listCollection('liveFirstPostMatchOutcomes', 'createdAt', 50),
     listCollection('dailyValidationReports', 'generatedAt', 5),
+    listCollection('liveMonitoringFixtureStates', 'updatedAt', 200),
   ]);
-  const limitations = [runs, sessions, leases, recoveryReports, outcomes, reports]
+  const limitations = [runs, sessions, leases, recoveryReports, outcomes, reports, fixtureStates]
     .map(result => result.limitation)
     .filter(Boolean) as string[];
   const activeLeases = leases.items.filter((lease: any) => lease.status === 'active');
   const completedOutcomes = outcomes.items.filter((outcome: any) => outcome.evaluable);
+  const freshness = buildFreshness({
+    runs: runs.items,
+    sessions: sessions.items,
+    fixtureStates: fixtureStates.items,
+    reports: reports.items,
+    outcomes: outcomes.items,
+  });
 
   return {
     generatedAt: new Date().toISOString(),
+    source: 'vercel_control_plane_firestore_rest',
     runtime: {
       environment: detectRuntimeEnvironment(),
       readOnlyControlPlane: isReadOnlyControlPlane(),
@@ -72,8 +147,10 @@ export async function getControlPlaneStatusReadModel() {
     runs: runs.items,
     sessions: sessions.items,
     leases: leases.items,
+    fixtureStates: fixtureStates.items,
     recoveryReports: recoveryReports.items,
     postMatchOutcomes: outcomes.items,
+    freshness,
     latestDailyReport: reports.items[0] || null,
     latestCausalCases: outcomes.items.slice(0, 20),
     latestRecoveryReport: recoveryReports.items[0] || null,
@@ -110,6 +187,9 @@ export async function getControlPlaneReadinessModel() {
     workerCommandAllowed: !status.readOnly,
     persistentWorkerAllowed: status.runtime.persistentWorkerAllowed,
     readOnlyControlPlane: status.readOnly,
+    freshness: status.freshness,
+    controlPlaneFreshnessStatus: status.freshness.freshnessStatus,
+    controlPlaneLagMs: status.freshness.lagMs,
     latestWorkerRunVisibleFromControlPlane: status.workerRuns.length > 0,
     latestDailyReportVisibleFromControlPlane: !!status.latestDailyReport,
     latestCausalCasesVisibleFromControlPlane: status.latestCausalCases.length > 0,

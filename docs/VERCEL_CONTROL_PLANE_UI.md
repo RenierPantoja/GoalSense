@@ -16,3 +16,5 @@ In local worker/runtime:
 - long worker windows must be run outside Vercel.
 
 The UI is a renderer/control plane, not the worker runtime.
+
+B62 adds freshness display and production visual checklist coverage. The UI remains a display layer and does not compute patterns, events, governance, outcomes, or probability.

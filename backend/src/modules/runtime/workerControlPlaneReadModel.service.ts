@@ -5,6 +5,7 @@ import {
   isPersistentWorkerAllowed,
   isReadOnlyControlPlane,
 } from './runtimeEnvironmentGuard.service.js'
+import { buildWorkerControlPlaneFreshness } from './workerControlPlaneFreshness.service.js'
 
 export async function getLatestWorkerStatusReadModel() {
   const repos = createRepositories()
@@ -18,17 +19,34 @@ export async function getLatestWorkerStatusReadModel() {
   ])
   const activeLeases = leases.filter(lease => lease.status === 'active')
   const completedOutcomes = postMatchOutcomes.filter(outcome => outcome.evaluable)
+  const recentSessionIds = sessions.slice(0, 20).map(session => session.id)
+  const fixtureStatesNested = await Promise.all(
+    recentSessionIds.map(sessionId => repos.intelligence.listLiveMonitoringFixtureStates(sessionId, 50).catch(() => [])),
+  )
+  const fixtureStates = fixtureStatesNested.flat()
+  const freshness = buildWorkerControlPlaneFreshness({
+    workerRuns: runs,
+    sessions,
+    fixtureStates,
+    dailyReports,
+    causalCases: postMatchOutcomes,
+    expectedUpdateSeconds: Math.max(30, runs[0]?.pollIntervalSeconds ?? 90),
+  })
 
   return {
     generatedAt: new Date().toISOString(),
+    source: 'backend_control_plane_read_model',
     runtime: detectRuntimeEnvironment(),
     readOnly: isReadOnlyControlPlane(),
     persistentWorkerAllowed: isPersistentWorkerAllowed(),
     workerRuns: runs,
+    runs,
     activeSessions: sessions.filter(session => session.status === 'running'),
     sessions,
     leases,
+    fixtureStates,
     activeLeases,
+    freshness,
     latestDailyReport: dailyReports[0] ?? null,
     latestCausalCases: postMatchOutcomes.slice(0, 20),
     latestRecoveryReport: recoveryReports[0] ?? null,

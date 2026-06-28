@@ -26,3 +26,5 @@ Blocked response shape:
 The gate never logs tokens, API keys, Firebase service accounts, or private keys.
 
 The gate does not enable enforce, odds, Telegram, auto-bet, or stake.
+
+B62 adds E2E verification that hosted control-plane freshness/status reads do not enable start/resume/recovery/post-match worker commands.

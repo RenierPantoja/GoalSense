@@ -43,6 +43,7 @@ export function EspnLiveFirstWorkerPanel({ isAdmin }: { isAdmin: boolean }) {
 
   const selectedRun = useMemo(() => latestRunnableRun(status?.runs ?? []), [status])
   const readOnlyControlPlane = !!(status?.readOnly || status?.runtime?.readOnlyControlPlane)
+  const freshnessStatus = status?.freshness?.freshnessStatus ?? 'unknown'
   const runtimeLabel = status?.runtime?.environment === 'vercel_production'
     ? 'Vercel Control Plane'
     : status?.runtime?.environment === 'vercel_preview'
@@ -86,10 +87,17 @@ export function EspnLiveFirstWorkerPanel({ isAdmin }: { isAdmin: boolean }) {
         <Stat label="fixtures" value={status?.fixturesActive ?? 0} />
         <Stat label="snapshots" value={selectedRun?.snapshotsCaptured ?? 0} />
         <Stat label="heartbeat" value={selectedRun?.heartbeatAt ? new Date(selectedRun.heartbeatAt).toLocaleTimeString() : 'n/a'} />
+        <Stat label="freshness" value={freshnessStatus} />
         <Stat label="rechecks" value={selectedRun?.rechecksTriggered ?? 0} />
         <Stat label="órfãs" value={status?.orphanSessions ?? 0} />
         <Stat label="post-match pend." value={status?.postMatchPending ?? 0} />
       </div>
+
+      {status?.freshness && status.freshness.freshnessStatus !== 'fresh' && (
+        <p className="mt-3 rounded-lg border border-amber-400/15 bg-amber-500/[0.04] px-3 py-2 text-[10.5px] text-amber-100/70">
+          Freshness {status.freshness.freshnessStatus}: {status.freshness.staleReasons[0] ?? 'sem worker ativo recente; isso não é falha.'}
+        </p>
+      )}
 
       {isAdmin && (
         <div className="mt-3 flex flex-wrap gap-2">

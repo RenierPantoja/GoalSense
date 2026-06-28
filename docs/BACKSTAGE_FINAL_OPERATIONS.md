@@ -46,3 +46,7 @@ Backstage includes a local ESPN Live-First worker panel for status, active lease
 # B61 Vercel-Safe Control Plane
 
 When Backstage is opened from Vercel, it acts as a control plane. It can render status, sessions, leases, reports, recovery summaries, and causal cases. Long-running worker actions are disabled in the UI and blocked by the backend runtime guard.
+
+# B62 Control Plane Freshness
+
+Backstage production should show worker freshness, heartbeat visibility, stale/empty state, and limitations. Stale/empty data is not treated as failure and never becomes invented active state.

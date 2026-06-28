@@ -18,6 +18,7 @@ import {
   isReadOnlyControlPlane,
   isPersistentWorkerAllowed,
 } from '../../runtime/runtimeEnvironmentGuard.service.js'
+import { buildWorkerControlPlaneFreshness } from '../../runtime/workerControlPlaneFreshness.service.js'
 
 function todayStr(date = new Date()): string { return date.toISOString().slice(0, 10) }
 
@@ -51,6 +52,10 @@ export async function generateDailyValidationReport(date: string = todayStr()): 
     repos.intelligence.listEspnLiveFirstRecoveryReports(200).catch(() => []),
     repos.intelligence.listLiveFirstPostMatchOutcomes(500).catch(() => []),
   ])
+  const fixtureStatesNested = await Promise.all(
+    liveSessionsAll.slice(0, 20).map(session => repos.intelligence.listLiveMonitoringFixtureStates(session.id, 50).catch(() => [])),
+  )
+  const fixtureStatesAll = fixtureStatesNested.flat()
   const workerRuns = workerRunsAll.filter(r => (r.startedAt || '').slice(0, 10) === date)
   const liveSessions = liveSessionsAll.filter(s => (s.startedAt || '').slice(0, 10) === date)
   const recoveryReports = recoveryReportsAll.filter(r => (r.generatedAt || '').slice(0, 10) === date)
@@ -75,6 +80,14 @@ export async function generateDailyValidationReport(date: string = todayStr()): 
   const readOnlyControlPlane = isReadOnlyControlPlane()
   const latestWorkerRunVisibleFromControlPlane = workerRunsAll.length > 0
   const latestCausalCasesVisibleFromControlPlane = postMatchOutcomesAll.length > 0
+  const controlPlaneFreshness = buildWorkerControlPlaneFreshness({
+    workerRuns: workerRunsAll,
+    sessions: liveSessionsAll,
+    fixtureStates: fixtureStatesAll,
+    dailyReports: [],
+    causalCases: postMatchOutcomesAll,
+    expectedUpdateSeconds: Math.max(30, workerRunsAll[0]?.pollIntervalSeconds ?? 90),
+  })
 
   const fixturesPlanned = dayRuns.reduce((s, r) => s + (r.selectedFixtures + r.skippedFixtures), 0)
   const fixturesAnalyzed = reliability?.fixturesAnalyzed ?? dayRuns.reduce((s, r) => s + r.selectedFixtures, 0)
@@ -121,7 +134,19 @@ export async function generateDailyValidationReport(date: string = todayStr()): 
     readOnlyControlPlane,
     workerCommandsBlockedInVercel: true,
     latestWorkerRunVisibleFromControlPlane,
+    controlPlaneDrillRun: process.env.CONTROL_PLANE_DRILL_RUN === 'true',
+    controlPlaneUrl: process.env.CONTROL_PLANE_URL || 'https://goal-sense.vercel.app',
+    controlPlaneRuntime: readOnlyControlPlane ? runtimeEnvironment : 'vercel_control_plane_observed_externally',
+    localWorkerRuntime: isPersistentWorkerAllowed() ? runtimeEnvironment : 'local_worker_required',
+    controlPlaneReadOnly: readOnlyControlPlane,
+    workerCommandsBlocked: true,
+    localWorkerRunVisibleFromVercel: latestWorkerRunVisibleFromControlPlane,
+    latestHeartbeatVisibleFromVercel: !!controlPlaneFreshness.latestWorkerHeartbeatAt,
+    latestDailyReportVisibleFromVercel: false,
     latestCausalCasesVisibleFromControlPlane,
+    controlPlaneFreshnessStatus: controlPlaneFreshness.freshnessStatus,
+    controlPlaneLagMs: controlPlaneFreshness.lagMs,
+    controlPlaneLimitations: controlPlaneFreshness.limitations,
     notEvaluableSummary: { causalNotEvaluable: reliability?.causalCasesNotEvaluable ?? 0, fixturesWithoutData: (fixturesAnalyzed - (reliability?.fixturesWithSufficientData ?? 0)) },
     providerLimitations: coverageReport.domainsBlockedByEnv,
     dataLimitations: coverageReport.domainsBlockedByDocs,

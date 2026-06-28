@@ -39,7 +39,19 @@ export interface DailyValidationReportDto {
   readOnlyControlPlane: boolean
   workerCommandsBlockedInVercel: boolean
   latestWorkerRunVisibleFromControlPlane: boolean
+  controlPlaneDrillRun?: boolean
+  controlPlaneUrl?: string
+  controlPlaneRuntime?: string
+  localWorkerRuntime?: string
+  controlPlaneReadOnly?: boolean
+  workerCommandsBlocked?: boolean
+  localWorkerRunVisibleFromVercel?: boolean
+  latestHeartbeatVisibleFromVercel?: boolean
+  latestDailyReportVisibleFromVercel?: boolean
   latestCausalCasesVisibleFromControlPlane: boolean
+  controlPlaneFreshnessStatus?: string
+  controlPlaneLagMs?: number | null
+  controlPlaneLimitations?: string[]
   notEvaluableSummary: { causalNotEvaluable: number; fixturesWithoutData: number }
   providerLimitations: string[]
   dataLimitations: string[]

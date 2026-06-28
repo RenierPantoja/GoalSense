@@ -28,6 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       case 'runtime': {
         const environment = detectRuntimeEnvironment();
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
         return res.status(200).json({
           ok: true,
           environment,
@@ -48,9 +49,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       case 'worker-control-plane-status':
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
         return res.status(200).json({ ok: true, data: await getControlPlaneStatusReadModel() });
 
       case 'worker-control-plane-readiness':
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
         return res.status(200).json({ ok: true, data: await getControlPlaneReadinessModel() });
 
       case 'team-logo-resolver': {

@@ -27,3 +27,7 @@ Daily reports now include ESPN Live-First worker metrics: worker runs, completed
 # B61 Deploy Context
 
 Daily reports now also include control-plane environment, worker runtime environment, deployed commit, deploy health, read-only control-plane status, whether worker commands are blocked in Vercel, and whether latest worker/causal data is visible from the control plane.
+
+# B62 Control Plane Drill Context
+
+Daily reports now include control-plane drill fields: URL, runtime, read-only status, command blocking, local worker visibility from Vercel, heartbeat visibility, daily-report visibility, causal-case visibility, freshness status, lag, and limitations.

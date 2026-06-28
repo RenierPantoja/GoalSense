@@ -16,6 +16,8 @@ Environment flags:
 - `ENABLE_VERCEL_WORKER_COMMANDS=false`
 - `ENABLE_LOCAL_WORKER_COMMANDS=true`
 
+B62 confirms Vercel production remains read-only during E2E drills. Status/readiness reads are allowed; persistent worker commands remain blocked.
+
 Rules:
 
 - Vercel preview/production blocks persistent worker commands by default.

@@ -28,6 +28,14 @@ curl https://goal-sense.vercel.app/api/worker-control-plane/status
 curl https://goal-sense.vercel.app/api/worker-control-plane/readiness
 ```
 
+B62 drill:
+
+```bash
+node scripts/runControlPlaneE2EDrill.mjs --duration 10 --max-fixtures 2 --poll 45
+```
+
+The drill confirms Vercel read-only status, local worker persistence, control-plane freshness, and daily-report visibility.
+
 Safety:
 
 - no odds;

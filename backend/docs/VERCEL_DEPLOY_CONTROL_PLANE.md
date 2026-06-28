@@ -12,6 +12,10 @@ Vercel responsibilities:
 
 On the Vercel Hobby plan, the control-plane URLs are served through the consolidated `api/misc.ts` function via rewrites. The public URLs remain `/api/runtime`, `/api/worker-control-plane/status`, and `/api/worker-control-plane/readiness`, but they do not add extra serverless functions.
 
+## B62 E2E Drill
+
+The control plane exposes freshness and lag diagnostics for local worker data persisted to Firebase. Use `node scripts/runControlPlaneE2EDrill.mjs` from `backend` to validate Local Worker -> Firebase -> Vercel Control Plane visibility without invoking any worker command from Vercel.
+
 Vercel does not:
 
 - start persistent ESPN Live-First workers;
