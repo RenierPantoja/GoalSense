@@ -108,15 +108,20 @@ try {
 const recoveryResult = await recovery.runRecoverySweep().catch(error => ({ success: false, error: error?.message || 'recovery failed' }))
 const postMatchResult = await sweeper.runPostMatchSweeper().catch(error => ({ success: false, error: error?.message || 'post-match failed' }))
 const report = await daily.generateDailyValidationReport().catch(error => ({ error: error?.message || 'daily report failed' }))
+const finalLocalStatus = await readModel.getControlPlaneDashboardSummary()
 const finalControlStatus = await fetchControlPlane('/api/worker-control-plane/status')
 const finalReadiness = await fetchControlPlane('/api/worker-control-plane/readiness')
+const finalControlRuns = finalControlStatus.data?.workerRuns || finalControlStatus.data?.runs || []
+const localWorkerPersisted = !!workerRunId && finalLocalStatus.workerRuns.some(run => run.id === workerRunId)
+const localWorkerRunVisibleFromVercel = !!workerRunId && finalControlRuns.some(run => run.id === workerRunId)
 
 const latestComparison = comparisons.at(-1)?.comparison || null
 const summary = {
   generatedAt: new Date().toISOString(),
   localWorkerWrote: !!workerRunId,
   workerRunId,
-  firebasePersisted: (finalControlStatus.data?.workerRuns?.length ?? 0) > 0,
+  localWorkerPersisted,
+  localWorkerRunVisibleFromVercel,
   vercelRead: finalControlStatus.ok,
   freshness: finalControlStatus.data?.freshness || null,
   blockedCommands: preflight.commandsBlocked,
