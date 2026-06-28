@@ -23,7 +23,7 @@ for (const path of paths) {
   const summary = {
     ok: body?.ok === true,
     noStore: String(response.headers.get('cache-control') || '').includes('no-store'),
-    readOnly: data?.readOnly ?? data?.readOnlyControlPlane ?? data?.runtime?.readOnlyControlPlane ?? data?.isReadOnlyControlPlane ?? null,
+    readOnly: body?.readOnly ?? data?.readOnly ?? data?.readOnlyControlPlane ?? data?.runtime?.readOnlyControlPlane ?? data?.isReadOnlyControlPlane ?? null,
     persistentWorkerAllowed: data?.persistentWorkerAllowed ?? data?.runtime?.persistentWorkerAllowed ?? data?.isPersistentWorkerAllowed ?? null,
     firebaseEnvValid: data?.firebaseEnvValid ?? (data?.status ? data.status === 'valid' : data?.firebaseEnv?.status === 'valid'),
     firebaseEnvStatus: data?.status || data?.env?.status || data?.firebaseEnv?.status || null,
