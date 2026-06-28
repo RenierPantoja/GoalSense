@@ -41,5 +41,12 @@ export interface EspnLiveFirstWorkerStatusDto {
   orphanSessions: number
   completedFixtures: number
   postMatchPending: number
+  readOnly?: boolean
+  runtime?: {
+    environment: string
+    readOnlyControlPlane: boolean
+    persistentWorkerAllowed: boolean
+  }
+  commandGuard?: Record<string, unknown>
   limitations: string[]
 }

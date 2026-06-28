@@ -36,3 +36,7 @@ Firebase collections:
 - `liveFirstPostMatchOutcomes`
 
 The Noop repository keeps B59 state only in process memory for smoke tests and local Prisma mode. It is not crash-resumable and must not be treated as a real distributed lock.
+
+## B61 Vercel Boundary
+
+The persistent worker must not run inside Vercel serverless functions. Vercel is a read-only control plane for status, readiness, reports, and UI rendering. Start/resume/recovery/post-match write commands belong to a local or dedicated worker runtime guarded by `GOALSENSE_RUNTIME=local_worker`.

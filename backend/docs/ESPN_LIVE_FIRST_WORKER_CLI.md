@@ -19,3 +19,7 @@ node scripts/smokeEspnLiveFirstPersistentWorker.mjs
 ```
 
 The CLI prints operational IDs and summaries only. It must not print API keys, tokens, Firebase service accounts, Telegram tokens, odds keys, or raw secrets.
+
+## B61 Control Plane Split
+
+Use these CLI scripts from the local/dedicated worker runtime. Do not run long ESPN Live-First sessions from Vercel. Hosted Backstage may show status and instructions, but worker commands are blocked in Vercel by the runtime guard.

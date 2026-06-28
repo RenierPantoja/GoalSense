@@ -103,6 +103,12 @@ import {
 } from '../modules/footballIntelligence/live/espnLiveFirstPersistentWorker.service.js'
 import { runRecoverySweep } from '../modules/footballIntelligence/live/espnLiveFirstRecovery.service.js'
 import { runPostMatchSweeper } from '../modules/footballIntelligence/live/espnLiveFirstPostMatchSweeper.service.js'
+import { assertWorkerCommandAllowed } from '../modules/runtime/workerCommandSafetyGate.service.js'
+import {
+  detectRuntimeEnvironment,
+  isPersistentWorkerAllowed,
+  isReadOnlyControlPlane,
+} from '../modules/runtime/runtimeEnvironmentGuard.service.js'
 
 const flag = (v: unknown) => String(v).toLowerCase() === 'true'
 
@@ -985,11 +991,18 @@ export async function matchIntelligenceRoutes(app: FastifyInstance) {
       orphanSessions: recoveryReports[0]?.orphanedSessionsFound ?? 0,
       completedFixtures: outcomes.filter(o => o.evaluable).length,
       postMatchPending: Math.max(0, sessions.filter(s => s.status === 'completed' || s.status === 'completed_with_warnings').reduce((sum, s) => sum + s.fixtureIds.length, 0) - outcomes.length),
+      runtime: {
+        environment: detectRuntimeEnvironment(),
+        readOnlyControlPlane: isReadOnlyControlPlane(),
+        persistentWorkerAllowed: isPersistentWorkerAllowed(),
+      },
       limitations: ['Local-only worker control; no odds, Telegram, auto-bet, stake, or enforce changes.'],
     })
   })
   app.post(`${BASE}/espn-live-first/worker/start`, op, async (req, reply) => {
     if (!lvGate(reply)) return
+    const safety = assertWorkerCommandAllowed('start_worker', { actor: req.auth })
+    if (!safety.allowed) return reply.status(403).send({ success: false, ...safety.response })
     const body = (req.body || {}) as any
     return ok(await startWorkerRun({
       mode: body.mode || 'local_manual',
@@ -1000,10 +1013,14 @@ export async function matchIntelligenceRoutes(app: FastifyInstance) {
   })
   app.post(`${BASE}/espn-live-first/worker/:workerRunId/stop`, op, async (req, reply) => {
     if (!lvGate(reply)) return
+    const safety = assertWorkerCommandAllowed('stop_worker', { actor: req.auth })
+    if (!safety.allowed) return reply.status(403).send({ success: false, ...safety.response })
     return ok(await stopWorkerRun(String((req.params as any).workerRunId)))
   })
   app.post(`${BASE}/espn-live-first/worker/:workerRunId/resume`, op, async (req, reply) => {
     if (!lvGate(reply)) return
+    const safety = assertWorkerCommandAllowed('resume_worker', { actor: req.auth })
+    if (!safety.allowed) return reply.status(403).send({ success: false, ...safety.response })
     return ok(await resumeWorkerRun(String((req.params as any).workerRunId)))
   })
   app.get(`${BASE}/espn-live-first/worker/:workerRunId/summary`, async (req, reply) => {
@@ -1013,10 +1030,14 @@ export async function matchIntelligenceRoutes(app: FastifyInstance) {
   })
   app.post(`${BASE}/espn-live-first/recovery-sweep`, op, async (_req, reply) => {
     if (!lvGate(reply)) return
+    const safety = assertWorkerCommandAllowed('recovery_sweep')
+    if (!safety.allowed) return reply.status(403).send({ success: false, ...safety.response })
     return ok(await runRecoverySweep())
   })
   app.post(`${BASE}/espn-live-first/post-match-sweeper`, op, async (_req, reply) => {
     if (!lvGate(reply)) return
+    const safety = assertWorkerCommandAllowed('post_match_sweeper')
+    if (!safety.allowed) return reply.status(403).send({ success: false, ...safety.response })
     return ok(await runPostMatchSweeper())
   })
 }

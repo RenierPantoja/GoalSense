@@ -227,6 +227,10 @@ const envSchema = z.object({
   ESPN_LIVE_FIRST_MAX_FIXTURES: z.coerce.number().default(5),
   ESPN_LIVE_FIRST_MAX_SESSION_MINUTES: z.coerce.number().default(180),
   ESPN_LIVE_FIRST_STOP_ON_FULL_TIME: z.string().default('true'),
+  // B61: Vercel control plane / local worker split.
+  GOALSENSE_RUNTIME: z.enum(['vercel_control_plane', 'local_worker', 'local_dev']).optional(),
+  ENABLE_VERCEL_WORKER_COMMANDS: z.string().default('false'),
+  ENABLE_LOCAL_WORKER_COMMANDS: z.string().default('true'),
 }).superRefine((val, ctx) => {
   // Conditional validation by persistence provider
   if (val.PERSISTENCE_PROVIDER === 'prisma') {

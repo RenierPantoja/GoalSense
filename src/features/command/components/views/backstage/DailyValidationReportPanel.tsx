@@ -41,6 +41,11 @@ export function DailyValidationReportPanel({ isAdmin }: { isAdmin: boolean }) {
       {!report ? <p className="text-[11px] text-white/40">Sem relatório do dia. {isAdmin ? 'Gere após rodar a validação.' : 'Aguardando geração.'}</p> : (
         <div className="space-y-1 text-[10.5px] text-white/60">
           <p className="text-[11px] text-white/80 font-medium">{report.date} · saúde {report.backendHealth} · go/no-go {report.goNoGo}</p>
+          {(report.controlPlaneEnvironment || report.workerRuntimeEnvironment) && (
+            <p className="text-[10.5px] text-cyan-100/65">
+              control plane: {report.controlPlaneEnvironment || 'unknown'} · worker runtime: {report.workerRuntimeEnvironment || 'unknown'} · read-only: {report.readOnlyControlPlane ? 'sim' : 'não'}
+            </p>
+          )}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
             <span>planejadas: {report.fixturesPlanned}</span>
             <span>analisadas: {report.fixturesAnalyzed}</span>
@@ -57,6 +62,8 @@ export function DailyValidationReportPanel({ isAdmin }: { isAdmin: boolean }) {
             <span>post-match pend.: {report.liveFirstPendingPostMatch}</span>
             <span>órfãs recup.: {report.orphanSessionsRecovered}</span>
             <span>snap/FT: {report.averageSnapshotsPerCompletedFixture}</span>
+            <span>worker visível: {report.latestWorkerRunVisibleFromControlPlane ? 'sim' : 'não'}</span>
+            <span>cases visíveis: {report.latestCausalCasesVisibleFromControlPlane ? 'sim' : 'não'}</span>
           </div>
           {report.providerLimitations.length > 0 && <p className="text-amber-100/70">limitação provider (≠ falha): {report.providerLimitations.join(', ')}</p>}
           {report.recommendedActions.slice(0, 3).map((a, i) => <p key={i} className="text-sky-200/60">→ {a}</p>)}

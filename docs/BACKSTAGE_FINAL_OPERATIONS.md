@@ -42,3 +42,7 @@ re-evaluate governance automatically during live matches without ever alerting/b
 # B59 ESPN Live-First Worker Panel
 
 Backstage includes a local ESPN Live-First worker panel for status, active leases, sessions, orphan recovery, and post-match sweeping. It does not expose odds, stake, Telegram delivery, or enforce controls.
+
+# B61 Vercel-Safe Control Plane
+
+When Backstage is opened from Vercel, it acts as a control plane. It can render status, sessions, leases, reports, recovery summaries, and causal cases. Long-running worker actions are disabled in the UI and blocked by the backend runtime guard.

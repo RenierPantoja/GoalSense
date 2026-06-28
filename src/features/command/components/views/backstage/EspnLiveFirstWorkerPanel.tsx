@@ -16,6 +16,13 @@ function latestRunnableRun(runs: EspnLiveFirstWorkerRunDto[]): EspnLiveFirstWork
   return runs.find(run => run.status === 'running' || run.status === 'paused' || run.status === 'recovered') ?? runs[0] ?? null
 }
 
+async function fetchControlPlaneStatus(): Promise<EspnLiveFirstWorkerStatusDto | null> {
+  const response = await fetch('/api/worker-control-plane/status', { cache: 'no-store' }).catch(() => null)
+  if (!response?.ok) return null
+  const body = await response.json().catch(() => null)
+  return body?.data ?? null
+}
+
 export function EspnLiveFirstWorkerPanel({ isAdmin }: { isAdmin: boolean }) {
   const [status, setStatus] = useState<EspnLiveFirstWorkerStatusDto | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -26,11 +33,25 @@ export function EspnLiveFirstWorkerPanel({ isAdmin }: { isAdmin: boolean }) {
     const response = await localValidationApi.getEspnLiveFirstWorkerStatus()
     if (response.reason === 'env_gate' || response.status === 403) { setDisabled(true); return }
     if (response.ok && response.data) setStatus(response.data)
+    else if (response.reason === 'no_backend' || response.reason === 'network') {
+      const controlPlaneStatus = await fetchControlPlaneStatus()
+      if (controlPlaneStatus) setStatus(controlPlaneStatus)
+    }
   }, [])
 
   useEffect(() => { void load() }, [load])
 
   const selectedRun = useMemo(() => latestRunnableRun(status?.runs ?? []), [status])
+  const readOnlyControlPlane = !!(status?.readOnly || status?.runtime?.readOnlyControlPlane)
+  const runtimeLabel = status?.runtime?.environment === 'vercel_production'
+    ? 'Vercel Control Plane'
+    : status?.runtime?.environment === 'vercel_preview'
+      ? 'Vercel Preview'
+      : status?.runtime?.environment === 'local_worker'
+        ? 'Local Worker'
+        : status?.runtime?.environment === 'local_dev'
+          ? 'Local Dev'
+          : 'Unknown'
 
   const runAction = async (name: string, action: () => Promise<{ ok?: boolean; data?: unknown; error?: string | null } | void>) => {
     setBusy(name)
@@ -49,6 +70,9 @@ export function EspnLiveFirstWorkerPanel({ isAdmin }: { isAdmin: boolean }) {
       <div className="mb-3 flex items-center gap-2">
         <Activity size={14} className="text-[#7FE9DC]" />
         <h4 className="flex-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">ESPN Live-First worker persistente</h4>
+        <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${readOnlyControlPlane ? 'border-cyan-400/20 bg-cyan-500/10 text-cyan-200/80' : 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200/80'}`}>
+          {runtimeLabel}
+        </span>
         <button type="button" onClick={() => void runAction('refresh', load)} disabled={busy !== null} className={buttonClass} title="Refresh status">
           <RefreshCw size={12} />Refresh
         </button>
@@ -69,22 +93,28 @@ export function EspnLiveFirstWorkerPanel({ isAdmin }: { isAdmin: boolean }) {
 
       {isAdmin && (
         <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" className={buttonClass} disabled={busy !== null} onClick={() => void runAction('start', () => localValidationApi.startEspnLiveFirstWorker({ maxDurationMinutes: 180, maxFixtures: 5, pollIntervalSeconds: 45 }))}>
+          <button type="button" className={buttonClass} disabled={busy !== null || readOnlyControlPlane} onClick={() => void runAction('start', () => localValidationApi.startEspnLiveFirstWorker({ maxDurationMinutes: 180, maxFixtures: 5, pollIntervalSeconds: 45 }))}>
             <Play size={12} />Start
           </button>
-          <button type="button" className={buttonClass} disabled={busy !== null || !selectedRun} onClick={() => selectedRun && void runAction('stop', () => localValidationApi.stopEspnLiveFirstWorker(selectedRun.id))}>
+          <button type="button" className={buttonClass} disabled={busy !== null || !selectedRun || readOnlyControlPlane} onClick={() => selectedRun && void runAction('stop', () => localValidationApi.stopEspnLiveFirstWorker(selectedRun.id))}>
             <Square size={12} />Stop
           </button>
-          <button type="button" className={buttonClass} disabled={busy !== null || !selectedRun} onClick={() => selectedRun && void runAction('resume', () => localValidationApi.resumeEspnLiveFirstWorker(selectedRun.id))}>
+          <button type="button" className={buttonClass} disabled={busy !== null || !selectedRun || readOnlyControlPlane} onClick={() => selectedRun && void runAction('resume', () => localValidationApi.resumeEspnLiveFirstWorker(selectedRun.id))}>
             <RotateCcw size={12} />Resume
           </button>
-          <button type="button" className={buttonClass} disabled={busy !== null} onClick={() => void runAction('recovery', localValidationApi.runEspnLiveFirstRecoverySweep)}>
+          <button type="button" className={buttonClass} disabled={busy !== null || readOnlyControlPlane} onClick={() => void runAction('recovery', localValidationApi.runEspnLiveFirstRecoverySweep)}>
             <TimerReset size={12} />Recovery
           </button>
-          <button type="button" className={buttonClass} disabled={busy !== null} onClick={() => void runAction('post-match', localValidationApi.runEspnLiveFirstPostMatchSweeper)}>
+          <button type="button" className={buttonClass} disabled={busy !== null || readOnlyControlPlane} onClick={() => void runAction('post-match', localValidationApi.runEspnLiveFirstPostMatchSweeper)}>
             <SearchCheck size={12} />Post-match
           </button>
         </div>
+      )}
+
+      {readOnlyControlPlane && (
+        <p className="mt-3 rounded-lg border border-cyan-400/15 bg-cyan-500/[0.04] px-3 py-2 text-[10.5px] text-cyan-100/70">
+          Control plane hospedado: comandos longos ficam bloqueados aqui. Use o CLI local/dedicado para start, recovery e post-match sweeper.
+        </p>
       )}
 
       {selectedRun && (

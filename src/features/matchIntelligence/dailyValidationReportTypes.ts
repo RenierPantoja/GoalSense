@@ -32,6 +32,14 @@ export interface DailyValidationReportDto {
   liveFirstNotEvaluableReasons: Record<string, number>
   averageSessionDurationMinutes: number
   averageSnapshotsPerCompletedFixture: number
+  controlPlaneEnvironment: string
+  workerRuntimeEnvironment: string
+  deployedCommit: string
+  deployHealth: string
+  readOnlyControlPlane: boolean
+  workerCommandsBlockedInVercel: boolean
+  latestWorkerRunVisibleFromControlPlane: boolean
+  latestCausalCasesVisibleFromControlPlane: boolean
   notEvaluableSummary: { causalNotEvaluable: number; fixturesWithoutData: number }
   providerLimitations: string[]
   dataLimitations: string[]

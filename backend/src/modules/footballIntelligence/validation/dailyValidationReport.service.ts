@@ -13,6 +13,11 @@ import type { DailyValidationReport } from './validationCampaign.types.js'
 import type {
   LocalValidationRun, LocalValidationReliabilityMetrics, LocalValidationCoverageMetrics, LocalValidationCostMetrics, LocalValidationGoNoGoReport,
 } from './localValidation.types.js'
+import {
+  detectRuntimeEnvironment,
+  isReadOnlyControlPlane,
+  isPersistentWorkerAllowed,
+} from '../../runtime/runtimeEnvironmentGuard.service.js'
 
 function todayStr(date = new Date()): string { return date.toISOString().slice(0, 10) }
 
@@ -66,6 +71,10 @@ export async function generateDailyValidationReport(date: string = todayStr()): 
   const averageSnapshotsPerCompletedFixture = completedOutcomes.length
     ? Math.round(postMatchOutcomes.reduce((sum, outcome) => sum + outcome.snapshotCount, 0) / completedOutcomes.length)
     : 0
+  const runtimeEnvironment = detectRuntimeEnvironment()
+  const readOnlyControlPlane = isReadOnlyControlPlane()
+  const latestWorkerRunVisibleFromControlPlane = workerRunsAll.length > 0
+  const latestCausalCasesVisibleFromControlPlane = postMatchOutcomesAll.length > 0
 
   const fixturesPlanned = dayRuns.reduce((s, r) => s + (r.selectedFixtures + r.skippedFixtures), 0)
   const fixturesAnalyzed = reliability?.fixturesAnalyzed ?? dayRuns.reduce((s, r) => s + r.selectedFixtures, 0)
@@ -105,6 +114,14 @@ export async function generateDailyValidationReport(date: string = todayStr()): 
     liveFirstNotEvaluableReasons: notEvaluableReasons,
     averageSessionDurationMinutes,
     averageSnapshotsPerCompletedFixture,
+    controlPlaneEnvironment: readOnlyControlPlane ? runtimeEnvironment : 'local_or_dedicated_backend',
+    workerRuntimeEnvironment: isPersistentWorkerAllowed() ? runtimeEnvironment : 'local_worker_required',
+    deployedCommit: process.env.VERCEL_GIT_COMMIT_SHA || process.env.BUILD_VERSION || 'unknown',
+    deployHealth: 'control_plane_read_model_available',
+    readOnlyControlPlane,
+    workerCommandsBlockedInVercel: true,
+    latestWorkerRunVisibleFromControlPlane,
+    latestCausalCasesVisibleFromControlPlane,
     notEvaluableSummary: { causalNotEvaluable: reliability?.causalCasesNotEvaluable ?? 0, fixturesWithoutData: (fixturesAnalyzed - (reliability?.fixturesWithSufficientData ?? 0)) },
     providerLimitations: coverageReport.domainsBlockedByEnv,
     dataLimitations: coverageReport.domainsBlockedByDocs,
