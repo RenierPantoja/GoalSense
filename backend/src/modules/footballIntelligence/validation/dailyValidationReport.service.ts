@@ -40,6 +40,33 @@ export async function generateDailyValidationReport(date: string = todayStr()): 
     ])
   }
 
+  const [workerRunsAll, liveSessionsAll, recoveryReportsAll, postMatchOutcomesAll] = await Promise.all([
+    repos.intelligence.listEspnLiveFirstWorkerRuns({ limit: 500 }).catch(() => []),
+    repos.intelligence.listLiveMonitoringSessions(500).catch(() => []),
+    repos.intelligence.listEspnLiveFirstRecoveryReports(200).catch(() => []),
+    repos.intelligence.listLiveFirstPostMatchOutcomes(500).catch(() => []),
+  ])
+  const workerRuns = workerRunsAll.filter(r => (r.startedAt || '').slice(0, 10) === date)
+  const liveSessions = liveSessionsAll.filter(s => (s.startedAt || '').slice(0, 10) === date)
+  const recoveryReports = recoveryReportsAll.filter(r => (r.generatedAt || '').slice(0, 10) === date)
+  const postMatchOutcomes = postMatchOutcomesAll.filter(o => (o.createdAt || '').slice(0, 10) === date)
+  const completedSessions = liveSessions.filter(s => s.status === 'completed' || s.status === 'completed_with_warnings')
+  const completedOutcomes = postMatchOutcomes.filter(o => o.finalStatus && o.finalStatus !== 'unknown')
+  const evaluableOutcomes = postMatchOutcomes.filter(o => o.evaluable)
+  const notEvaluableReasons = postMatchOutcomes.reduce<Record<string, number>>((acc, outcome) => {
+    if (!outcome.evaluable) acc[outcome.reason] = (acc[outcome.reason] || 0) + 1
+    return acc
+  }, {})
+  const sessionDurations = completedSessions
+    .filter(s => s.endedAt)
+    .map(s => Math.max(0, (new Date(s.endedAt as string).getTime() - new Date(s.startedAt).getTime()) / 60000))
+  const averageSessionDurationMinutes = sessionDurations.length
+    ? Math.round(sessionDurations.reduce((sum, value) => sum + value, 0) / sessionDurations.length)
+    : 0
+  const averageSnapshotsPerCompletedFixture = completedOutcomes.length
+    ? Math.round(postMatchOutcomes.reduce((sum, outcome) => sum + outcome.snapshotCount, 0) / completedOutcomes.length)
+    : 0
+
   const fixturesPlanned = dayRuns.reduce((s, r) => s + (r.selectedFixtures + r.skippedFixtures), 0)
   const fixturesAnalyzed = reliability?.fixturesAnalyzed ?? dayRuns.reduce((s, r) => s + r.selectedFixtures, 0)
   const fixturesSkipped = dayRuns.reduce((s, r) => s + r.skippedFixtures, 0)
@@ -67,6 +94,17 @@ export async function generateDailyValidationReport(date: string = todayStr()): 
     },
     holdsSummary: { created: reliability?.holdsCreated ?? 0, rechecked: reliability?.holdsRechecked ?? 0 },
     causalSummary: { created: reliability?.causalCasesCreated ?? 0, evaluable: reliability?.causalCasesEvaluable ?? 0, notEvaluable: reliability?.causalCasesNotEvaluable ?? 0 },
+    workerRuns: workerRuns.length,
+    workerSessionsCompleted: completedSessions.length,
+    orphanSessionsDetected: recoveryReports.reduce((sum, report) => sum + report.orphanedSessionsFound, 0),
+    orphanSessionsRecovered: recoveryReports.reduce((sum, report) => sum + report.recoveredSessions.length, 0),
+    postMatchSweeperRuns: postMatchOutcomes.length > 0 ? 1 : 0,
+    liveFirstCompletedFixtures: completedOutcomes.length,
+    liveFirstPendingPostMatch: Math.max(0, completedSessions.reduce((sum, session) => sum + session.fixtureIds.length, 0) - postMatchOutcomes.length),
+    liveFirstEvaluableCases: evaluableOutcomes.length,
+    liveFirstNotEvaluableReasons: notEvaluableReasons,
+    averageSessionDurationMinutes,
+    averageSnapshotsPerCompletedFixture,
     notEvaluableSummary: { causalNotEvaluable: reliability?.causalCasesNotEvaluable ?? 0, fixturesWithoutData: (fixturesAnalyzed - (reliability?.fixturesWithSufficientData ?? 0)) },
     providerLimitations: coverageReport.domainsBlockedByEnv,
     dataLimitations: coverageReport.domainsBlockedByDocs,

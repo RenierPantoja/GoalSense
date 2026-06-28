@@ -13,6 +13,8 @@ export interface ValidationCampaignDto {
   aggregateMetrics: {
     fixturesAnalyzed: number; fixturesWithData: number; governanceEvaluations: number
     causalEvaluable: number; causalNotEvaluable: number; providerLimitedFixtures: number
+    liveMonitoringHours: number; completedLiveFirstFixtures: number; evaluableLiveFirstCases: number
+    orphanRecoveryCount: number; postMatchSweeperCount: number
   }
   blockers: string[]
   warnings: string[]

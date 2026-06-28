@@ -20,22 +20,16 @@ import { getBackendUrl, setBackendUrl } from '@/services/commandBackendClient'
 import { usePatternWriteThrough } from '@/services/usePatternWriteThrough'
 import { useAlertWriteThrough } from '@/services/useAlertWriteThrough'
 import { useBackendPerformance } from '@/services/useBackendPerformance'
-import { useBackendAlertsMirror, compareLocalAndBackendAlerts } from '@/services/useBackendAlertsMirror'
+import { useBackendAlertsMirror, compareLocalAndBackendAlerts, type BackendAlertView } from '@/services/useBackendAlertsMirror'
 import { mergeLocalAndBackendAlerts } from '@/services/hybridAlertMerge'
 import { useTelegramIntegration } from '@/services/useTelegramIntegration'
 import { usePatterns } from './contexts/PatternContext'
-import { evaluateAllPatterns } from './intelligence/patternEvaluator'
-import { applyPrecisionChecks } from './intelligence/patternPrecisionEngine'
-import { validateAutoDiscoveryCandidate, buildAutoDiscoveryCandidate } from './intelligence/autoDiscoveryPrecisionGate'
-import { isDuplicateAlert } from './intelligence/alertDuplicateGuard'
-import { extractEspnTimedEvents, type CommandTimedEvent } from './intelligence/commandTimedEvents'
-import { feedScoreCacheFromEvents } from '@/lib/liveScoreCache'
-import { runAutoDiscovery } from './intelligence/autoDiscoveryEngine'
-import { resolveAlert } from './intelligence/patternResolutionEngine'
+import type { CommandTimedEvent } from './intelligence/commandTimedEvents'
 import { recordScopeEntities } from '@/services/intelligence/scopeKnowledgeBase'
 import { isLiveFx, detectChanges, type ChangeEvent } from './commandHelpers'
 import { getCommandCenterPollingInterval } from '@/lib/liveFreshness'
 import type { Pattern, FixtureStatsForPattern, ScannerEntry } from './types/commandTypes'
+import type { PatternHit } from './types/commandTypes'
 import type { AutoOpportunityPromotionPlanDto, AutoOpportunityDto } from './intelligence/autoEngineTypes'
 import { useCommandAlertNotifications } from '@/features/notifications/useCommandAlertNotifications'
 import { CockpitView } from './components/views/cockpit/CockpitView'
@@ -49,6 +43,21 @@ import { BackstageLocalPage } from './components/views/backstage/BackstageLocalP
 import { TelegramConfigPanel } from './components/telegram/TelegramConfigPanel'
 
 type Tab = 'cockpit' | 'patterns' | 'scanner' | 'alerts' | 'performance' | 'backtest' | 'autoengine' | 'backstage'
+
+const COMMAND_CENTER_BACKEND_ONLY = true
+
+function severityFromBackendAlert(alert: BackendAlertView): PatternHit['severity'] {
+  if (alert.signalState === 'ready_to_alert' || alert.confidence >= 80) return 'critical'
+  if (alert.signalState === 'strong_candidate' || alert.confidence >= 50) return 'attention'
+  return 'info'
+}
+
+function priorityFromConfidence(confidence: number): ScannerEntry['priority'] {
+  if (confidence >= 75) return 'critical'
+  if (confidence >= 50) return 'attention'
+  if (confidence >= 35) return 'watch'
+  return 'low'
+}
 
 export function CommandCenterPage() {
   const navigate = useNavigate()
@@ -73,13 +82,11 @@ export function CommandCenterPage() {
   const { isFavoriteTeam } = useFavorites()
   const { enabledCount, registerCommandAlert, updateCommandAlertStatus, commandAlerts } = useAlerts()
   const { isAdvanced } = useViewMode()
-  const { patterns, templates, createPattern, createFromTemplate, updatePattern, togglePattern, deletePattern, getActivePatterns, triggeredAlerts, triggerAlert, getRecentTriggered, resolveExpired, discoveryConfig, updateDiscoveryConfig, activePatternCount, triggeredTodayCount } = usePatterns()
+  const { patterns, templates, createPattern, createFromTemplate, updatePattern, togglePattern, deletePattern, triggeredAlerts, getRecentTriggered, discoveryConfig, updateDiscoveryConfig, activePatternCount, triggeredTodayCount } = usePatterns()
   const backendSync = useBackendSync(patterns)
-  // Backend-only mode: when on AND a backend is configured, the local client
-  // engine stops generating/persisting alerts — the backend Pattern Worker
-  // becomes the sole source of truth. Local evaluation still feeds the
-  // Scanner/Cockpit as a live preview, but no local alerts are written.
-  const delegateToBackend = backendOnly && backendSync.enabled
+  // Backend-only mode: the backend mirror is the sole source of truth for
+  // Command Center signals and alerts. The frontend only renders.
+  const delegateToBackend = COMMAND_CENTER_BACKEND_ONLY
   const toggleBackendOnly = useCallback(() => {
     setBackendOnlyState(prev => { const next = !prev; setBackendOnly(next); return next })
   }, [])
@@ -92,7 +99,7 @@ export function CommandCenterPage() {
   const disconnectBackend = useCallback(() => {
     setBackendUrl('')
     setBackendUrlInput('')
-    setBackendOnlyState(false); setBackendOnly(false)
+    setBackendOnlyState(true); setBackendOnly(true)
     setTimeout(() => { backendSync.refreshBackendHealth() }, 0)
   }, [backendSync])
   const writeThrough = usePatternWriteThrough(
@@ -105,12 +112,13 @@ export function CommandCenterPage() {
   )
   const backendPerf = useBackendPerformance(backendSync.online)
   const backendAlertsMirror = useBackendAlertsMirror(backendSync.online)
+  const refreshBackendAlerts = backendAlertsMirror.refreshBackendAlerts
   const telegram = useTelegramIntegration(backendSync.online)
 
   // ═══ INTELLIGENCE GATE ═══
   const hasManualPatterns = activePatternCount > 0
   const hasAutoDiscovery = discoveryConfig.enabled && discoveryConfig.userConfigured
-  const hasIntelligence = hasManualPatterns || hasAutoDiscovery
+  const hasIntelligence = COMMAND_CENTER_BACKEND_ONLY ? true : hasManualPatterns || hasAutoDiscovery
 
   // V5.1 — opt-in foreground notification stream. Hook ignores backlog and
   // only fires for ids that appear after first mount. Every guard (opt-in,
@@ -132,37 +140,10 @@ export function CommandCenterPage() {
     finally { setLoading(false); setRefreshing(false) }
   }, [])
 
-  const fetchStats = useCallback(async (fxList: LiveFixture[]) => {
-    if (!hasIntelligence) return
-    const live = fxList.filter(fx => isLiveFx(fx) && fx.provider === 'espn').slice(0, 15)
-    if (live.length === 0) return
-    const results = await Promise.allSettled(live.map(async (fx) => {
-      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=${fx.id}`, { cache: 'no-store' })
-      if (!res.ok) return null
-      const json = await res.json()
-      const hS = json.boxscore?.teams?.[0]?.statistics || []; const aS = json.boxscore?.teams?.[1]?.statistics || []
-      const g = (arr: any[], n: string) => { const s = arr.find((x: any) => x.name === n || x.label === n); return s ? parseFloat(s.displayValue) || 0 : 0 }
-      const stats = { possession: { home: g(hS, 'possessionPct') || g(hS, 'POSSESSION'), away: g(aS, 'possessionPct') || g(aS, 'POSSESSION') }, shots: { home: g(hS, 'totalShots') || g(hS, 'SHOTS'), away: g(aS, 'totalShots') || g(aS, 'SHOTS') }, shotsOnTarget: { home: g(hS, 'shotsOnTarget') || g(hS, 'ON GOAL'), away: g(aS, 'shotsOnTarget') || g(aS, 'ON GOAL') }, corners: { home: g(hS, 'wonCorners') || g(hS, 'Corner Kicks'), away: g(aS, 'wonCorners') || g(aS, 'Corner Kicks') }, yellowCards: { home: g(hS, 'yellowCards') || g(hS, 'Yellow Cards'), away: g(aS, 'yellowCards') || g(aS, 'Yellow Cards') } } as FixtureStatsForPattern
-      // V5 Phase 6: extract timed events from the same ESPN response
-      const timedEvents = extractEspnTimedEvents(json, fx.id, fx.homeTeam.name, fx.awayTeam.name)
-      // V14: Feed score cache from goal events so Live Radar/Matches get fresh score
-      const goalEvts = timedEvents.filter(e => e.type === 'goal' || e.type === 'own_goal' || e.type === 'penalty_scored')
-      if (goalEvts.length > 0) {
-        feedScoreCacheFromEvents(fx.id, fx.score.home ?? 0, fx.score.away ?? 0, goalEvts.map(e => ({ type: e.type, side: e.side, minute: e.minute, playerName: e.playerName })))
-      }
-      return { id: fx.id, stats, events: timedEvents }
-    }))
-    const m = new Map<number, FixtureStatsForPattern>()
-    const em = new Map<number, CommandTimedEvent[]>()
-    for (const r of results) {
-      if (r.status === 'fulfilled' && r.value) {
-        m.set(r.value.id, r.value.stats)
-        if (r.value.events.length > 0) em.set(r.value.id, r.value.events)
-      }
-    }
-    setStatsMap(m)
-    setEventsMap(em)
-  }, [hasIntelligence])
+  const fetchStats = useCallback(async (_fxList: LiveFixture[]) => {
+    setStatsMap(new Map())
+    setEventsMap(new Map())
+  }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
   useEffect(() => { if (fixtures.length > 0) fetchStats(fixtures) }, [fixtures, fetchStats])
@@ -218,240 +199,79 @@ export function CommandCenterPage() {
   useEffect(() => {
     if (!autoRefresh) { if (intervalRef.current) clearInterval(intervalRef.current); return }
     const interval = getCommandCenterPollingInterval(liveMatches, hasManualPatterns)
-    intervalRef.current = setInterval(() => { fetchData(true); resolveExpired() }, interval)
+    intervalRef.current = setInterval(() => {
+      fetchData(true)
+      void refreshBackendAlerts()
+    }, interval)
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
-  }, [autoRefresh, fetchData, liveMatches.length, resolveExpired, hasManualPatterns])
+  }, [autoRefresh, fetchData, liveMatches.length, hasManualPatterns, refreshBackendAlerts])
 
   const toggleAuto = () => { const n = !autoRefresh; setAutoRefresh(n); try { localStorage.setItem('goalsense_cmd_auto', String(n)) } catch { } }
 
   // ─── Pattern Evaluation (ONLY if intelligence active) ──────────────────────
   const patternHits = useMemo(() => {
-    if (!hasManualPatterns) return []
-    return evaluateAllPatterns(getActivePatterns(), fixtures, statsMap, isFavoriteTeam)
-  }, [hasManualPatterns, patterns, fixtures, statsMap, isFavoriteTeam, getActivePatterns])
-
-  useEffect(() => {
-    if (!hasIntelligence || delegateToBackend) return
-    for (const hit of patternHits) {
-      const pat = patterns.find(p => p.id === hit.patternId)
-      if (!pat) continue
-      const fx = hit.fixture
-      const fxStats = statsMap.get(fx.id)
-
-      // V5 Precision Engine: validate before alerting
-      const precision = applyPrecisionChecks(hit, pat, fx, fxStats, eventsMap.get(fx.id))
-
-      if (!precision.shouldAlert) continue
-
-      // V12: Content-aware duplicate guard
-      const dupCheck = isDuplicateAlert(
-        { fixtureId: fx.id, patternId: hit.patternId, score: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 }, minute: fx.status.elapsed || null, momentumSource: undefined },
-        commandAlerts,
-        { includeResolved: true }
-      )
-      if (dupCheck.duplicate) continue
-
-      // Build temporal evidence for audit trail
-      const fxEvts = eventsMap.get(fx.id)
-      const recentWindow = 10
-      const recentEvts = fxEvts && fx.status.elapsed ? fxEvts.filter(e => e.minute >= (fx.status.elapsed! - recentWindow) && e.minute <= fx.status.elapsed!).slice(0, 5) : []
-      const offTypes = ['shot_on_target', 'shot_off_target', 'corner', 'dangerous_attack', 'goal', 'penalty_scored']
-      const offRecent = recentEvts.filter(e => offTypes.includes(e.type))
-      const momSrc = offRecent.length >= 1 ? 'timed_events' : fxStats ? 'stats_proxy' : 'insufficient'
-      const recConf = offRecent.length >= 3 ? 85 : offRecent.length >= 1 ? 65 : 35
-
-      triggerAlert({ patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, league: fx.league.name, minute: fx.status.elapsed, confidence: precision.adjustedConfidence, reasons: hit.reasons, timestamp: new Date().toISOString(), status: 'pending', scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 } })
-      alertWT.registerCommandAlertWT({ source: 'command_center', patternId: hit.patternId, patternName: hit.patternName, fixtureId: fx.id, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, competition: fx.league.name, minuteAtTrigger: fx.status.elapsed, scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 }, confidence: precision.adjustedConfidence, severity: hit.severity, evidences: [...hit.reasons, ...precision.reasons], status: 'pending', triggerSnapshot: { minute: fx.status.elapsed, homeScore: fx.score.home ?? 0, awayScore: fx.score.away ?? 0, status: fx.status.short, competition: fx.league.name, provider: fx.provider, homeTeam: fx.homeTeam.name, awayTeam: fx.awayTeam.name, homeLogo: fx.homeTeam.logo, awayLogo: fx.awayTeam.logo, favoriteInvolved: isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name), conditionsMatched: hit.matchedConditions, conditionsTotal: hit.totalConditions, confidenceAtTrigger: precision.adjustedConfidence, ...(fxStats ? { stats: fxStats } : {}) }, temporalEvidence: { momentumSource: momSrc as any, recencyConfidence: recConf, windowMinutes: recentWindow, recentEventsUsed: recentEvts.map(e => ({ minute: e.minute, type: e.type, side: e.side, teamName: e.teamName, playerName: e.playerName })) } })
-    }
-  }, [patternHits, hasIntelligence, triggerAlert, patterns, alertWT, isFavoriteTeam, statsMap, commandAlerts, eventsMap, delegateToBackend])
-
-  // ─── Resolution ────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (delegateToBackend) return
-    if (fixtures.length === 0 || commandAlerts.length === 0) return
-    const pending = commandAlerts.filter(a => a.status === 'pending')
-    if (pending.length === 0) return
-    const fxMap = new Map(fixtures.map(f => [f.id, f]))
-    for (const alert of pending) {
-      const fx = fxMap.get(alert.fixtureId)
-      const result = resolveAlert({ id: alert.id, patternName: alert.patternName, fixtureId: alert.fixtureId, minuteAtTrigger: alert.minuteAtTrigger, scoreAtTrigger: alert.scoreAtTrigger, confidence: alert.confidence, createdAt: alert.createdAt, status: 'pending' }, fx)
-      if (result) { const finalStatus = result.strength === 'partial_confirmation' ? 'confirmed_partial' as const : result.status; alertWT.updateCommandAlertStatusWT(alert.id, finalStatus, { score: result.scoreAtResolution, reason: result.reason }) }
-    }
-  }, [fixtures, commandAlerts, alertWT, delegateToBackend])
+    const byId = new Map(fixtures.map(fx => [String(fx.id), fx]))
+    const byExternalId = new Map(fixtures.map(fx => [String(fx.externalId), fx]))
+    return backendAlertsMirror.alerts.flatMap((alert): PatternHit[] => {
+      const fx = byId.get(String(alert.fixtureId)) || byExternalId.get(String(alert.fixtureId))
+      if (!fx) return []
+      const confidence = alert.confidence || 0
+      return [{
+        patternId: alert.patternId,
+        patternName: alert.patternName,
+        fixtureId: fx.id,
+        fixture: fx,
+        confidence,
+        confidenceLevel: confidence >= 75 ? 'alta' : confidence >= 50 ? 'm\u00e9dia' : 'baixa',
+        severity: severityFromBackendAlert(alert),
+        reasons: [`Backend signal: ${alert.signalState}`, `Status: ${alert.status}`],
+        matchedConditions: 0,
+        totalConditions: 0,
+        timestamp: alert.createdAt,
+      }]
+    })
+  }, [fixtures, backendAlertsMirror.alerts])
 
   // ─── Auto Discovery (ONLY if configured) ──────────────────────────────────
   const discoveries = useMemo(() => {
-    if (!hasAutoDiscovery) return []
-    return runAutoDiscovery(fixtures, statsMap, isFavoriteTeam, discoveryConfig)
-  }, [hasAutoDiscovery, fixtures, statsMap, isFavoriteTeam, discoveryConfig])
+    return []
+  }, [])
 
-  // ─── Auto Discovery → Alert (ONLY when registerAlertAuto is on) ──────────
-  // V11: Auto-discovery now passes through the Precision Gate before alerting.
-  // Honors: hasAutoDiscovery + discoveryConfig.registerAlertAuto + precision validation.
-  // Anti-duplicate is enforced both by the precision gate (manualAlertFixtureIds)
-  // and inside registerCommandAlert (5min window per pattern+fixture).
-  useEffect(() => {
-    if (!hasAutoDiscovery) return
-    if (delegateToBackend) return
-    if (!discoveryConfig.registerAlertAuto) return
-
-    // Collect fixture ids that already have manual pattern alerts to avoid duplication
-    const manualAlertFixtureIds = new Set(
-      commandAlerts
-        .filter(a => !a.patternId.startsWith('auto_') && a.status === 'pending')
-        .map(a => a.fixtureId)
-    )
-
-    for (const d of discoveries) {
-      if (d.confidence < discoveryConfig.minConfidence) continue
-      const fx = d.fixture
-      const fxStats = statsMap.get(fx.id)
-      const fxEvents = eventsMap.get(fx.id)
-
-      // V11: Build candidate and validate through precision gate
-      const candidate = buildAutoDiscoveryCandidate(d, discoveryConfig)
-      const validation = validateAutoDiscoveryCandidate(
-        candidate,
-        fx,
-        fxStats,
-        fxEvents,
-        discoveryConfig,
-        manualAlertFixtureIds,
-      )
-
-      // Only register alert if precision gate says ready_to_alert
-      if (!validation.wouldAlert) continue
-
-      // V12: Content-aware duplicate guard
-      const syntheticPatternId = `auto_${d.type}`
-      const dupCheck = isDuplicateAlert(
-        { fixtureId: fx.id, patternId: syntheticPatternId, score: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 }, minute: fx.status.elapsed || null, momentumSource: validation.momentumSource, discoveryType: d.type },
-        commandAlerts,
-        { includeResolved: true }
-      )
-      if (dupCheck.duplicate) continue
-
-      const patternName = d.insight || 'Descoberta automática'
-      const inferredSeverity = candidate.syntheticPatternLike.severity
-
-      triggerAlert({
-        patternId: syntheticPatternId,
-        patternName,
-        fixtureId: fx.id,
-        homeTeam: fx.homeTeam.name,
-        awayTeam: fx.awayTeam.name,
-        league: fx.league.name,
-        minute: fx.status.elapsed,
-        confidence: validation.adjustedConfidence,
-        reasons: [...candidate.reasons, ...validation.reasons].filter(Boolean),
-        timestamp: new Date().toISOString(),
-        status: 'pending',
-        scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 },
-      })
-      alertWT.registerCommandAlertWT({
-        source: 'command_center',
-        patternId: syntheticPatternId,
-        patternName,
-        fixtureId: fx.id,
-        homeTeam: fx.homeTeam.name,
-        awayTeam: fx.awayTeam.name,
-        competition: fx.league.name,
-        minuteAtTrigger: fx.status.elapsed,
-        scoreAtTrigger: { home: fx.score.home ?? 0, away: fx.score.away ?? 0 },
-        confidence: validation.adjustedConfidence,
-        severity: inferredSeverity,
-        evidences: [...candidate.reasons, ...validation.reasons].filter(Boolean),
-        status: 'pending',
-        triggerSnapshot: {
-          minute: fx.status.elapsed,
-          homeScore: fx.score.home ?? 0,
-          awayScore: fx.score.away ?? 0,
-          status: fx.status.short,
-          competition: fx.league.name,
-          provider: fx.provider,
-          homeTeam: fx.homeTeam.name,
-          awayTeam: fx.awayTeam.name,
-          homeLogo: fx.homeTeam.logo,
-          awayLogo: fx.awayTeam.logo,
-          favoriteInvolved: isFavoriteTeam(fx.homeTeam.name) || isFavoriteTeam(fx.awayTeam.name),
-          conditionsMatched: 0,
-          conditionsTotal: 0,
-          confidenceAtTrigger: validation.adjustedConfidence,
-          ...(fxStats ? { stats: fxStats } : {}),
-        },
-        temporalEvidence: validation.temporalEvidence,
-      })
-    }
-  }, [hasAutoDiscovery, discoveryConfig, discoveries, triggerAlert, alertWT, isFavoriteTeam, statsMap, eventsMap, commandAlerts, delegateToBackend])
 
   // ─── Scanner (ONLY signals) — V5 with precision states ──────────────────────
   const scannerEntries = useMemo((): ScannerEntry[] => {
     if (!hasIntelligence) return []
-    const hitIds = new Set(patternHits.map(h => h.fixtureId))
-    const discIds = new Set(discoveries.map(d => d.fixtureId))
-    const entries: ScannerEntry[] = []
-    for (const fx of fixtures) {
-      const fxHits = patternHits.filter(h => h.fixtureId === fx.id)
-      if (!hitIds.has(fx.id) && !discIds.has(fx.id)) continue
-      const top = fxHits[0] || null
-      const disc = discoveries.find(d => d.fixtureId === fx.id)
-      const fxStats = statsMap.get(fx.id)
-
-      // Run precision on top hit for signal state
-      let signalState: ScannerEntry['signalState']
-      let adjustedConf = top?.confidence || disc?.confidence || 0
-      let blockersList: string[] | undefined
-      let dq: ScannerEntry['dataQuality']
-
-      if (top) {
-        const pat = patterns.find(p => p.id === top.patternId)
-        if (pat) {
-          const precision = applyPrecisionChecks(top, pat, fx, fxStats, eventsMap.get(fx.id))
-          signalState = precision.signalState
-          adjustedConf = precision.adjustedConfidence
-          if (precision.blockers.length > 0) blockersList = precision.blockers
-          dq = precision.dataQuality
-        }
-      }
-
-      // V5 Phase 7B: extract momentum/events data for UI
-      const fxEvents = eventsMap.get(fx.id)
-      let momentumSrc: ScannerEntry['momentumSource']
-      let recencyConf: number | undefined
-      let recentEvts: ScannerEntry['recentEventsUsed']
-      if (fxEvents && fxEvents.length > 0 && fx.status.elapsed) {
-        const recent = fxEvents.filter(e => e.minute >= (fx.status.elapsed! - 10) && e.minute <= fx.status.elapsed!)
-        const offensiveTypes = ['shot_on_target', 'shot_off_target', 'corner', 'dangerous_attack', 'goal', 'penalty_scored', 'penalty_missed']
-        const offensiveRecent = recent.filter(e => offensiveTypes.includes(e.type))
-        momentumSrc = offensiveRecent.length >= 1 ? 'timed_events' : 'stats_proxy'
-        recencyConf = offensiveRecent.length >= 3 ? 85 : offensiveRecent.length >= 1 ? 65 : 35
-        recentEvts = recent.slice(0, 5).map(e => ({ minute: e.minute, type: e.type, side: e.side, teamName: e.teamName, playerName: e.playerName }))
-      } else {
-        momentumSrc = fxStats ? 'stats_proxy' : 'insufficient'
-      }
-
-      const conf = adjustedConf
-      const priority: ScannerEntry['priority'] = conf >= 75 ? 'critical' : conf >= 50 ? 'attention' : conf >= 35 ? 'watch' : 'low'
-      entries.push({ fixture: fx, patterns: fxHits, topPattern: top, priority, confidence: conf, reason: top?.patternName || disc?.insight || '', signalState, blockers: blockersList, dataQuality: dq, momentumSource: momentumSrc, recencyConfidence: recencyConf, recentEventsUsed: recentEvts })
-    }
-    return entries.sort((a, b) => b.confidence - a.confidence)
-  }, [hasIntelligence, fixtures, patternHits, discoveries, statsMap, patterns])
+    return patternHits.map((hit): ScannerEntry => ({
+      fixture: hit.fixture,
+      patterns: [hit],
+      topPattern: hit,
+      priority: priorityFromConfidence(hit.confidence),
+      confidence: hit.confidence,
+      reason: hit.patternName,
+      signalState: hit.confidence >= 75 ? 'ready_to_alert' : hit.confidence >= 50 ? 'strong_candidate' : 'watch_only',
+      dataQuality: hit.fixture.provider === 'espn' ? 'rich' : 'partial',
+      momentumSource: 'insufficient',
+    })).sort((a, b) => b.confidence - a.confidence)
+  }, [hasIntelligence, patternHits])
 
   // ─── Decision ──────────────────────────────────────────────────────────────
   const decisionMatch = useMemo(() => {
     if (!hasIntelligence) return null
     if (patternHits.length > 0) return patternHits[0].fixture
-    if (discoveries.length > 0) return discoveries[0].fixture
     return null
-  }, [hasIntelligence, patternHits, discoveries])
+  }, [hasIntelligence, patternHits])
   const decisionHit = hasIntelligence ? patternHits[0] || null : null
-  const decisionDiscovery = !decisionHit && discoveries.length > 0 ? discoveries[0] : null
+  const decisionDiscovery = null
 
   // ─── Status badge ──────────────────────────────────────────────────────────
   const statusBadge = !hasIntelligence ? { label: 'Sem configuração', color: 'text-white/55 bg-white/[0.04] border-white/[0.08]' } : patternHits.length > 0 ? { label: 'Sinais ativos', color: 'text-amber-300 bg-amber-500/10 border-amber-500/15' } : liveMatches.length > 0 ? { label: 'Monitorando', color: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/15' } : { label: 'Online', color: 'text-emerald-400/80 bg-emerald-500/8 border-emerald-500/12' }
 
   // ─── Hybrid Alert Merge (Phase B10) ────────────────────────────────────────
   const hybridMerge = useMemo(() => {
+    if (COMMAND_CENTER_BACKEND_ONLY) {
+      if (!backendAlertsMirror.alerts.length) return null
+      return mergeLocalAndBackendAlerts([], backendAlertsMirror.alerts)
+    }
     if (!backendAlertsMirror.alerts.length && !commandAlerts.length) return null
     return mergeLocalAndBackendAlerts(commandAlerts, backendAlertsMirror.alerts)
   }, [commandAlerts, backendAlertsMirror.alerts])
@@ -459,9 +279,9 @@ export function CommandCenterPage() {
   const metrics = [
     { label: 'Analisados', value: fixtures.length },
     { label: 'Padrões ativos', value: activePatternCount },
-    { label: 'Motor auto', value: hasAutoDiscovery ? 'On' : 'Off' },
+    { label: 'Fonte', value: 'Backend' },
     { label: 'Sinais', value: patternHits.length + discoveries.length },
-    { label: 'Alertas', value: triggeredTodayCount },
+    { label: 'Alertas', value: COMMAND_CENTER_BACKEND_ONLY ? backendAlertsMirror.totalCount : triggeredTodayCount },
   ]
 
   const openMatch = (fx: LiveFixture) => { storeFixtureForNavigation(fx); navigate(`/app/matches/${fx.id}`, { state: { fixture: fx } }) }
@@ -500,7 +320,7 @@ export function CommandCenterPage() {
   }
   const timeSince = lastUpdate ? Math.round((Date.now() - lastUpdate.getTime()) / 1000) : null
 
-  if (loading) return <div className="max-w-[1680px] mx-auto px-6 xl:px-10 flex items-center justify-center min-h-[50vh]"><div className="flex flex-col items-center gap-4"><div className="relative h-11 w-11"><div className="absolute inset-0 rounded-full border-2 border-white/[0.08]" /><div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyan-400/70 animate-spin" /></div><span className="text-[13px] text-white/35">Inicializando motor</span></div></div>
+  if (loading) return <div className="max-w-[1680px] mx-auto px-6 xl:px-10 flex items-center justify-center min-h-[50vh]"><div className="flex flex-col items-center gap-4"><div className="relative h-11 w-11"><div className="absolute inset-0 rounded-full border-2 border-white/[0.08]" /><div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyan-400/70 animate-spin" /></div><span className="text-[13px] text-white/35">Inicializando painel</span></div></div>
 
   return (
     <div className="max-w-[1680px] mx-auto px-5 xl:px-10 space-y-7 animate-fadeIn">
@@ -513,7 +333,7 @@ export function CommandCenterPage() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <div className="flex items-center gap-3"><h1 className="text-[28px] font-bold text-white/95 tracking-tight">Command Center</h1><span className={`text-[11px] font-bold uppercase tracking-[0.08em] px-3 py-1 rounded-full border ${statusBadge.color}`}>{statusBadge.label}</span>{delegateToBackend && <span className="text-[11px] font-bold uppercase tracking-[0.08em] px-3 py-1 rounded-full border text-cyan-300 bg-cyan-500/10 border-cyan-500/20" title="Detecção e alertas vêm somente do backend">Somente backend</span>}</div>
-              <p className="text-[14px] text-white/45 mt-1.5">Motor de decisão em tempo real{timeSince !== null && <span className="text-white/30"> · atualizado {timeSince < 60 ? `${timeSince}s` : `${Math.floor(timeSince / 60)}min`} atrás</span>}{refreshing && <span className="text-cyan-400/50 ml-2 animate-pulse">●</span>}{isAdvanced && backendSync.enabled && <span className={`ml-2 text-[10px] ${backendSync.online ? 'text-emerald-400/60' : 'text-white/25'}`}>· Backend {backendSync.online ? 'online' : 'offline'}{backendSync.online && backendSync.patternMirror.summary ? ` · ${backendSync.patternMirror.summary}` : ''}</span>}</p>
+              <p className="text-[14px] text-white/45 mt-1.5">Painel de sinais em tempo real{timeSince !== null && <span className="text-white/30"> · atualizado {timeSince < 60 ? `${timeSince}s` : `${Math.floor(timeSince / 60)}min`} atrás</span>}{refreshing && <span className="text-cyan-400/50 ml-2 animate-pulse">●</span>}{isAdvanced && backendSync.enabled && <span className={`ml-2 text-[10px] ${backendSync.online ? 'text-emerald-400/60' : 'text-white/25'}`}>· Backend {backendSync.online ? 'online' : 'offline'}{backendSync.online && backendSync.patternMirror.summary ? ` · ${backendSync.patternMirror.summary}` : ''}</span>}</p>
             </div>
             <div className="flex items-center gap-2.5">
               <button onClick={toggleAuto} className={`h-9 px-4 rounded-xl text-[11px] font-semibold uppercase tracking-wider transition-all ${autoRefresh ? 'bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/15' : 'text-white/30 border border-white/[0.06]'}`} type="button">Auto</button>
@@ -585,7 +405,7 @@ export function CommandCenterPage() {
                 onClick={toggleBackendOnly}
                 className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${delegateToBackend ? 'text-cyan-300 bg-cyan-500/10 border-cyan-500/25' : 'text-white/35 border-white/[0.1] hover:text-white/60'}`}
                 type="button"
-                title="Quando ativo, a detecção e os alertas vêm SOMENTE do backend. O motor local vira apenas pré-visualização."
+                title="Detecção e alertas vêm SOMENTE do backend. O frontend apenas renderiza o espelho."
               >
                 {delegateToBackend ? '● Somente backend' : '○ Somente backend'}
               </button>
@@ -671,10 +491,10 @@ export function CommandCenterPage() {
       </nav>
 
       {/* ═══ CONTENT ═══ */}
-      {activeTab === 'cockpit' && <CockpitView hasIntelligence={hasIntelligence} decisionMatch={decisionMatch} decisionHit={decisionHit} decisionDiscovery={decisionDiscovery} patternHits={patternHits} discoveries={discoveries} changes={changes} fixtures={fixtures} openMatch={openMatch} isAdvanced={isAdvanced} activePatternCount={activePatternCount} enabledCount={enabledCount} triggeredAlerts={getRecentTriggered(5)} onGoToPatterns={() => setActiveTab('patterns')} navigate={navigate} templates={templates} createFromTemplate={writeThrough.createFromTemplateWT} />}
+      {activeTab === 'cockpit' && <CockpitView hasIntelligence={hasIntelligence} decisionMatch={decisionMatch} decisionHit={decisionHit} decisionDiscovery={decisionDiscovery} patternHits={patternHits} discoveries={discoveries} changes={changes} fixtures={fixtures} openMatch={openMatch} isAdvanced={isAdvanced} activePatternCount={activePatternCount} enabledCount={enabledCount} triggeredAlerts={COMMAND_CENTER_BACKEND_ONLY ? [] : getRecentTriggered(5)} onGoToPatterns={() => setActiveTab('patterns')} navigate={navigate} templates={templates} createFromTemplate={writeThrough.createFromTemplateWT} />}
       {activeTab === 'patterns' && <PatternsView patterns={patterns} templates={templates} createFromTemplate={writeThrough.createFromTemplateWT} createPattern={writeThrough.createPatternWT} updatePattern={writeThrough.updatePatternWT} togglePattern={writeThrough.togglePatternWT} deletePattern={writeThrough.deletePatternWT} isAdvanced={isAdvanced} showBuilder={showBuilder} setShowBuilder={setShowBuilder} discoveryConfig={discoveryConfig} updateDiscoveryConfig={updateDiscoveryConfig} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} fixtures={fixtures} statsMap={statsMap} eventsMap={eventsMap} isFavoriteTeam={isFavoriteTeam} prefilledDraft={prefilledDraft} clearPrefilledDraft={() => setPrefilledDraft(null)} />}
       {activeTab === 'scanner' && <ScannerView hasIntelligence={hasIntelligence} entries={scannerEntries} openMatch={openMatch} isAdvanced={isAdvanced} onGoToPatterns={() => setActiveTab('patterns')} patterns={patterns} />}
-      {activeTab === 'alerts' && <AlertsIntelligencePanel triggeredAlerts={getRecentTriggered(30)} isAdvanced={isAdvanced} openMatch={openMatch} fixtures={fixtures} navigate={navigate} hybridAlerts={hybridMerge?.alerts} hybridDiagnostics={hybridMerge?.diagnostics} backendOnline={backendSync.online} telegramEnabled={telegram.enabled && telegram.configured} telegramChannels={telegram.channels} onSendTelegram={telegram.sendAlert} getAlertTelegramStatus={telegram.getAlertTelegramStatus} getSentChannelIds={telegram.getSentChannelIds} loadDeliveriesForAlerts={telegram.loadDeliveriesForAlerts} getEligibilityForAlert={telegram.getEligibilityForAlert} eligibilityByAlertId={telegram.eligibilityByAlertId} onGoToBacktest={() => setActiveTab('backtest')} />}
+      {activeTab === 'alerts' && <AlertsIntelligencePanel triggeredAlerts={COMMAND_CENTER_BACKEND_ONLY ? [] : getRecentTriggered(30)} isAdvanced={isAdvanced} openMatch={openMatch} fixtures={fixtures} navigate={navigate} hybridAlerts={hybridMerge?.alerts} hybridDiagnostics={hybridMerge?.diagnostics} backendOnline={backendSync.online} telegramEnabled={telegram.enabled && telegram.configured} telegramChannels={telegram.channels} onSendTelegram={telegram.sendAlert} getAlertTelegramStatus={telegram.getAlertTelegramStatus} getSentChannelIds={telegram.getSentChannelIds} loadDeliveriesForAlerts={telegram.loadDeliveriesForAlerts} getEligibilityForAlert={telegram.getEligibilityForAlert} eligibilityByAlertId={telegram.eligibilityByAlertId} onGoToBacktest={() => setActiveTab('backtest')} />}
       {activeTab === 'performance' && <PerformanceView patterns={patterns} triggeredAlerts={triggeredAlerts} commandAlerts={commandAlerts} isAdvanced={isAdvanced} backendReports={backendPerf.reports} performanceSource={backendPerf.source} />}
       {activeTab === 'backtest' && <BacktestLab patterns={patterns} backendOnline={backendSync.online} />}
       {activeTab === 'autoengine' && <AutoEngineCockpit backendOnline={backendSync.online} onGoToBacktest={() => setActiveTab('backtest')} onGoToAlerts={() => setActiveTab('alerts')} onPromoteToRadar={promoteToRadar} onOpenMatch={resolveAndOpenMatch} />}

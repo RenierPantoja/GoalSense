@@ -21,6 +21,17 @@ export interface DailyValidationReportDto {
   governanceSummary: { evaluations: number; wouldAllow: number; wouldMonitor: number; wouldWait: number; wouldBlock: number; aligned: number; tooStrict: number; tooLoose: number }
   holdsSummary: { created: number; rechecked: number }
   causalSummary: { created: number; evaluable: number; notEvaluable: number }
+  workerRuns: number
+  workerSessionsCompleted: number
+  orphanSessionsDetected: number
+  orphanSessionsRecovered: number
+  postMatchSweeperRuns: number
+  liveFirstCompletedFixtures: number
+  liveFirstPendingPostMatch: number
+  liveFirstEvaluableCases: number
+  liveFirstNotEvaluableReasons: Record<string, number>
+  averageSessionDurationMinutes: number
+  averageSnapshotsPerCompletedFixture: number
   notEvaluableSummary: { causalNotEvaluable: number; fixturesWithoutData: number }
   providerLimitations: string[]
   dataLimitations: string[]

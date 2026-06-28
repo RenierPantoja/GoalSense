@@ -9,6 +9,7 @@ import { Database } from 'lucide-react'
 import { matchIntelligenceApi } from '@/services/matchIntelligenceApi'
 import type { ProviderCapabilitiesDto } from '@/features/matchIntelligence/matchIntelligenceTypes'
 import { BackstageMatchIntelligencePanel } from './BackstageMatchIntelligencePanel'
+import { EspnLiveFirstWorkerPanel } from './EspnLiveFirstWorkerPanel'
 
 export function BackstageLocalPage() {
   const [caps, setCaps] = useState<ProviderCapabilitiesDto | null>(null)
@@ -39,6 +40,7 @@ export function BackstageLocalPage() {
           <p className="text-[10px] text-white/30 mt-1.5">{caps.limitations[0]}</p>
         </div>
       )}
+      <EspnLiveFirstWorkerPanel isAdmin />
       <BackstageMatchIntelligencePanel />
     </div>
   )

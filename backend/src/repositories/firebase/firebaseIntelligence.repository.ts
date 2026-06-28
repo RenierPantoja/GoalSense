@@ -76,6 +76,12 @@ import type {
 import type {
   DailyValidationReport, ValidationCampaign,
 } from '../../modules/footballIntelligence/validation/validationCampaign.types.js'
+import type {
+  EspnLiveFirstWorkerRun, EspnLiveFirstFixtureLease, EspnLiveFirstRecoveryReport, LiveFirstPostMatchOutcome,
+} from '../../modules/footballIntelligence/live/espnLiveFirstWorker.types.js'
+import type {
+  LiveMonitoringSession, LiveMonitoringFixtureState,
+} from '../../modules/footballIntelligence/live/liveMonitoringSession.types.js'
 
 const LEDGER = 'signalLedger'
 const OUTCOMES = 'alertOutcomes'
@@ -154,6 +160,12 @@ const LV_GO_NO_GO = 'localValidationGoNoGoReports'
 const LV_BACKEND_HEALTH = 'backendHealthReports'
 const LV_DAILY_REPORTS = 'dailyValidationReports'
 const LV_CAMPAIGNS = 'validationCampaigns'
+const LIVE_MONITORING_SESSIONS = 'liveMonitoringSessions'
+const LIVE_MONITORING_FIXTURE_STATES = 'liveMonitoringFixtureStates'
+const LF_WORKER_RUNS = 'espnLiveFirstWorkerRuns'
+const LF_LEASES = 'espnLiveFirstFixtureLeases'
+const LF_RECOVERY_REPORTS = 'espnLiveFirstRecoveryReports'
+const LF_POST_MATCH_OUTCOMES = 'liveFirstPostMatchOutcomes'
 
 const READ_CAP = 2000
 
@@ -1495,5 +1507,92 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     const db = await getFirestore(); const ref = db.collection(LV_CAMPAIGNS).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
     const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
     await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+
+  // ── B59: ESPN Live-First Persistent Worker ──
+  async saveLiveMonitoringSession(session: LiveMonitoringSession): Promise<LiveMonitoringSession> {
+    const db = await getFirestore(); await db.collection(LIVE_MONITORING_SESSIONS).doc(session.id).set(session, { merge: true }); return session
+  }
+  async getLiveMonitoringSession(id: string): Promise<LiveMonitoringSession | null> {
+    const db = await getFirestore(); const doc = await db.collection(LIVE_MONITORING_SESSIONS).doc(id).get(); return doc.exists ? docData<LiveMonitoringSession>(doc) : null
+  }
+  async listLiveMonitoringSessions(limit?: number): Promise<LiveMonitoringSession[]> {
+    const db = await getFirestore(); const snap = await db.collection(LIVE_MONITORING_SESSIONS).get()
+    return snap.docs.map((d: any) => docData<LiveMonitoringSession>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 100)
+  }
+  async updateLiveMonitoringSession(id: string, patch: Partial<LiveMonitoringSession>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(LIVE_MONITORING_SESSIONS).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    clean.updatedAt = clean.updatedAt || new Date().toISOString()
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async saveLiveMonitoringFixtureState(state: LiveMonitoringFixtureState): Promise<LiveMonitoringFixtureState> {
+    const db = await getFirestore(); await db.collection(LIVE_MONITORING_FIXTURE_STATES).doc(state.id).set(state, { merge: true }); return state
+  }
+  async getLiveMonitoringFixtureState(id: string): Promise<LiveMonitoringFixtureState | null> {
+    const db = await getFirestore(); const doc = await db.collection(LIVE_MONITORING_FIXTURE_STATES).doc(id).get(); return doc.exists ? docData<LiveMonitoringFixtureState>(doc) : null
+  }
+  async listLiveMonitoringFixtureStates(sessionId: string, limit?: number): Promise<LiveMonitoringFixtureState[]> {
+    const db = await getFirestore(); const snap = await db.collection(LIVE_MONITORING_FIXTURE_STATES).where('sessionId', '==', sessionId).get()
+    return snap.docs.map((d: any) => docData<LiveMonitoringFixtureState>(d)).sort((a: any, b: any) => (b.updatedAt || '').localeCompare(a.updatedAt || '')).slice(0, limit || 200)
+  }
+  async updateLiveMonitoringFixtureState(id: string, patch: Partial<LiveMonitoringFixtureState>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(LIVE_MONITORING_FIXTURE_STATES).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    clean.updatedAt = clean.updatedAt || new Date().toISOString()
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async saveEspnLiveFirstWorkerRun(run: EspnLiveFirstWorkerRun): Promise<EspnLiveFirstWorkerRun> {
+    const db = await getFirestore(); await db.collection(LF_WORKER_RUNS).doc(run.id).set(run, { merge: true }); return run
+  }
+  async getEspnLiveFirstWorkerRun(id: string): Promise<EspnLiveFirstWorkerRun | null> {
+    const db = await getFirestore(); const doc = await db.collection(LF_WORKER_RUNS).doc(id).get(); return doc.exists ? docData<EspnLiveFirstWorkerRun>(doc) : null
+  }
+  async listEspnLiveFirstWorkerRuns(filters: { status?: string; limit?: number }): Promise<EspnLiveFirstWorkerRun[]> {
+    const db = await getFirestore()
+    let q: any = db.collection(LF_WORKER_RUNS)
+    if (filters.status) q = q.where('status', '==', filters.status)
+    const snap = await q.get()
+    return snap.docs.map((d: any) => docData<EspnLiveFirstWorkerRun>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, filters.limit || 50)
+  }
+  async updateEspnLiveFirstWorkerRun(id: string, patch: Partial<EspnLiveFirstWorkerRun>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(LF_WORKER_RUNS).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async saveEspnLiveFirstFixtureLease(lease: EspnLiveFirstFixtureLease): Promise<EspnLiveFirstFixtureLease> {
+    const db = await getFirestore(); await db.collection(LF_LEASES).doc(lease.id).set(lease, { merge: true }); return lease
+  }
+  async getEspnLiveFirstFixtureLease(id: string): Promise<EspnLiveFirstFixtureLease | null> {
+    const db = await getFirestore(); const doc = await db.collection(LF_LEASES).doc(id).get(); return doc.exists ? docData<EspnLiveFirstFixtureLease>(doc) : null
+  }
+  async listEspnLiveFirstFixtureLeases(limit?: number): Promise<EspnLiveFirstFixtureLease[]> {
+    const db = await getFirestore(); const snap = await db.collection(LF_LEASES).get()
+    return snap.docs.map((d: any) => docData<EspnLiveFirstFixtureLease>(d)).slice(0, limit || 200)
+  }
+  async updateEspnLiveFirstFixtureLease(id: string, patch: Partial<EspnLiveFirstFixtureLease>): Promise<{ count: number }> {
+    const db = await getFirestore(); const ref = db.collection(LF_LEASES).doc(id); const doc = await ref.get(); if (!doc.exists) return { count: 0 }
+    const clean: any = {}; for (const [k, v] of Object.entries(patch)) clean[k] = v === undefined ? null : v
+    await ref.set(clean, { merge: true }); return { count: 1 }
+  }
+  async saveEspnLiveFirstRecoveryReport(report: EspnLiveFirstRecoveryReport): Promise<EspnLiveFirstRecoveryReport> {
+    const db = await getFirestore(); await db.collection(LF_RECOVERY_REPORTS).doc(report.id).set(report, { merge: true }); return report
+  }
+  async getEspnLiveFirstRecoveryReport(id: string): Promise<EspnLiveFirstRecoveryReport | null> {
+    const db = await getFirestore(); const doc = await db.collection(LF_RECOVERY_REPORTS).doc(id).get(); return doc.exists ? docData<EspnLiveFirstRecoveryReport>(doc) : null
+  }
+  async listEspnLiveFirstRecoveryReports(limit?: number): Promise<EspnLiveFirstRecoveryReport[]> {
+    const db = await getFirestore(); const snap = await db.collection(LF_RECOVERY_REPORTS).get()
+    return snap.docs.map((d: any) => docData<EspnLiveFirstRecoveryReport>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit || 50)
+  }
+  async saveLiveFirstPostMatchOutcome(outcome: LiveFirstPostMatchOutcome): Promise<LiveFirstPostMatchOutcome> {
+    const db = await getFirestore(); const id = `lfo_${outcome.fixtureId}_${outcome.sessionId}`; await db.collection(LF_POST_MATCH_OUTCOMES).doc(id).set(outcome, { merge: true }); return outcome
+  }
+  async getLiveFirstPostMatchOutcome(fixtureId: string, sessionId: string): Promise<LiveFirstPostMatchOutcome | null> {
+    const db = await getFirestore(); const id = `lfo_${fixtureId}_${sessionId}`; const doc = await db.collection(LF_POST_MATCH_OUTCOMES).doc(id).get(); return doc.exists ? docData<LiveFirstPostMatchOutcome>(doc) : null
+  }
+  async listLiveFirstPostMatchOutcomes(limit?: number): Promise<LiveFirstPostMatchOutcome[]> {
+    const db = await getFirestore(); const snap = await db.collection(LF_POST_MATCH_OUTCOMES).get()
+    return snap.docs.map((d: any) => docData<LiveFirstPostMatchOutcome>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
   }
 }

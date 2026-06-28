@@ -219,6 +219,14 @@ const envSchema = z.object({
   ENABLE_LOCAL_LIVE_RECHECK_BRIDGE: z.string().default('false'),
   LOCAL_LIVE_RECHECK_BRIDGE_MODE: z.enum(['observe', 'enforce']).default('observe'),
   LOCAL_LIVE_RECHECK_MIN_INTERVAL_SECONDS: z.coerce.number().default(60),
+  // B59: ESPN Live-First Persistent Worker
+  ESPN_LIVE_FIRST_LEASE_TTL_SECONDS: z.coerce.number().default(120),
+  ESPN_LIVE_FIRST_HEARTBEAT_SECONDS: z.coerce.number().default(30),
+  ESPN_LIVE_FIRST_POLL_INTERVAL_SECONDS: z.coerce.number().default(45),
+  ESPN_LIVE_FIRST_MIN_POLL_INTERVAL_SECONDS: z.coerce.number().default(30),
+  ESPN_LIVE_FIRST_MAX_FIXTURES: z.coerce.number().default(5),
+  ESPN_LIVE_FIRST_MAX_SESSION_MINUTES: z.coerce.number().default(180),
+  ESPN_LIVE_FIRST_STOP_ON_FULL_TIME: z.string().default('true'),
 }).superRefine((val, ctx) => {
   // Conditional validation by persistence provider
   if (val.PERSISTENCE_PROVIDER === 'prisma') {

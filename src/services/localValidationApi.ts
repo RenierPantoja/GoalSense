@@ -11,8 +11,10 @@ import type {
 import type { DailyValidationReportDto } from '@/features/matchIntelligence/dailyValidationReportTypes'
 import type { ValidationCampaignDto } from '@/features/matchIntelligence/validationCampaignTypes'
 import type { ControlledBetaReadinessReportDto } from '@/features/matchIntelligence/controlledBetaReadinessTypes'
+import type { EspnLiveFirstWorkerStatusDto } from '@/features/matchIntelligence/espnLiveFirstWorkerTypes'
 
 const BASE = '/api/match-intelligence/local-validation'
+const LIVE_FIRST_BASE = '/api/match-intelligence/espn-live-first'
 const run = (id: string) => `${BASE}/runs/${encodeURIComponent(id)}`
 
 export const localValidationApi = {
@@ -39,4 +41,20 @@ export const localValidationApi = {
   getValidationCampaign(campaignId: string) { return apiFetch<ValidationCampaignDto>(`${BASE}/campaigns/${encodeURIComponent(campaignId)}`) },
   closeValidationCampaign(campaignId: string) { return apiFetch<ValidationCampaignDto>(`${BASE}/campaigns/${encodeURIComponent(campaignId)}/close`, { method: 'POST', body: '{}' }) },
   getControlledBetaReadiness() { return apiFetch<ControlledBetaReadinessReportDto>(`${BASE}/controlled-beta-readiness`) },
+  getEspnLiveFirstWorkerStatus() { return apiFetch<EspnLiveFirstWorkerStatusDto>(`${LIVE_FIRST_BASE}/worker/status`) },
+  startEspnLiveFirstWorker(options: { maxDurationMinutes?: number; maxFixtures?: number; pollIntervalSeconds?: number } = {}) {
+    return apiFetch<{ success: boolean; workerRunId?: string; message: string }>(`${LIVE_FIRST_BASE}/worker/start`, { method: 'POST', body: JSON.stringify(options) })
+  },
+  stopEspnLiveFirstWorker(workerRunId: string) {
+    return apiFetch<{ success: boolean; message: string }>(`${LIVE_FIRST_BASE}/worker/${encodeURIComponent(workerRunId)}/stop`, { method: 'POST', body: '{}' })
+  },
+  resumeEspnLiveFirstWorker(workerRunId: string) {
+    return apiFetch<{ success: boolean; message: string }>(`${LIVE_FIRST_BASE}/worker/${encodeURIComponent(workerRunId)}/resume`, { method: 'POST', body: '{}' })
+  },
+  runEspnLiveFirstRecoverySweep() {
+    return apiFetch<unknown>(`${LIVE_FIRST_BASE}/recovery-sweep`, { method: 'POST', body: '{}' })
+  },
+  runEspnLiveFirstPostMatchSweeper() {
+    return apiFetch<unknown>(`${LIVE_FIRST_BASE}/post-match-sweeper`, { method: 'POST', body: '{}' })
+  },
 }

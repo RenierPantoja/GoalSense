@@ -192,6 +192,12 @@ import type {
 import type {
   DailyValidationReport, ValidationCampaign,
 } from '../modules/footballIntelligence/validation/validationCampaign.types.js'
+import type {
+  EspnLiveFirstWorkerRun, EspnLiveFirstFixtureLease, EspnLiveFirstRecoveryReport, LiveFirstPostMatchOutcome,
+} from '../modules/footballIntelligence/live/espnLiveFirstWorker.types.js'
+import type {
+  LiveMonitoringSession, LiveMonitoringFixtureState,
+} from '../modules/footballIntelligence/live/liveMonitoringSession.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -523,6 +529,30 @@ export interface IntelligenceRepository {
   getValidationCampaign(id: string): Promise<ValidationCampaign | null>
   listValidationCampaigns(limit?: number): Promise<ValidationCampaign[]>
   updateValidationCampaign(id: string, patch: Partial<ValidationCampaign>): Promise<{ count: number }>
+
+  // ── B59: ESPN Live-First Persistent Worker ──────────────────────────────────
+  saveLiveMonitoringSession(session: LiveMonitoringSession): Promise<LiveMonitoringSession>
+  getLiveMonitoringSession(id: string): Promise<LiveMonitoringSession | null>
+  listLiveMonitoringSessions(limit?: number): Promise<LiveMonitoringSession[]>
+  updateLiveMonitoringSession(id: string, patch: Partial<LiveMonitoringSession>): Promise<{ count: number }>
+  saveLiveMonitoringFixtureState(state: LiveMonitoringFixtureState): Promise<LiveMonitoringFixtureState>
+  getLiveMonitoringFixtureState(id: string): Promise<LiveMonitoringFixtureState | null>
+  listLiveMonitoringFixtureStates(sessionId: string, limit?: number): Promise<LiveMonitoringFixtureState[]>
+  updateLiveMonitoringFixtureState(id: string, patch: Partial<LiveMonitoringFixtureState>): Promise<{ count: number }>
+  saveEspnLiveFirstWorkerRun(run: EspnLiveFirstWorkerRun): Promise<EspnLiveFirstWorkerRun>
+  getEspnLiveFirstWorkerRun(id: string): Promise<EspnLiveFirstWorkerRun | null>
+  listEspnLiveFirstWorkerRuns(filters: { status?: string; limit?: number }): Promise<EspnLiveFirstWorkerRun[]>
+  updateEspnLiveFirstWorkerRun(id: string, patch: Partial<EspnLiveFirstWorkerRun>): Promise<{ count: number }>
+  saveEspnLiveFirstFixtureLease(lease: EspnLiveFirstFixtureLease): Promise<EspnLiveFirstFixtureLease>
+  getEspnLiveFirstFixtureLease(id: string): Promise<EspnLiveFirstFixtureLease | null>
+  listEspnLiveFirstFixtureLeases(limit?: number): Promise<EspnLiveFirstFixtureLease[]>
+  updateEspnLiveFirstFixtureLease(id: string, patch: Partial<EspnLiveFirstFixtureLease>): Promise<{ count: number }>
+  saveEspnLiveFirstRecoveryReport(report: EspnLiveFirstRecoveryReport): Promise<EspnLiveFirstRecoveryReport>
+  getEspnLiveFirstRecoveryReport(id: string): Promise<EspnLiveFirstRecoveryReport | null>
+  listEspnLiveFirstRecoveryReports(limit?: number): Promise<EspnLiveFirstRecoveryReport[]>
+  saveLiveFirstPostMatchOutcome(outcome: LiveFirstPostMatchOutcome): Promise<LiveFirstPostMatchOutcome>
+  getLiveFirstPostMatchOutcome(fixtureId: string, sessionId: string): Promise<LiveFirstPostMatchOutcome | null>
+  listLiveFirstPostMatchOutcomes(limit?: number): Promise<LiveFirstPostMatchOutcome[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

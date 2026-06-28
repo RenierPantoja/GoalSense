@@ -51,6 +51,12 @@ export function DailyValidationReportPanel({ isAdmin }: { isAdmin: boolean }) {
             <span>causal aval.: {report.causalSummary.evaluable}</span>
             <span>não avaliável: {report.causalSummary.notEvaluable}</span>
             <span>manual intake: {report.manualIntakeUsed}</span>
+            <span>worker runs: {report.workerRuns}</span>
+            <span>sessões longas: {report.workerSessionsCompleted}</span>
+            <span>FT live-first: {report.liveFirstCompletedFixtures}</span>
+            <span>post-match pend.: {report.liveFirstPendingPostMatch}</span>
+            <span>órfãs recup.: {report.orphanSessionsRecovered}</span>
+            <span>snap/FT: {report.averageSnapshotsPerCompletedFixture}</span>
           </div>
           {report.providerLimitations.length > 0 && <p className="text-amber-100/70">limitação provider (≠ falha): {report.providerLimitations.join(', ')}</p>}
           {report.recommendedActions.slice(0, 3).map((a, i) => <p key={i} className="text-sky-200/60">→ {a}</p>)}

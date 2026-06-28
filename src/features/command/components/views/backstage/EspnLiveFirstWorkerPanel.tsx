@@ -1,0 +1,99 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Activity, Play, RefreshCw, RotateCcw, SearchCheck, Square, TimerReset } from 'lucide-react'
+import { localValidationApi } from '@/services/localValidationApi'
+import type { EspnLiveFirstWorkerStatusDto, EspnLiveFirstWorkerRunDto } from '@/features/matchIntelligence/espnLiveFirstWorkerTypes'
+
+function Stat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] uppercase tracking-[0.12em] text-white/30">{label}</p>
+      <p className="mt-0.5 truncate text-[13px] font-semibold text-white/75">{value}</p>
+    </div>
+  )
+}
+
+function latestRunnableRun(runs: EspnLiveFirstWorkerRunDto[]): EspnLiveFirstWorkerRunDto | null {
+  return runs.find(run => run.status === 'running' || run.status === 'paused' || run.status === 'recovered') ?? runs[0] ?? null
+}
+
+export function EspnLiveFirstWorkerPanel({ isAdmin }: { isAdmin: boolean }) {
+  const [status, setStatus] = useState<EspnLiveFirstWorkerStatusDto | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
+  const [disabled, setDisabled] = useState(false)
+
+  const load = useCallback(async () => {
+    const response = await localValidationApi.getEspnLiveFirstWorkerStatus()
+    if (response.reason === 'env_gate' || response.status === 403) { setDisabled(true); return }
+    if (response.ok && response.data) setStatus(response.data)
+  }, [])
+
+  useEffect(() => { void load() }, [load])
+
+  const selectedRun = useMemo(() => latestRunnableRun(status?.runs ?? []), [status])
+
+  const runAction = async (name: string, action: () => Promise<{ ok?: boolean; data?: unknown; error?: string | null } | void>) => {
+    setBusy(name)
+    const result = await action()
+    setBusy(null)
+    setMsg(!result || result.ok ? `${name} concluído.` : result.error || `${name} falhou.`)
+    await load()
+  }
+
+  if (disabled) return null
+
+  const buttonClass = 'h-8 px-2 rounded-lg border border-white/[0.09] bg-white/[0.03] hover:bg-white/[0.06] text-[11px] text-white/70 inline-flex items-center gap-1 disabled:opacity-45 disabled:cursor-not-allowed'
+
+  return (
+    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.012] p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <Activity size={14} className="text-[#7FE9DC]" />
+        <h4 className="flex-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">ESPN Live-First worker persistente</h4>
+        <button type="button" onClick={() => void runAction('refresh', load)} disabled={busy !== null} className={buttonClass} title="Refresh status">
+          <RefreshCw size={12} />Refresh
+        </button>
+      </div>
+
+      {msg && <p className="mb-2 text-[11px] text-white/60">{msg}</p>}
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="status" value={selectedRun?.status ?? 'stopped'} />
+        <Stat label="sessões" value={status?.sessionsRunning ?? 0} />
+        <Stat label="fixtures" value={status?.fixturesActive ?? 0} />
+        <Stat label="snapshots" value={selectedRun?.snapshotsCaptured ?? 0} />
+        <Stat label="heartbeat" value={selectedRun?.heartbeatAt ? new Date(selectedRun.heartbeatAt).toLocaleTimeString() : 'n/a'} />
+        <Stat label="rechecks" value={selectedRun?.rechecksTriggered ?? 0} />
+        <Stat label="órfãs" value={status?.orphanSessions ?? 0} />
+        <Stat label="post-match pend." value={status?.postMatchPending ?? 0} />
+      </div>
+
+      {isAdmin && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" className={buttonClass} disabled={busy !== null} onClick={() => void runAction('start', () => localValidationApi.startEspnLiveFirstWorker({ maxDurationMinutes: 180, maxFixtures: 5, pollIntervalSeconds: 45 }))}>
+            <Play size={12} />Start
+          </button>
+          <button type="button" className={buttonClass} disabled={busy !== null || !selectedRun} onClick={() => selectedRun && void runAction('stop', () => localValidationApi.stopEspnLiveFirstWorker(selectedRun.id))}>
+            <Square size={12} />Stop
+          </button>
+          <button type="button" className={buttonClass} disabled={busy !== null || !selectedRun} onClick={() => selectedRun && void runAction('resume', () => localValidationApi.resumeEspnLiveFirstWorker(selectedRun.id))}>
+            <RotateCcw size={12} />Resume
+          </button>
+          <button type="button" className={buttonClass} disabled={busy !== null} onClick={() => void runAction('recovery', localValidationApi.runEspnLiveFirstRecoverySweep)}>
+            <TimerReset size={12} />Recovery
+          </button>
+          <button type="button" className={buttonClass} disabled={busy !== null} onClick={() => void runAction('post-match', localValidationApi.runEspnLiveFirstPostMatchSweeper)}>
+            <SearchCheck size={12} />Post-match
+          </button>
+        </div>
+      )}
+
+      {selectedRun && (
+        <div className="mt-3 space-y-1 text-[10.5px] text-white/50">
+          <p>run {selectedRun.id} · fixtures {selectedRun.fixtureIds.length} · leases {status?.leases.length ?? 0} · completed {status?.completedFixtures ?? 0}</p>
+          {selectedRun.limitations.slice(0, 2).map((item, index) => <p key={index} className="text-amber-100/65">{item}</p>)}
+        </div>
+      )}
+      <p className="mt-2 text-[10px] text-white/30">Local-only · ESPN live data · sem odds · sem Telegram · sem auto-bet · enforce off · unknown/not_evaluable não é falha.</p>
+    </div>
+  )
+}

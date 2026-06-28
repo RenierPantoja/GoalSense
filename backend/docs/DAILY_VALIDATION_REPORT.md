@@ -20,3 +20,6 @@ dataLimitations; costMetrics; backendHealth; goNoGo; recommendedActions; limitat
 `POST /api/match-intelligence/local-validation/daily-report/generate` (operator; optional
 `campaignId` to attach). Persisted to Firebase `dailyValidationReports` keyed by date; Noop
 returns empty.
+# B59 Long-Session Metrics
+
+Daily reports now include ESPN Live-First worker metrics: worker runs, completed worker sessions, orphan sessions detected/recovered, post-match sweeper activity, completed live-first fixtures, pending post-match count, evaluable live-first cases, not_evaluable reasons, average session duration, and average snapshots per completed fixture.

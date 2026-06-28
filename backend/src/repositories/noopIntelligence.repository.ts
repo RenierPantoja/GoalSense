@@ -71,6 +71,12 @@ import type {
 import type {
   DailyValidationReport, ValidationCampaign,
 } from '../modules/footballIntelligence/validation/validationCampaign.types.js'
+import type {
+  EspnLiveFirstWorkerRun, EspnLiveFirstFixtureLease, EspnLiveFirstRecoveryReport, LiveFirstPostMatchOutcome,
+} from '../modules/footballIntelligence/live/espnLiveFirstWorker.types.js'
+import type {
+  LiveMonitoringSession, LiveMonitoringFixtureState,
+} from '../modules/footballIntelligence/live/liveMonitoringSession.types.js'
 let warned = false
 function warnOnce(): void {
   if (warned) return
@@ -79,6 +85,13 @@ function warnOnce(): void {
 }
 
 export class NoopIntelligenceRepository implements IntelligenceRepository {
+  private readonly liveMonitoringSessions = new Map<string, LiveMonitoringSession>()
+  private readonly liveMonitoringFixtureStates = new Map<string, LiveMonitoringFixtureState>()
+  private readonly espnLiveFirstWorkerRuns = new Map<string, EspnLiveFirstWorkerRun>()
+  private readonly espnLiveFirstFixtureLeases = new Map<string, EspnLiveFirstFixtureLease>()
+  private readonly espnLiveFirstRecoveryReports = new Map<string, EspnLiveFirstRecoveryReport>()
+  private readonly liveFirstPostMatchOutcomes = new Map<string, LiveFirstPostMatchOutcome>()
+
   async createSignalLedgerEntry(entry: SignalLedgerEntry): Promise<SignalLedgerEntry> { warnOnce(); return entry }
   async updateSignalLedgerEntry(): Promise<{ count: number }> { return { count: 0 } }
   async getSignalLedgerEntryByAlertId(): Promise<SignalLedgerEntry | null> { return null }
@@ -407,4 +420,44 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async getValidationCampaign(): Promise<ValidationCampaign | null> { return null }
   async listValidationCampaigns(): Promise<ValidationCampaign[]> { return [] }
   async updateValidationCampaign(): Promise<{ count: number }> { return { count: 0 } }
+
+  // ── B59 (Noop): ESPN Live-First Persistent Worker ──
+  async saveLiveMonitoringSession(session: LiveMonitoringSession): Promise<LiveMonitoringSession> { warnOnce(); this.liveMonitoringSessions.set(session.id, session); return session }
+  async getLiveMonitoringSession(id: string): Promise<LiveMonitoringSession | null> { return this.liveMonitoringSessions.get(id) ?? null }
+  async listLiveMonitoringSessions(limit = 100): Promise<LiveMonitoringSession[]> { return Array.from(this.liveMonitoringSessions.values()).sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit) }
+  async updateLiveMonitoringSession(id: string, patch: Partial<LiveMonitoringSession>): Promise<{ count: number }> {
+    const existing = this.liveMonitoringSessions.get(id); if (!existing) return { count: 0 }
+    this.liveMonitoringSessions.set(id, { ...existing, ...patch, updatedAt: patch.updatedAt ?? new Date().toISOString() }); return { count: 1 }
+  }
+  async saveLiveMonitoringFixtureState(state: LiveMonitoringFixtureState): Promise<LiveMonitoringFixtureState> { warnOnce(); this.liveMonitoringFixtureStates.set(state.id, state); return state }
+  async getLiveMonitoringFixtureState(id: string): Promise<LiveMonitoringFixtureState | null> { return this.liveMonitoringFixtureStates.get(id) ?? null }
+  async listLiveMonitoringFixtureStates(sessionId: string, limit = 200): Promise<LiveMonitoringFixtureState[]> {
+    return Array.from(this.liveMonitoringFixtureStates.values()).filter(s => s.sessionId === sessionId).sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || '')).slice(0, limit)
+  }
+  async updateLiveMonitoringFixtureState(id: string, patch: Partial<LiveMonitoringFixtureState>): Promise<{ count: number }> {
+    const existing = this.liveMonitoringFixtureStates.get(id); if (!existing) return { count: 0 }
+    this.liveMonitoringFixtureStates.set(id, { ...existing, ...patch, updatedAt: patch.updatedAt ?? new Date().toISOString() }); return { count: 1 }
+  }
+  async saveEspnLiveFirstWorkerRun(run: EspnLiveFirstWorkerRun): Promise<EspnLiveFirstWorkerRun> { warnOnce(); this.espnLiveFirstWorkerRuns.set(run.id, run); return run }
+  async getEspnLiveFirstWorkerRun(id: string): Promise<EspnLiveFirstWorkerRun | null> { return this.espnLiveFirstWorkerRuns.get(id) ?? null }
+  async listEspnLiveFirstWorkerRuns(filters: { status?: string; limit?: number } = {}): Promise<EspnLiveFirstWorkerRun[]> {
+    return Array.from(this.espnLiveFirstWorkerRuns.values()).filter(r => !filters.status || r.status === filters.status).sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, filters.limit || 50)
+  }
+  async updateEspnLiveFirstWorkerRun(id: string, patch: Partial<EspnLiveFirstWorkerRun>): Promise<{ count: number }> {
+    const existing = this.espnLiveFirstWorkerRuns.get(id); if (!existing) return { count: 0 }
+    this.espnLiveFirstWorkerRuns.set(id, { ...existing, ...patch, updatedAt: patch.updatedAt ?? new Date().toISOString() }); return { count: 1 }
+  }
+  async saveEspnLiveFirstFixtureLease(lease: EspnLiveFirstFixtureLease): Promise<EspnLiveFirstFixtureLease> { warnOnce(); this.espnLiveFirstFixtureLeases.set(lease.id, lease); return lease }
+  async getEspnLiveFirstFixtureLease(id: string): Promise<EspnLiveFirstFixtureLease | null> { return this.espnLiveFirstFixtureLeases.get(id) ?? null }
+  async listEspnLiveFirstFixtureLeases(limit = 200): Promise<EspnLiveFirstFixtureLease[]> { return Array.from(this.espnLiveFirstFixtureLeases.values()).slice(0, limit) }
+  async updateEspnLiveFirstFixtureLease(id: string, patch: Partial<EspnLiveFirstFixtureLease>): Promise<{ count: number }> {
+    const existing = this.espnLiveFirstFixtureLeases.get(id); if (!existing) return { count: 0 }
+    this.espnLiveFirstFixtureLeases.set(id, { ...existing, ...patch, updatedAt: patch.updatedAt ?? new Date().toISOString() }); return { count: 1 }
+  }
+  async saveEspnLiveFirstRecoveryReport(report: EspnLiveFirstRecoveryReport): Promise<EspnLiveFirstRecoveryReport> { warnOnce(); this.espnLiveFirstRecoveryReports.set(report.id, report); return report }
+  async getEspnLiveFirstRecoveryReport(id: string): Promise<EspnLiveFirstRecoveryReport | null> { return this.espnLiveFirstRecoveryReports.get(id) ?? null }
+  async listEspnLiveFirstRecoveryReports(limit = 50): Promise<EspnLiveFirstRecoveryReport[]> { return Array.from(this.espnLiveFirstRecoveryReports.values()).sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit) }
+  async saveLiveFirstPostMatchOutcome(outcome: LiveFirstPostMatchOutcome): Promise<LiveFirstPostMatchOutcome> { warnOnce(); this.liveFirstPostMatchOutcomes.set(`${outcome.fixtureId}_${outcome.sessionId}`, outcome); return outcome }
+  async getLiveFirstPostMatchOutcome(fixtureId: string, sessionId: string): Promise<LiveFirstPostMatchOutcome | null> { return this.liveFirstPostMatchOutcomes.get(`${fixtureId}_${sessionId}`) ?? null }
+  async listLiveFirstPostMatchOutcomes(limit = 200): Promise<LiveFirstPostMatchOutcome[]> { return Array.from(this.liveFirstPostMatchOutcomes.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit) }
 }

@@ -97,6 +97,12 @@ import { repairLinksForFixture, repairLinksForToday } from '../modules/footballI
 import { generateDailyValidationReport, getDailyValidationReport, listDailyValidationReports } from '../modules/footballIntelligence/validation/dailyValidationReport.service.js'
 import { createValidationCampaign, listCampaigns, getCampaign, closeCampaign, attachDailyReport } from '../modules/footballIntelligence/validation/validationCampaign.service.js'
 import { buildControlledBetaReadiness } from '../modules/footballIntelligence/validation/controlledBetaReadiness.service.js'
+import {
+  startWorkerRun, stopWorkerRun, resumeWorkerRun, getActiveWorkerStatus,
+  buildWorkerRunSummary,
+} from '../modules/footballIntelligence/live/espnLiveFirstPersistentWorker.service.js'
+import { runRecoverySweep } from '../modules/footballIntelligence/live/espnLiveFirstRecovery.service.js'
+import { runPostMatchSweeper } from '../modules/footballIntelligence/live/espnLiveFirstPostMatchSweeper.service.js'
 
 const flag = (v: unknown) => String(v).toLowerCase() === 'true'
 
@@ -956,5 +962,61 @@ export async function matchIntelligenceRoutes(app: FastifyInstance) {
   app.get(`${BASE}/local-validation/controlled-beta-readiness`, async (_req, reply) => {
     if (!lvGate(reply)) return
     return ok(await buildControlledBetaReadiness())
+  })
+
+  // B59: persistent ESPN Live-First worker controls.
+  app.get(`${BASE}/espn-live-first/worker/status`, async (_req, reply) => {
+    if (!lvGate(reply)) return
+    const repos = repos2()
+    const runs = await repos.intelligence.listEspnLiveFirstWorkerRuns({ limit: 20 }).catch(() => [])
+    const sessions = await repos.intelligence.listLiveMonitoringSessions(50).catch(() => [])
+    const leases = await repos.intelligence.listEspnLiveFirstFixtureLeases(200).catch(() => [])
+    const recoveryReports = await repos.intelligence.listEspnLiveFirstRecoveryReports(10).catch(() => [])
+    const outcomes = await repos.intelligence.listLiveFirstPostMatchOutcomes(100).catch(() => [])
+    return ok({
+      active: getActiveWorkerStatus(),
+      runs,
+      sessions,
+      leases,
+      recoveryReports,
+      postMatchOutcomes: outcomes,
+      sessionsRunning: sessions.filter(s => s.status === 'running').length,
+      fixturesActive: leases.filter(l => l.status === 'active').length,
+      orphanSessions: recoveryReports[0]?.orphanedSessionsFound ?? 0,
+      completedFixtures: outcomes.filter(o => o.evaluable).length,
+      postMatchPending: Math.max(0, sessions.filter(s => s.status === 'completed' || s.status === 'completed_with_warnings').reduce((sum, s) => sum + s.fixtureIds.length, 0) - outcomes.length),
+      limitations: ['Local-only worker control; no odds, Telegram, auto-bet, stake, or enforce changes.'],
+    })
+  })
+  app.post(`${BASE}/espn-live-first/worker/start`, op, async (req, reply) => {
+    if (!lvGate(reply)) return
+    const body = (req.body || {}) as any
+    return ok(await startWorkerRun({
+      mode: body.mode || 'local_manual',
+      maxDurationMinutes: Number(body.maxDurationMinutes || env.ESPN_LIVE_FIRST_MAX_SESSION_MINUTES),
+      maxFixtures: Number(body.maxFixtures || env.ESPN_LIVE_FIRST_MAX_FIXTURES),
+      pollIntervalSeconds: Number(body.pollIntervalSeconds || env.ESPN_LIVE_FIRST_POLL_INTERVAL_SECONDS),
+    }))
+  })
+  app.post(`${BASE}/espn-live-first/worker/:workerRunId/stop`, op, async (req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(await stopWorkerRun(String((req.params as any).workerRunId)))
+  })
+  app.post(`${BASE}/espn-live-first/worker/:workerRunId/resume`, op, async (req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(await resumeWorkerRun(String((req.params as any).workerRunId)))
+  })
+  app.get(`${BASE}/espn-live-first/worker/:workerRunId/summary`, async (req, reply) => {
+    if (!lvGate(reply)) return
+    const summary = await buildWorkerRunSummary(String((req.params as any).workerRunId))
+    return summary ? ok(summary) : reply.status(404).send(badRequest('worker_run_not_found'))
+  })
+  app.post(`${BASE}/espn-live-first/recovery-sweep`, op, async (_req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(await runRecoverySweep())
+  })
+  app.post(`${BASE}/espn-live-first/post-match-sweeper`, op, async (_req, reply) => {
+    if (!lvGate(reply)) return
+    return ok(await runPostMatchSweeper())
   })
 }

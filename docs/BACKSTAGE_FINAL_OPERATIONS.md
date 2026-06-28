@@ -39,3 +39,6 @@ controlled-beta readiness. The live-recheck bridge can be enabled (observe, rate
 re-evaluate governance automatically during live matches without ever alerting/blocking. See
 `docs/DAILY_VALIDATION_REPORT_UI.md`, `docs/VALIDATION_CAMPAIGN_UI.md`,
 `backend/docs/FIRST_REAL_VALIDATION_DAY_RUNBOOK.md`.
+# B59 ESPN Live-First Worker Panel
+
+Backstage includes a local ESPN Live-First worker panel for status, active leases, sessions, orphan recovery, and post-match sweeping. It does not expose odds, stake, Telegram delivery, or enforce controls.

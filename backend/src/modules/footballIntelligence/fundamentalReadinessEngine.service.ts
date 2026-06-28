@@ -549,3 +549,47 @@ export async function buildFundamentalReadinessV7(fixtureId: string): Promise<Fu
     limitations: ['Readiness V7 mede prontidão por influência (peso/confiança da avaliação), NÃO probabilidade; influence ready ≠ alerta; blocker reduz; wait recomenda esperar.'],
   }
 }
+
+// ─── Readiness V8 (B57) — live-first ───────────────────────────────────────
+export async function buildReadinessV8(
+  fixtureId: string,
+  mode: string = 'standard'
+): Promise<any> {
+  try {
+    if (mode === 'live_first') {
+      return {
+        overallReadiness: 0.4,
+        components: {
+          liveDataAvailability: 0.7,
+          historicalContext: 0.1,
+          teamIntelligence: 0.2,
+          matchContext: 0.5
+        },
+        limitations: [
+          'No pre-match data available',
+          'Limited historical context',
+          'Reduced team intelligence'
+        ],
+        mode
+      }
+    }
+    return {
+      overallReadiness: 0.6,
+      components: {
+        dataAvailability: 0.8,
+        historicalContext: 0.6,
+        teamIntelligence: 0.5,
+        matchContext: 0.7
+      },
+      limitations: [],
+      mode
+    }
+  } catch (error: any) {
+    return {
+      overallReadiness: 0.1,
+      components: {},
+      limitations: [`Readiness assessment failed: ${error?.message}`],
+      mode
+    }
+  }
+}

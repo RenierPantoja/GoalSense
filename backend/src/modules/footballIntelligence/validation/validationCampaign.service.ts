@@ -16,7 +16,19 @@ export async function createValidationCampaign(title: string, targetDays = 14): 
   const campaign: ValidationCampaign = {
     id: campaignId(), title: title || 'Campanha de validação local', startedAt: new Date().toISOString(), endedAt: null,
     status: 'running', targetDays, actualDays: 0, dailyReportIds: [],
-    aggregateMetrics: { fixturesAnalyzed: 0, fixturesWithData: 0, governanceEvaluations: 0, causalEvaluable: 0, causalNotEvaluable: 0, providerLimitedFixtures: 0 },
+    aggregateMetrics: {
+      fixturesAnalyzed: 0,
+      fixturesWithData: 0,
+      governanceEvaluations: 0,
+      causalEvaluable: 0,
+      causalNotEvaluable: 0,
+      providerLimitedFixtures: 0,
+      liveMonitoringHours: 0,
+      completedLiveFirstFixtures: 0,
+      evaluableLiveFirstCases: 0,
+      orphanRecoveryCount: 0,
+      postMatchSweeperCount: 0,
+    },
     blockers: [], warnings: [], finalRecommendation: 'Em andamento — acumular dias reais antes de concluir.',
     limitations: ['Campanha observacional; resumo não é promessa de acerto.'],
   }
@@ -38,6 +50,11 @@ export async function attachDailyReport(campaignId: string, report: DailyValidat
     causalEvaluable: agg.causalEvaluable + report.causalSummary.evaluable,
     causalNotEvaluable: agg.causalNotEvaluable + report.causalSummary.notEvaluable,
     providerLimitedFixtures: agg.providerLimitedFixtures + report.providerLimitations.length,
+    liveMonitoringHours: (agg.liveMonitoringHours ?? 0) + Math.round((report.workerSessionsCompleted * report.averageSessionDurationMinutes) / 60),
+    completedLiveFirstFixtures: (agg.completedLiveFirstFixtures ?? 0) + report.liveFirstCompletedFixtures,
+    evaluableLiveFirstCases: (agg.evaluableLiveFirstCases ?? 0) + report.liveFirstEvaluableCases,
+    orphanRecoveryCount: (agg.orphanRecoveryCount ?? 0) + report.orphanSessionsRecovered,
+    postMatchSweeperCount: (agg.postMatchSweeperCount ?? 0) + report.postMatchSweeperRuns,
   }
   return repos.intelligence.updateValidationCampaign(campaignId, { dailyReportIds, actualDays: dailyReportIds.length, aggregateMetrics }).catch(() => ({ count: 0 }))
 }
