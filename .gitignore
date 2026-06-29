@@ -28,3 +28,7 @@ dist
 backend/dist
 backend/node_modules
 backend/live-validation-watch-result.json
+
+# Build artifacts
+*.tsbuildinfo
+tsconfig.tsbuildinfo

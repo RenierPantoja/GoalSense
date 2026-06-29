@@ -38,6 +38,20 @@ export const CAUSAL_CASE_ALLOWLIST = [
   'dataMode', 'limitations', 'createdAt',
 ] as const
 
+// B69: sanitized public signal-quality summary + case preview
+export const SIGNAL_QUALITY_SUMMARY_ALLOWLIST = [
+  'generatedAt', 'sampleSize', 'signalsReviewed', 'reliableObserve',
+  'usefulButLimited', 'noisyMonitorOnly', 'insufficientData', 'misleadingCandidate',
+  'pendingMoreSample', 'topUsefulSignals', 'topNoisySignals',
+  'governanceFeedbackSummary', 'momentumNoiseFindings', 'recommendedHumanReviewCount',
+  'limitations', 'dataMode', 'observeOnly',
+] as const
+
+export const SIGNAL_QUALITY_CASE_ALLOWLIST = [
+  'caseId', 'fixtureId', 'signalKind', 'evidenceStrength', 'noiseRisk',
+  'outcomeAlignment', 'qualityGrade', 'matchMinute', 'limitations', 'createdAt',
+] as const
+
 // ── Denylist: forbidden field-name fragments (case-insensitive) ─────────────
 // Any field whose key contains one of these fragments is dropped, regardless of
 // allowlist, as a defense-in-depth guard.

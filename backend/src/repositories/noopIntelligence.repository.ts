@@ -75,6 +75,7 @@ import type {
   EspnLiveFirstWorkerRun, EspnLiveFirstFixtureLease, EspnLiveFirstRecoveryReport, LiveFirstPostMatchOutcome,
 } from '../modules/footballIntelligence/live/espnLiveFirstWorker.types.js'
 import type { ControlPlanePublicSummaryDoc } from '../modules/controlPlane/controlPlanePublic.types.js'
+import type { LiveFirstSignalQualityCase, LiveFirstSignalQualitySummary } from '../modules/footballIntelligence/live/signalQuality/liveFirstSignalQuality.types.js'
 import type {
   LiveMonitoringSession, LiveMonitoringFixtureState,
 } from '../modules/footballIntelligence/live/liveMonitoringSession.types.js'
@@ -93,6 +94,8 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   private readonly espnLiveFirstRecoveryReports = new Map<string, EspnLiveFirstRecoveryReport>()
   private readonly liveFirstPostMatchOutcomes = new Map<string, LiveFirstPostMatchOutcome>()
   private readonly controlPlanePublicSummaries = new Map<string, ControlPlanePublicSummaryDoc>()
+  private readonly liveFirstSignalQualityCases = new Map<string, LiveFirstSignalQualityCase>()
+  private readonly liveFirstSignalQualityReviews = new Map<string, LiveFirstSignalQualitySummary>()
 
   async createSignalLedgerEntry(entry: SignalLedgerEntry): Promise<SignalLedgerEntry> { warnOnce(); return entry }
   async updateSignalLedgerEntry(): Promise<{ count: number }> { return { count: 0 } }
@@ -467,4 +470,11 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async saveControlPlanePublicSummary(doc: ControlPlanePublicSummaryDoc): Promise<ControlPlanePublicSummaryDoc> { this.controlPlanePublicSummaries.set(doc.id, doc); return doc }
   async getControlPlanePublicSummary(id: string): Promise<ControlPlanePublicSummaryDoc | null> { return this.controlPlanePublicSummaries.get(id) ?? null }
   async listControlPlanePublicSummaries(limit = 20): Promise<ControlPlanePublicSummaryDoc[]> { return Array.from(this.controlPlanePublicSummaries.values()).slice(0, limit) }
+
+  // B68: live-first signal quality review (in-memory, not persisted in Prisma mode)
+  async saveLiveFirstSignalQualityCase(c: LiveFirstSignalQualityCase): Promise<LiveFirstSignalQualityCase> { this.liveFirstSignalQualityCases.set(c.id, c); return c }
+  async listLiveFirstSignalQualityCases(limit = 200): Promise<LiveFirstSignalQualityCase[]> { return Array.from(this.liveFirstSignalQualityCases.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit) }
+  async saveLiveFirstSignalQualityReview(r: LiveFirstSignalQualitySummary): Promise<LiveFirstSignalQualitySummary> { this.liveFirstSignalQualityReviews.set(r.id, r); return r }
+  async getLatestLiveFirstSignalQualityReview(): Promise<LiveFirstSignalQualitySummary | null> { return Array.from(this.liveFirstSignalQualityReviews.values()).sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))[0] ?? null }
+  async listLiveFirstSignalQualityReviews(limit = 50): Promise<LiveFirstSignalQualitySummary[]> { return Array.from(this.liveFirstSignalQualityReviews.values()).sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit) }
 }

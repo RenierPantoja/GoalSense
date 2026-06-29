@@ -31,3 +31,13 @@ Daily reports now also include control-plane environment, worker runtime environ
 # B62 Control Plane Drill Context
 
 Daily reports now include control-plane drill fields: URL, runtime, read-only status, command blocking, local worker visibility from Vercel, heartbeat visibility, daily-report visibility, causal-case visibility, freshness status, lag, and limitations.
+
+---
+
+## B68 Update — Signal Quality Section
+The daily report can include a signal-quality section sourced from the latest
+`liveFirstSignalQualityReviews`: `signalsReviewed`, `reliableObserveSignals`,
+`usefulButLimitedSignals`, `noisyMonitorOnlySignals`, `insufficientDataSignals`,
+`misleadingCandidateSignals`, `pendingMoreSampleSignals`, `topUsefulLiveSignals`,
+`topNoisyLiveSignals`, `momentumNoiseFindings`, `governanceQualityFeedback`,
+`recommendedHumanReviewItems`. Observe only — no calibration is applied.

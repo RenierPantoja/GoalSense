@@ -10,6 +10,7 @@ import { matchIntelligenceApi } from '@/services/matchIntelligenceApi'
 import type { ProviderCapabilitiesDto } from '@/features/matchIntelligence/matchIntelligenceTypes'
 import { BackstageMatchIntelligencePanel } from './BackstageMatchIntelligencePanel'
 import { EspnLiveFirstWorkerPanel } from './EspnLiveFirstWorkerPanel'
+import { LiveFirstSignalQualityPanel } from './LiveFirstSignalQualityPanel'
 
 export function BackstageLocalPage() {
   const [caps, setCaps] = useState<ProviderCapabilitiesDto | null>(null)
@@ -41,6 +42,7 @@ export function BackstageLocalPage() {
         </div>
       )}
       <EspnLiveFirstWorkerPanel isAdmin />
+      <LiveFirstSignalQualityPanel />
       <BackstageMatchIntelligencePanel />
     </div>
   )

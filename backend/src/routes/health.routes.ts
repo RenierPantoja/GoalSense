@@ -81,4 +81,19 @@ export async function healthRoutes(app: FastifyInstance) {
       data: await buildControlPlaneFirebaseReadReport(),
     }
   })
+
+  // B68: latest live-first signal quality review (observe only).
+  app.get('/worker-control-plane/signal-quality', async (_req, reply) => {
+    reply.header('Cache-Control', 'no-store, max-age=0')
+    const { createRepositories } = await import('../repositories/index.js')
+    const repos = createRepositories()
+    const summary = await repos.intelligence.getLatestLiveFirstSignalQualityReview().catch(() => null)
+    return {
+      ok: true,
+      readOnly: true,
+      generatedAt: new Date().toISOString(),
+      data: summary,
+      limitations: summary ? [] : ['No signal quality review published yet (not a failure).'],
+    }
+  })
 }

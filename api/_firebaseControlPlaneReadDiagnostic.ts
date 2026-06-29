@@ -83,6 +83,12 @@ export async function buildControlPlaneFirebaseReadReport() {
   // B66: sanitized public read model status (preferred path).
   const publicModel = await getPublicControlPlaneReadModel().catch(() => null);
 
+  // B68: after lockdown, raw 403 is EXPECTED (success), not an alarming error.
+  // Only flag permissionDenied as critical when the sanitized summary itself is denied.
+  const sanitizedActive = publicModel?.dataMode === 'sanitized_read_model';
+  const rawCollectionsLocked = sanitizedActive && permissionDenied && publicModel?.rawFallbackEnabled === false;
+  const criticalPermissionDenied = publicModel?.permissionDeniedPublicSummary === true;
+
   return {
     generatedAt: new Date().toISOString(),
     readOnly: true,
@@ -110,10 +116,16 @@ export async function buildControlPlaneFirebaseReadReport() {
     permissionDeniedPublicSummary: publicModel?.permissionDeniedPublicSummary ?? false,
     controlPlaneDataMode: publicModel?.dataMode ?? 'missing_public_summary',
     publicExposure: publicModel?.publicExposure ?? 'unknown',
+    // B68: clear lockdown semantics — raw 403 after lockdown is success, not alarm.
+    rawCollectionsLocked,
+    criticalPermissionDenied,
+    rawPermissionDeniedDetail: permissionDenied,
     limitations: [
       'Diagnostic is read-only and never writes to Firebase.',
       'Empty collections are not failures.',
-      ...(permissionDenied ? ['Firebase Rules denied at least one raw control-plane read.'] : []),
+      ...(rawCollectionsLocked ? ['Raw collections are locked (403 expected after B67 lockdown).'] : []),
+      ...(criticalPermissionDenied ? ['CRITICAL: sanitized controlPlanePublicSummaries read denied.'] : []),
+      ...((permissionDenied && !sanitizedActive && !criticalPermissionDenied) ? ['Firebase Rules denied at least one raw control-plane read.'] : []),
       ...((publicModel?.dataMode === 'sanitized_read_model') ? ['Using sanitized public read model (minimal exposure).'] : []),
       ...((publicModel?.dataMode === 'missing_public_summary') ? ['controlPlanePublicSummaries not published yet; this is not a failure.'] : []),
     ],

@@ -120,8 +120,57 @@ export async function buildPublicCausalCasesSummary() {
   return { cases }
 }
 
-// ── Snapshot assembly + publish ──────────────────────────────────────────────
+// ── B69: sanitized public signal-quality summary ────────────────────────────
 
+export async function buildPublicSignalQualitySummary() {
+  const repos = createRepositories()
+  const review: any = await repos.intelligence.getLatestLiveFirstSignalQualityReview().catch(() => null)
+  if (!review) {
+    return {
+      summary: { observeOnly: true, dataMode: 'sanitized_read_model', available: false, sampleSize: 0, limitations: ['No signal quality review published yet (not a failure).'] },
+      casesPreview: [] as any[],
+    }
+  }
+  const topUsefulSignals = (review.topUsefulSignals || []).slice(0, 5).map((s: any) => ({ signalKind: String(s.signalKind), count: Number(s.count) || 0 }))
+  const topNoisySignals = (review.topNoisySignals || []).slice(0, 5).map((s: any) => ({ signalKind: String(s.signalKind), count: Number(s.count) || 0 }))
+  const summary = {
+    observeOnly: true,
+    dataMode: 'sanitized_read_model',
+    available: true,
+    generatedAt: review.generatedAt,
+    sampleSize: review.sampleSize ?? 0,
+    signalsReviewed: review.signalsReviewed ?? 0,
+    reliableObserve: review.reliableObserve ?? 0,
+    usefulButLimited: review.usefulButLimited ?? 0,
+    noisyMonitorOnly: review.noisyMonitorOnly ?? 0,
+    insufficientData: review.insufficientData ?? 0,
+    misleadingCandidate: review.misleadingCandidate ?? 0,
+    pendingMoreSample: review.pendingMoreSample ?? 0,
+    topUsefulSignals,
+    topNoisySignals,
+    governanceFeedbackSummary: (review.governanceQualityFeedback || []).slice(0, 5),
+    momentumNoiseFindings: (review.momentumNoiseFindings || []).slice(0, 5),
+    recommendedHumanReviewCount: (review.recommendations || []).length,
+    limitations: (review.limitations || []).slice(0, 5),
+  }
+  // Sanitized case preview from persisted cases (allowlisted, no raw payloads).
+  const cases: any[] = await repos.intelligence.listLiveFirstSignalQualityCases(10).catch(() => [])
+  const casesPreview = cases.slice(0, 10).map(c => ({
+    caseId: String(c.id),
+    fixtureId: String(c.fixtureId),
+    signalKind: String(c.signalKind),
+    evidenceStrength: String(c.evidenceStrength),
+    noiseRisk: String(c.noiseRisk),
+    outcomeAlignment: String(c.outcomeAlignment),
+    qualityGrade: String(c.qualityGrade),
+    matchMinute: c.matchMinute ?? null,
+    limitations: (c.limitations || []).slice(0, 3),
+    createdAt: c.createdAt,
+  }))
+  return { summary, casesPreview }
+}
+
+// ── Snapshot assembly + publish ──────────────────────────────────────────────
 export async function buildPublicControlPlaneSnapshot(): Promise<ControlPlanePublicSummaryDoc[]> {
   const status = await getLatestWorkerStatusReadModel()
   const generatedAt = new Date().toISOString()
@@ -131,12 +180,13 @@ export async function buildPublicControlPlaneSnapshot(): Promise<ControlPlanePub
     ],
   })
 
-  const [workerStatus, sessions, leases, daily, causal] = await Promise.all([
+  const [workerStatus, sessions, leases, daily, causal, signalQuality] = await Promise.all([
     buildPublicWorkerStatusSummary(),
     buildPublicLiveSessionsSummary(),
     buildPublicLeasesSummary(),
     buildPublicDailyReportSummary(),
     buildPublicCausalCasesSummary(),
+    buildPublicSignalQualitySummary(),
   ])
 
   const recovery = status.latestRecoveryReport
@@ -153,6 +203,8 @@ export async function buildPublicControlPlaneSnapshot(): Promise<ControlPlanePub
     mk('latestLeases', { leases: leases.leases, activeCount: leases.leases.filter((l: any) => l.status === 'active').length }),
     mk('latestDailyReport', daily.data ?? {}),
     mk('latestCausalCases', { cases: causal.cases, evaluableCount: causal.cases.filter((c: any) => c.evaluable).length }),
+    mk('latestSignalQualitySummary', signalQuality.summary),
+    mk('latestSignalQualityCasesPreview', { cases: signalQuality.casesPreview, count: signalQuality.casesPreview.length }),
     mk('latestRecoveryStatus', recovery),
     mk('freshness', {
       freshnessStatus: status.freshness.freshnessStatus,

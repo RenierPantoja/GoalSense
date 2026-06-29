@@ -80,6 +80,7 @@ import type {
   EspnLiveFirstWorkerRun, EspnLiveFirstFixtureLease, EspnLiveFirstRecoveryReport, LiveFirstPostMatchOutcome,
 } from '../../modules/footballIntelligence/live/espnLiveFirstWorker.types.js'
 import type { ControlPlanePublicSummaryDoc } from '../../modules/controlPlane/controlPlanePublic.types.js'
+import type { LiveFirstSignalQualityCase, LiveFirstSignalQualitySummary } from '../../modules/footballIntelligence/live/signalQuality/liveFirstSignalQuality.types.js'
 import type {
   LiveMonitoringSession, LiveMonitoringFixtureState,
 } from '../../modules/footballIntelligence/live/liveMonitoringSession.types.js'
@@ -168,6 +169,8 @@ const LF_LEASES = 'espnLiveFirstFixtureLeases'
 const LF_RECOVERY_REPORTS = 'espnLiveFirstRecoveryReports'
 const LF_POST_MATCH_OUTCOMES = 'liveFirstPostMatchOutcomes'
 const CONTROL_PLANE_PUBLIC_SUMMARIES = 'controlPlanePublicSummaries'
+const LF_SIGNAL_QUALITY_CASES = 'liveFirstSignalQualityCases'
+const LF_SIGNAL_QUALITY_REVIEWS = 'liveFirstSignalQualityReviews'
 
 const READ_CAP = 2000
 
@@ -1608,5 +1611,26 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
   async listControlPlanePublicSummaries(limit?: number): Promise<ControlPlanePublicSummaryDoc[]> {
     const db = await getFirestore(); const snap = await db.collection(CONTROL_PLANE_PUBLIC_SUMMARIES).get()
     return snap.docs.map((d: any) => docData<ControlPlanePublicSummaryDoc>(d)).slice(0, limit || 20)
+  }
+
+  // â”€â”€ B68: live-first signal quality review â”€â”€
+  async saveLiveFirstSignalQualityCase(c: LiveFirstSignalQualityCase): Promise<LiveFirstSignalQualityCase> {
+    const db = await getFirestore(); await db.collection(LF_SIGNAL_QUALITY_CASES).doc(c.id).set(c, { merge: true }); return c
+  }
+  async listLiveFirstSignalQualityCases(limit?: number): Promise<LiveFirstSignalQualityCase[]> {
+    const db = await getFirestore(); const snap = await db.collection(LF_SIGNAL_QUALITY_CASES).get()
+    return snap.docs.map((d: any) => docData<LiveFirstSignalQualityCase>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
+  }
+  async saveLiveFirstSignalQualityReview(r: LiveFirstSignalQualitySummary): Promise<LiveFirstSignalQualitySummary> {
+    const db = await getFirestore(); await db.collection(LF_SIGNAL_QUALITY_REVIEWS).doc(r.id).set(r, { merge: true }); return r
+  }
+  async getLatestLiveFirstSignalQualityReview(): Promise<LiveFirstSignalQualitySummary | null> {
+    const db = await getFirestore(); const snap = await db.collection(LF_SIGNAL_QUALITY_REVIEWS).get()
+    const items = snap.docs.map((d: any) => docData<LiveFirstSignalQualitySummary>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))
+    return items[0] || null
+  }
+  async listLiveFirstSignalQualityReviews(limit?: number): Promise<LiveFirstSignalQualitySummary[]> {
+    const db = await getFirestore(); const snap = await db.collection(LF_SIGNAL_QUALITY_REVIEWS).get()
+    return snap.docs.map((d: any) => docData<LiveFirstSignalQualitySummary>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit || 50)
   }
 }

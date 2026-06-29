@@ -11,6 +11,7 @@ import {
 } from './_workerControlPlaneReadModel.js';
 import { buildFirebaseEnvSafeSummary } from './_firebaseControlPlaneEnv.js';
 import { buildControlPlaneFirebaseReadReport } from './_firebaseControlPlaneReadDiagnostic.js';
+import { getPublicSignalQualityReadModel } from './_controlPlanePublicReadModel.js';
 
 /**
  * Consolidated handler for less-critical endpoints.
@@ -76,6 +77,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           generatedAt: new Date().toISOString(),
           data: await buildControlPlaneFirebaseReadReport(),
         });
+
+      case 'worker-control-plane-signal-quality':
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
+        return res.status(200).json({ ok: true, readOnly: true, data: await getPublicSignalQualityReadModel() });
 
       case 'team-logo-resolver': {
         const name = getQuery('name');

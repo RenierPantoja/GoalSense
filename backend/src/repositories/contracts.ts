@@ -201,6 +201,9 @@ import type {
 import type {
   ControlPlanePublicSummaryDoc,
 } from '../modules/controlPlane/controlPlanePublic.types.js'
+import type {
+  LiveFirstSignalQualityCase, LiveFirstSignalQualitySummary,
+} from '../modules/footballIntelligence/live/signalQuality/liveFirstSignalQuality.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -561,6 +564,13 @@ export interface IntelligenceRepository {
   saveControlPlanePublicSummary(doc: ControlPlanePublicSummaryDoc): Promise<ControlPlanePublicSummaryDoc>
   getControlPlanePublicSummary(id: string): Promise<ControlPlanePublicSummaryDoc | null>
   listControlPlanePublicSummaries(limit?: number): Promise<ControlPlanePublicSummaryDoc[]>
+
+  // â”€â”€ B68: Live-first signal quality review â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  saveLiveFirstSignalQualityCase(c: LiveFirstSignalQualityCase): Promise<LiveFirstSignalQualityCase>
+  listLiveFirstSignalQualityCases(limit?: number): Promise<LiveFirstSignalQualityCase[]>
+  saveLiveFirstSignalQualityReview(r: LiveFirstSignalQualitySummary): Promise<LiveFirstSignalQualitySummary>
+  getLatestLiveFirstSignalQualityReview(): Promise<LiveFirstSignalQualitySummary | null>
+  listLiveFirstSignalQualityReviews(limit?: number): Promise<LiveFirstSignalQualitySummary[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

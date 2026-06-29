@@ -122,3 +122,31 @@ export async function getPublicControlPlaneReadModel(): Promise<PublicControlPla
     summaries,
   };
 }
+
+/**
+ * B69: sanitized signal-quality view for the hosted control plane.
+ * Reads latestSignalQualitySummary / latestSignalQualityCasesPreview from the
+ * public summaries. Never reads raw collections.
+ */
+export async function getPublicSignalQualityReadModel() {
+  const model = await getPublicControlPlaneReadModel();
+  const summary = model.summaries?.['latestSignalQualitySummary'] || null;
+  const preview = model.summaries?.['latestSignalQualityCasesPreview'] || null;
+  const available = !!summary && summary.available !== false;
+  return {
+    observeOnly: true,
+    signalQualityAvailable: available,
+    controlPlaneDataMode: model.dataMode,
+    publicExposure: model.publicExposure,
+    rawFallbackEnabled: model.rawFallbackEnabled,
+    signalQualityFreshness: model.sanitizedSnapshotFreshness,
+    generatedAt: summary?.generatedAt ?? model.sanitizedSnapshotGeneratedAt ?? null,
+    sampleSize: summary?.sampleSize ?? 0,
+    summary: available ? summary : null,
+    casesPreview: preview?.cases ?? [],
+    status: available ? 'sanitized_read_model' : 'missing_public_signal_quality_summary',
+    limitations: available
+      ? ['Observe only; sanitized public signal-quality summary.']
+      : ['No sanitized signal-quality summary published yet (not a failure).'],
+  };
+}
