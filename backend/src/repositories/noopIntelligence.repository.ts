@@ -74,6 +74,7 @@ import type {
 import type {
   EspnLiveFirstWorkerRun, EspnLiveFirstFixtureLease, EspnLiveFirstRecoveryReport, LiveFirstPostMatchOutcome,
 } from '../modules/footballIntelligence/live/espnLiveFirstWorker.types.js'
+import type { ControlPlanePublicSummaryDoc } from '../modules/controlPlane/controlPlanePublic.types.js'
 import type {
   LiveMonitoringSession, LiveMonitoringFixtureState,
 } from '../modules/footballIntelligence/live/liveMonitoringSession.types.js'
@@ -91,6 +92,7 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   private readonly espnLiveFirstFixtureLeases = new Map<string, EspnLiveFirstFixtureLease>()
   private readonly espnLiveFirstRecoveryReports = new Map<string, EspnLiveFirstRecoveryReport>()
   private readonly liveFirstPostMatchOutcomes = new Map<string, LiveFirstPostMatchOutcome>()
+  private readonly controlPlanePublicSummaries = new Map<string, ControlPlanePublicSummaryDoc>()
 
   async createSignalLedgerEntry(entry: SignalLedgerEntry): Promise<SignalLedgerEntry> { warnOnce(); return entry }
   async updateSignalLedgerEntry(): Promise<{ count: number }> { return { count: 0 } }
@@ -460,4 +462,9 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async saveLiveFirstPostMatchOutcome(outcome: LiveFirstPostMatchOutcome): Promise<LiveFirstPostMatchOutcome> { warnOnce(); this.liveFirstPostMatchOutcomes.set(`${outcome.fixtureId}_${outcome.sessionId}`, outcome); return outcome }
   async getLiveFirstPostMatchOutcome(fixtureId: string, sessionId: string): Promise<LiveFirstPostMatchOutcome | null> { return this.liveFirstPostMatchOutcomes.get(`${fixtureId}_${sessionId}`) ?? null }
   async listLiveFirstPostMatchOutcomes(limit = 200): Promise<LiveFirstPostMatchOutcome[]> { return Array.from(this.liveFirstPostMatchOutcomes.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit) }
+
+  // B66: sanitized public control-plane summaries
+  async saveControlPlanePublicSummary(doc: ControlPlanePublicSummaryDoc): Promise<ControlPlanePublicSummaryDoc> { this.controlPlanePublicSummaries.set(doc.id, doc); return doc }
+  async getControlPlanePublicSummary(id: string): Promise<ControlPlanePublicSummaryDoc | null> { return this.controlPlanePublicSummaries.get(id) ?? null }
+  async listControlPlanePublicSummaries(limit = 20): Promise<ControlPlanePublicSummaryDoc[]> { return Array.from(this.controlPlanePublicSummaries.values()).slice(0, limit) }
 }

@@ -15,6 +15,7 @@ import { detectSnapshotChanges } from './liveSnapshotDiff.service.js'
 import { onLiveSnapshotCaptured, processRecheckQueue, isBridgeEnabled as isLiveRecheckBridgeEnabled } from '../validation/localLiveReevaluationBridge.service.js'
 import { acquireFixtureLease, renewFixtureLease, releaseFixtureLease, getWorkerActiveLeasesCount } from './espnLiveFirstLease.service.js'
 import { runEspnLiveFirstPostMatchSweeper } from './espnLiveFirstPostMatchSweeper.service.js'
+import { publishPublicControlPlaneSnapshot } from '../../controlPlane/controlPlanePublicReadModel.service.js'
 import type {
   EspnLiveFirstWorkerRun,
   EspnLiveFirstWorkerStatus,
@@ -363,6 +364,9 @@ async function executeWorkerTick(): Promise<void> {
       await stopEspnLiveFirstWorker('All fixtures completed')
     }
 
+    // B66: publish sanitized public control-plane snapshot (throttled, non-fatal).
+    await publishPublicControlPlaneSnapshot().catch(() => { /* never break the worker */ })
+
   } catch (error: any) {
     activeWorkerRun.errors.push(`Worker tick error: ${error?.message || 'unknown'}`)
     if (activeWorkerRun.errors.length >= 10) {
@@ -417,6 +421,9 @@ export async function stopEspnLiveFirstWorker(reason?: string): Promise<{
     activeWorkerRun = null
     workerSession = null
     workerFixtureStates.clear()
+
+    // B66: final forced publish so the control plane reflects the stopped state.
+    await publishPublicControlPlaneSnapshot({ force: true }).catch(() => {})
 
     return {
       success: true,

@@ -78,18 +78,45 @@ export function EspnLiveFirstWorkerPanel({ isAdmin }: { isAdmin: boolean }) {
 
   const buttonClass = 'h-8 px-2 rounded-lg border border-white/[0.09] bg-white/[0.03] hover:bg-white/[0.06] text-[11px] text-white/70 inline-flex items-center gap-1 disabled:opacity-45 disabled:cursor-not-allowed'
 
+  // B66: control-plane security mode badge
+  const diag = status?.firebaseReadDiagnostic
+  const dataMode = diag?.controlPlaneDataMode ?? (diag?.permissionDenied ? 'permission_denied' : 'missing_public_summary')
+  const publicExposure = diag?.publicExposure ?? 'unknown'
+  const dataModeLabel: Record<string, string> = {
+    sanitized_read_model: 'Sanitized Read Model',
+    raw_fallback: 'Raw Fallback',
+    missing_public_summary: 'Public Summary Pending',
+    permission_denied: 'Permission Denied',
+  }
+  const dataModeTone: Record<string, string> = {
+    sanitized_read_model: 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200/80',
+    raw_fallback: 'border-amber-400/20 bg-amber-500/10 text-amber-200/80',
+    missing_public_summary: 'border-white/10 bg-white/[0.04] text-white/60',
+    permission_denied: 'border-rose-400/20 bg-rose-500/10 text-rose-200/80',
+  }
+  const rawExposureWarning = diag?.rawPublicExposureWarning ?? null
+
   return (
     <div className="rounded-2xl border border-white/[0.07] bg-white/[0.012] p-4">
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <Activity size={14} className="text-[#7FE9DC]" />
         <h4 className="flex-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">ESPN Live-First worker persistente</h4>
         <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${readOnlyControlPlane ? 'border-cyan-400/20 bg-cyan-500/10 text-cyan-200/80' : 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200/80'}`}>
           {runtimeLabel}
         </span>
+        <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${dataModeTone[dataMode] ?? dataModeTone.missing_public_summary}`} title={`Public exposure: ${publicExposure}`}>
+          {dataModeLabel[dataMode] ?? dataMode}
+        </span>
         <button type="button" onClick={() => void runAction('refresh', load)} disabled={busy !== null} className={buttonClass} title="Refresh status">
           <RefreshCw size={12} />Refresh
         </button>
       </div>
+
+      {rawExposureWarning && (
+        <p className="mb-2 rounded-lg border border-amber-400/20 bg-amber-500/[0.07] px-2 py-1 text-[10px] text-amber-200/80">
+          ⚠ {rawExposureWarning}
+        </p>
+      )}
 
       {msg && <p className="mb-2 text-[11px] text-white/60">{msg}</p>}
 

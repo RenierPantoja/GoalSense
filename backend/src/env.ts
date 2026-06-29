@@ -231,6 +231,10 @@ const envSchema = z.object({
   GOALSENSE_RUNTIME: z.enum(['vercel_control_plane', 'local_worker', 'local_dev']).optional(),
   ENABLE_VERCEL_WORKER_COMMANDS: z.string().default('false'),
   ENABLE_LOCAL_WORKER_COMMANDS: z.string().default('true'),
+  // B66: Public sanitized control-plane read model + raw fallback policy.
+  ENABLE_PUBLIC_CONTROL_PLANE_READ_MODEL: z.string().default('true'),
+  ENABLE_RAW_CONTROL_PLANE_READ_FALLBACK: z.string().default('false'),
+  CONTROL_PLANE_PUBLIC_SNAPSHOT_MIN_INTERVAL_SECONDS: z.coerce.number().default(30),
 }).superRefine((val, ctx) => {
   // Conditional validation by persistence provider
   if (val.PERSISTENCE_PROVIDER === 'prisma') {

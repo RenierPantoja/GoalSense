@@ -64,6 +64,18 @@ export interface EspnLiveFirstWorkerStatusDto {
     lastErrorSafe: string | null
     freshnessStatus: string
     limitations: string[]
+    // B66 public read model hardening fields
+    publicReadModelEnabled?: boolean
+    publicSummaryReadable?: boolean
+    rawFallbackEnabled?: boolean
+    rawCollectionsReadable?: boolean
+    rawPublicExposureWarning?: string | null
+    sanitizedSnapshotFreshness?: string | null
+    sanitizedSnapshotGeneratedAt?: string | null
+    missingPublicSummary?: boolean
+    permissionDeniedPublicSummary?: boolean
+    controlPlaneDataMode?: 'sanitized_read_model' | 'raw_fallback' | 'missing_public_summary' | 'permission_denied'
+    publicExposure?: 'minimal' | 'transitional_raw_read' | 'blocked' | 'unknown'
   }
   recoveryReports: Array<{ id: string; generatedAt: string; orphanedSessionsFound: number; recoveredSessions: string[]; closedSessions: string[]; limitations: string[] }>
   postMatchOutcomes: Array<{ fixtureId: string; sessionId: string; evaluable: boolean; reason: string; snapshotCount: number; limitations: string[] }>

@@ -198,6 +198,9 @@ import type {
 import type {
   LiveMonitoringSession, LiveMonitoringFixtureState,
 } from '../modules/footballIntelligence/live/liveMonitoringSession.types.js'
+import type {
+  ControlPlanePublicSummaryDoc,
+} from '../modules/controlPlane/controlPlanePublic.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -553,6 +556,11 @@ export interface IntelligenceRepository {
   saveLiveFirstPostMatchOutcome(outcome: LiveFirstPostMatchOutcome): Promise<LiveFirstPostMatchOutcome>
   getLiveFirstPostMatchOutcome(fixtureId: string, sessionId: string): Promise<LiveFirstPostMatchOutcome | null>
   listLiveFirstPostMatchOutcomes(limit?: number): Promise<LiveFirstPostMatchOutcome[]>
+
+  // â”€â”€ B66: Sanitized public control-plane summaries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  saveControlPlanePublicSummary(doc: ControlPlanePublicSummaryDoc): Promise<ControlPlanePublicSummaryDoc>
+  getControlPlanePublicSummary(id: string): Promise<ControlPlanePublicSummaryDoc | null>
+  listControlPlanePublicSummaries(limit?: number): Promise<ControlPlanePublicSummaryDoc[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

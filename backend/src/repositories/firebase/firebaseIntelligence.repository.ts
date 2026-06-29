@@ -79,6 +79,7 @@ import type {
 import type {
   EspnLiveFirstWorkerRun, EspnLiveFirstFixtureLease, EspnLiveFirstRecoveryReport, LiveFirstPostMatchOutcome,
 } from '../../modules/footballIntelligence/live/espnLiveFirstWorker.types.js'
+import type { ControlPlanePublicSummaryDoc } from '../../modules/controlPlane/controlPlanePublic.types.js'
 import type {
   LiveMonitoringSession, LiveMonitoringFixtureState,
 } from '../../modules/footballIntelligence/live/liveMonitoringSession.types.js'
@@ -166,6 +167,7 @@ const LF_WORKER_RUNS = 'espnLiveFirstWorkerRuns'
 const LF_LEASES = 'espnLiveFirstFixtureLeases'
 const LF_RECOVERY_REPORTS = 'espnLiveFirstRecoveryReports'
 const LF_POST_MATCH_OUTCOMES = 'liveFirstPostMatchOutcomes'
+const CONTROL_PLANE_PUBLIC_SUMMARIES = 'controlPlanePublicSummaries'
 
 const READ_CAP = 2000
 
@@ -1594,5 +1596,17 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
   async listLiveFirstPostMatchOutcomes(limit?: number): Promise<LiveFirstPostMatchOutcome[]> {
     const db = await getFirestore(); const snap = await db.collection(LF_POST_MATCH_OUTCOMES).get()
     return snap.docs.map((d: any) => docData<LiveFirstPostMatchOutcome>(d)).sort(byCreatedAtDesc).slice(0, limit || 200)
+  }
+
+  // â”€â”€ B66: Sanitized public control-plane summaries â”€â”€
+  async saveControlPlanePublicSummary(doc: ControlPlanePublicSummaryDoc): Promise<ControlPlanePublicSummaryDoc> {
+    const db = await getFirestore(); await db.collection(CONTROL_PLANE_PUBLIC_SUMMARIES).doc(doc.id).set(doc, { merge: true }); return doc
+  }
+  async getControlPlanePublicSummary(id: string): Promise<ControlPlanePublicSummaryDoc | null> {
+    const db = await getFirestore(); const d = await db.collection(CONTROL_PLANE_PUBLIC_SUMMARIES).doc(id).get(); return d.exists ? docData<ControlPlanePublicSummaryDoc>(d) : null
+  }
+  async listControlPlanePublicSummaries(limit?: number): Promise<ControlPlanePublicSummaryDoc[]> {
+    const db = await getFirestore(); const snap = await db.collection(CONTROL_PLANE_PUBLIC_SUMMARIES).get()
+    return snap.docs.map((d: any) => docData<ControlPlanePublicSummaryDoc>(d)).slice(0, limit || 20)
   }
 }

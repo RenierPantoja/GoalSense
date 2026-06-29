@@ -1,4 +1,5 @@
 import { getFirebaseControlPlaneEnvStatus } from './_firebaseControlPlaneEnv.js';
+import { getPublicControlPlaneReadModel } from './_controlPlanePublicReadModel.js';
 
 type TargetName = 'workerRunsReadable' | 'sessionsReadable' | 'leasesReadable' | 'dailyReportsReadable' | 'causalCasesReadable';
 
@@ -79,6 +80,9 @@ export async function buildControlPlaneFirebaseReadReport() {
     targets.find(item => item.collection === target.collection)?.readable === true,
   ]));
 
+  // B66: sanitized public read model status (preferred path).
+  const publicModel = await getPublicControlPlaneReadModel().catch(() => null);
+
   return {
     generatedAt: new Date().toISOString(),
     readOnly: true,
@@ -92,10 +96,26 @@ export async function buildControlPlaneFirebaseReadReport() {
     freshnessStatus: permissionDenied ? 'permission_denied' : anyNonEmpty ? 'readable' : anyReadable ? 'empty_firestore' : 'stale',
     env: { ...env, firebaseReadable: anyReadable, firebaseReadableUnknown: false },
     targets,
+    // ── B66 public read model hardening fields ──
+    publicReadModelEnabled: publicModel?.publicReadModelEnabled ?? false,
+    publicSummaryReadable: publicModel?.publicSummaryReadable ?? false,
+    rawFallbackEnabled: publicModel?.rawFallbackEnabled ?? false,
+    rawCollectionsReadable: anyReadable,
+    rawPublicExposureWarning: (publicModel?.rawFallbackEnabled === true && anyReadable)
+      ? 'Raw control-plane collections are publicly readable via transitional fallback. Prefer controlPlanePublicSummaries.'
+      : null,
+    sanitizedSnapshotFreshness: publicModel?.sanitizedSnapshotFreshness ?? null,
+    sanitizedSnapshotGeneratedAt: publicModel?.sanitizedSnapshotGeneratedAt ?? null,
+    missingPublicSummary: publicModel?.missingPublicSummary ?? true,
+    permissionDeniedPublicSummary: publicModel?.permissionDeniedPublicSummary ?? false,
+    controlPlaneDataMode: publicModel?.dataMode ?? 'missing_public_summary',
+    publicExposure: publicModel?.publicExposure ?? 'unknown',
     limitations: [
       'Diagnostic is read-only and never writes to Firebase.',
       'Empty collections are not failures.',
-      ...(permissionDenied ? ['Firebase Rules denied at least one control-plane read.'] : []),
+      ...(permissionDenied ? ['Firebase Rules denied at least one raw control-plane read.'] : []),
+      ...((publicModel?.dataMode === 'sanitized_read_model') ? ['Using sanitized public read model (minimal exposure).'] : []),
+      ...((publicModel?.dataMode === 'missing_public_summary') ? ['controlPlanePublicSummaries not published yet; this is not a failure.'] : []),
     ],
   };
 }

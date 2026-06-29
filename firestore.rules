@@ -1,0 +1,67 @@
+rules_version = '2';
+
+// GoalSense Firestore Security Rules — B66 (Public Control Plane Hardening)
+// ─────────────────────────────────────────────────────────────────────────────
+// Model:
+//   - The local worker writes via the Firebase Admin SDK (service account), which
+//     BYPASSES these rules. Denying client writes never affects the worker.
+//   - The hosted Vercel Control Plane reads via the Firestore REST API using only
+//     the public Web App apiKey (no auth token). It PREFERS the sanitized
+//     `controlPlanePublicSummaries` collection (allowlisted fields only).
+//   - All client writes are denied. Default-deny for everything else.
+//
+// Exposure tiers:
+//   1) controlPlanePublicSummaries  → PUBLIC READ (minimal, sanitized). Preferred.
+//   2) raw operational collections  → TRANSITIONAL public read, kept ONLY because
+//      the Vercel read-diagnostic + raw fallback still reference them. These are
+//      slated for lock-down once the sanitized model is confirmed populated in
+//      production (see backend/docs/FIREBASE_RULES_HARDENING_B66.md). They contain
+//      non-sensitive operational telemetry only (no PII/secrets/odds/payloads).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Tier 1: Sanitized public control-plane summaries (preferred) ──────────
+    match /controlPlanePublicSummaries/{doc} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ── Tier 2: Transitional raw telemetry (read-only, slated for lock-down) ──
+    match /espnLiveFirstWorkerRuns/{doc} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /liveMonitoringSessions/{doc} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /liveMonitoringFixtureStates/{doc} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /espnLiveFirstFixtureLeases/{doc} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /espnLiveFirstRecoveryReports/{doc} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /liveFirstPostMatchOutcomes/{doc} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /dailyValidationReports/{doc} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ── Default deny: every other collection is fully locked to clients ───────
+    // (Admin SDK / service account continues to bypass rules for the worker.)
+    match /{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+  }
+}
