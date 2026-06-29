@@ -6,6 +6,7 @@ import {
 } from './_runtimeGuard.js';
 import { getFirebaseControlPlaneEnvStatus } from './_firebaseControlPlaneEnv.js';
 import { buildControlPlaneFirebaseReadReport } from './_firebaseControlPlaneReadDiagnostic.js';
+import { getPublicControlPlaneReadModel } from './_controlPlanePublicReadModel.js';
 
 type FirestoreValue = { stringValue?: string; integerValue?: string; doubleValue?: number; booleanValue?: boolean; nullValue?: null; arrayValue?: { values?: FirestoreValue[] }; mapValue?: { fields?: Record<string, FirestoreValue> } };
 
@@ -112,8 +113,201 @@ async function listCollection(collection: string, orderField: string, limit: num
   return { ok: true as const, items: (json.documents || []).map(docData), limitation: null };
 }
 
+function commonRuntimeBlock() {
+  return {
+    runtime: {
+      environment: detectRuntimeEnvironment(),
+      readOnlyControlPlane: isReadOnlyControlPlane(),
+      persistentWorkerAllowed: isPersistentWorkerAllowed(),
+    },
+    readOnly: isReadOnlyControlPlane(),
+    commandGuard: {
+      startWorker: explainRuntimeGuardDecision('start_worker'),
+      readStatus: explainRuntimeGuardDecision('read_status'),
+      recoverySweep: explainRuntimeGuardDecision('recovery_sweep'),
+      postMatchSweeper: explainRuntimeGuardDecision('post_match_sweeper'),
+    },
+  };
+}
+
+/** B67: build the status read model from sanitized controlPlanePublicSummaries. */
+function buildStatusFromSanitized(publicModel: any, firebaseEnv: any) {
+  const s = publicModel.summaries || {};
+  const ws = s.latestWorkerStatus || {};
+  const sessionList = Array.isArray(s.latestLiveSessions?.sessions) ? s.latestLiveSessions.sessions : [];
+  const leaseList = Array.isArray(s.latestLeases?.leases) ? s.latestLeases.leases : [];
+  const causalList = Array.isArray(s.latestCausalCases?.cases) ? s.latestCausalCases.cases : [];
+  const recovery = s.latestRecoveryStatus || {};
+  const fresh = s.freshness || {};
+
+  const runs = ws.workerRunId ? [{
+    id: ws.workerRunId,
+    status: ws.status,
+    mode: ws.mode,
+    startedAt: ws.startedAt,
+    stoppedAt: ws.stoppedAt,
+    heartbeatAt: ws.heartbeatAt,
+    snapshotsCaptured: ws.snapshotsCaptured ?? 0,
+    rechecksTriggered: ws.rechecksTriggered ?? 0,
+    postMatchResolved: ws.postMatchResolved ?? 0,
+    fixtureIds: [],
+    warnings: [],
+    limitations: ws.limitations ?? [],
+  }] : [];
+
+  const sessions = sessionList.map((x: any) => ({
+    id: x.sessionId,
+    status: x.status,
+    fixtureIds: new Array(x.fixtureCount ?? 0).fill(''),
+    snapshotsCaptured: x.snapshotsCaptured ?? 0,
+    liveRechecks: x.rechecks ?? 0,
+    limitations: x.limitations ?? [],
+  }));
+
+  const leases = leaseList.map((x: any) => ({
+    fixtureId: x.fixtureId,
+    sessionId: x.sessionId,
+    status: x.status,
+    acquiredAt: x.acquiredAt,
+    heartbeatAt: x.heartbeatAt,
+    leaseExpiresAt: x.leaseExpiresAt,
+    limitations: x.limitations ?? [],
+  }));
+
+  const freshnessStatus = fresh.freshnessStatus || ws.freshnessStatus || 'unknown';
+  const freshness = {
+    latestWorkerHeartbeatAt: fresh.latestWorkerHeartbeatAt ?? ws.heartbeatAt ?? null,
+    latestSessionUpdatedAt: null,
+    latestSnapshotAt: null,
+    latestDailyReportAt: fresh.latestDailyReportAt ?? null,
+    latestCausalCaseAt: fresh.latestCausalCaseAt ?? null,
+    freshnessStatus,
+    staleReasons: [],
+    nextExpectedUpdate: null,
+    lagMs: fresh.lagMs ?? null,
+    limitations: [
+      'Freshness derived from sanitized public control-plane summary.',
+      'Vercel observes persisted sanitized state and does not run worker loops.',
+    ],
+  };
+
+  return {
+    generatedAt: new Date().toISOString(),
+    source: 'vercel_control_plane_sanitized_summary',
+    ...commonRuntimeBlock(),
+    firebaseEnv,
+    firebaseReadDiagnostic: {
+      firebaseEnvValid: true,
+      firebaseInitialized: true,
+      permissionDenied: false,
+      freshnessStatus: 'readable',
+      controlPlaneDataMode: publicModel.dataMode,
+      publicExposure: publicModel.publicExposure,
+      publicReadModelEnabled: publicModel.publicReadModelEnabled,
+      publicSummaryReadable: publicModel.publicSummaryReadable,
+      rawFallbackEnabled: publicModel.rawFallbackEnabled,
+      rawCollectionsReadable: false,
+      rawPublicExposureWarning: null,
+      missingPublicSummary: false,
+      permissionDeniedPublicSummary: false,
+      sanitizedSnapshotFreshness: publicModel.sanitizedSnapshotFreshness,
+      sanitizedSnapshotGeneratedAt: publicModel.sanitizedSnapshotGeneratedAt,
+      emptyCollections: [],
+      lastErrorSafe: null,
+      limitations: [],
+    },
+    controlPlaneDataState: freshnessStatus,
+    active: null,
+    workerRuns: runs,
+    runs,
+    sessions,
+    leases,
+    fixtureStates: [],
+    recoveryReports: recovery.generatedAt ? [recovery] : [],
+    postMatchOutcomes: causalList,
+    freshness,
+    latestDailyReport: (s.latestDailyReport && Object.keys(s.latestDailyReport).length > 0) ? s.latestDailyReport : null,
+    latestCausalCases: causalList,
+    latestRecoveryReport: recovery.generatedAt ? recovery : null,
+    sessionsRunning: sessions.filter((x: any) => x.status === 'running').length,
+    fixturesActive: leaseList.filter((x: any) => x.status === 'active').length,
+    orphanSessions: recovery.orphanedSessionsFound ?? 0,
+    completedFixtures: causalList.filter((x: any) => x.evaluable).length,
+    postMatchPending: 0,
+    limitations: [
+      'Sanitized public read model (minimal exposure); raw collections are private.',
+      'No odds, Telegram, auto-bet, stake, or enforce changes.',
+    ],
+  };
+}
+
+/** B67: honest empty model when sanitized summary not yet published (not a failure). */
+function emptySanitizedStatus(firebaseEnv: any, firebaseReadDiagnostic: any, dataState: string, publicModel: any) {
+  return {
+    generatedAt: new Date().toISOString(),
+    source: 'vercel_control_plane_sanitized_summary',
+    ...commonRuntimeBlock(),
+    firebaseEnv,
+    firebaseReadDiagnostic: {
+      ...firebaseReadDiagnostic,
+      controlPlaneDataMode: publicModel?.dataMode ?? 'missing_public_summary',
+      publicExposure: publicModel?.publicExposure ?? 'minimal',
+      publicSummaryReadable: publicModel?.publicSummaryReadable ?? false,
+      rawFallbackEnabled: publicModel?.rawFallbackEnabled ?? false,
+      missingPublicSummary: publicModel?.missingPublicSummary ?? true,
+    },
+    controlPlaneDataState: dataState,
+    active: null,
+    workerRuns: [],
+    runs: [],
+    sessions: [],
+    leases: [],
+    fixtureStates: [],
+    recoveryReports: [],
+    postMatchOutcomes: [],
+    freshness: {
+      latestWorkerHeartbeatAt: null, latestSessionUpdatedAt: null, latestSnapshotAt: null,
+      latestDailyReportAt: null, latestCausalCaseAt: null,
+      freshnessStatus: 'empty', staleReasons: ['Sanitized public summary not published yet.'],
+      nextExpectedUpdate: null, lagMs: null,
+      limitations: ['Empty sanitized model is not a failure; the worker has not published a snapshot yet.'],
+    },
+    latestDailyReport: null,
+    latestCausalCases: [],
+    latestRecoveryReport: null,
+    sessionsRunning: 0,
+    fixturesActive: 0,
+    orphanSessions: 0,
+    completedFixtures: 0,
+    postMatchPending: 0,
+    limitations: [
+      'Sanitized public summary not published yet (missing_public_summary is not a failure).',
+      'Raw control-plane collections are private; enable ENABLE_RAW_CONTROL_PLANE_READ_FALLBACK only for transitional debugging.',
+    ],
+  };
+}
+
 export async function getControlPlaneStatusReadModel() {
   const firebaseEnv = getFirebaseControlPlaneEnvStatus();
+
+  // ── B67: sanitized-first. Prefer controlPlanePublicSummaries; raw is fallback. ──
+  const publicModel = await getPublicControlPlaneReadModel().catch(() => null);
+  const rawFallbackEnabled = String(process.env.ENABLE_RAW_CONTROL_PLANE_READ_FALLBACK ?? 'false') === 'true';
+  if (publicModel && publicModel.publicSummaryReadable && publicModel.dataMode === 'sanitized_read_model') {
+    return buildStatusFromSanitized(publicModel, firebaseEnv);
+  }
+  if (!rawFallbackEnabled) {
+    // No raw fallback in production: return an honest, non-failure empty model.
+    const firebaseReadDiagnostic = await buildControlPlaneFirebaseReadReport();
+    const dataState = firebaseEnv.requiredMissing.length > 0
+      ? 'missing_firebase_env'
+      : publicModel?.permissionDeniedPublicSummary
+        ? 'firebase_permission_denied'
+        : 'missing_public_summary';
+    return emptySanitizedStatus(firebaseEnv, firebaseReadDiagnostic, dataState, publicModel);
+  }
+  // Raw fallback (transitional, flag-gated) — original behavior below.
+
   const [runs, sessions, leases, recoveryReports, outcomes, reports, fixtureStates] = await Promise.all([
     listCollection('espnLiveFirstWorkerRuns', 'startedAt', 20),
     listCollection('liveMonitoringSessions', 'startedAt', 50),
