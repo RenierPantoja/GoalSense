@@ -178,8 +178,10 @@ export async function buildPublicSignalQualityCampaignSummary() {
   const baseline: any = await repos.intelligence.getLatestSignalReliabilityBaseline().catch(() => null)
   const humanItems: any[] = await repos.intelligence.listHumanReviewItems(500).catch(() => [])
   const review: any = await repos.intelligence.getLatestLiveFirstSignalQualityReview().catch(() => null)
+  const triage: any = await repos.intelligence.getLatestHumanReviewTriageSummary().catch(() => null)
+  const windowReport: any = await repos.intelligence.getLatestSignalQualityWindowReport().catch(() => null)
   if (!campaign) {
-    return { campaign: { observeOnly: true, available: false, limitations: ['No signal quality campaign yet (not a failure).'] }, humanReview: { observeOnly: true, queueSize: 0 }, baseline: null }
+    return { campaign: { observeOnly: true, available: false, limitations: ['No signal quality campaign yet (not a failure).'] }, humanReview: { observeOnly: true, queueSize: 0 }, baseline: null, triage: null, windowReport: null }
   }
   const pendingReview = humanItems.filter(i => i.status === 'pending').length
   return {
@@ -225,6 +227,39 @@ export async function buildPublicSignalQualityCampaignSummary() {
       thresholdStudyReadiness: baseline.thresholdStudyReadiness,
       consistencyNote: baseline.consistencyNote,
     } : null,
+    triage: triage ? {
+      observeOnly: true,
+      totalItems: triage.totalItems,
+      requiresHumanReview: triage.requiresHumanReview,
+      monitorOnly: triage.monitorOnly,
+      duplicateClusters: triage.duplicateClusters,
+      criticalReview: triage.criticalReview,
+      highValueReview: triage.highValueReview,
+      patternWatch: triage.patternWatch,
+      insufficientDataBucket: triage.insufficientDataBucket,
+      pendingOutcome: triage.pendingOutcome,
+      lowValueNoise: triage.lowValueNoise,
+      topReviewReasons: (triage.topReviewReasons || []).slice(0, 5),
+      // Sanitized batch preview: NO reviewer notes.
+      suggestedHumanReviewBatch: (triage.suggestedHumanReviewBatch || []).slice(0, 10).map((b: any) => ({
+        fixtureId: String(b.fixtureId), signalKind: String(b.signalKind), bucket: String(b.bucket),
+        priorityAfter: String(b.priorityAfter), suggestedQuestion: String(b.suggestedQuestion).slice(0, 140),
+      })),
+    } : null,
+    windowReport: windowReport ? {
+      observeOnly: true,
+      windowId: windowReport.windowId,
+      durationMinutes: windowReport.durationMinutes,
+      fixtures: windowReport.fixtures,
+      snapshots: windowReport.snapshots,
+      casesCreated: windowReport.casesCreated,
+      usefulSignals: (windowReport.usefulSignals || []).slice(0, 5),
+      noisySignals: (windowReport.noisySignals || []).slice(0, 5),
+      missingStatsRatio: windowReport.missingStatsRatio,
+      missingTimelineRatio: windowReport.missingTimelineRatio,
+      pendingOutcomeRatio: windowReport.pendingOutcomeRatio,
+      dataQualityScoreObservational: windowReport.dataQualityScoreObservational,
+    } : null,
   }
 }
 export async function buildPublicControlPlaneSnapshot(): Promise<ControlPlanePublicSummaryDoc[]> {
@@ -264,6 +299,8 @@ export async function buildPublicControlPlaneSnapshot(): Promise<ControlPlanePub
     mk('latestSignalQualityCasesPreview', { cases: signalQuality.casesPreview, count: signalQuality.casesPreview.length }),
     mk('latestSignalQualityCampaignSummary', campaign.campaign),
     mk('latestHumanReviewQueueSummary', campaign.humanReview),
+    mk('latestHumanReviewTriageSummary', campaign.triage ?? {}),
+    mk('latestSignalQualityWindowReport', campaign.windowReport ?? {}),
     mk('latestSignalReliabilityBaseline', campaign.baseline ?? {}),
     mk('latestRecoveryStatus', recovery),
     mk('freshness', {

@@ -82,6 +82,8 @@ import type {
 import type { ControlPlanePublicSummaryDoc } from '../../modules/controlPlane/controlPlanePublic.types.js'
 import type { LiveFirstSignalQualityCase, LiveFirstSignalQualitySummary } from '../../modules/footballIntelligence/live/signalQuality/liveFirstSignalQuality.types.js'
 import type { SignalQualityCampaign, SignalQualityCampaignWindow, HumanReviewItem, SignalReliabilityBaseline } from '../../modules/footballIntelligence/live/signalQuality/signalQualityCampaign.types.js'
+import type { HumanReviewTriageResult, HumanReviewTriageSummary } from '../../modules/footballIntelligence/live/signalQuality/humanReviewTriage.types.js'
+import type { SignalQualityWindowReport } from '../../modules/footballIntelligence/live/signalQuality/signalQualityWindowReport.types.js'
 import type {
   LiveMonitoringSession, LiveMonitoringFixtureState,
 } from '../../modules/footballIntelligence/live/liveMonitoringSession.types.js'
@@ -176,6 +178,9 @@ const SQ_CAMPAIGNS = 'signalQualityCampaigns'
 const SQ_CAMPAIGN_WINDOWS = 'signalQualityCampaignWindows'
 const LF_HUMAN_REVIEW_ITEMS = 'liveFirstHumanReviewItems'
 const LF_RELIABILITY_BASELINES = 'liveFirstSignalReliabilityBaselines'
+const HR_TRIAGE_RESULTS = 'humanReviewTriageResults'
+const HR_TRIAGE_SUMMARIES = 'humanReviewTriageSummaries'
+const SQ_WINDOW_REPORTS = 'signalQualityWindowReports'
 
 const READ_CAP = 2000
 
@@ -1676,5 +1681,34 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
     const db = await getFirestore(); const snap = await db.collection(LF_RELIABILITY_BASELINES).get()
     const items = snap.docs.map((d: any) => docData<SignalReliabilityBaseline>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))
     return items[0] || null
+  }
+
+  // â”€â”€ B71: human review triage + window reports â”€â”€
+  async saveHumanReviewTriageResult(r: HumanReviewTriageResult): Promise<HumanReviewTriageResult> {
+    const db = await getFirestore(); await db.collection(HR_TRIAGE_RESULTS).doc(r.itemId).set(r, { merge: true }); return r
+  }
+  async listHumanReviewTriageResults(limit?: number): Promise<HumanReviewTriageResult[]> {
+    const db = await getFirestore(); const snap = await db.collection(HR_TRIAGE_RESULTS).get()
+    return snap.docs.map((d: any) => docData<HumanReviewTriageResult>(d)).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit || 500)
+  }
+  async saveHumanReviewTriageSummary(s: HumanReviewTriageSummary): Promise<HumanReviewTriageSummary> {
+    const db = await getFirestore(); await db.collection(HR_TRIAGE_SUMMARIES).doc(s.id).set(s, { merge: true }); return s
+  }
+  async getLatestHumanReviewTriageSummary(): Promise<HumanReviewTriageSummary | null> {
+    const db = await getFirestore(); const snap = await db.collection(HR_TRIAGE_SUMMARIES).get()
+    const items = snap.docs.map((d: any) => docData<HumanReviewTriageSummary>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))
+    return items[0] || null
+  }
+  async saveSignalQualityWindowReport(r: SignalQualityWindowReport): Promise<SignalQualityWindowReport> {
+    const db = await getFirestore(); await db.collection(SQ_WINDOW_REPORTS).doc(r.id).set(r, { merge: true }); return r
+  }
+  async getLatestSignalQualityWindowReport(): Promise<SignalQualityWindowReport | null> {
+    const db = await getFirestore(); const snap = await db.collection(SQ_WINDOW_REPORTS).get()
+    const items = snap.docs.map((d: any) => docData<SignalQualityWindowReport>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))
+    return items[0] || null
+  }
+  async listSignalQualityWindowReports(limit?: number): Promise<SignalQualityWindowReport[]> {
+    const db = await getFirestore(); const snap = await db.collection(SQ_WINDOW_REPORTS).get()
+    return snap.docs.map((d: any) => docData<SignalQualityWindowReport>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit || 50)
   }
 }

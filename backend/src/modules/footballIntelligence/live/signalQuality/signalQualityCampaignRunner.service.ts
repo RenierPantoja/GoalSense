@@ -154,10 +154,16 @@ export async function updateCampaignStatus(campaignId: string, status: SignalQua
 export { evaluateThresholdStudyReadiness }
 export type { ThresholdStudyReadiness }
 
-/** Convenience: refresh human review queue + baseline after a window. */
-export async function refreshCampaignDerivedArtifacts(): Promise<{ humanReviewQueueSize: number; readiness: ThresholdStudyReadiness }> {
+/** Convenience: refresh human review queue + triage + baseline + window report. */
+export async function refreshCampaignDerivedArtifacts(campaignId?: string): Promise<{ humanReviewQueueSize: number; readiness: ThresholdStudyReadiness }> {
   await buildAndSaveHumanReviewQueue().catch(() => [])
+  const { saveHumanReviewTriageRun } = await import('./liveFirstHumanReviewTriage.service.js')
+  await saveHumanReviewTriageRun().catch(() => null)
   const baseline = await buildAndSaveReliabilityBaseline().catch(() => null)
+  if (campaignId) {
+    const { buildAndSaveLatestWindowReport } = await import('./signalQualityWindowReport.service.js')
+    await buildAndSaveLatestWindowReport(campaignId).catch(() => null)
+  }
   const size = await getHumanReviewQueueSize().catch(() => 0)
   return { humanReviewQueueSize: size, readiness: baseline?.thresholdStudyReadiness ?? 'not_ready_small_sample' }
 }

@@ -45,7 +45,7 @@ while (Date.now() < endAt && workerRunId) {
 if (workerRunId) await worker.stopWorkerRun(workerRunId).catch(() => {})
 
 const summary = await review.saveSignalQualityReview().catch(() => null)
-const derived = await runner.refreshCampaignDerivedArtifacts().catch(() => ({ humanReviewQueueSize: 0, readiness: 'not_ready_small_sample' }))
+const derived = await runner.refreshCampaignDerivedArtifacts(campaign.id).catch(() => ({ humanReviewQueueSize: 0, readiness: 'not_ready_small_sample' }))
 await runner.completeCampaignWindow(campaign.id, window.id, 'completed', {
   workerRunId,
   signalQualityCasesCreated: summary?.sampleSize ?? 0,

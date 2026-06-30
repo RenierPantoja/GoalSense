@@ -207,6 +207,12 @@ import type {
 import type {
   SignalQualityCampaign, SignalQualityCampaignWindow, HumanReviewItem, SignalReliabilityBaseline,
 } from '../modules/footballIntelligence/live/signalQuality/signalQualityCampaign.types.js'
+import type {
+  HumanReviewTriageResult, HumanReviewTriageSummary,
+} from '../modules/footballIntelligence/live/signalQuality/humanReviewTriage.types.js'
+import type {
+  SignalQualityWindowReport,
+} from '../modules/footballIntelligence/live/signalQuality/signalQualityWindowReport.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -586,6 +592,15 @@ export interface IntelligenceRepository {
   listHumanReviewItems(limit?: number): Promise<HumanReviewItem[]>
   saveSignalReliabilityBaseline(b: SignalReliabilityBaseline): Promise<SignalReliabilityBaseline>
   getLatestSignalReliabilityBaseline(): Promise<SignalReliabilityBaseline | null>
+
+  // â”€â”€ B71: human review triage + window reports â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  saveHumanReviewTriageResult(r: HumanReviewTriageResult): Promise<HumanReviewTriageResult>
+  listHumanReviewTriageResults(limit?: number): Promise<HumanReviewTriageResult[]>
+  saveHumanReviewTriageSummary(s: HumanReviewTriageSummary): Promise<HumanReviewTriageSummary>
+  getLatestHumanReviewTriageSummary(): Promise<HumanReviewTriageSummary | null>
+  saveSignalQualityWindowReport(r: SignalQualityWindowReport): Promise<SignalQualityWindowReport>
+  getLatestSignalQualityWindowReport(): Promise<SignalQualityWindowReport | null>
+  listSignalQualityWindowReports(limit?: number): Promise<SignalQualityWindowReport[]>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

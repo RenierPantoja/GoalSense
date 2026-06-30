@@ -27,6 +27,37 @@ export function evaluateThresholdStudyReadiness(cases: LiveFirstSignalQualityCas
   return 'ready_for_human_threshold_study'
 }
 
+/**
+ * B71 Threshold Readiness V2: also considers whether the critical/high-value human
+ * review queue has been triaged. Never changes runtime/policy/score.
+ */
+export function evaluateThresholdStudyReadinessV2(params: {
+  cases: LiveFirstSignalQualityCase[]
+  untriagedCriticalOrHighValue: number
+}): { readiness: ThresholdStudyReadiness; reason: string } {
+  const { cases, untriagedCriticalOrHighValue } = params
+  const total = cases.length
+  if (total < MIN_SAMPLE_FOR_STUDY && total < 100) {
+    return { readiness: 'not_ready_small_sample', reason: `sampleSize ${total} < ${MIN_SAMPLE_FOR_STUDY}` }
+  }
+  const unknowns = cases.filter(c => c.evidenceStrength === 'unknown' || c.outcomeAlignment === 'unknown').length
+  const notEvaluable = cases.filter(c => c.outcomeAlignment === 'not_evaluable' || c.outcomeAlignment === 'pending').length
+  if (ratio(unknowns, total) > 0.4 || ratio(notEvaluable, total) > 0.6) {
+    return { readiness: 'not_ready_too_many_unknowns', reason: `unknowns=${ratio(unknowns, total)} notEvaluable=${ratio(notEvaluable, total)}` }
+  }
+  if (untriagedCriticalOrHighValue > 0) {
+    return { readiness: 'not_ready_review_queue_untriaged' as ThresholdStudyReadiness, reason: `${untriagedCriticalOrHighValue} critical/high-value items untriaged` }
+  }
+  const evaluable = cases.filter(c => c.outcomeAlignment === 'aligned' || c.outcomeAlignment === 'partially_aligned' || c.outcomeAlignment === 'contradicted').length
+  if (total >= 100 && evaluable > 0 && total < MIN_SAMPLE_FOR_STUDY) {
+    return { readiness: 'limited_review_possible', reason: `sample ${total} (>=100) with some outcomes; threshold not applied` }
+  }
+  if (total >= MIN_SAMPLE_FOR_STUDY && evaluable >= 50) {
+    return { readiness: 'ready_for_human_threshold_study', reason: 'sample + outcomes sufficient; human review complete' }
+  }
+  return { readiness: 'limited_review_possible', reason: 'partial readiness' }
+}
+
 export function buildReliabilityBaseline(cases: LiveFirstSignalQualityCase[], humanReviewCount = 0): SignalReliabilityBaseline {
   const total = cases.length
 

@@ -77,6 +77,8 @@ import type {
 import type { ControlPlanePublicSummaryDoc } from '../modules/controlPlane/controlPlanePublic.types.js'
 import type { LiveFirstSignalQualityCase, LiveFirstSignalQualitySummary } from '../modules/footballIntelligence/live/signalQuality/liveFirstSignalQuality.types.js'
 import type { SignalQualityCampaign, SignalQualityCampaignWindow, HumanReviewItem, SignalReliabilityBaseline } from '../modules/footballIntelligence/live/signalQuality/signalQualityCampaign.types.js'
+import type { HumanReviewTriageResult, HumanReviewTriageSummary } from '../modules/footballIntelligence/live/signalQuality/humanReviewTriage.types.js'
+import type { SignalQualityWindowReport } from '../modules/footballIntelligence/live/signalQuality/signalQualityWindowReport.types.js'
 import type {
   LiveMonitoringSession, LiveMonitoringFixtureState,
 } from '../modules/footballIntelligence/live/liveMonitoringSession.types.js'
@@ -101,6 +103,9 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   private readonly signalQualityCampaignWindows = new Map<string, SignalQualityCampaignWindow>()
   private readonly humanReviewItems = new Map<string, HumanReviewItem>()
   private readonly signalReliabilityBaselines = new Map<string, SignalReliabilityBaseline>()
+  private readonly humanReviewTriageResults = new Map<string, HumanReviewTriageResult>()
+  private readonly humanReviewTriageSummaries = new Map<string, HumanReviewTriageSummary>()
+  private readonly signalQualityWindowReports = new Map<string, SignalQualityWindowReport>()
 
   async createSignalLedgerEntry(entry: SignalLedgerEntry): Promise<SignalLedgerEntry> { warnOnce(); return entry }
   async updateSignalLedgerEntry(): Promise<{ count: number }> { return { count: 0 } }
@@ -494,4 +499,13 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async listHumanReviewItems(limit = 200): Promise<HumanReviewItem[]> { return Array.from(this.humanReviewItems.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit) }
   async saveSignalReliabilityBaseline(b: SignalReliabilityBaseline): Promise<SignalReliabilityBaseline> { this.signalReliabilityBaselines.set(b.id, b); return b }
   async getLatestSignalReliabilityBaseline(): Promise<SignalReliabilityBaseline | null> { return Array.from(this.signalReliabilityBaselines.values()).sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))[0] ?? null }
+
+  // B71: human review triage + window reports (in-memory)
+  async saveHumanReviewTriageResult(r: HumanReviewTriageResult): Promise<HumanReviewTriageResult> { this.humanReviewTriageResults.set(r.itemId, r); return r }
+  async listHumanReviewTriageResults(limit = 500): Promise<HumanReviewTriageResult[]> { return Array.from(this.humanReviewTriageResults.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit) }
+  async saveHumanReviewTriageSummary(s: HumanReviewTriageSummary): Promise<HumanReviewTriageSummary> { this.humanReviewTriageSummaries.set(s.id, s); return s }
+  async getLatestHumanReviewTriageSummary(): Promise<HumanReviewTriageSummary | null> { return Array.from(this.humanReviewTriageSummaries.values()).sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))[0] ?? null }
+  async saveSignalQualityWindowReport(r: SignalQualityWindowReport): Promise<SignalQualityWindowReport> { this.signalQualityWindowReports.set(r.id, r); return r }
+  async getLatestSignalQualityWindowReport(): Promise<SignalQualityWindowReport | null> { return Array.from(this.signalQualityWindowReports.values()).sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))[0] ?? null }
+  async listSignalQualityWindowReports(limit = 50): Promise<SignalQualityWindowReport[]> { return Array.from(this.signalQualityWindowReports.values()).sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit) }
 }

@@ -33,6 +33,7 @@ export type ThresholdStudyReadiness =
   | 'not_ready_small_sample'
   | 'not_ready_too_many_unknowns'
   | 'not_ready_missing_outcomes'
+  | 'not_ready_review_queue_untriaged'
   | 'limited_review_possible'
   | 'ready_for_human_threshold_study'
 

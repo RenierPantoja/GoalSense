@@ -19,6 +19,19 @@ interface CampaignSummaryDto {
   limitations?: string[]
 }
 
+interface TriageDto {
+  totalItems?: number
+  requiresHumanReview?: number
+  monitorOnly?: number
+  duplicateClusters?: number
+  criticalReview?: number
+  highValueReview?: number
+  patternWatch?: number
+  insufficientDataBucket?: number
+  pendingOutcome?: number
+  lowValueNoise?: number
+}
+
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="min-w-0">
@@ -30,16 +43,18 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 
 export function SignalQualityCampaignPanel() {
   const [c, setC] = useState<CampaignSummaryDto | null>(null)
+  const [triage, setTriage] = useState<TriageDto | null>(null)
   const [loaded, setLoaded] = useState(false)
 
   const load = useCallback(async () => {
     const res = await fetch('/api/worker-control-plane/signal-quality', { cache: 'no-store' }).catch(() => null)
     setLoaded(true)
-    if (!res?.ok) { setC(null); return }
+    if (!res?.ok) { setC(null); setTriage(null); return }
     const body = await res.json().catch(() => null)
     // Campaign summary is published alongside signal quality in the public model.
     const data = body?.data ?? null
     setC(data?.campaign ?? data?.campaignSummary ?? null)
+    setTriage(data?.triage ?? null)
   }, [])
 
   useEffect(() => { void load() }, [load])
@@ -80,6 +95,22 @@ export function SignalQualityCampaignPanel() {
           )}
           <p className="mt-3 text-[10px] text-amber-200/60">Readiness é observacional e não altera runtime. Sem odds, sem probabilidade, sem promessa de acerto.</p>
         </>
+      )}
+
+      {triage && (
+        <div className="mt-3 border-t border-white/[0.06] pt-3">
+          <p className="text-[10px] uppercase tracking-[0.12em] text-white/30">human review triage</p>
+          <div className="mt-1 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label="requires review" value={triage.requiresHumanReview ?? 0} />
+            <Stat label="critical" value={triage.criticalReview ?? 0} />
+            <Stat label="high value" value={triage.highValueReview ?? 0} />
+            <Stat label="pattern watch" value={triage.patternWatch ?? 0} />
+            <Stat label="duplicates" value={triage.duplicateClusters ?? 0} />
+            <Stat label="insufficient" value={triage.insufficientDataBucket ?? 0} />
+            <Stat label="pending outcome" value={triage.pendingOutcome ?? 0} />
+            <Stat label="monitor only" value={(triage.monitorOnly ?? 0) + (triage.lowValueNoise ?? 0)} />
+          </div>
+        </div>
       )}
     </div>
   )
