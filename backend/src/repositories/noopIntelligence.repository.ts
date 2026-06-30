@@ -76,6 +76,7 @@ import type {
 } from '../modules/footballIntelligence/live/espnLiveFirstWorker.types.js'
 import type { ControlPlanePublicSummaryDoc } from '../modules/controlPlane/controlPlanePublic.types.js'
 import type { LiveFirstSignalQualityCase, LiveFirstSignalQualitySummary } from '../modules/footballIntelligence/live/signalQuality/liveFirstSignalQuality.types.js'
+import type { SignalQualityCampaign, SignalQualityCampaignWindow, HumanReviewItem, SignalReliabilityBaseline } from '../modules/footballIntelligence/live/signalQuality/signalQualityCampaign.types.js'
 import type {
   LiveMonitoringSession, LiveMonitoringFixtureState,
 } from '../modules/footballIntelligence/live/liveMonitoringSession.types.js'
@@ -96,6 +97,10 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   private readonly controlPlanePublicSummaries = new Map<string, ControlPlanePublicSummaryDoc>()
   private readonly liveFirstSignalQualityCases = new Map<string, LiveFirstSignalQualityCase>()
   private readonly liveFirstSignalQualityReviews = new Map<string, LiveFirstSignalQualitySummary>()
+  private readonly signalQualityCampaigns = new Map<string, SignalQualityCampaign>()
+  private readonly signalQualityCampaignWindows = new Map<string, SignalQualityCampaignWindow>()
+  private readonly humanReviewItems = new Map<string, HumanReviewItem>()
+  private readonly signalReliabilityBaselines = new Map<string, SignalReliabilityBaseline>()
 
   async createSignalLedgerEntry(entry: SignalLedgerEntry): Promise<SignalLedgerEntry> { warnOnce(); return entry }
   async updateSignalLedgerEntry(): Promise<{ count: number }> { return { count: 0 } }
@@ -477,4 +482,16 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async saveLiveFirstSignalQualityReview(r: LiveFirstSignalQualitySummary): Promise<LiveFirstSignalQualitySummary> { this.liveFirstSignalQualityReviews.set(r.id, r); return r }
   async getLatestLiveFirstSignalQualityReview(): Promise<LiveFirstSignalQualitySummary | null> { return Array.from(this.liveFirstSignalQualityReviews.values()).sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))[0] ?? null }
   async listLiveFirstSignalQualityReviews(limit = 50): Promise<LiveFirstSignalQualitySummary[]> { return Array.from(this.liveFirstSignalQualityReviews.values()).sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit) }
+
+  // B70: campaign + human review + baseline (in-memory)
+  async saveSignalQualityCampaign(c: SignalQualityCampaign): Promise<SignalQualityCampaign> { this.signalQualityCampaigns.set(c.id, c); return c }
+  async getSignalQualityCampaign(id: string): Promise<SignalQualityCampaign | null> { return this.signalQualityCampaigns.get(id) ?? null }
+  async getLatestSignalQualityCampaign(): Promise<SignalQualityCampaign | null> { return Array.from(this.signalQualityCampaigns.values()).sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''))[0] ?? null }
+  async listSignalQualityCampaigns(limit = 50): Promise<SignalQualityCampaign[]> { return Array.from(this.signalQualityCampaigns.values()).sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit) }
+  async saveSignalQualityCampaignWindow(w: SignalQualityCampaignWindow): Promise<SignalQualityCampaignWindow> { this.signalQualityCampaignWindows.set(w.id, w); return w }
+  async listSignalQualityCampaignWindows(campaignId: string, limit = 100): Promise<SignalQualityCampaignWindow[]> { return Array.from(this.signalQualityCampaignWindows.values()).filter(w => w.campaignId === campaignId).sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || '')).slice(0, limit) }
+  async saveHumanReviewItem(item: HumanReviewItem): Promise<HumanReviewItem> { this.humanReviewItems.set(item.id, item); return item }
+  async listHumanReviewItems(limit = 200): Promise<HumanReviewItem[]> { return Array.from(this.humanReviewItems.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit) }
+  async saveSignalReliabilityBaseline(b: SignalReliabilityBaseline): Promise<SignalReliabilityBaseline> { this.signalReliabilityBaselines.set(b.id, b); return b }
+  async getLatestSignalReliabilityBaseline(): Promise<SignalReliabilityBaseline | null> { return Array.from(this.signalReliabilityBaselines.values()).sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))[0] ?? null }
 }

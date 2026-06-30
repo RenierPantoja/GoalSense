@@ -132,6 +132,9 @@ export async function getPublicSignalQualityReadModel() {
   const model = await getPublicControlPlaneReadModel();
   const summary = model.summaries?.['latestSignalQualitySummary'] || null;
   const preview = model.summaries?.['latestSignalQualityCasesPreview'] || null;
+  const campaign = model.summaries?.['latestSignalQualityCampaignSummary'] || null;
+  const humanReview = model.summaries?.['latestHumanReviewQueueSummary'] || null;
+  const baseline = model.summaries?.['latestSignalReliabilityBaseline'] || null;
   const available = !!summary && summary.available !== false;
   return {
     observeOnly: true,
@@ -144,6 +147,9 @@ export async function getPublicSignalQualityReadModel() {
     sampleSize: summary?.sampleSize ?? 0,
     summary: available ? summary : null,
     casesPreview: preview?.cases ?? [],
+    campaign,
+    humanReview,
+    baseline,
     status: available ? 'sanitized_read_model' : 'missing_public_signal_quality_summary',
     limitations: available
       ? ['Observe only; sanitized public signal-quality summary.']

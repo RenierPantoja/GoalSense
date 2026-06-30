@@ -171,6 +171,62 @@ export async function buildPublicSignalQualitySummary() {
 }
 
 // ── Snapshot assembly + publish ──────────────────────────────────────────────
+
+export async function buildPublicSignalQualityCampaignSummary() {
+  const repos = createRepositories()
+  const campaign: any = await repos.intelligence.getLatestSignalQualityCampaign().catch(() => null)
+  const baseline: any = await repos.intelligence.getLatestSignalReliabilityBaseline().catch(() => null)
+  const humanItems: any[] = await repos.intelligence.listHumanReviewItems(500).catch(() => [])
+  const review: any = await repos.intelligence.getLatestLiveFirstSignalQualityReview().catch(() => null)
+  if (!campaign) {
+    return { campaign: { observeOnly: true, available: false, limitations: ['No signal quality campaign yet (not a failure).'] }, humanReview: { observeOnly: true, queueSize: 0 }, baseline: null }
+  }
+  const pendingReview = humanItems.filter(i => i.status === 'pending').length
+  return {
+    campaign: {
+      observeOnly: true,
+      available: true,
+      campaignId: campaign.id,
+      name: String(campaign.name || '').slice(0, 80),
+      status: campaign.status,
+      sampleSize: campaign.totalSignalQualityCases ?? 0,
+      windowsCompleted: campaign.completedWindows ?? 0,
+      targetWindows: campaign.targetWindows ?? 0,
+      thresholdStudyReadiness: baseline?.thresholdStudyReadiness ?? 'not_ready_small_sample',
+      topUsefulSignals: (review?.topUsefulSignals || []).slice(0, 5).map((s: any) => ({ signalKind: String(s.signalKind), count: Number(s.count) || 0 })),
+      topNoisySignals: (review?.topNoisySignals || []).slice(0, 5).map((s: any) => ({ signalKind: String(s.signalKind), count: Number(s.count) || 0 })),
+      humanReviewQueueSize: pendingReview,
+      insufficientDataRatio: baseline?.insufficientDataRatio ?? 0,
+      notEvaluableRatio: baseline?.notEvaluableRatio ?? 0,
+      generatedAt: new Date().toISOString(),
+      limitations: ['Observe only; readiness never changes runtime.'],
+    },
+    humanReview: {
+      observeOnly: true,
+      queueSize: pendingReview,
+      // Sanitized preview: NO reviewer notes published.
+      items: humanItems.slice(0, 10).map(i => ({
+        fixtureId: String(i.fixtureId),
+        signalKind: String(i.signalKind),
+        priority: String(i.priority),
+        reason: String(i.reason).slice(0, 120),
+        status: String(i.status),
+      })),
+    },
+    baseline: baseline ? {
+      observeOnly: true,
+      sampleSize: baseline.sampleSize,
+      insufficientDataRatio: baseline.insufficientDataRatio,
+      notEvaluableRatio: baseline.notEvaluableRatio,
+      staleSnapshotRatio: baseline.staleSnapshotRatio,
+      missingStatsRatio: baseline.missingStatsRatio,
+      missingTimelineRatio: baseline.missingTimelineRatio,
+      humanReviewRatio: baseline.humanReviewRatio,
+      thresholdStudyReadiness: baseline.thresholdStudyReadiness,
+      consistencyNote: baseline.consistencyNote,
+    } : null,
+  }
+}
 export async function buildPublicControlPlaneSnapshot(): Promise<ControlPlanePublicSummaryDoc[]> {
   const status = await getLatestWorkerStatusReadModel()
   const generatedAt = new Date().toISOString()
@@ -188,6 +244,7 @@ export async function buildPublicControlPlaneSnapshot(): Promise<ControlPlanePub
     buildPublicCausalCasesSummary(),
     buildPublicSignalQualitySummary(),
   ])
+  const campaign = await buildPublicSignalQualityCampaignSummary()
 
   const recovery = status.latestRecoveryReport
     ? {
@@ -205,6 +262,9 @@ export async function buildPublicControlPlaneSnapshot(): Promise<ControlPlanePub
     mk('latestCausalCases', { cases: causal.cases, evaluableCount: causal.cases.filter((c: any) => c.evaluable).length }),
     mk('latestSignalQualitySummary', signalQuality.summary),
     mk('latestSignalQualityCasesPreview', { cases: signalQuality.casesPreview, count: signalQuality.casesPreview.length }),
+    mk('latestSignalQualityCampaignSummary', campaign.campaign),
+    mk('latestHumanReviewQueueSummary', campaign.humanReview),
+    mk('latestSignalReliabilityBaseline', campaign.baseline ?? {}),
     mk('latestRecoveryStatus', recovery),
     mk('freshness', {
       freshnessStatus: status.freshness.freshnessStatus,

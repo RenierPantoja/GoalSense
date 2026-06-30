@@ -81,6 +81,7 @@ import type {
 } from '../../modules/footballIntelligence/live/espnLiveFirstWorker.types.js'
 import type { ControlPlanePublicSummaryDoc } from '../../modules/controlPlane/controlPlanePublic.types.js'
 import type { LiveFirstSignalQualityCase, LiveFirstSignalQualitySummary } from '../../modules/footballIntelligence/live/signalQuality/liveFirstSignalQuality.types.js'
+import type { SignalQualityCampaign, SignalQualityCampaignWindow, HumanReviewItem, SignalReliabilityBaseline } from '../../modules/footballIntelligence/live/signalQuality/signalQualityCampaign.types.js'
 import type {
   LiveMonitoringSession, LiveMonitoringFixtureState,
 } from '../../modules/footballIntelligence/live/liveMonitoringSession.types.js'
@@ -171,6 +172,10 @@ const LF_POST_MATCH_OUTCOMES = 'liveFirstPostMatchOutcomes'
 const CONTROL_PLANE_PUBLIC_SUMMARIES = 'controlPlanePublicSummaries'
 const LF_SIGNAL_QUALITY_CASES = 'liveFirstSignalQualityCases'
 const LF_SIGNAL_QUALITY_REVIEWS = 'liveFirstSignalQualityReviews'
+const SQ_CAMPAIGNS = 'signalQualityCampaigns'
+const SQ_CAMPAIGN_WINDOWS = 'signalQualityCampaignWindows'
+const LF_HUMAN_REVIEW_ITEMS = 'liveFirstHumanReviewItems'
+const LF_RELIABILITY_BASELINES = 'liveFirstSignalReliabilityBaselines'
 
 const READ_CAP = 2000
 
@@ -1632,5 +1637,44 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
   async listLiveFirstSignalQualityReviews(limit?: number): Promise<LiveFirstSignalQualitySummary[]> {
     const db = await getFirestore(); const snap = await db.collection(LF_SIGNAL_QUALITY_REVIEWS).get()
     return snap.docs.map((d: any) => docData<LiveFirstSignalQualitySummary>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit || 50)
+  }
+
+  // â”€â”€ B70: signal quality campaign + human review + baseline â”€â”€
+  async saveSignalQualityCampaign(c: SignalQualityCampaign): Promise<SignalQualityCampaign> {
+    const db = await getFirestore(); await db.collection(SQ_CAMPAIGNS).doc(c.id).set(c, { merge: true }); return c
+  }
+  async getSignalQualityCampaign(id: string): Promise<SignalQualityCampaign | null> {
+    const db = await getFirestore(); const d = await db.collection(SQ_CAMPAIGNS).doc(id).get(); return d.exists ? docData<SignalQualityCampaign>(d) : null
+  }
+  async getLatestSignalQualityCampaign(): Promise<SignalQualityCampaign | null> {
+    const db = await getFirestore(); const snap = await db.collection(SQ_CAMPAIGNS).get()
+    const items = snap.docs.map((d: any) => docData<SignalQualityCampaign>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || ''))
+    return items[0] || null
+  }
+  async listSignalQualityCampaigns(limit?: number): Promise<SignalQualityCampaign[]> {
+    const db = await getFirestore(); const snap = await db.collection(SQ_CAMPAIGNS).get()
+    return snap.docs.map((d: any) => docData<SignalQualityCampaign>(d)).sort((a: any, b: any) => (b.startedAt || '').localeCompare(a.startedAt || '')).slice(0, limit || 50)
+  }
+  async saveSignalQualityCampaignWindow(w: SignalQualityCampaignWindow): Promise<SignalQualityCampaignWindow> {
+    const db = await getFirestore(); await db.collection(SQ_CAMPAIGN_WINDOWS).doc(w.id).set(w, { merge: true }); return w
+  }
+  async listSignalQualityCampaignWindows(campaignId: string, limit?: number): Promise<SignalQualityCampaignWindow[]> {
+    const db = await getFirestore(); const snap = await db.collection(SQ_CAMPAIGN_WINDOWS).where('campaignId', '==', campaignId).get()
+    return snap.docs.map((d: any) => docData<SignalQualityCampaignWindow>(d)).sort((a: any, b: any) => (a.startedAt || '').localeCompare(b.startedAt || '')).slice(0, limit || 100)
+  }
+  async saveHumanReviewItem(item: HumanReviewItem): Promise<HumanReviewItem> {
+    const db = await getFirestore(); await db.collection(LF_HUMAN_REVIEW_ITEMS).doc(item.id).set(item, { merge: true }); return item
+  }
+  async listHumanReviewItems(limit?: number): Promise<HumanReviewItem[]> {
+    const db = await getFirestore(); const snap = await db.collection(LF_HUMAN_REVIEW_ITEMS).get()
+    return snap.docs.map((d: any) => docData<HumanReviewItem>(d)).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit || 200)
+  }
+  async saveSignalReliabilityBaseline(b: SignalReliabilityBaseline): Promise<SignalReliabilityBaseline> {
+    const db = await getFirestore(); await db.collection(LF_RELIABILITY_BASELINES).doc(b.id).set(b, { merge: true }); return b
+  }
+  async getLatestSignalReliabilityBaseline(): Promise<SignalReliabilityBaseline | null> {
+    const db = await getFirestore(); const snap = await db.collection(LF_RELIABILITY_BASELINES).get()
+    const items = snap.docs.map((d: any) => docData<SignalReliabilityBaseline>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))
+    return items[0] || null
   }
 }

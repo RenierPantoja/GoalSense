@@ -52,6 +52,13 @@ export const SIGNAL_QUALITY_CASE_ALLOWLIST = [
   'outcomeAlignment', 'qualityGrade', 'matchMinute', 'limitations', 'createdAt',
 ] as const
 
+// B70: sanitized public campaign + human-review + baseline
+export const SIGNAL_QUALITY_CAMPAIGN_ALLOWLIST = [
+  'campaignId', 'sampleSize', 'windowsCompleted', 'thresholdStudyReadiness',
+  'topUsefulSignals', 'topNoisySignals', 'humanReviewQueueSize',
+  'insufficientDataRatio', 'notEvaluableRatio', 'limitations', 'observeOnly', 'generatedAt',
+] as const
+
 // ── Denylist: forbidden field-name fragments (case-insensitive) ─────────────
 // Any field whose key contains one of these fragments is dropped, regardless of
 // allowlist, as a defense-in-depth guard.

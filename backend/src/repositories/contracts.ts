@@ -204,6 +204,9 @@ import type {
 import type {
   LiveFirstSignalQualityCase, LiveFirstSignalQualitySummary,
 } from '../modules/footballIntelligence/live/signalQuality/liveFirstSignalQuality.types.js'
+import type {
+  SignalQualityCampaign, SignalQualityCampaignWindow, HumanReviewItem, SignalReliabilityBaseline,
+} from '../modules/footballIntelligence/live/signalQuality/signalQualityCampaign.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -571,6 +574,18 @@ export interface IntelligenceRepository {
   saveLiveFirstSignalQualityReview(r: LiveFirstSignalQualitySummary): Promise<LiveFirstSignalQualitySummary>
   getLatestLiveFirstSignalQualityReview(): Promise<LiveFirstSignalQualitySummary | null>
   listLiveFirstSignalQualityReviews(limit?: number): Promise<LiveFirstSignalQualitySummary[]>
+
+  // â”€â”€ B70: signal quality multi-window campaign + human review + baseline â”€â”€â”€â”€
+  saveSignalQualityCampaign(c: SignalQualityCampaign): Promise<SignalQualityCampaign>
+  getSignalQualityCampaign(id: string): Promise<SignalQualityCampaign | null>
+  getLatestSignalQualityCampaign(): Promise<SignalQualityCampaign | null>
+  listSignalQualityCampaigns(limit?: number): Promise<SignalQualityCampaign[]>
+  saveSignalQualityCampaignWindow(w: SignalQualityCampaignWindow): Promise<SignalQualityCampaignWindow>
+  listSignalQualityCampaignWindows(campaignId: string, limit?: number): Promise<SignalQualityCampaignWindow[]>
+  saveHumanReviewItem(item: HumanReviewItem): Promise<HumanReviewItem>
+  listHumanReviewItems(limit?: number): Promise<HumanReviewItem[]>
+  saveSignalReliabilityBaseline(b: SignalReliabilityBaseline): Promise<SignalReliabilityBaseline>
+  getLatestSignalReliabilityBaseline(): Promise<SignalReliabilityBaseline | null>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────
