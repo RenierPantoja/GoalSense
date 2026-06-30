@@ -136,6 +136,9 @@ export async function getPublicSignalQualityReadModel() {
   const humanReview = model.summaries?.['latestHumanReviewQueueSummary'] || null;
   const triage = model.summaries?.['latestHumanReviewTriageSummary'] || null;
   const windowReport = model.summaries?.['latestSignalQualityWindowReport'] || null;
+  const adjudication = model.summaries?.['latestHumanReviewAdjudicationSummary'] || null;
+  const windowComparison = model.summaries?.['latestSignalQualityWindowComparison'] || null;
+  const readinessV3 = model.summaries?.['latestThresholdReadinessV3'] || null;
   const baseline = model.summaries?.['latestSignalReliabilityBaseline'] || null;
   const available = !!summary && summary.available !== false;
   return {
@@ -153,6 +156,9 @@ export async function getPublicSignalQualityReadModel() {
     humanReview,
     triage,
     windowReport,
+    adjudication,
+    windowComparison,
+    readinessV3,
     baseline,
     status: available ? 'sanitized_read_model' : 'missing_public_signal_quality_summary',
     limitations: available

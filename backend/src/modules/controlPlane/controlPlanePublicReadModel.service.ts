@@ -180,8 +180,11 @@ export async function buildPublicSignalQualityCampaignSummary() {
   const review: any = await repos.intelligence.getLatestLiveFirstSignalQualityReview().catch(() => null)
   const triage: any = await repos.intelligence.getLatestHumanReviewTriageSummary().catch(() => null)
   const windowReport: any = await repos.intelligence.getLatestSignalQualityWindowReport().catch(() => null)
+  const adjudication: any = await repos.intelligence.getLatestHumanReviewAdjudicationSummary().catch(() => null)
+  const windowComparison: any = await repos.intelligence.getLatestSignalQualityWindowComparison().catch(() => null)
+  const readinessV3: any = await repos.intelligence.getLatestThresholdReadinessV3().catch(() => null)
   if (!campaign) {
-    return { campaign: { observeOnly: true, available: false, limitations: ['No signal quality campaign yet (not a failure).'] }, humanReview: { observeOnly: true, queueSize: 0 }, baseline: null, triage: null, windowReport: null }
+    return { campaign: { observeOnly: true, available: false, limitations: ['No signal quality campaign yet (not a failure).'] }, humanReview: { observeOnly: true, queueSize: 0 }, baseline: null, triage: null, windowReport: null, adjudication: null, windowComparison: null, readinessV3: null }
   }
   const pendingReview = humanItems.filter(i => i.status === 'pending').length
   return {
@@ -260,6 +263,51 @@ export async function buildPublicSignalQualityCampaignSummary() {
       pendingOutcomeRatio: windowReport.pendingOutcomeRatio,
       dataQualityScoreObservational: windowReport.dataQualityScoreObservational,
     } : null,
+    adjudication: adjudication ? {
+      observeOnly: true,
+      generatedAt: adjudication.generatedAt,
+      totalAdjudicated: adjudication.totalAdjudicated,
+      pendingBefore: adjudication.pendingBefore,
+      pendingAfter: adjudication.pendingAfter,
+      needsMoreSamples: adjudication.needsMoreSamples,
+      insufficientEvidence: adjudication.insufficientEvidence,
+      duplicateOfExistingPattern: adjudication.duplicateOfExistingPattern,
+      confirmedNoise: adjudication.confirmedNoise,
+      confirmedUsefulSignal: adjudication.confirmedUsefulSignal,
+      conservativeDefaultsApplied: adjudication.conservativeDefaultsApplied,
+      // Reviewer private notes are NEVER published; only an assertion flag is exposed.
+      notesWithheld: true,
+    } : null,
+    windowComparison: windowComparison ? {
+      observeOnly: true,
+      generatedAt: windowComparison.generatedAt,
+      windowsCompared: windowComparison.windowsCompared,
+      cumulativeCases: windowComparison.cumulativeCases,
+      deltaDataQualityScore: windowComparison.deltaDataQualityScore,
+      deltaPendingOutcomeRatio: windowComparison.deltaPendingOutcomeRatio,
+      deltaMissingStatsRatio: windowComparison.deltaMissingStatsRatio,
+      recurringUsefulSignals: (windowComparison.recurringUsefulSignals || []).slice(0, 5),
+      recurringNoisySignals: (windowComparison.recurringNoisySignals || []).slice(0, 5),
+      windows: (windowComparison.windows || []).slice(0, 5).map((w: any) => ({
+        windowId: String(w.windowId), casesCreated: w.casesCreated,
+        dataQualityScoreObservational: w.dataQualityScoreObservational,
+        pendingOutcomeRatio: w.pendingOutcomeRatio, missingStatsRatio: w.missingStatsRatio,
+      })),
+      trendNote: String(windowComparison.trendNote || '').slice(0, 200),
+    } : null,
+    readinessV3: readinessV3 ? {
+      observeOnly: true,
+      generatedAt: readinessV3.generatedAt,
+      readiness: readinessV3.readiness,
+      reason: String(readinessV3.reason || '').slice(0, 160),
+      sampleSize: readinessV3.sampleSize,
+      evaluableCases: readinessV3.evaluableCases,
+      reviewQueuePending: readinessV3.reviewQueuePending,
+      reviewQueueAdjudicated: readinessV3.reviewQueueAdjudicated,
+      unadjudicatedRequiresReview: readinessV3.unadjudicatedRequiresReview,
+      minimumSampleForStudy: readinessV3.minimumSampleForStudy,
+      changesRuntime: false,
+    } : null,
   }
 }
 export async function buildPublicControlPlaneSnapshot(): Promise<ControlPlanePublicSummaryDoc[]> {
@@ -301,6 +349,9 @@ export async function buildPublicControlPlaneSnapshot(): Promise<ControlPlanePub
     mk('latestHumanReviewQueueSummary', campaign.humanReview),
     mk('latestHumanReviewTriageSummary', campaign.triage ?? {}),
     mk('latestSignalQualityWindowReport', campaign.windowReport ?? {}),
+    mk('latestHumanReviewAdjudicationSummary', campaign.adjudication ?? {}),
+    mk('latestSignalQualityWindowComparison', campaign.windowComparison ?? {}),
+    mk('latestThresholdReadinessV3', campaign.readinessV3 ?? {}),
     mk('latestSignalReliabilityBaseline', campaign.baseline ?? {}),
     mk('latestRecoveryStatus', recovery),
     mk('freshness', {

@@ -213,6 +213,15 @@ import type {
 import type {
   SignalQualityWindowReport,
 } from '../modules/footballIntelligence/live/signalQuality/signalQualityWindowReport.types.js'
+import type {
+  HumanReviewAdjudicationRecord, HumanReviewAdjudicationSummary,
+} from '../modules/footballIntelligence/live/signalQuality/humanReviewAdjudication.types.js'
+import type {
+  SignalQualityWindowComparison,
+} from '../modules/footballIntelligence/live/signalQuality/signalQualityWindowComparison.types.js'
+import type {
+  ThresholdReadinessV3,
+} from '../modules/footballIntelligence/live/signalQuality/thresholdReadinessV3.types.js'
 
 export interface IntelligenceRepository {
   // Signal Ledger
@@ -601,6 +610,16 @@ export interface IntelligenceRepository {
   saveSignalQualityWindowReport(r: SignalQualityWindowReport): Promise<SignalQualityWindowReport>
   getLatestSignalQualityWindowReport(): Promise<SignalQualityWindowReport | null>
   listSignalQualityWindowReports(limit?: number): Promise<SignalQualityWindowReport[]>
+
+  // ── B72: human review adjudication + window comparison + readiness V3 ─────
+  saveHumanReviewAdjudication(r: HumanReviewAdjudicationRecord): Promise<HumanReviewAdjudicationRecord>
+  listHumanReviewAdjudications(limit?: number): Promise<HumanReviewAdjudicationRecord[]>
+  saveHumanReviewAdjudicationSummary(s: HumanReviewAdjudicationSummary): Promise<HumanReviewAdjudicationSummary>
+  getLatestHumanReviewAdjudicationSummary(): Promise<HumanReviewAdjudicationSummary | null>
+  saveSignalQualityWindowComparison(c: SignalQualityWindowComparison): Promise<SignalQualityWindowComparison>
+  getLatestSignalQualityWindowComparison(): Promise<SignalQualityWindowComparison | null>
+  saveThresholdReadinessV3(r: ThresholdReadinessV3): Promise<ThresholdReadinessV3>
+  getLatestThresholdReadinessV3(): Promise<ThresholdReadinessV3 | null>
 }
 
 // ─── Aggregate ─────────────────────────────────────────────────────────────

@@ -163,7 +163,11 @@ export async function refreshCampaignDerivedArtifacts(campaignId?: string): Prom
   if (campaignId) {
     const { buildAndSaveLatestWindowReport } = await import('./signalQualityWindowReport.service.js')
     await buildAndSaveLatestWindowReport(campaignId).catch(() => null)
+    const { buildAndSaveWindowComparison } = await import('./signalQualityWindowComparison.service.js')
+    await buildAndSaveWindowComparison(campaignId).catch(() => null)
   }
+  const { buildAndSaveThresholdReadinessV3 } = await import('./thresholdReadinessV3.service.js')
+  await buildAndSaveThresholdReadinessV3().catch(() => null)
   const size = await getHumanReviewQueueSize().catch(() => 0)
   return { humanReviewQueueSize: size, readiness: baseline?.thresholdStudyReadiness ?? 'not_ready_small_sample' }
 }

@@ -84,6 +84,9 @@ import type { LiveFirstSignalQualityCase, LiveFirstSignalQualitySummary } from '
 import type { SignalQualityCampaign, SignalQualityCampaignWindow, HumanReviewItem, SignalReliabilityBaseline } from '../../modules/footballIntelligence/live/signalQuality/signalQualityCampaign.types.js'
 import type { HumanReviewTriageResult, HumanReviewTriageSummary } from '../../modules/footballIntelligence/live/signalQuality/humanReviewTriage.types.js'
 import type { SignalQualityWindowReport } from '../../modules/footballIntelligence/live/signalQuality/signalQualityWindowReport.types.js'
+import type { HumanReviewAdjudicationRecord, HumanReviewAdjudicationSummary } from '../../modules/footballIntelligence/live/signalQuality/humanReviewAdjudication.types.js'
+import type { SignalQualityWindowComparison } from '../../modules/footballIntelligence/live/signalQuality/signalQualityWindowComparison.types.js'
+import type { ThresholdReadinessV3 } from '../../modules/footballIntelligence/live/signalQuality/thresholdReadinessV3.types.js'
 import type {
   LiveMonitoringSession, LiveMonitoringFixtureState,
 } from '../../modules/footballIntelligence/live/liveMonitoringSession.types.js'
@@ -181,6 +184,10 @@ const LF_RELIABILITY_BASELINES = 'liveFirstSignalReliabilityBaselines'
 const HR_TRIAGE_RESULTS = 'humanReviewTriageResults'
 const HR_TRIAGE_SUMMARIES = 'humanReviewTriageSummaries'
 const SQ_WINDOW_REPORTS = 'signalQualityWindowReports'
+const HR_ADJUDICATIONS = 'humanReviewAdjudications'
+const HR_ADJUDICATION_SUMMARIES = 'humanReviewAdjudicationSummaries'
+const SQ_WINDOW_COMPARISONS = 'signalQualityWindowComparisons'
+const THRESHOLD_READINESS_V3 = 'thresholdStudyReadinessV3'
 
 const READ_CAP = 2000
 
@@ -1710,5 +1717,38 @@ export class FirebaseIntelligenceRepository implements IntelligenceRepository {
   async listSignalQualityWindowReports(limit?: number): Promise<SignalQualityWindowReport[]> {
     const db = await getFirestore(); const snap = await db.collection(SQ_WINDOW_REPORTS).get()
     return snap.docs.map((d: any) => docData<SignalQualityWindowReport>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit || 50)
+  }
+
+  // ── B72: human review adjudication + window comparison + readiness V3 ──
+  async saveHumanReviewAdjudication(r: HumanReviewAdjudicationRecord): Promise<HumanReviewAdjudicationRecord> {
+    const db = await getFirestore(); await db.collection(HR_ADJUDICATIONS).doc(r.id).set(r, { merge: true }); return r
+  }
+  async listHumanReviewAdjudications(limit?: number): Promise<HumanReviewAdjudicationRecord[]> {
+    const db = await getFirestore(); const snap = await db.collection(HR_ADJUDICATIONS).get()
+    return snap.docs.map((d: any) => docData<HumanReviewAdjudicationRecord>(d)).sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit || 500)
+  }
+  async saveHumanReviewAdjudicationSummary(s: HumanReviewAdjudicationSummary): Promise<HumanReviewAdjudicationSummary> {
+    const db = await getFirestore(); await db.collection(HR_ADJUDICATION_SUMMARIES).doc(s.id).set(s, { merge: true }); return s
+  }
+  async getLatestHumanReviewAdjudicationSummary(): Promise<HumanReviewAdjudicationSummary | null> {
+    const db = await getFirestore(); const snap = await db.collection(HR_ADJUDICATION_SUMMARIES).get()
+    const items = snap.docs.map((d: any) => docData<HumanReviewAdjudicationSummary>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))
+    return items[0] || null
+  }
+  async saveSignalQualityWindowComparison(c: SignalQualityWindowComparison): Promise<SignalQualityWindowComparison> {
+    const db = await getFirestore(); await db.collection(SQ_WINDOW_COMPARISONS).doc(c.id).set(c, { merge: true }); return c
+  }
+  async getLatestSignalQualityWindowComparison(): Promise<SignalQualityWindowComparison | null> {
+    const db = await getFirestore(); const snap = await db.collection(SQ_WINDOW_COMPARISONS).get()
+    const items = snap.docs.map((d: any) => docData<SignalQualityWindowComparison>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))
+    return items[0] || null
+  }
+  async saveThresholdReadinessV3(r: ThresholdReadinessV3): Promise<ThresholdReadinessV3> {
+    const db = await getFirestore(); await db.collection(THRESHOLD_READINESS_V3).doc(r.id).set(r, { merge: true }); return r
+  }
+  async getLatestThresholdReadinessV3(): Promise<ThresholdReadinessV3 | null> {
+    const db = await getFirestore(); const snap = await db.collection(THRESHOLD_READINESS_V3).get()
+    const items = snap.docs.map((d: any) => docData<ThresholdReadinessV3>(d)).sort((a: any, b: any) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))
+    return items[0] || null
   }
 }

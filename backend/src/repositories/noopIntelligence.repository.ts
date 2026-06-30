@@ -79,6 +79,9 @@ import type { LiveFirstSignalQualityCase, LiveFirstSignalQualitySummary } from '
 import type { SignalQualityCampaign, SignalQualityCampaignWindow, HumanReviewItem, SignalReliabilityBaseline } from '../modules/footballIntelligence/live/signalQuality/signalQualityCampaign.types.js'
 import type { HumanReviewTriageResult, HumanReviewTriageSummary } from '../modules/footballIntelligence/live/signalQuality/humanReviewTriage.types.js'
 import type { SignalQualityWindowReport } from '../modules/footballIntelligence/live/signalQuality/signalQualityWindowReport.types.js'
+import type { HumanReviewAdjudicationRecord, HumanReviewAdjudicationSummary } from '../modules/footballIntelligence/live/signalQuality/humanReviewAdjudication.types.js'
+import type { SignalQualityWindowComparison } from '../modules/footballIntelligence/live/signalQuality/signalQualityWindowComparison.types.js'
+import type { ThresholdReadinessV3 } from '../modules/footballIntelligence/live/signalQuality/thresholdReadinessV3.types.js'
 import type {
   LiveMonitoringSession, LiveMonitoringFixtureState,
 } from '../modules/footballIntelligence/live/liveMonitoringSession.types.js'
@@ -106,6 +109,10 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   private readonly humanReviewTriageResults = new Map<string, HumanReviewTriageResult>()
   private readonly humanReviewTriageSummaries = new Map<string, HumanReviewTriageSummary>()
   private readonly signalQualityWindowReports = new Map<string, SignalQualityWindowReport>()
+  private readonly humanReviewAdjudications = new Map<string, HumanReviewAdjudicationRecord>()
+  private readonly humanReviewAdjudicationSummaries = new Map<string, HumanReviewAdjudicationSummary>()
+  private readonly signalQualityWindowComparisons = new Map<string, SignalQualityWindowComparison>()
+  private readonly thresholdReadinessV3Records = new Map<string, ThresholdReadinessV3>()
 
   async createSignalLedgerEntry(entry: SignalLedgerEntry): Promise<SignalLedgerEntry> { warnOnce(); return entry }
   async updateSignalLedgerEntry(): Promise<{ count: number }> { return { count: 0 } }
@@ -508,4 +515,14 @@ export class NoopIntelligenceRepository implements IntelligenceRepository {
   async saveSignalQualityWindowReport(r: SignalQualityWindowReport): Promise<SignalQualityWindowReport> { this.signalQualityWindowReports.set(r.id, r); return r }
   async getLatestSignalQualityWindowReport(): Promise<SignalQualityWindowReport | null> { return Array.from(this.signalQualityWindowReports.values()).sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))[0] ?? null }
   async listSignalQualityWindowReports(limit = 50): Promise<SignalQualityWindowReport[]> { return Array.from(this.signalQualityWindowReports.values()).sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || '')).slice(0, limit) }
+
+  // B72: human review adjudication + window comparison + readiness V3 (in-memory)
+  async saveHumanReviewAdjudication(r: HumanReviewAdjudicationRecord): Promise<HumanReviewAdjudicationRecord> { this.humanReviewAdjudications.set(r.id, r); return r }
+  async listHumanReviewAdjudications(limit = 500): Promise<HumanReviewAdjudicationRecord[]> { return Array.from(this.humanReviewAdjudications.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, limit) }
+  async saveHumanReviewAdjudicationSummary(s: HumanReviewAdjudicationSummary): Promise<HumanReviewAdjudicationSummary> { this.humanReviewAdjudicationSummaries.set(s.id, s); return s }
+  async getLatestHumanReviewAdjudicationSummary(): Promise<HumanReviewAdjudicationSummary | null> { return Array.from(this.humanReviewAdjudicationSummaries.values()).sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))[0] ?? null }
+  async saveSignalQualityWindowComparison(c: SignalQualityWindowComparison): Promise<SignalQualityWindowComparison> { this.signalQualityWindowComparisons.set(c.id, c); return c }
+  async getLatestSignalQualityWindowComparison(): Promise<SignalQualityWindowComparison | null> { return Array.from(this.signalQualityWindowComparisons.values()).sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))[0] ?? null }
+  async saveThresholdReadinessV3(r: ThresholdReadinessV3): Promise<ThresholdReadinessV3> { this.thresholdReadinessV3Records.set(r.id, r); return r }
+  async getLatestThresholdReadinessV3(): Promise<ThresholdReadinessV3 | null> { return Array.from(this.thresholdReadinessV3Records.values()).sort((a, b) => (b.generatedAt || '').localeCompare(a.generatedAt || ''))[0] ?? null }
 }
